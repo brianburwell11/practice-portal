@@ -1,0 +1,16 @@
+{
+  "songs": [
+    {
+      "id": "st-james",
+      "title": "St. James",
+      "artist": "Unknown",
+      "path": "audio/song-st-james"
+    },
+    {
+      "id": "test-tones",
+      "title": "Test Tones",
+      "artist": "Generated",
+      "path": "audio/song-test"
+    }
+  ]
+}

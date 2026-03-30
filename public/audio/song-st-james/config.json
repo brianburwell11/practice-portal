@@ -1,0 +1,111 @@
+{
+  "id": "st-james",
+  "title": "St. James",
+  "artist": "Unknown",
+  "key": "",
+  "durationSeconds": 331.58,
+  "stems": [
+    {
+      "id": "kick",
+      "label": "Kick",
+      "file": "Scratch 01 - Kick.wav",
+      "defaultVolume": 0.8,
+      "defaultPan": 0.0,
+      "color": "#ef4444"
+    },
+    {
+      "id": "snare",
+      "label": "Snare",
+      "file": "Scratch 02 - Snare.wav",
+      "defaultVolume": 0.8,
+      "defaultPan": 0.0,
+      "color": "#f97316"
+    },
+    {
+      "id": "hi-tom",
+      "label": "Hi Tom",
+      "file": "Scratch 03 - Hi Tom.wav",
+      "defaultVolume": 0.7,
+      "defaultPan": -0.3,
+      "color": "#eab308"
+    },
+    {
+      "id": "lo-tom",
+      "label": "Lo Tom",
+      "file": "Scratch 04 - Lo Tom.wav",
+      "defaultVolume": 0.7,
+      "defaultPan": 0.3,
+      "color": "#84cc16"
+    },
+    {
+      "id": "ovhd",
+      "label": "Overhead",
+      "file": "Scratch 05 - OVHD.wav",
+      "defaultVolume": 0.6,
+      "defaultPan": 0.0,
+      "color": "#22c55e"
+    },
+    {
+      "id": "bass",
+      "label": "Bass",
+      "file": "Scratch 06 - Bass.wav",
+      "defaultVolume": 0.8,
+      "defaultPan": 0.0,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "guitar",
+      "label": "Guitar",
+      "file": "Scratch 07 - Guitar.wav",
+      "defaultVolume": 0.7,
+      "defaultPan": -0.2,
+      "color": "#8b5cf6"
+    },
+    {
+      "id": "keys",
+      "label": "Keys",
+      "file": "Scratch 08 - Keys.wav",
+      "defaultVolume": 0.7,
+      "defaultPan": 0.2,
+      "color": "#a855f7"
+    },
+    {
+      "id": "horns",
+      "label": "Horns",
+      "file": "Scratch 09 - Horns.wav",
+      "defaultVolume": 0.7,
+      "defaultPan": 0.0,
+      "color": "#ec4899"
+    },
+    {
+      "id": "vox",
+      "label": "Vocals",
+      "file": "Scratch 10 - Vox.wav",
+      "defaultVolume": 0.8,
+      "defaultPan": 0.0,
+      "color": "#f43f5e"
+    }
+  ],
+  "groups": [
+    {
+      "id": "drums",
+      "label": "Drums",
+      "color": "#ef4444",
+      "stemIds": ["kick", "snare", "hi-tom", "lo-tom", "ovhd"]
+    }
+  ],
+  "tempoMap": [
+    { "beat": 0, "bpm": 120 }
+  ],
+  "timeSignatureMap": [
+    { "beat": 0, "numerator": 4, "denominator": 4 }
+  ],
+  "metronome": {
+    "clickSound": "woodblock",
+    "accentPattern": [1.0, 0.4, 0.6, 0.4],
+    "subdivisions": 1
+  },
+  "markers": [
+    { "name": "Start", "beat": 0, "color": "#22c55e" }
+  ]
+}
