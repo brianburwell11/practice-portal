@@ -17,6 +17,15 @@ export default function App() {
         {/* Header */}
         <header className="px-4 py-3 border-b border-gray-700 flex items-center gap-3">
           <h1 className="text-lg font-semibold tracking-tight">Practice Portal</h1>
+          {import.meta.env.DEV && (
+            <a
+              href="#/admin/add-song"
+              onClick={() => setTimeout(() => location.reload(), 0)}
+              className="text-xs text-gray-500 hover:text-gray-300"
+            >
+              + Add Song
+            </a>
+          )}
           {selectedSong && (
             <button
               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded"

@@ -10,7 +10,7 @@ import { SectionList } from './SectionList';
 import { parseXscFile } from '../../audio/xscParser';
 
 export function MarkerEditorModal() {
-  const { isOpen, tapMap, dirty, tapping, close, setTapping, importTapMap } =
+  const { isOpen, tapMap, dirty, tapping, close, setTapping, importTapMap, onComplete } =
     useMarkerEditorStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const setSelectedSong = useSongStore((s) => s.setSelectedSong);
@@ -31,9 +31,17 @@ export function MarkerEditorModal() {
     engine.seek(Math.max(0, Math.min(seconds, duration || 0)));
   }, [engine, duration]);
 
-  if (!isOpen || !selectedSong) return null;
+  if (!isOpen || (!selectedSong && !onComplete)) return null;
 
   const handleSave = async () => {
+    if (onComplete) {
+      onComplete(tapMap);
+      close();
+      return;
+    }
+
+    if (!selectedSong) return;
+
     setSaving(true);
     setError(null);
 
@@ -101,7 +109,7 @@ export function MarkerEditorModal() {
             TapMap Editor
           </h2>
           <span className="text-sm text-gray-400">
-            {selectedSong.title}
+            {selectedSong?.title ?? 'New Song'}
           </span>
         </div>
         <div className="flex items-center gap-2">

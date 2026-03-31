@@ -72,7 +72,7 @@ export function SectionList() {
             </tr>
           </thead>
           <tbody>
-            {sectionIndices.map((tapMapIdx, i) => {
+            {sectionIndices.map((tapMapIdx) => {
               const entry = tapMap[tapMapIdx];
               const isSelected = selectedIndex === tapMapIdx;
               const isEditing = editingIdx === tapMapIdx;

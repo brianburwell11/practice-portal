@@ -66,6 +66,7 @@ export class AudioEngine {
     config: SongConfig,
     basePath: string,
     onProgress?: (loaded: number, total: number) => void,
+    stemFiles?: Map<string, File>,
   ): Promise<void> {
     // Stop current playback and clean up
     this.stop();
@@ -83,9 +84,15 @@ export class AudioEngine {
 
     const stemEntries = await Promise.all(
       config.stems.map(async (stemConfig: StemConfig) => {
-        const url = `${basePath}/${stemConfig.file}`;
-        const response = await fetch(url);
-        const arrayBuffer = await response.arrayBuffer();
+        let arrayBuffer: ArrayBuffer;
+        const localFile = stemFiles?.get(stemConfig.id);
+        if (localFile) {
+          arrayBuffer = await localFile.arrayBuffer();
+        } else {
+          const url = `${basePath}/${stemConfig.file}`;
+          const response = await fetch(url);
+          arrayBuffer = await response.arrayBuffer();
+        }
         const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
         loaded++;
         onProgress?.(loaded, total);

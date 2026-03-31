@@ -13,8 +13,9 @@ interface TapMapEditorState {
   selectedIndex: number | null;
   tapping: boolean;
   undoStack: TapMapEntry[][];
+  onComplete: ((tapMap: TapMapEntry[]) => void) | null;
 
-  open: (tapMap: TapMapEntry[]) => void;
+  open: (tapMap: TapMapEntry[], onComplete?: (tapMap: TapMapEntry[]) => void) => void;
   close: () => void;
   addEntry: (entry: TapMapEntry) => void;
   deleteEntry: (index: number) => void;
@@ -33,6 +34,7 @@ const initialState = {
   selectedIndex: null as number | null,
   tapping: false,
   undoStack: [] as TapMapEntry[][],
+  onComplete: null as ((tapMap: TapMapEntry[]) => void) | null,
 };
 
 const pushUndo = (stack: TapMapEntry[][], snapshot: TapMapEntry[]): TapMapEntry[][] => {
@@ -44,7 +46,7 @@ const pushUndo = (stack: TapMapEntry[][], snapshot: TapMapEntry[]): TapMapEntry[
 export const useMarkerEditorStore = create<TapMapEditorState>((set) => ({
   ...initialState,
 
-  open: (tapMap) =>
+  open: (tapMap, onComplete) =>
     set({
       isOpen: true,
       tapMap: sortByTime(tapMap),
@@ -52,6 +54,7 @@ export const useMarkerEditorStore = create<TapMapEditorState>((set) => ({
       selectedIndex: null,
       tapping: false,
       undoStack: [],
+      onComplete: onComplete ?? null,
     }),
 
   close: () => set({ ...initialState }),

@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
-import { useSongStore } from '../../store/songStore';
+
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import { autoLabelSection } from '../../audio/tapMapUtils';
 
@@ -20,7 +20,7 @@ export function MarkerEditorCanvas({
 }: MarkerEditorCanvasProps) {
   const engine = useAudioEngine();
   const { position, duration } = useTransportStore();
-  const selectedSong = useSongStore((s) => s.selectedSong);
+
   const {
     tapMap,
     selectedIndex,
@@ -118,7 +118,7 @@ export function MarkerEditorCanvas({
 
     const peakData = engine.peakData;
 
-    if (!peakData || !duration || !selectedSong) {
+    if (!peakData || !duration) {
       ctx.fillStyle = '#1f2937';
       ctx.fillRect(0, 0, width, height);
       return;
@@ -225,7 +225,7 @@ export function MarkerEditorCanvas({
       ctx.fillStyle = '#3B82F6';
       ctx.fillRect(Math.round(playheadX) - 1, 0, 2, height);
     }
-  }, [engine.peakData, position, duration, selectedSong, tapMap, selectedIndex, viewStart, viewDuration, secondsToPixel, onViewChange]);
+  }, [engine.peakData, position, duration, tapMap, selectedIndex, viewStart, viewDuration, secondsToPixel, onViewChange]);
 
   // Playhead animation during playback
   useEffect(() => {
@@ -311,7 +311,7 @@ export function MarkerEditorCanvas({
         return;
 
       if (!tapping) return;
-      if (!selectedSong || !duration) return;
+      if (!duration) return;
 
       const key = e.key.toUpperCase();
 
@@ -337,7 +337,7 @@ export function MarkerEditorCanvas({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [engine, selectedSong, duration, tapping, tapMap, addEntry, undo]);
+  }, [engine, duration, tapping, tapMap, addEntry, undo]);
 
   return (
     <div
