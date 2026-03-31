@@ -14,7 +14,7 @@ function formatTime(seconds: number): string {
 
 export function TransportBar() {
   const engine = useAudioEngine();
-  const { playing, position, duration } = useTransportStore();
+  const { playing, position, duration, loopA, loopB } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const { masterVolume, setMasterVolume } = useMixerStore();
 
@@ -42,10 +42,22 @@ export function TransportBar() {
         e.preventDefault();
         playing ? engine.pause() : engine.play();
       }
+      if (e.key === '[' && !disabled) {
+        e.preventDefault();
+        engine.setLoop(position, engine.loopB);
+      }
+      if (e.key === ']' && !disabled) {
+        e.preventDefault();
+        engine.setLoop(engine.loopA, position);
+      }
+      if (e.key === '\\' && !disabled) {
+        e.preventDefault();
+        engine.clearLoop();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [engine, playing, disabled]);
+  }, [engine, playing, disabled, loopA, loopB, position]);
 
   return (
     <div className="flex items-center gap-4 px-4 py-3 border-b border-gray-700">
@@ -68,6 +80,34 @@ export function TransportBar() {
             title={playing ? 'Pause' : 'Play'}
           >
             {playing ? '\u23F8' : '\u25B6'}
+          </button>
+          <button
+            className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              loopA !== null && loopB !== null
+                ? 'bg-green-600 hover:bg-green-500 text-white'
+                : loopA !== null
+                  ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
+                  : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            }`}
+            disabled={disabled}
+            onClick={() => {
+              if (loopA !== null && loopB !== null) {
+                engine.clearLoop();
+              } else if (loopA !== null) {
+                engine.setLoop(loopA, position);
+              } else {
+                engine.setLoop(position, null);
+              }
+            }}
+            title={
+              loopA !== null && loopB !== null
+                ? `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} — click to clear`
+                : loopA !== null
+                  ? `Loop in: ${formatTime(loopA)} — click to set out point`
+                  : 'Set loop in point'
+            }
+          >
+            &#x21BB;
           </button>
           <div className="font-mono text-sm text-gray-300 ml-1">
             {formatTime(position)} / {formatTime(duration)}

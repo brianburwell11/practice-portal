@@ -25,6 +25,9 @@ export class AudioEngine {
   /** Maps stem id → group id (if the stem belongs to a group) */
   private stemToGroup: Map<string, string> = new Map();
   private workletRegistered = false;
+  private _loopA: number | null = null;
+  private _loopB: number | null = null;
+  private loopCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.ctx = new AudioContext();
@@ -43,6 +46,14 @@ export class AudioEngine {
 
   get peakData(): Float32Array | null {
     return this._peakData;
+  }
+
+  get loopA(): number | null {
+    return this._loopA;
+  }
+
+  get loopB(): number | null {
+    return this._loopB;
   }
 
   setOnStateChange(cb: EngineStateCallback): void {
@@ -68,7 +79,8 @@ export class AudioEngine {
     onProgress?: (loaded: number, total: number) => void,
     stemFiles?: Map<string, File>,
   ): Promise<void> {
-    // Stop current playback and clean up
+    // Clear any active loop and stop current playback
+    this.clearLoop();
     this.stop();
     this.disposeStemPlayers();
 
@@ -144,6 +156,9 @@ export class AudioEngine {
     }
 
     this.startPositionUpdates();
+    if (this._loopA !== null && this._loopB !== null) {
+      this.startLoopScheduler();
+    }
     this.notify();
   }
 
@@ -156,6 +171,7 @@ export class AudioEngine {
     }
 
     this.stopPositionUpdates();
+    this.stopLoopScheduler();
     this.notify();
   }
 
@@ -167,6 +183,7 @@ export class AudioEngine {
     }
 
     this.stopPositionUpdates();
+    this.stopLoopScheduler();
     this.notify();
   }
 
@@ -357,7 +374,7 @@ export class AudioEngine {
     this.stopPositionUpdates();
     const tick = () => {
       // Check if playback reached the end
-      if (this.clock.currentTime >= this.clock.duration) {
+      if (this._loopA === null && this._loopB === null && this.clock.currentTime >= this.clock.duration) {
         this.stop();
         return;
       }
@@ -374,7 +391,52 @@ export class AudioEngine {
     }
   }
 
+  setLoop(a: number | null, b: number | null): void {
+    if (a !== null && b !== null) {
+      // Auto-swap if a > b
+      if (a > b) {
+        [a, b] = [b, a];
+      }
+      // Enforce minimum 0.1s loop length
+      if (b - a < 0.1) {
+        return;
+      }
+    }
+    this._loopA = a;
+    this._loopB = b;
+    if (a !== null && b !== null && this.clock.playing) {
+      this.startLoopScheduler();
+    } else {
+      this.stopLoopScheduler();
+    }
+    this.notify();
+  }
+
+  clearLoop(): void {
+    this._loopA = null;
+    this._loopB = null;
+    this.stopLoopScheduler();
+    this.notify();
+  }
+
+  private startLoopScheduler(): void {
+    this.stopLoopScheduler();
+    this.loopCheckInterval = setInterval(() => {
+      if (this._loopA !== null && this._loopB !== null && this.clock.playing && this.clock.currentTime >= this._loopB) {
+        this.seek(this._loopA);
+      }
+    }, 10);
+  }
+
+  private stopLoopScheduler(): void {
+    if (this.loopCheckInterval !== null) {
+      clearInterval(this.loopCheckInterval);
+      this.loopCheckInterval = null;
+    }
+  }
+
   dispose(): void {
+    this.stopLoopScheduler();
     this.stop();
     this.disposeStemPlayers();
     this.ctx.close();

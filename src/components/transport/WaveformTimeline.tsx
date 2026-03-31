@@ -12,7 +12,7 @@ const MIN_VIEW = 5;
 
 export function WaveformTimeline() {
   const engine = useAudioEngine();
-  const { position, duration } = useTransportStore();
+  const { position, duration, loopA, loopB } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
 
   // Main canvas refs
@@ -29,6 +29,8 @@ export function WaveformTimeline() {
   const [viewStart, setViewStart] = useState(0);
   const [viewDuration, setViewDuration] = useState(Infinity); // Infinity = full duration
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
+  const [draggingMarker, setDraggingMarker] = useState<'A' | 'B' | null>(null);
+  const suppressClickRef = useRef(false);
 
   const effectiveViewDuration = Math.min(viewDuration, duration || Infinity);
   const isZoomed = duration > 0 && effectiveViewDuration < duration;
@@ -94,8 +96,33 @@ export function WaveformTimeline() {
     [duration, selectedSong, secondsToPixel],
   );
 
+  // Hit test: check if a pixel X is within 6px of loop A or B marker
+  const hitTestLoopMarker = useCallback(
+    (pixelX: number): 'A' | 'B' | null => {
+      if (loopA === null || loopB === null) return null;
+      const { width } = sizeRef.current;
+      if (width === 0) return null;
+      const ax = secondsToPixel(loopA, width);
+      const bx = secondsToPixel(loopB, width);
+      // Prefer whichever is closer if both are within range
+      const distA = Math.abs(pixelX - ax);
+      const distB = Math.abs(pixelX - bx);
+      if (distA <= 6 && distB <= 6) return distA <= distB ? 'A' : 'B';
+      if (distA <= 6) return 'A';
+      if (distB <= 6) return 'B';
+      return null;
+    },
+    [loopA, loopB, secondsToPixel],
+  );
+
+  const [cursorStyle, setCursorStyle] = useState<string>('pointer');
+
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (suppressClickRef.current) {
+        suppressClickRef.current = false;
+        return;
+      }
       if (!duration) return;
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -106,18 +133,58 @@ export function WaveformTimeline() {
     [engine, duration, findSnapMarker, pixelToSeconds],
   );
 
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const hit = hitTestLoopMarker(x);
+      if (hit) {
+        e.preventDefault();
+        setDraggingMarker(hit);
+      }
+    },
+    [hitTestLoopMarker],
+  );
+
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
+
+      if (draggingMarker) {
+        const seconds = pixelToSeconds(x, sizeRef.current.width);
+        const clamped = Math.max(0, Math.min(seconds, duration || 0));
+        if (draggingMarker === 'A') {
+          engine.setLoop(clamped, loopB);
+        } else {
+          engine.setLoop(loopA, clamped);
+        }
+        return;
+      }
+
+      // Update cursor based on loop marker proximity
+      const hit = hitTestLoopMarker(x);
+      setCursorStyle(hit ? 'col-resize' : 'pointer');
+
       setHoveredTime(findSnapMarker(x));
     },
-    [findSnapMarker],
+    [draggingMarker, findSnapMarker, hitTestLoopMarker, pixelToSeconds, duration, engine, loopA, loopB],
   );
+
+  const handleMouseUp = useCallback(() => {
+    if (draggingMarker) {
+      suppressClickRef.current = true;
+      setDraggingMarker(null);
+    }
+  }, [draggingMarker]);
 
   const handleMouseLeave = useCallback(() => {
     setHoveredTime(null);
-  }, []);
+    if (draggingMarker) {
+      setDraggingMarker(null);
+    }
+    setCursorStyle('pointer');
+  }, [draggingMarker]);
 
   // Cmd+scroll zoom, shift+scroll horizontal navigation
   useEffect(() => {
@@ -328,6 +395,43 @@ export function WaveformTimeline() {
     // Markers
     drawMarkers(ctx, width, height, (s) => secondsToPixel(s, width));
 
+    // Loop bracket markers and region highlight
+    if (loopA !== null || loopB !== null) {
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 2;
+      const bracketW = 6;
+
+      // Green fill between brackets when both are set
+      if (loopA !== null && loopB !== null) {
+        const ax = secondsToPixel(loopA, width);
+        const bx = secondsToPixel(loopB, width);
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.15)';
+        ctx.fillRect(ax, 0, bx - ax, height);
+      }
+
+      // "[" bracket at loop-in
+      if (loopA !== null) {
+        const ax = secondsToPixel(loopA, width);
+        ctx.beginPath();
+        ctx.moveTo(ax + bracketW, 0);
+        ctx.lineTo(ax, 0);
+        ctx.lineTo(ax, height);
+        ctx.lineTo(ax + bracketW, height);
+        ctx.stroke();
+      }
+
+      // "]" bracket at loop-out
+      if (loopB !== null) {
+        const bx = secondsToPixel(loopB, width);
+        ctx.beginPath();
+        ctx.moveTo(bx - bracketW, 0);
+        ctx.lineTo(bx, 0);
+        ctx.lineTo(bx, height);
+        ctx.lineTo(bx - bracketW, height);
+        ctx.stroke();
+      }
+    }
+
     // Hover highlight
     if (hoveredTime !== null) {
       const hx = secondsToPixel(hoveredTime, width);
@@ -348,7 +452,7 @@ export function WaveformTimeline() {
       ctx.fillStyle = '#3B82F6';
       ctx.fillRect(Math.round(playheadX) - 1, 0, 2, height);
     }
-  }, [engine.peakData, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers]);
+  }, [engine.peakData, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB]);
 
   // Draw overview canvas (full song, only when zoomed)
   useEffect(() => {
@@ -402,6 +506,26 @@ export function WaveformTimeline() {
       }
     }
 
+    // Loop region on overview
+    if (loopA !== null || loopB !== null) {
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 1;
+      if (loopA !== null && loopB !== null) {
+        const oax = (loopA / duration) * width;
+        const obx = (loopB / duration) * width;
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
+        ctx.fillRect(oax, 0, obx - oax, height);
+      }
+      if (loopA !== null) {
+        const oax = (loopA / duration) * width;
+        ctx.beginPath(); ctx.moveTo(oax, 0); ctx.lineTo(oax, height); ctx.stroke();
+      }
+      if (loopB !== null) {
+        const obx = (loopB / duration) * width;
+        ctx.beginPath(); ctx.moveTo(obx, 0); ctx.lineTo(obx, height); ctx.stroke();
+      }
+    }
+
     // Viewport indicator
     const vx1 = (viewStart / duration) * width;
     const vx2 = ((viewStart + effectiveViewDuration) / duration) * width;
@@ -415,7 +539,7 @@ export function WaveformTimeline() {
     const phx = (position / duration) * width;
     ctx.fillStyle = '#3B82F6';
     ctx.fillRect(Math.round(phx) - 0.5, 0, 1.5, height);
-  }, [engine.peakData, position, duration, selectedSong, isZoomed, viewStart, effectiveViewDuration]);
+  }, [engine.peakData, position, duration, selectedSong, isZoomed, viewStart, effectiveViewDuration, loopA, loopB]);
 
   // Overview click: seek + center viewport
   const handleOverviewClick = useCallback(
@@ -435,13 +559,16 @@ export function WaveformTimeline() {
       {/* Main waveform */}
       <div
         ref={containerRef}
-        className="h-[108px] relative cursor-pointer rounded overflow-hidden"
+        className="h-[108px] relative rounded overflow-hidden"
+        style={{ cursor: cursorStyle }}
       >
         <canvas
           ref={canvasRef}
           className="w-full h-full"
           onClick={handleClick}
+          onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
         />
       </div>
