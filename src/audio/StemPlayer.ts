@@ -77,6 +77,10 @@ export class StemPlayer {
     this.updateGain();
   }
 
+  get audioBuffer(): AudioBuffer {
+    return this.buffer;
+  }
+
   get soloed(): boolean {
     return this._soloed;
   }

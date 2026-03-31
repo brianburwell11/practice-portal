@@ -1,6 +1,7 @@
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
+import { WaveformTimeline } from './WaveformTimeline';
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -42,17 +43,8 @@ export function TransportBar() {
         {formatTime(position)} / {formatTime(duration)}
       </div>
 
-      {/* Seek bar */}
-      <input
-        type="range"
-        min={0}
-        max={duration || 1}
-        step={0.1}
-        value={position}
-        onChange={(e) => engine.seek(parseFloat(e.target.value))}
-        disabled={disabled}
-        className="flex-1 h-2 accent-blue-500 cursor-pointer disabled:opacity-40"
-      />
+      {/* Waveform timeline */}
+      <WaveformTimeline />
 
       {/* Song info */}
       {selectedSong && (

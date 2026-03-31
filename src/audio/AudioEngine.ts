@@ -16,6 +16,7 @@ export class AudioEngine {
   readonly masterGain: GainNode;
   private stems: Map<string, StemPlayer> = new Map();
   private _songConfig: SongConfig | null = null;
+  private _peakData: Float32Array | null = null;
   private onStateChange: EngineStateCallback | null = null;
   private animFrameId: number | null = null;
   private groupConfigs: StemGroupConfig[] = [];
@@ -36,6 +37,10 @@ export class AudioEngine {
 
   get audioContext(): AudioContext {
     return this.ctx;
+  }
+
+  get peakData(): Float32Array | null {
+    return this._peakData;
   }
 
   setOnStateChange(cb: EngineStateCallback): void {
@@ -96,6 +101,7 @@ export class AudioEngine {
       }
     }
 
+    this._peakData = this.computeMergedPeaks(2048);
     this.notify();
   }
 
@@ -272,11 +278,53 @@ export class AudioEngine {
     }
   }
 
+  private computeMergedPeaks(bucketCount: number): Float32Array {
+    const peaks = new Float32Array(bucketCount * 2); // interleaved [min, max, ...]
+
+    // Find the longest buffer to determine total sample count
+    let maxLength = 0;
+    for (const stem of this.stems.values()) {
+      maxLength = Math.max(maxLength, stem.audioBuffer.length);
+    }
+    if (maxLength === 0) return peaks;
+
+    const samplesPerBucket = maxLength / bucketCount;
+
+    for (let b = 0; b < bucketCount; b++) {
+      let bucketMin = 0;
+      let bucketMax = 0;
+      const start = Math.floor(b * samplesPerBucket);
+      const end = Math.floor((b + 1) * samplesPerBucket);
+
+      for (const stem of this.stems.values()) {
+        const buf = stem.audioBuffer;
+        if (start >= buf.length) continue;
+        const channels = buf.numberOfChannels;
+        const sampleEnd = Math.min(end, buf.length);
+
+        for (let ch = 0; ch < channels; ch++) {
+          const data = buf.getChannelData(ch);
+          for (let s = start; s < sampleEnd; s++) {
+            const val = data[s] / channels; // average across channels
+            if (val < bucketMin) bucketMin = val;
+            if (val > bucketMax) bucketMax = val;
+          }
+        }
+      }
+
+      peaks[b * 2] = bucketMin;
+      peaks[b * 2 + 1] = bucketMax;
+    }
+
+    return peaks;
+  }
+
   private disposeStemPlayers(): void {
     for (const stem of this.stems.values()) {
       stem.disconnect();
     }
     this.stems.clear();
+    this._peakData = null;
   }
 
   private startPositionUpdates(): void {
