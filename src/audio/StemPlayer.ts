@@ -1,9 +1,13 @@
+import { SoundTouchNode } from '@soundtouchjs/audio-worklet';
+
 export class StemPlayer {
   private ctx: AudioContext;
   private buffer: AudioBuffer;
   private source: AudioBufferSourceNode | null = null;
   readonly gainNode: GainNode;
   readonly panNode: StereoPannerNode;
+  private soundtouchNode: SoundTouchNode;
+  private _tempoRatio = 1.0;
   private _muted = false;
   private _soloed = false;
   private _userVolume: number;
@@ -19,13 +23,16 @@ export class StemPlayer {
     this.buffer = buffer;
     this._userVolume = defaultVolume;
 
+    this.soundtouchNode = new SoundTouchNode(ctx);
+
     this.gainNode = ctx.createGain();
     this.gainNode.gain.value = defaultVolume;
 
     this.panNode = ctx.createStereoPanner();
     this.panNode.pan.value = defaultPan;
 
-    // Chain: gain → pan → master
+    // Chain: soundtouch → gain → pan → master
+    this.soundtouchNode.connect(this.gainNode);
     this.gainNode.connect(this.panNode);
     this.panNode.connect(masterGain);
   }
@@ -33,10 +40,27 @@ export class StemPlayer {
   /** Start playback at a precise AudioContext time from a song offset */
   start(when: number, offset: number): void {
     this.stop();
+
+    // Recreate SoundTouchNode to flush internal buffers from previous playback
+    this.soundtouchNode.disconnect();
+    this.soundtouchNode = new SoundTouchNode(this.ctx);
+    this.soundtouchNode.playbackRate.value = this._tempoRatio;
+    this.soundtouchNode.connect(this.gainNode);
+
     this.source = this.ctx.createBufferSource();
     this.source.buffer = this.buffer;
-    this.source.connect(this.gainNode);
+    this.source.playbackRate.value = this._tempoRatio;
+    this.source.connect(this.soundtouchNode);
     this.source.start(when, offset);
+  }
+
+  setTempo(ratio: number): void {
+    this._tempoRatio = ratio;
+    // Drive speed via source playbackRate; SoundTouch auto-corrects pitch
+    if (this.source) {
+      this.source.playbackRate.value = ratio;
+    }
+    this.soundtouchNode.playbackRate.value = ratio;
   }
 
   stop(): void {
@@ -116,6 +140,7 @@ export class StemPlayer {
 
   disconnect(): void {
     this.stop();
+    this.soundtouchNode.disconnect();
     this.gainNode.disconnect();
     this.panNode.disconnect();
   }

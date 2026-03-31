@@ -1,6 +1,7 @@
 import type { SongConfig, StemConfig, StemGroupConfig } from './types';
 import { TransportClock } from './TransportClock';
 import { StemPlayer } from './StemPlayer';
+import { SoundTouchNode } from '@soundtouchjs/audio-worklet';
 
 interface GroupState {
   volume: number;
@@ -23,6 +24,7 @@ export class AudioEngine {
   private groupStates: Map<string, GroupState> = new Map();
   /** Maps stem id → group id (if the stem belongs to a group) */
   private stemToGroup: Map<string, string> = new Map();
+  private workletRegistered = false;
 
   constructor() {
     this.ctx = new AudioContext();
@@ -51,6 +53,15 @@ export class AudioEngine {
     this.onStateChange?.();
   }
 
+  private async ensureWorkletRegistered(): Promise<void> {
+    if (this.workletRegistered) return;
+    await SoundTouchNode.register(
+      this.ctx,
+      `${import.meta.env.BASE_URL}soundtouch-processor.js`,
+    );
+    this.workletRegistered = true;
+  }
+
   async loadSong(
     config: SongConfig,
     basePath: string,
@@ -59,6 +70,9 @@ export class AudioEngine {
     // Stop current playback and clean up
     this.stop();
     this.disposeStemPlayers();
+
+    // Register SoundTouch AudioWorklet processor (once)
+    await this.ensureWorkletRegistered();
 
     this._songConfig = config;
     this.clock.duration = config.durationSeconds;
@@ -180,6 +194,14 @@ export class AudioEngine {
 
   setMasterVolume(v: number): void {
     this.masterGain.gain.value = v;
+    this.notify();
+  }
+
+  setTempo(ratio: number): void {
+    this.clock.setTempoRatio(ratio);
+    for (const stem of this.stems.values()) {
+      stem.setTempo(ratio);
+    }
     this.notify();
   }
 

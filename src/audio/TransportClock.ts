@@ -4,6 +4,7 @@ export class TransportClock {
   private contextTimeAtPlay = 0;
   private songTimeAtPlay = 0;
   private _duration = 0;
+  private _tempoRatio = 1.0;
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
@@ -21,10 +22,22 @@ export class TransportClock {
     this._duration = d;
   }
 
+  get tempoRatio(): number {
+    return this._tempoRatio;
+  }
+
+  setTempoRatio(ratio: number): void {
+    if (this._playing) {
+      this.songTimeAtPlay = this.currentTime;
+      this.contextTimeAtPlay = this.ctx.currentTime;
+    }
+    this._tempoRatio = ratio;
+  }
+
   /** Current song position in seconds */
   get currentTime(): number {
     if (!this._playing) return this.songTimeAtPlay;
-    const elapsed = this.ctx.currentTime - this.contextTimeAtPlay;
+    const elapsed = (this.ctx.currentTime - this.contextTimeAtPlay) * this._tempoRatio;
     const pos = this.songTimeAtPlay + elapsed;
     return Math.min(pos, this._duration);
   }
