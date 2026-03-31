@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
@@ -15,6 +16,17 @@ export function TransportBar() {
   const selectedSong = useSongStore((s) => s.selectedSong);
 
   const disabled = !selectedSong;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !disabled) {
+        e.preventDefault();
+        playing ? engine.pause() : engine.play();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [engine, playing, disabled]);
 
   return (
     <div className="flex items-center gap-4 px-4 py-3 border-b border-gray-700">

@@ -259,12 +259,9 @@ export class AudioEngine {
       let stemAudibleBySolo = false;
       if (stem.soloed) {
         stemAudibleBySolo = true;
-      } else if (gs?.soloed && !anyStemSoloed) {
-        // Group is soloed and no individual stems are soloed
+      } else if (gs?.soloed) {
+        // Group is soloed — all non-muted children play
         stemAudibleBySolo = true;
-      } else if (gs?.soloed && anyStemSoloed) {
-        // Group is soloed but individual solos also exist — only individually soloed stems play
-        stemAudibleBySolo = false;
       } else if (!anySoloActive) {
         stemAudibleBySolo = true;
       }
