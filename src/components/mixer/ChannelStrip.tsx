@@ -49,7 +49,7 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
         <input
           type="range"
           min={0}
-          max={1}
+          max={1.5}
           step={0.01}
           value={stemState.volume}
           onChange={(e) => handleVolume(parseFloat(e.target.value))}
