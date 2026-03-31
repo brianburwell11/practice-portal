@@ -2,8 +2,6 @@ import { useRef, useEffect, useCallback } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
-import { useSongStore } from '../../store/songStore';
-import { beatToSeconds } from '../../audio/tempoUtils';
 
 interface TimelineNavigatorProps {
   viewStart: number;
@@ -20,9 +18,7 @@ export function TimelineNavigator({
 }: TimelineNavigatorProps) {
   const engine = useAudioEngine();
   const { position, duration } = useTransportStore();
-  const markers = useMarkerEditorStore((s) => s.markers);
-  const beatOffset = useMarkerEditorStore((s) => s.beatOffset);
-  const selectedSong = useSongStore((s) => s.selectedSong);
+  const tapMap = useMarkerEditorStore((s) => s.tapMap);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -98,20 +94,26 @@ export function TimelineNavigator({
       ctx.fillRect(px, y1, 1, y2 - y1 || 1);
     }
 
-    // 3. Markers
-    if (selectedSong) {
-      for (const marker of markers) {
-        const seconds = beatToSeconds(marker.beat, selectedSong.tempoMap, beatOffset);
-        const x = (seconds / duration) * width;
-        if (x < 0 || x > width) continue;
+    // 3. TapMap entries
+    for (const entry of tapMap) {
+      const x = (entry.time / duration) * width;
+      if (x < 0 || x > width) continue;
 
-        ctx.strokeStyle = marker.color;
+      if (entry.type === 'section') {
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+      } else if (entry.type === 'measure') {
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
         ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-        ctx.stroke();
+      } else {
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.lineWidth = 0.5;
       }
+
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
     }
 
     // 4. Viewport indicator
@@ -127,7 +129,7 @@ export function TimelineNavigator({
     const playheadX = (position / duration) * width;
     ctx.fillStyle = '#3B82F6';
     ctx.fillRect(Math.round(playheadX) - 0.75, 0, 1.5, height);
-  }, [engine.peakData, position, duration, viewStart, viewDuration, markers, beatOffset, selectedSong]);
+  }, [engine.peakData, position, duration, viewStart, viewDuration, tapMap]);
 
   const clampViewStart = useCallback(
     (vs: number) => Math.max(0, Math.min(vs, duration - viewDuration)),

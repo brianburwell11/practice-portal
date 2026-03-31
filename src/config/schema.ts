@@ -39,6 +39,12 @@ export const stemGroupConfigSchema = z.object({
   stemIds: z.array(z.string()).min(1),
 });
 
+export const tapMapEntrySchema = z.object({
+  time: z.number().min(0),
+  type: z.enum(['section', 'measure', 'beat']),
+  label: z.string().optional(),
+});
+
 export const songConfigSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -52,6 +58,7 @@ export const songConfigSchema = z.object({
   timeSignatureMap: z.array(timeSignatureEntrySchema).min(1),
   metronome: metronomeConfigSchema,
   markers: z.array(markerConfigSchema),
+  tapMap: z.array(tapMapEntrySchema).optional(),
 });
 
 export const songManifestEntrySchema = z.object({

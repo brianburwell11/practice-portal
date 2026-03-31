@@ -21,10 +21,10 @@ export default function App() {
             <button
               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded"
               onClick={() =>
-                openMarkerEditor(selectedSong.markers, selectedSong.beatOffset)
+                openMarkerEditor(selectedSong.tapMap ?? [])
               }
             >
-              Edit Markers
+              TapMap Editor
             </button>
           )}
         </header>

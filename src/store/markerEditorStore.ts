@@ -1,87 +1,118 @@
 import { create } from 'zustand';
-import type { MarkerConfig } from '../audio/types';
+import type { TapMapEntry } from '../audio/types';
 
-interface MarkerEditorState {
+const MAX_UNDO = 50;
+
+const sortByTime = (entries: TapMapEntry[]) =>
+  [...entries].sort((a, b) => a.time - b.time);
+
+interface TapMapEditorState {
   isOpen: boolean;
-  markers: MarkerConfig[];
-  beatOffset: number;
-  editingMarkerIndex: number | null;
-  tapBeatMode: boolean;
+  tapMap: TapMapEntry[];
   dirty: boolean;
+  selectedIndex: number | null;
+  tapping: boolean;
+  undoStack: TapMapEntry[][];
 
-  open: (markers: MarkerConfig[], beatOffset: number) => void;
+  open: (tapMap: TapMapEntry[]) => void;
   close: () => void;
-  addMarker: (marker: MarkerConfig) => void;
-  updateMarker: (index: number, updates: Partial<MarkerConfig>) => void;
-  deleteMarker: (index: number) => void;
-  moveMarker: (index: number, newBeat: number) => void;
-  setEditingMarker: (index: number | null) => void;
-  setBeatOffset: (offset: number) => void;
-  setTapBeatMode: (on: boolean) => void;
+  addEntry: (entry: TapMapEntry) => void;
+  deleteEntry: (index: number) => void;
+  moveEntry: (index: number, newTime: number) => void;
+  updateSectionLabel: (index: number, label: string) => void;
+  setSelectedIndex: (index: number | null) => void;
+  setTapping: (on: boolean) => void;
+  undo: () => void;
+  importTapMap: (entries: TapMapEntry[]) => void;
 }
 
 const initialState = {
   isOpen: false,
-  markers: [] as MarkerConfig[],
-  beatOffset: 0,
-  editingMarkerIndex: null as number | null,
-  tapBeatMode: false,
+  tapMap: [] as TapMapEntry[],
   dirty: false,
+  selectedIndex: null as number | null,
+  tapping: false,
+  undoStack: [] as TapMapEntry[][],
 };
 
-export const useMarkerEditorStore = create<MarkerEditorState>((set) => ({
+const pushUndo = (stack: TapMapEntry[][], snapshot: TapMapEntry[]): TapMapEntry[][] => {
+  const next = [...stack, snapshot];
+  if (next.length > MAX_UNDO) next.shift();
+  return next;
+};
+
+export const useMarkerEditorStore = create<TapMapEditorState>((set) => ({
   ...initialState,
 
-  open: (markers, beatOffset) =>
+  open: (tapMap) =>
     set({
       isOpen: true,
-      markers: [...markers].sort((a, b) => a.beat - b.beat),
-      beatOffset,
-      editingMarkerIndex: null,
-      tapBeatMode: false,
+      tapMap: sortByTime(tapMap),
       dirty: false,
+      selectedIndex: null,
+      tapping: false,
+      undoStack: [],
     }),
 
   close: () => set({ ...initialState }),
 
-  addMarker: (marker) =>
+  addEntry: (entry) =>
     set((state) => ({
-      markers: [...state.markers, marker].sort((a, b) => a.beat - b.beat),
+      undoStack: pushUndo(state.undoStack, state.tapMap),
+      tapMap: sortByTime([...state.tapMap, entry]),
       dirty: true,
     })),
 
-  updateMarker: (index, updates) =>
+  deleteEntry: (index) =>
     set((state) => ({
-      markers: state.markers.map((m, i) =>
-        i === index ? { ...m, ...updates } : m,
-      ),
+      undoStack: pushUndo(state.undoStack, state.tapMap),
+      tapMap: state.tapMap.filter((_, i) => i !== index),
+      selectedIndex: state.selectedIndex === index ? null : state.selectedIndex,
       dirty: true,
     })),
 
-  deleteMarker: (index) =>
-    set((state) => ({
-      markers: state.markers.filter((_, i) => i !== index),
-      editingMarkerIndex:
-        state.editingMarkerIndex === index ? null : state.editingMarkerIndex,
-      dirty: true,
-    })),
-
-  moveMarker: (index, newBeat) =>
+  moveEntry: (index, newTime) =>
     set((state) => {
-      const moved = { ...state.markers[index], beat: newBeat };
-      const rest = state.markers.filter((_, i) => i !== index);
-      const sorted = [...rest, moved].sort((a, b) => a.beat - b.beat);
+      const moved = { ...state.tapMap[index], time: newTime };
+      const rest = state.tapMap.filter((_, i) => i !== index);
+      const sorted = sortByTime([...rest, moved]);
       const newIndex = sorted.indexOf(moved);
       return {
-        markers: sorted,
-        editingMarkerIndex: newIndex,
+        undoStack: pushUndo(state.undoStack, state.tapMap),
+        tapMap: sorted,
+        selectedIndex: newIndex,
         dirty: true,
       };
     }),
 
-  setEditingMarker: (index) => set({ editingMarkerIndex: index }),
+  updateSectionLabel: (index, label) =>
+    set((state) => ({
+      tapMap: state.tapMap.map((e, i) =>
+        i === index ? { ...e, label } : e,
+      ),
+      dirty: true,
+    })),
 
-  setBeatOffset: (beatOffset) => set({ beatOffset, dirty: true }),
+  setSelectedIndex: (index) => set({ selectedIndex: index }),
 
-  setTapBeatMode: (tapBeatMode) => set({ tapBeatMode }),
+  setTapping: (tapping) => set({ tapping }),
+
+  undo: () =>
+    set((state) => {
+      if (state.undoStack.length === 0) return state;
+      const stack = [...state.undoStack];
+      const previous = stack.pop()!;
+      return {
+        undoStack: stack,
+        tapMap: previous,
+        dirty: true,
+      };
+    }),
+
+  importTapMap: (entries) =>
+    set((state) => ({
+      undoStack: pushUndo(state.undoStack, state.tapMap),
+      tapMap: sortByTime(entries),
+      dirty: true,
+    })),
 }));

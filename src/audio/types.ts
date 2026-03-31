@@ -37,6 +37,12 @@ export interface StemGroupConfig {
   stemIds: string[];
 }
 
+export interface TapMapEntry {
+  time: number;                              // seconds into the audio
+  type: 'section' | 'measure' | 'beat';      // hierarchy: section > measure > beat
+  label?: string;                            // only for sections
+}
+
 export interface SongConfig {
   id: string;
   title: string;
@@ -50,6 +56,7 @@ export interface SongConfig {
   timeSignatureMap: TimeSignatureEntry[];
   metronome: MetronomeConfig;
   markers: MarkerConfig[];
+  tapMap?: TapMapEntry[];
 }
 
 export interface SongManifestEntry {

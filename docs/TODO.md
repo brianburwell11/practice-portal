@@ -1,7 +1,11 @@
 # TODO
 
-## Marker Editor
+## TapMap Editor
 
-- **Fractional beat marker placement** — Allow markers at non-integer beats (e.g. beat 16.5) for pickups and other off-beat positions. Currently snaps to integer beats only.
+- **Fractional beat positioning** — Allow fine-grained placement between integer beats for pickups and off-beat positions.
 
-- **Tap-mapped beat grid for rubato recordings** — An admin mode where the user taps every measure/beat to define a non-uniform beat grid for recordings that weren't recorded to a metronome.
+- **Metronome playback from tapMap** — MetronomeScheduler should play clicks based on tapped beat positions (interpolating between them) instead of only supporting constant BPM.
+
+- **Tap refinement mode** — Re-tap individual beats/measures to improve timing accuracy without redoing the entire map.
+
+- **WaveformTimeline tapMap integration** — Main app's transport timeline should render section markers from tapMap when present.
