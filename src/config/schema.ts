@@ -45,6 +45,7 @@ export const songConfigSchema = z.object({
   artist: z.string(),
   key: z.string(),
   durationSeconds: z.number().positive(),
+  beatOffset: z.number().min(0).default(0),
   stems: z.array(stemConfigSchema).min(1),
   groups: z.array(stemGroupConfigSchema).optional(),
   tempoMap: z.array(tempoMapEntrySchema).min(1),

@@ -43,6 +43,7 @@ export interface SongConfig {
   artist: string;
   key: string;
   durationSeconds: number;
+  beatOffset: number;
   stems: StemConfig[];
   groups?: StemGroupConfig[];
   tempoMap: TempoMapEntry[];

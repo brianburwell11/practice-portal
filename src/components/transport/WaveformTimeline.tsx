@@ -14,7 +14,7 @@ export function WaveformTimeline() {
 
   const markers = useMemo(() => {
     if (!selectedSong) return [];
-    return markersToSeconds(selectedSong.markers, selectedSong.tempoMap);
+    return markersToSeconds(selectedSong.markers, selectedSong.tempoMap, selectedSong.beatOffset);
   }, [selectedSong]);
 
   const handleClick = useCallback(
