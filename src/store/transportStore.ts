@@ -8,6 +8,7 @@ interface TransportState {
   loopA: number | null;
   loopB: number | null;
   loopEnabled: boolean;
+  followPlayhead: boolean;
   setPlaying: (p: boolean) => void;
   setPosition: (p: number) => void;
   setDuration: (d: number) => void;
@@ -15,6 +16,8 @@ interface TransportState {
   setLoopA: (a: number | null) => void;
   setLoopB: (b: number | null) => void;
   setLoopEnabled: (e: boolean) => void;
+  setFollowPlayhead: (f: boolean) => void;
+  toggleFollowPlayhead: () => void;
   clearLoop: () => void;
 }
 
@@ -26,6 +29,7 @@ export const useTransportStore = create<TransportState>((set) => ({
   loopA: null,
   loopB: null,
   loopEnabled: true,
+  followPlayhead: true,
   setPlaying: (playing) => set({ playing }),
   setPosition: (position) => set({ position }),
   setDuration: (duration) => set({ duration }),
@@ -33,5 +37,7 @@ export const useTransportStore = create<TransportState>((set) => ({
   setLoopA: (loopA) => set({ loopA }),
   setLoopB: (loopB) => set({ loopB }),
   setLoopEnabled: (loopEnabled) => set({ loopEnabled }),
+  setFollowPlayhead: (followPlayhead) => set({ followPlayhead }),
+  toggleFollowPlayhead: () => set((s) => ({ followPlayhead: !s.followPlayhead })),
   clearLoop: () => set({ loopA: null, loopB: null, loopEnabled: true }),
 }));

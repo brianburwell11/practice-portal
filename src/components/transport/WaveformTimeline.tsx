@@ -12,7 +12,7 @@ const MIN_VIEW = 5;
 
 export function WaveformTimeline() {
   const engine = useAudioEngine();
-  const { position, duration, loopA, loopB, loopEnabled } = useTransportStore();
+  const { position, duration, loopA, loopB, loopEnabled, followPlayhead, setFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
 
   // Main canvas refs
@@ -129,8 +129,9 @@ export function WaveformTimeline() {
       const snap = findSnapMarker(x);
       const seconds = snap ?? pixelToSeconds(x, sizeRef.current.width);
       engine.seek(Math.max(0, Math.min(seconds, duration)));
+      setFollowPlayhead(true);
     },
-    [engine, duration, findSnapMarker, pixelToSeconds],
+    [engine, duration, findSnapMarker, pixelToSeconds, setFollowPlayhead],
   );
 
   const handleMouseDown = useCallback(
@@ -208,26 +209,27 @@ export function WaveformTimeline() {
         setViewDuration(newDuration);
         setViewStart(clampViewStart(newStart, newDuration));
       } else {
-        const delta = e.shiftKey ? e.deltaY : e.deltaX;
+        const delta = e.shiftKey ? (e.deltaY || e.deltaX) : e.deltaX;
         if (delta === 0 || !isZoomed) return;
         e.preventDefault();
         const scrollAmount = (delta / 500) * effectiveViewDuration;
         setViewStart((prev) => clampViewStart(prev + scrollAmount, effectiveViewDuration));
+        setFollowPlayhead(false);
       }
     };
 
     container.addEventListener('wheel', handleWheel, { passive: false });
     return () => container.removeEventListener('wheel', handleWheel);
-  }, [duration, effectiveViewDuration, isZoomed, pixelToSeconds, clampViewStart]);
+  }, [duration, effectiveViewDuration, isZoomed, pixelToSeconds, clampViewStart, setFollowPlayhead]);
 
   // Auto-scroll during playback when zoomed
   useEffect(() => {
-    if (!isZoomed || !duration) return;
+    if (!followPlayhead || !isZoomed || !duration) return;
     const rightThreshold = viewStart + effectiveViewDuration * 0.85;
     if (position > rightThreshold || position < viewStart) {
       setViewStart(clampViewStart(position - effectiveViewDuration * 0.25, effectiveViewDuration));
     }
-  }, [position, isZoomed, viewStart, effectiveViewDuration, duration, clampViewStart]);
+  }, [position, isZoomed, viewStart, effectiveViewDuration, duration, clampViewStart, followPlayhead]);
 
   // ResizeObserver for main canvas
   useEffect(() => {

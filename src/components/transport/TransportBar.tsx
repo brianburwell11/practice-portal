@@ -14,7 +14,7 @@ function formatTime(seconds: number): string {
 
 export function TransportBar() {
   const engine = useAudioEngine();
-  const { playing, position, duration, loopA, loopB, loopEnabled } = useTransportStore();
+  const { playing, position, duration, loopA, loopB, loopEnabled, toggleFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const { masterVolume, setMasterVolume } = useMixerStore();
 
@@ -60,10 +60,14 @@ export function TransportBar() {
           }
         }
       }
+      if (e.key === '`') {
+        e.preventDefault();
+        toggleFollowPlayhead();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [engine, playing, disabled, loopA, loopB, loopEnabled, position]);
+  }, [engine, playing, disabled, loopA, loopB, loopEnabled, position, toggleFollowPlayhead]);
 
   return (
     <div className="flex items-center gap-4 px-4 py-3 border-b border-gray-700">
