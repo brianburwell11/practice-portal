@@ -290,11 +290,11 @@ export function WaveformTimeline() {
           if (x < -1 || x > width + 1) continue;
 
           if (entry.type === 'beat') {
-            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
             ctx.lineWidth = 0.5;
           } else if (entry.type === 'measure') {
-            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-            ctx.lineWidth = 0.5;
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 1.5;
           } else {
             ctx.strokeStyle = '#f59e0b';
             ctx.lineWidth = 1;
