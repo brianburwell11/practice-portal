@@ -14,7 +14,7 @@ function formatTime(seconds: number): string {
 
 export function TransportBar() {
   const engine = useAudioEngine();
-  const { playing, position, duration, loopA, loopB } = useTransportStore();
+  const { playing, position, duration, loopA, loopB, loopEnabled } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const { masterVolume, setMasterVolume } = useMixerStore();
 
@@ -52,12 +52,18 @@ export function TransportBar() {
       }
       if (e.key === '\\' && !disabled) {
         e.preventDefault();
-        engine.clearLoop();
+        if (loopA !== null && loopB !== null) {
+          if (e.shiftKey) {
+            engine.clearLoop();
+          } else {
+            engine.setLoopEnabled(!loopEnabled);
+          }
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [engine, playing, disabled, loopA, loopB, position]);
+  }, [engine, playing, disabled, loopA, loopB, loopEnabled, position]);
 
   return (
     <div className="flex items-center gap-4 px-4 py-3 border-b border-gray-700">
@@ -84,15 +90,21 @@ export function TransportBar() {
           <button
             className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               loopA !== null && loopB !== null
-                ? 'bg-green-600 hover:bg-green-500 text-white'
+                ? loopEnabled
+                  ? 'bg-yellow-500 hover:bg-yellow-400 text-gray-900'
+                  : 'bg-yellow-500/40 hover:bg-yellow-500/50 text-yellow-200'
                 : loopA !== null
                   ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
                   : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
             }`}
             disabled={disabled}
-            onClick={() => {
+            onClick={(e) => {
               if (loopA !== null && loopB !== null) {
-                engine.clearLoop();
+                if (e.shiftKey) {
+                  engine.clearLoop();
+                } else {
+                  engine.setLoopEnabled(!loopEnabled);
+                }
               } else if (loopA !== null) {
                 engine.setLoop(loopA, position);
               } else {
@@ -101,7 +113,9 @@ export function TransportBar() {
             }}
             title={
               loopA !== null && loopB !== null
-                ? `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} — click to clear`
+                ? loopEnabled
+                  ? `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} — click to disable, shift+click to clear`
+                  : `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} (disabled) — click to enable, shift+click to clear`
                 : loopA !== null
                   ? `Loop in: ${formatTime(loopA)} — click to set out point`
                   : 'Set loop in point'

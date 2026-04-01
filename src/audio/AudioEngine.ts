@@ -27,6 +27,7 @@ export class AudioEngine {
   private workletRegistered = false;
   private _loopA: number | null = null;
   private _loopB: number | null = null;
+  private _loopEnabled = true;
   private loopCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -54,6 +55,10 @@ export class AudioEngine {
 
   get loopB(): number | null {
     return this._loopB;
+  }
+
+  get loopEnabled(): boolean {
+    return this._loopEnabled;
   }
 
   setOnStateChange(cb: EngineStateCallback): void {
@@ -156,7 +161,7 @@ export class AudioEngine {
     }
 
     this.startPositionUpdates();
-    if (this._loopA !== null && this._loopB !== null) {
+    if (this._loopEnabled && this._loopA !== null && this._loopB !== null) {
       this.startLoopScheduler();
     }
     this.notify();
@@ -374,7 +379,7 @@ export class AudioEngine {
     this.stopPositionUpdates();
     const tick = () => {
       // Check if playback reached the end
-      if (this._loopA === null && this._loopB === null && this.clock.currentTime >= this.clock.duration) {
+      if (!(this._loopEnabled && this._loopA !== null && this._loopB !== null) && this.clock.currentTime >= this.clock.duration) {
         this.stop();
         return;
       }
@@ -404,6 +409,7 @@ export class AudioEngine {
     }
     this._loopA = a;
     this._loopB = b;
+    this._loopEnabled = true;
     if (a !== null && b !== null && this.clock.playing) {
       this.startLoopScheduler();
     } else {
@@ -412,9 +418,20 @@ export class AudioEngine {
     this.notify();
   }
 
+  setLoopEnabled(enabled: boolean): void {
+    this._loopEnabled = enabled;
+    if (enabled && this._loopA !== null && this._loopB !== null && this.clock.playing) {
+      this.startLoopScheduler();
+    } else if (!enabled) {
+      this.stopLoopScheduler();
+    }
+    this.notify();
+  }
+
   clearLoop(): void {
     this._loopA = null;
     this._loopB = null;
+    this._loopEnabled = true;
     this.stopLoopScheduler();
     this.notify();
   }
@@ -422,7 +439,7 @@ export class AudioEngine {
   private startLoopScheduler(): void {
     this.stopLoopScheduler();
     this.loopCheckInterval = setInterval(() => {
-      if (this._loopA !== null && this._loopB !== null && this.clock.playing && this.clock.currentTime >= this._loopB) {
+      if (this._loopEnabled && this._loopA !== null && this._loopB !== null && this.clock.playing && this.clock.currentTime >= this._loopB) {
         this.seek(this._loopA);
       }
     }, 10);

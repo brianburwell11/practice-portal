@@ -12,7 +12,7 @@ const MIN_VIEW = 5;
 
 export function WaveformTimeline() {
   const engine = useAudioEngine();
-  const { position, duration, loopA, loopB } = useTransportStore();
+  const { position, duration, loopA, loopB, loopEnabled } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
 
   // Main canvas refs
@@ -397,15 +397,16 @@ export function WaveformTimeline() {
 
     // Loop bracket markers and region highlight
     if (loopA !== null || loopB !== null) {
-      ctx.strokeStyle = '#22c55e';
+      const loopColor = loopEnabled ? '#eab308' : '#eab30860';
+      ctx.strokeStyle = loopColor;
       ctx.lineWidth = 2;
       const bracketW = 6;
 
-      // Green fill between brackets when both are set
+      // Fill between brackets when both are set
       if (loopA !== null && loopB !== null) {
         const ax = secondsToPixel(loopA, width);
         const bx = secondsToPixel(loopB, width);
-        ctx.fillStyle = 'rgba(34, 197, 94, 0.15)';
+        ctx.fillStyle = loopEnabled ? 'rgba(234, 179, 8, 0.15)' : 'rgba(234, 179, 8, 0.06)';
         ctx.fillRect(ax, 0, bx - ax, height);
       }
 
@@ -452,7 +453,7 @@ export function WaveformTimeline() {
       ctx.fillStyle = '#3B82F6';
       ctx.fillRect(Math.round(playheadX) - 1, 0, 2, height);
     }
-  }, [engine.peakData, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB]);
+  }, [engine.peakData, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB, loopEnabled]);
 
   // Draw overview canvas (full song, only when zoomed)
   useEffect(() => {
@@ -508,12 +509,12 @@ export function WaveformTimeline() {
 
     // Loop region on overview
     if (loopA !== null || loopB !== null) {
-      ctx.strokeStyle = '#22c55e';
+      ctx.strokeStyle = loopEnabled ? '#eab308' : '#eab30860';
       ctx.lineWidth = 1;
       if (loopA !== null && loopB !== null) {
         const oax = (loopA / duration) * width;
         const obx = (loopB / duration) * width;
-        ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
+        ctx.fillStyle = loopEnabled ? 'rgba(234, 179, 8, 0.2)' : 'rgba(234, 179, 8, 0.08)';
         ctx.fillRect(oax, 0, obx - oax, height);
       }
       if (loopA !== null) {
@@ -539,7 +540,7 @@ export function WaveformTimeline() {
     const phx = (position / duration) * width;
     ctx.fillStyle = '#3B82F6';
     ctx.fillRect(Math.round(phx) - 0.5, 0, 1.5, height);
-  }, [engine.peakData, position, duration, selectedSong, isZoomed, viewStart, effectiveViewDuration, loopA, loopB]);
+  }, [engine.peakData, position, duration, selectedSong, isZoomed, viewStart, effectiveViewDuration, loopA, loopB, loopEnabled]);
 
   // Overview click: seek + center viewport
   const handleOverviewClick = useCallback(

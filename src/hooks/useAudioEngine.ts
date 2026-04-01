@@ -32,9 +32,10 @@ export function useCreateEngine(): AudioEngine {
       setPosition(engine.clock.currentTime);
       setDuration(engine.clock.duration);
       // Sync loop state
-      const { setLoopA, setLoopB } = useTransportStore.getState();
+      const { setLoopA, setLoopB, setLoopEnabled } = useTransportStore.getState();
       setLoopA(engine.loopA);
       setLoopB(engine.loopB);
+      setLoopEnabled(engine.loopEnabled);
     });
 
     // Don't dispose — singleton survives StrictMode remounts
