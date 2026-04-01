@@ -24,8 +24,8 @@ export function MarkerEditorCanvas({
   const {
     tapMap,
     selectedIndex,
-    tapping,
     addEntry,
+    deleteEntry,
     moveEntry,
     setSelectedIndex,
     undo,
@@ -90,7 +90,7 @@ export function MarkerEditorCanvas({
       } else if (e.shiftKey || e.deltaX !== 0) {
         // Horizontal scroll
         e.preventDefault();
-        const delta = e.shiftKey ? e.deltaY : e.deltaX;
+        const delta = e.deltaX || e.deltaY;
         if (delta === 0) return;
         const scrollAmount = (delta / 500) * viewDuration;
         const newStart = Math.max(0, Math.min(duration - viewDuration, viewStart + scrollAmount));
@@ -210,8 +210,8 @@ export function MarkerEditorCanvas({
         ctx.stroke();
       } else {
         // Beat: thin white line
-        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-        ctx.lineWidth = 0.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 0.75;
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
@@ -301,7 +301,7 @@ export function MarkerEditorCanvas({
     [duration, findEntryNearX, setSelectedIndex, moveEntry, pixelToSeconds, engine],
   );
 
-  // Keyboard: S/M/B to add entries, Z to undo (when tapping)
+  // Keyboard: S/M/B to add entries, Z to undo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -310,7 +310,6 @@ export function MarkerEditorCanvas({
       )
         return;
 
-      if (!tapping) return;
       if (!duration) return;
 
       const key = e.key.toUpperCase();
@@ -319,9 +318,6 @@ export function MarkerEditorCanvas({
         undo();
         return;
       }
-
-      const { playing } = useTransportStore.getState();
-      if (!playing) return;
 
       const currentPos = engine.clock.currentTime;
 
@@ -337,7 +333,32 @@ export function MarkerEditorCanvas({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [engine, duration, tapping, tapMap, addEntry, undo]);
+  }, [engine, duration, tapMap, addEntry, undo]);
+
+  // Backspace / Delete to remove selected marker; Cmd/Ctrl+Z to undo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
+
+      if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      if (selectedIndex === null) return;
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        deleteEntry(selectedIndex);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIndex, deleteEntry, undo]);
 
   return (
     <div

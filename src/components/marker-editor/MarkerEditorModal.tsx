@@ -10,7 +10,7 @@ import { SectionList } from './SectionList';
 import { parseXscFile } from '../../audio/xscParser';
 
 export function MarkerEditorModal() {
-  const { isOpen, tapMap, dirty, tapping, close, setTapping, importTapMap, onComplete } =
+  const { isOpen, tapMap, dirty, close, importTapMap, onComplete } =
     useMarkerEditorStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const setSelectedSong = useSongStore((s) => s.setSelectedSong);
@@ -113,16 +113,6 @@ export function MarkerEditorModal() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            className={`px-3 py-1.5 rounded text-sm transition-colors ${
-              tapping
-                ? 'bg-amber-500 text-gray-900 font-semibold'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-            }`}
-            onClick={() => setTapping(!tapping)}
-          >
-            {tapping ? 'Tapping' : 'Tap Mode'}
-          </button>
           <button
             className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
             onClick={() => fileInputRef.current?.click()}
