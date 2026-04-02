@@ -26,6 +26,15 @@ export default function App() {
               + Add Song
             </a>
           )}
+          {import.meta.env.DEV && selectedSong && (
+            <a
+              href={`#/admin/edit-song/${selectedSong.id}`}
+              onClick={() => setTimeout(() => location.reload(), 0)}
+              className="text-xs text-gray-500 hover:text-gray-300"
+            >
+              Edit Song
+            </a>
+          )}
           {selectedSong && (
             <button
               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded"
