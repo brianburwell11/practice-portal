@@ -1,6 +1,8 @@
 import type { Plugin, ViteDevServer } from 'vite';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { execSync } from 'node:child_process';
 import Busboy from 'busboy';
 import dotenv from 'dotenv';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -19,6 +21,44 @@ function getR2Client(): S3Client | null {
       secretAccessKey: R2_SECRET_ACCESS_KEY,
     },
   });
+}
+
+interface ProbeResult {
+  codec: string;
+  bitrate: number;
+  channels: number;
+  sampleRate: number;
+}
+
+function ffprobe(filePath: string): ProbeResult {
+  const raw = execSync(
+    `ffprobe -v quiet -print_format json -show_streams "${filePath}"`,
+    { encoding: 'utf-8' },
+  );
+  const data = JSON.parse(raw);
+  const audio = data.streams?.find((s: any) => s.codec_type === 'audio');
+  if (!audio) throw new Error('No audio stream found');
+  return {
+    codec: audio.codec_name ?? '',
+    bitrate: parseInt(audio.bit_rate ?? '0', 10),
+    channels: audio.channels ?? 0,
+    sampleRate: parseInt(audio.sample_rate ?? '0', 10),
+  };
+}
+
+function shouldSkipTranscode(probe: ProbeResult): boolean {
+  return probe.codec === 'mp3' && probe.bitrate >= 256000;
+}
+
+function transcodeToMp3(inputPath: string, outputPath: string, probe: ProbeResult): void {
+  // Mono stems get 128k (equivalent quality to 256k stereo)
+  const isMono = probe.channels === 1;
+  const bitrate = isMono ? '128k' : '256k';
+  const channelFlag = isMono ? '-ac 1' : '';
+  execSync(
+    `ffmpeg -y -i "${inputPath}" -codec:a libmp3lame -b:a ${bitrate} ${channelFlag} -ar 44100 "${outputPath}"`,
+    { stdio: 'ignore' },
+  );
 }
 
 function readBody(req: import('node:http').IncomingMessage): Promise<string> {
@@ -135,6 +175,81 @@ export function configApiPlugin(): Plugin {
             jsonResponse(res, 200, { ok: true, path: logoPath });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Upload failed' });
+          }
+          return;
+        }
+
+        // --- POST /api/r2/transcode-upload ---
+        const transcodeMatch = req.url?.match(/^\/api\/r2\/transcode-upload\/([^/]+)$/);
+        if (transcodeMatch && req.method === 'POST') {
+          const songId = transcodeMatch[1];
+          const r2 = getR2Client();
+          const bucket = process.env.R2_BUCKET;
+          if (!r2 || !bucket) {
+            return jsonResponse(res, 500, { error: 'R2 not configured — check .env' });
+          }
+
+          const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pp-transcode-'));
+
+          try {
+            // 1. Receive files via busboy → temp dir
+            const received = await new Promise<{ origName: string; tmpPath: string }[]>((resolve, reject) => {
+              const files: { origName: string; tmpPath: string }[] = [];
+              const busboy = Busboy({ headers: req.headers as Record<string, string> });
+
+              busboy.on('file', (_field, stream, info) => {
+                const tmpPath = path.join(tmpDir, info.filename);
+                const ws = fs.createWriteStream(tmpPath);
+                stream.pipe(ws);
+                ws.on('finish', () => files.push({ origName: info.filename, tmpPath }));
+                ws.on('error', reject);
+              });
+
+              busboy.on('finish', () => resolve(files));
+              busboy.on('error', reject);
+              req.pipe(busboy);
+            });
+
+            // 2. Transcode each file and upload to R2
+            const fileMap: Record<string, string> = {}; // origName → transcoded name
+
+            for (const { origName, tmpPath } of received) {
+              let uploadPath = tmpPath;
+              let uploadName = origName;
+
+              const probe = ffprobe(tmpPath);
+
+              if (shouldSkipTranscode(probe)) {
+                // Already MP3 ≥256k, upload as-is
+                uploadName = origName;
+              } else {
+                // Transcode to MP3
+                const baseName = path.basename(origName, path.extname(origName));
+                uploadName = `${baseName}.mp3`;
+                uploadPath = path.join(tmpDir, `out-${uploadName}`);
+                transcodeToMp3(tmpPath, uploadPath, probe);
+              }
+
+              // Upload to R2
+              const key = `song-${songId}/${uploadName}`;
+              const body = fs.readFileSync(uploadPath);
+              await r2.send(new PutObjectCommand({
+                Bucket: bucket,
+                Key: key,
+                Body: body,
+                ContentType: 'audio/mpeg',
+              }));
+
+              fileMap[origName] = uploadName;
+            }
+
+            const publicBase = `${process.env.R2_PUBLIC_URL}/song-${songId}`;
+            jsonResponse(res, 200, { ok: true, fileMap, publicBase });
+          } catch (err: any) {
+            jsonResponse(res, 500, { error: err.message ?? 'Transcode/upload failed' });
+          } finally {
+            // Clean up temp dir
+            fs.rmSync(tmpDir, { recursive: true, force: true });
           }
           return;
         }

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
+import { uploadFormWithProgress } from '../utils/uploadWithProgress';
 
 interface Props {
   state: WizardState;
@@ -21,38 +22,43 @@ export function ReviewStep({ state, dispatch }: Props) {
     dispatch({ type: 'SET_ERROR', error: null });
 
     try {
-      // 1. Get presigned URLs for R2 upload
-      const filenames = state.stems.map((s) => s.file.name);
-      const presignRes = await fetch('/api/r2/presign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ songId: state.id, files: filenames }),
-      });
-      if (!presignRes.ok) {
-        const err = await presignRes.json();
-        throw new Error(err.error || 'Failed to get upload URLs');
+      // 1. Upload stems to server for transcoding + R2 upload
+      const formData = new FormData();
+      for (const stem of state.stems) {
+        formData.append('stems', stem.file, stem.file.name);
       }
-      const { urls, publicBase } = await presignRes.json() as {
-        urls: Record<string, string>;
-        publicBase: string;
+
+      dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+        fileIndex: 0, fileCount: state.stems.length, bytesSent: 0, bytesTotal: 1,
+      }});
+
+      const uploadResult = await uploadFormWithProgress(
+        `/api/r2/transcode-upload/${state.id}`,
+        formData,
+        (bytesSent, bytesTotal) => {
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+            fileIndex: 0, fileCount: state.stems.length, bytesSent, bytesTotal,
+          }});
+        },
+      );
+
+      if (!uploadResult.ok) throw new Error(uploadResult.error ?? 'Upload failed');
+      const { fileMap, publicBase } = uploadResult;
+      dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+
+      // 2. Update config stem filenames to match transcoded files, then save locally
+      const transcodedConfig = {
+        ...config,
+        stems: config.stems.map((stem) => ({
+          ...stem,
+          file: fileMap[stem.file] ?? stem.file,
+        })),
       };
 
-      // 2. Upload each stem directly to R2
-      for (const stem of state.stems) {
-        const presignedUrl = urls[stem.file.name];
-        if (!presignedUrl) throw new Error(`No upload URL for ${stem.file.name}`);
-        const uploadRes = await fetch(presignedUrl, {
-          method: 'PUT',
-          body: stem.file,
-        });
-        if (!uploadRes.ok) throw new Error(`Upload failed for ${stem.file.name}`);
-      }
-
-      // 3. Write config locally
       const configRes = await fetch(`/api/song/${state.id}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify(transcodedConfig),
       });
       if (!configRes.ok) {
         const err = await configRes.json();
@@ -203,6 +209,29 @@ export function ReviewStep({ state, dispatch }: Props) {
         </div>
       )}
 
+      {/* Upload progress */}
+      {state.uploadProgress && (() => {
+        const pct = state.uploadProgress.bytesTotal
+          ? Math.round((state.uploadProgress.bytesSent / state.uploadProgress.bytesTotal) * 100)
+          : 0;
+        const uploading = pct < 100;
+        return (
+          <div className="space-y-1">
+            <p className="text-sm text-gray-400">
+              {uploading
+                ? `Uploading ${state.stems.length} stems (${pct}%)...`
+                : 'Transcoding & uploading to storage...'}
+            </p>
+            <div className="w-full bg-gray-700 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full transition-all ${uploading ? 'bg-blue-500' : 'bg-blue-500 animate-pulse'}`}
+                style={{ width: uploading ? `${pct}%` : '100%' }}
+              />
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="flex justify-between">
         <button
           onClick={() => dispatch({ type: 'PREV_STEP' })}
@@ -216,7 +245,9 @@ export function ReviewStep({ state, dispatch }: Props) {
           onClick={handleSave}
           className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium"
         >
-          {state.saving ? 'Saving...' : 'Save Song'}
+          {state.saving
+            ? state.uploadProgress ? 'Uploading...' : 'Saving...'
+            : 'Save Song'}
         </button>
       </div>
     </div>

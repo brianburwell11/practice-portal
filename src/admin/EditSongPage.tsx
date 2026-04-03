@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema, songManifestSchema } from '../config/schema';
 import { detectStem, isAudioFile, deduplicateIds } from './utils/stemDetection';
+import { uploadFormWithProgress } from './utils/uploadWithProgress';
 import type { StemConfig, StemGroupConfig } from '../audio/types';
 
 const groupColors = [
@@ -138,23 +139,36 @@ export default function EditSongPage() {
     if (!config || !songPath) return;
     dispatch({ type: 'SET_SAVING', saving: true });
     try {
-      // Upload new stem files to R2
+      // Upload new stem files: transcode + upload to R2
       if (newStemFiles.size > 0) {
-        const filenames = Array.from(newStemFiles.values()).map((f) => f.name);
-        const presignRes = await fetch('/api/r2/presign', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ songId: config.id, files: filenames }),
-        });
-        if (!presignRes.ok) throw new Error('Failed to get upload URLs');
-        const { urls } = await presignRes.json() as { urls: Record<string, string> };
-
+        const formData = new FormData();
         for (const [, file] of newStemFiles) {
-          const presignedUrl = urls[file.name];
-          if (!presignedUrl) throw new Error(`No upload URL for ${file.name}`);
-          const uploadRes = await fetch(presignedUrl, { method: 'PUT', body: file });
-          if (!uploadRes.ok) throw new Error(`Upload failed for ${file.name}`);
+          formData.append('stems', file, file.name);
         }
+
+        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+          fileIndex: 0, fileCount: newStemFiles.size, bytesSent: 0, bytesTotal: 1,
+        }});
+
+        const uploadResult = await uploadFormWithProgress(
+          `/api/r2/transcode-upload/${config.id}`,
+          formData,
+          (bytesSent, bytesTotal) => {
+            dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+              fileIndex: 0, fileCount: newStemFiles.size, bytesSent, bytesTotal,
+            }});
+          },
+        );
+
+        if (!uploadResult.ok) throw new Error(uploadResult.error ?? 'Upload failed');
+
+        // Update stem filenames to transcoded versions
+        const updatedStems = config.stems.map((stem) => ({
+          ...stem,
+          file: uploadResult.fileMap[stem.file] ?? stem.file,
+        }));
+        dispatch({ type: 'INIT', config: { ...config, stems: updatedStems } });
+        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
       }
 
       // Save config
@@ -442,6 +456,28 @@ export default function EditSongPage() {
             </div>
           )}
 
+          {state.uploadProgress && (() => {
+            const pct = state.uploadProgress.bytesTotal
+              ? Math.round((state.uploadProgress.bytesSent / state.uploadProgress.bytesTotal) * 100)
+              : 0;
+            const uploading = pct < 100;
+            return (
+              <div className="space-y-1">
+                <p className="text-sm text-gray-400">
+                  {uploading
+                    ? `Uploading ${state.uploadProgress.fileCount} stems (${pct}%)...`
+                    : 'Transcoding & uploading to storage...'}
+                </p>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${uploading ? 'bg-blue-500' : 'bg-blue-500 animate-pulse'}`}
+                    style={{ width: uploading ? `${pct}%` : '100%' }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-500">
               {isDirty(state) ? 'Unsaved changes' : 'No changes'}
@@ -451,7 +487,9 @@ export default function EditSongPage() {
               onClick={handleSave}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium"
             >
-              {state.saving ? 'Saving...' : 'Save'}
+              {state.saving
+                ? state.uploadProgress ? 'Uploading...' : 'Saving...'
+                : 'Save'}
             </button>
           </div>
         </section>
