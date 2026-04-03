@@ -40,7 +40,8 @@ export function SongList() {
       const configData = await res.json();
       const config = songConfigSchema.parse(configData);
 
-      await engine.loadSong(config, `/${entry.path}`, (loaded, total) => {
+      const audioBase = entry.audioBasePath ?? `/${entry.path}`;
+      await engine.loadSong(config, audioBase, (loaded, total) => {
         setLoadProgress(loaded, total);
       });
 

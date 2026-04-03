@@ -2,6 +2,24 @@ import type { Plugin, ViteDevServer } from 'vite';
 import fs from 'node:fs';
 import path from 'node:path';
 import Busboy from 'busboy';
+import dotenv from 'dotenv';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+dotenv.config();
+
+function getR2Client(): S3Client | null {
+  const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = process.env;
+  if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) return null;
+  return new S3Client({
+    region: 'auto',
+    endpoint: R2_ENDPOINT,
+    credentials: {
+      accessKeyId: R2_ACCESS_KEY_ID,
+      secretAccessKey: R2_SECRET_ACCESS_KEY,
+    },
+  });
+}
 
 function readBody(req: import('node:http').IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -33,9 +51,7 @@ export function configApiPlugin(): Plugin {
           const songId = configMatch[1];
           const songDir = path.resolve(process.cwd(), 'public', 'audio', `song-${songId}`);
 
-          if (!fs.existsSync(songDir)) {
-            return jsonResponse(res, 404, { error: `Song directory song-${songId} not found` });
-          }
+          fs.mkdirSync(songDir, { recursive: true });
 
           try {
             const raw = await readBody(req);
@@ -119,6 +135,38 @@ export function configApiPlugin(): Plugin {
             jsonResponse(res, 200, { ok: true, path: logoPath });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Upload failed' });
+          }
+          return;
+        }
+
+        // --- POST /api/r2/presign ---
+        if (req.url === '/api/r2/presign' && req.method === 'POST') {
+          const r2 = getR2Client();
+          const bucket = process.env.R2_BUCKET;
+          if (!r2 || !bucket) {
+            return jsonResponse(res, 500, { error: 'R2 not configured — check .env' });
+          }
+
+          try {
+            const raw = await readBody(req);
+            const { songId, files } = JSON.parse(raw) as { songId: string; files: string[] };
+            if (!songId || !files?.length) {
+              return jsonResponse(res, 400, { error: 'songId and files[] required' });
+            }
+
+            const urls: Record<string, string> = {};
+            for (const filename of files) {
+              const key = `song-${songId}/${filename}`;
+              const url = await getSignedUrl(r2, new PutObjectCommand({
+                Bucket: bucket,
+                Key: key,
+              }), { expiresIn: 3600 });
+              urls[filename] = url;
+            }
+
+            jsonResponse(res, 200, { urls, publicBase: `${process.env.R2_PUBLIC_URL}/song-${songId}` });
+          } catch (err: any) {
+            jsonResponse(res, 400, { error: err.message ?? 'Presign failed' });
           }
           return;
         }

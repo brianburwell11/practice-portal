@@ -138,14 +138,23 @@ export default function EditSongPage() {
     if (!config || !songPath) return;
     dispatch({ type: 'SET_SAVING', saving: true });
     try {
-      // Upload new stem files
+      // Upload new stem files to R2
       if (newStemFiles.size > 0) {
-        const formData = new FormData();
+        const filenames = Array.from(newStemFiles.values()).map((f) => f.name);
+        const presignRes = await fetch('/api/r2/presign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ songId: config.id, files: filenames }),
+        });
+        if (!presignRes.ok) throw new Error('Failed to get upload URLs');
+        const { urls } = await presignRes.json() as { urls: Record<string, string> };
+
         for (const [, file] of newStemFiles) {
-          formData.append('stems', file, file.name);
+          const presignedUrl = urls[file.name];
+          if (!presignedUrl) throw new Error(`No upload URL for ${file.name}`);
+          const uploadRes = await fetch(presignedUrl, { method: 'PUT', body: file });
+          if (!uploadRes.ok) throw new Error(`Upload failed for ${file.name}`);
         }
-        const uploadRes = await fetch(`/api/song/${config.id}/upload`, { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Failed to upload stem files');
       }
 
       // Save config

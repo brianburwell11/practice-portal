@@ -18,6 +18,10 @@ public/audio/**/*.mp3
 public/audio/**/*.ogg
 public/audio/**/*.flac
 
+# Environment variables
+.env
+.env.*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

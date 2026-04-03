@@ -21,21 +21,34 @@ export function ReviewStep({ state, dispatch }: Props) {
     dispatch({ type: 'SET_ERROR', error: null });
 
     try {
-      // 1. Upload stem files
-      const formData = new FormData();
-      for (const stem of state.stems) {
-        formData.append('stems', stem.file, stem.file.name);
-      }
-      const uploadRes = await fetch(`/api/song/${state.id}/upload`, {
+      // 1. Get presigned URLs for R2 upload
+      const filenames = state.stems.map((s) => s.file.name);
+      const presignRes = await fetch('/api/r2/presign', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ songId: state.id, files: filenames }),
       });
-      if (!uploadRes.ok) {
-        const err = await uploadRes.json();
-        throw new Error(err.error || 'Upload failed');
+      if (!presignRes.ok) {
+        const err = await presignRes.json();
+        throw new Error(err.error || 'Failed to get upload URLs');
+      }
+      const { urls, publicBase } = await presignRes.json() as {
+        urls: Record<string, string>;
+        publicBase: string;
+      };
+
+      // 2. Upload each stem directly to R2
+      for (const stem of state.stems) {
+        const presignedUrl = urls[stem.file.name];
+        if (!presignedUrl) throw new Error(`No upload URL for ${stem.file.name}`);
+        const uploadRes = await fetch(presignedUrl, {
+          method: 'PUT',
+          body: stem.file,
+        });
+        if (!uploadRes.ok) throw new Error(`Upload failed for ${stem.file.name}`);
       }
 
-      // 2. Write config
+      // 3. Write config locally
       const configRes = await fetch(`/api/song/${state.id}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,7 +59,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         throw new Error(err.error || 'Config save failed');
       }
 
-      // 3. Update manifest
+      // 4. Update manifest with R2 audio path
       const manifestRes = await fetch('/api/manifest/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -55,11 +68,27 @@ export function ReviewStep({ state, dispatch }: Props) {
           title: state.title,
           artist: state.artist,
           path: `audio/song-${state.id}`,
+          audioBasePath: publicBase,
         }),
       });
       if (!manifestRes.ok) {
         const err = await manifestRes.json();
         throw new Error(err.error || 'Manifest update failed');
+      }
+
+      // 5. Auto-add song to current band
+      if (bandSlug) {
+        const bandsRes = await fetch('/bands.json');
+        const bandsData = await bandsRes.json();
+        const band = bandsData.bands.find((b: any) => b.route === bandSlug);
+        if (band && !band.songIds.includes(state.id)) {
+          band.songIds.push(state.id);
+          await fetch('/api/bands', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bandsData),
+          });
+        }
       }
 
       setResult('success');

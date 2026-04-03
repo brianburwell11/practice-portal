@@ -64,6 +64,7 @@ export interface SongManifestEntry {
   title: string;
   artist: string;
   path: string;
+  audioBasePath?: string;
 }
 
 export interface SongManifest {
