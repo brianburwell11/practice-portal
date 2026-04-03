@@ -23,6 +23,13 @@
       "title": "Bite",
       "artist": "SOOZA",
       "path": "audio/song-gunk-palace-sooza"
+    },
+    {
+      "id": "bella-ciao-sooza",
+      "title": "Bella Ciao",
+      "artist": "SOOZA",
+      "path": "audio/song-bella-ciao-sooza",
+      "audioBasePath": "https://pub-9e583788dafa4ce193a3eee1987d93b6.r2.dev/song-bella-ciao-sooza"
     }
   ]
 }
