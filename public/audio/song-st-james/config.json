@@ -85,6 +85,14 @@
       "defaultVolume": 0.8,
       "defaultPan": 0,
       "color": "#f43f5e"
+    },
+    {
+      "id": "click",
+      "label": "Click",
+      "file": "St James Click.mp3",
+      "defaultVolume": 0.8,
+      "defaultPan": 0,
+      "color": "#94a3b8"
     }
   ],
   "groups": [

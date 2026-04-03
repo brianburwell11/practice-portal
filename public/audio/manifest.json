@@ -11,6 +11,18 @@
       "title": "Test Tones",
       "artist": "Generated",
       "path": "audio/song-test"
+    },
+    {
+      "id": "wiggle-sooza",
+      "title": "Wiggle",
+      "artist": "SOOZA",
+      "path": "audio/song-wiggle-sooza"
+    },
+    {
+      "id": "gunk-palace-sooza",
+      "title": "Bite",
+      "artist": "SOOZA",
+      "path": "audio/song-gunk-palace-sooza"
     }
   ]
 }
