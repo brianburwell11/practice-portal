@@ -71,3 +71,23 @@ export const songManifestEntrySchema = z.object({
 export const songManifestSchema = z.object({
   songs: z.array(songManifestEntrySchema).min(1),
 });
+
+export const bandColorsSchema = z.object({
+  primary: z.string(),
+  accent: z.string(),
+  background: z.string(),
+  text: z.string(),
+});
+
+export const bandConfigSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  route: z.string(),
+  colors: bandColorsSchema,
+  logo: z.string().optional(),
+  songIds: z.array(z.string()),
+});
+
+export const bandsManifestSchema = z.object({
+  bands: z.array(bandConfigSchema),
+});

@@ -69,3 +69,23 @@ export interface SongManifestEntry {
 export interface SongManifest {
   songs: SongManifestEntry[];
 }
+
+export interface BandColors {
+  primary: string;
+  accent: string;
+  background: string;
+  text: string;
+}
+
+export interface BandConfig {
+  id: string;
+  name: string;
+  route: string;
+  colors: BandColors;
+  logo?: string;
+  songIds: string[];
+}
+
+export interface BandsManifest {
+  bands: BandConfig[];
+}
