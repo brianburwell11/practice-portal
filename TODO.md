@@ -49,3 +49,11 @@
 - Displayed as markers on the waveform timeline
 - Two layers: admin notes (saved in config.json, visible to all band members)
   and personal notes (browser localStorage, per user)
+
+## 9. Lazy Stem Loading (Monitor)
+
+- Currently all stems are fetched and decoded before playback is available
+- If load times become a problem with many stems on R2, consider loading
+  essential stems first (e.g. full mix or rhythm section) and background-loading the rest
+- Monitor real-world usage before implementing — may not be necessary
+  with browser caching (Cache-Control: immutable) after the first load

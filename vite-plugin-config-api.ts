@@ -238,6 +238,7 @@ export function configApiPlugin(): Plugin {
                 Key: key,
                 Body: body,
                 ContentType: 'audio/mpeg',
+                CacheControl: 'public, max-age=31536000, immutable',
               }));
 
               fileMap[origName] = uploadName;
