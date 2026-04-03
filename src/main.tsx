@@ -20,9 +20,11 @@ const adminFallback = (
   <div className="min-h-screen bg-gray-900 text-gray-400 p-8">Loading admin...</div>
 );
 
+const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <Routes>
         <Route path="/" element={<BandPicker />} />
         {ManageBandsPage && (

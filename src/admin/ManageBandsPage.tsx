@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bandsManifestSchema, songManifestSchema } from '../config/schema';
+import { assetUrl } from '../utils/url';
 import type { BandConfig, BandColors, SongManifestEntry } from '../audio/types';
 
 const defaultColors: BandColors = {
@@ -35,12 +36,12 @@ export default function ManageBandsPage() {
 
   // Load bands + songs manifest
   useEffect(() => {
-    fetch('/bands.json')
+    fetch(assetUrl('bands.json'))
       .then((r) => r.json())
       .then((data) => setBands(bandsManifestSchema.parse(data).bands))
       .catch((err) => setError(String(err)));
 
-    fetch('/audio/manifest.json')
+    fetch(assetUrl('audio/manifest.json'))
       .then((r) => r.json())
       .then((data) => setAllSongs(songManifestSchema.parse(data).songs))
       .catch((err) => setError(String(err)));

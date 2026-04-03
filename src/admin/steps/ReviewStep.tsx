@@ -4,6 +4,7 @@ import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
 import { uploadFormWithProgress } from '../utils/uploadWithProgress';
+import { assetUrl } from '../../utils/url';
 
 interface Props {
   state: WizardState;
@@ -84,7 +85,7 @@ export function ReviewStep({ state, dispatch }: Props) {
 
       // 5. Auto-add song to current band
       if (bandSlug) {
-        const bandsRes = await fetch('/bands.json');
+        const bandsRes = await fetch(assetUrl('bands.json'));
         const bandsData = await bandsRes.json();
         const band = bandsData.bands.find((b: any) => b.route === bandSlug);
         if (band && !band.songIds.includes(state.id)) {

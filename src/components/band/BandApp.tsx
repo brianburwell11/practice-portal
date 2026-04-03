@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Outlet } from 'react-router-dom';
 import { useBandStore } from '../../store/bandStore';
 import { bandsManifestSchema } from '../../config/schema';
+import { assetUrl } from '../../utils/url';
 
 export function BandApp() {
   const { bandSlug } = useParams<{ bandSlug: string }>();
@@ -11,7 +12,7 @@ export function BandApp() {
   // Load bands manifest
   useEffect(() => {
     if (bandsManifest) return;
-    fetch('/bands.json')
+    fetch(assetUrl('bands.json'))
       .then((r) => r.json())
       .then((data) => setBandsManifest(bandsManifestSchema.parse(data)))
       .catch((err) => setError(String(err)));

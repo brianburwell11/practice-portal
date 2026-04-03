@@ -4,6 +4,7 @@ import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema, songManifestSchema } from '../config/schema';
 import { detectStem, isAudioFile, deduplicateIds } from './utils/stemDetection';
 import { uploadFormWithProgress } from './utils/uploadWithProgress';
+import { assetUrl } from '../utils/url';
 import type { StemConfig, StemGroupConfig } from '../audio/types';
 
 const groupColors = [
@@ -34,12 +35,12 @@ export default function EditSongPage() {
     if (!songId) { setLoadError('No song ID in URL'); return; }
     (async () => {
       try {
-        const manifestRes = await fetch('/audio/manifest.json');
+        const manifestRes = await fetch(assetUrl('audio/manifest.json'));
         const manifest = songManifestSchema.parse(await manifestRes.json());
         const entry = manifest.songs.find((s) => s.id === songId);
         if (!entry) { setLoadError(`Song "${songId}" not found in manifest`); return; }
         setSongPath(entry.path);
-        const configRes = await fetch(`/${entry.path}/config.json`);
+        const configRes = await fetch(assetUrl(`${entry.path}/config.json`));
         const config = songConfigSchema.parse(await configRes.json());
         dispatch({ type: 'INIT', config });
       } catch (err: any) {

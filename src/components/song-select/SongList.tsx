@@ -4,6 +4,7 @@ import { useMixerStore } from '../../store/mixerStore';
 import { useBandStore } from '../../store/bandStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { songManifestSchema, songConfigSchema } from '../../config/schema';
+import { assetUrl } from '../../utils/url';
 import type { SongManifestEntry } from '../../audio/types';
 
 export function SongList() {
@@ -14,7 +15,7 @@ export function SongList() {
   const currentBand = useBandStore((s) => s.currentBand);
 
   useEffect(() => {
-    fetch('/audio/manifest.json')
+    fetch(assetUrl('audio/manifest.json'))
       .then((r) => r.json())
       .then((data) => {
         const parsed = songManifestSchema.parse(data);
@@ -35,12 +36,12 @@ export function SongList() {
     setError(null);
 
     try {
-      const configUrl = `/${entry.path}/config.json`;
+      const configUrl = assetUrl(`${entry.path}/config.json`);
       const res = await fetch(configUrl);
       const configData = await res.json();
       const config = songConfigSchema.parse(configData);
 
-      const audioBase = entry.audioBasePath ?? `/${entry.path}`;
+      const audioBase = entry.audioBasePath ?? assetUrl(entry.path);
       await engine.loadSong(config, audioBase, (loaded, total) => {
         setLoadProgress(loaded, total);
       });

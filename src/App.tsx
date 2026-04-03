@@ -7,6 +7,7 @@ import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
 import { useNavigate } from 'react-router-dom';
+import { assetUrl } from './utils/url';
 
 export default function App() {
   const engine = useCreateEngine();
@@ -37,7 +38,7 @@ export default function App() {
             </h1>
           ) : (
             <img
-              src={currentBand.logo}
+              src={assetUrl(currentBand.logo)}
               alt={currentBand.name}
               className="h-10 object-contain"
             />

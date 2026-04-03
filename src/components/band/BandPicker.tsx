@@ -2,13 +2,14 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useBandStore } from '../../store/bandStore';
 import { bandsManifestSchema } from '../../config/schema';
+import { assetUrl } from '../../utils/url';
 
 export function BandPicker() {
   const { bandsManifest, setBandsManifest } = useBandStore();
 
   useEffect(() => {
     if (bandsManifest) return;
-    fetch('/bands.json')
+    fetch(assetUrl('bands.json'))
       .then((r) => r.json())
       .then((data) => setBandsManifest(bandsManifestSchema.parse(data)))
       .catch(console.error);
@@ -31,7 +32,7 @@ export function BandPicker() {
               style={{ backgroundColor: band.colors.background }}
             >
               {band.logo ? (
-                <img src={band.logo} alt="" className="w-10 h-10 rounded object-contain" />
+                <img src={assetUrl(band.logo)} alt="" className="w-10 h-10 rounded object-contain" />
               ) : (
                 <div
                   className="w-10 h-10 rounded flex items-center justify-center text-lg font-bold"
