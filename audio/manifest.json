@@ -1,0 +1,49 @@
+{
+  "songs": [
+    {
+      "id": "st-james",
+      "title": "St. James",
+      "artist": "Unknown",
+      "path": "audio/song-st-james"
+    },
+    {
+      "id": "test-tones",
+      "title": "Test Tones",
+      "artist": "Generated",
+      "path": "audio/song-test"
+    },
+    {
+      "id": "wiggle-sooza",
+      "title": "Wiggle",
+      "artist": "SOOZA",
+      "path": "audio/song-wiggle-sooza"
+    },
+    {
+      "id": "gunk-palace-sooza",
+      "title": "Bite",
+      "artist": "SOOZA",
+      "path": "audio/song-gunk-palace-sooza"
+    },
+    {
+      "id": "bella-ciao-sooza",
+      "title": "Bella Ciao",
+      "artist": "SOOZA",
+      "path": "audio/song-bella-ciao-sooza",
+      "audioBasePath": "https://pub-9e583788dafa4ce193a3eee1987d93b6.r2.dev/song-bella-ciao-sooza"
+    },
+    {
+      "id": "22-sooza",
+      "title": "22",
+      "artist": "SOOZA",
+      "path": "audio/song-22-sooza",
+      "audioBasePath": "https://pub-9e583788dafa4ce193a3eee1987d93b6.r2.dev/song-22-sooza"
+    },
+    {
+      "id": "foo-bar",
+      "title": "foo",
+      "artist": "bar",
+      "path": "audio/song-foo-bar",
+      "audioBasePath": "https://pub-9e583788dafa4ce193a3eee1987d93b6.r2.dev/song-foo-bar"
+    }
+  ]
+}
