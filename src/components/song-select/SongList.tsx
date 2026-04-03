@@ -8,7 +8,7 @@ import type { SongManifestEntry } from '../../audio/types';
 
 export function SongList() {
   const engine = useAudioEngine();
-  const { manifest, selectedSong, loading, setManifest, setSelectedSong, setLoading, setLoadProgress, setError } =
+  const { manifest, selectedSong, loading, loadProgress, setManifest, setSelectedSong, setLoading, setLoadProgress, setError } =
     useSongStore();
   const { initStems, initGroups } = useMixerStore();
   const currentBand = useBandStore((s) => s.currentBand);
@@ -97,7 +97,19 @@ export function SongList() {
           </option>
         ))}
       </select>
-      {loading && <span className="text-xs text-gray-500">Loading stems...</span>}
+      {loading && loadProgress && (
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="flex-1 bg-gray-700 rounded-full h-2">
+            <div
+              className="bg-blue-500 h-2 rounded-full transition-all"
+              style={{ width: `${Math.round((loadProgress.loaded / loadProgress.total) * 100)}%` }}
+            />
+          </div>
+          <span className="text-xs text-gray-500 shrink-0">
+            {loadProgress.loaded}/{loadProgress.total}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
