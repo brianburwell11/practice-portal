@@ -9,7 +9,7 @@
     {
       "id": "kick",
       "label": "Kick",
-      "file": "Scratch 01 - Kick.wav",
+      "file": "Scratch 01 - Kick.mp3",
       "defaultVolume": 0.8,
       "defaultPan": 0,
       "color": "#ef4444"
@@ -17,7 +17,7 @@
     {
       "id": "snare",
       "label": "Snare",
-      "file": "Scratch 02 - Snare.wav",
+      "file": "Scratch 02 - Snare.mp3",
       "defaultVolume": 0.8,
       "defaultPan": 0,
       "color": "#f97316"
@@ -25,7 +25,7 @@
     {
       "id": "hi-tom",
       "label": "Hi Tom",
-      "file": "Scratch 03 - Hi Tom.wav",
+      "file": "Scratch 03 - Hi Tom.mp3",
       "defaultVolume": 0.7,
       "defaultPan": -0.3,
       "color": "#eab308"
@@ -33,7 +33,7 @@
     {
       "id": "lo-tom",
       "label": "Lo Tom",
-      "file": "Scratch 04 - Lo Tom.wav",
+      "file": "Scratch 04 - Lo Tom.mp3",
       "defaultVolume": 0.7,
       "defaultPan": 0.3,
       "color": "#84cc16"
@@ -41,7 +41,7 @@
     {
       "id": "ovhd",
       "label": "Overhead",
-      "file": "Scratch 05 - OVHD.wav",
+      "file": "Scratch 05 - OVHD.mp3",
       "defaultVolume": 0.6,
       "defaultPan": 0,
       "color": "#22c55e"
@@ -49,7 +49,7 @@
     {
       "id": "bass",
       "label": "Bass",
-      "file": "Scratch 06 - Bass.wav",
+      "file": "Scratch 06 - Bass.mp3",
       "defaultVolume": 0.8,
       "defaultPan": 0,
       "color": "#3b82f6"
@@ -57,7 +57,7 @@
     {
       "id": "guitar",
       "label": "Guitar",
-      "file": "Scratch 07 - Guitar.wav",
+      "file": "Scratch 07 - Guitar.mp3",
       "defaultVolume": 0.7,
       "defaultPan": -0.2,
       "color": "#8b5cf6"
@@ -65,7 +65,7 @@
     {
       "id": "keys",
       "label": "Keys",
-      "file": "Scratch 08 - Keys.wav",
+      "file": "Scratch 08 - Keys.mp3",
       "defaultVolume": 0.7,
       "defaultPan": 0.2,
       "color": "#a855f7"
@@ -73,7 +73,7 @@
     {
       "id": "horns",
       "label": "Horns",
-      "file": "Scratch 09 - Horns.wav",
+      "file": "Scratch 09 - Horns.mp3",
       "defaultVolume": 0.7,
       "defaultPan": 0,
       "color": "#ec4899"
@@ -81,7 +81,7 @@
     {
       "id": "vox",
       "label": "Vocals",
-      "file": "Scratch 10 - Vox.wav",
+      "file": "Scratch 10 - Vox.mp3",
       "defaultVolume": 0.8,
       "defaultPan": 0,
       "color": "#f43f5e"
