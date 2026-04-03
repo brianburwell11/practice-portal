@@ -84,6 +84,62 @@ export function configApiPlugin(): Plugin {
           return;
         }
 
+        // --- POST /api/bands/{bandId}/logo ---
+        const logoMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/logo$/);
+        if (logoMatch && req.method === 'POST') {
+          const bandId = logoMatch[1];
+          const bandDir = path.resolve(process.cwd(), 'public', 'bands', bandId);
+          fs.mkdirSync(bandDir, { recursive: true });
+
+          try {
+            const result = await new Promise<{ filename: string }>((resolve, reject) => {
+              const busboy = Busboy({ headers: req.headers as Record<string, string> });
+
+              busboy.on('file', (_fieldname, fileStream, info) => {
+                // Remove any existing logo files
+                for (const ext of ['png', 'jpg', 'jpeg', 'svg']) {
+                  const old = path.join(bandDir, `logo.${ext}`);
+                  if (fs.existsSync(old)) fs.unlinkSync(old);
+                }
+
+                const ext = path.extname(info.filename).toLowerCase() || '.png';
+                const filename = `logo${ext}`;
+                const filePath = path.join(bandDir, filename);
+                const writeStream = fs.createWriteStream(filePath);
+                fileStream.pipe(writeStream);
+                writeStream.on('finish', () => resolve({ filename }));
+                writeStream.on('error', reject);
+              });
+
+              busboy.on('error', reject);
+              req.pipe(busboy);
+            });
+
+            const logoPath = `/bands/${bandId}/${result.filename}`;
+            jsonResponse(res, 200, { ok: true, path: logoPath });
+          } catch (err: any) {
+            jsonResponse(res, 400, { error: err.message ?? 'Upload failed' });
+          }
+          return;
+        }
+
+        // --- POST /api/bands ---
+        if (req.url === '/api/bands' && req.method === 'POST') {
+          const bandsPath = path.resolve(process.cwd(), 'public', 'bands.json');
+
+          try {
+            const raw = await readBody(req);
+            const body = JSON.parse(raw);
+            const { bandsManifestSchema } = await server.ssrLoadModule('/src/config/schema.ts');
+            const validated = (bandsManifestSchema as any).parse(body);
+            fs.writeFileSync(bandsPath, JSON.stringify(validated, null, 2) + '\n');
+            jsonResponse(res, 200, { ok: true });
+          } catch (err: any) {
+            jsonResponse(res, 400, { error: err.message ?? 'Invalid request' });
+          }
+          return;
+        }
+
         // --- POST /api/manifest/add ---
         if (req.url === '/api/manifest/add' && req.method === 'POST') {
           const manifestPath = path.resolve(process.cwd(), 'public', 'audio', 'manifest.json');
