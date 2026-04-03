@@ -1,0 +1,903 @@
+{
+  "id": "st-james",
+  "title": "St. James",
+  "artist": "Unknown",
+  "key": "",
+  "durationSeconds": 331.58,
+  "beatOffset": 0,
+  "stems": [
+    {
+      "id": "kick",
+      "label": "Kick",
+      "file": "Scratch 01 - Kick.mp3",
+      "defaultVolume": 0.8,
+      "defaultPan": 0,
+      "color": "#ef4444"
+    },
+    {
+      "id": "snare",
+      "label": "Snare",
+      "file": "Scratch 02 - Snare.mp3",
+      "defaultVolume": 0.8,
+      "defaultPan": 0,
+      "color": "#f97316"
+    },
+    {
+      "id": "hi-tom",
+      "label": "Hi Tom",
+      "file": "Scratch 03 - Hi Tom.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": -0.3,
+      "color": "#eab308"
+    },
+    {
+      "id": "lo-tom",
+      "label": "Lo Tom",
+      "file": "Scratch 04 - Lo Tom.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": 0.3,
+      "color": "#84cc16"
+    },
+    {
+      "id": "ovhd",
+      "label": "Overhead",
+      "file": "Scratch 05 - OVHD.mp3",
+      "defaultVolume": 0.6,
+      "defaultPan": 0,
+      "color": "#22c55e"
+    },
+    {
+      "id": "bass",
+      "label": "Bass",
+      "file": "Scratch 06 - Bass.mp3",
+      "defaultVolume": 0.8,
+      "defaultPan": 0,
+      "color": "#3b82f6"
+    },
+    {
+      "id": "guitar",
+      "label": "Guitar",
+      "file": "Scratch 07 - Guitar.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": -0.2,
+      "color": "#8b5cf6"
+    },
+    {
+      "id": "keys",
+      "label": "Keys",
+      "file": "Scratch 08 - Keys.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": 0.2,
+      "color": "#a855f7"
+    },
+    {
+      "id": "horns",
+      "label": "Horns",
+      "file": "Scratch 09 - Horns.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": 0,
+      "color": "#ec4899"
+    },
+    {
+      "id": "vox",
+      "label": "Vocals",
+      "file": "Scratch 10 - Vox.mp3",
+      "defaultVolume": 0.8,
+      "defaultPan": 0,
+      "color": "#f43f5e"
+    },
+    {
+      "id": "click",
+      "label": "Click",
+      "file": "St James Click.mp3",
+      "defaultVolume": 0.8,
+      "defaultPan": 0,
+      "color": "#94a3b8"
+    }
+  ],
+  "groups": [
+    {
+      "id": "drums",
+      "label": "Drums",
+      "color": "#ef4444",
+      "stemIds": [
+        "kick",
+        "snare",
+        "hi-tom",
+        "lo-tom",
+        "ovhd"
+      ]
+    }
+  ],
+  "tempoMap": [
+    {
+      "beat": 0,
+      "bpm": 120
+    }
+  ],
+  "timeSignatureMap": [
+    {
+      "beat": 0,
+      "numerator": 4,
+      "denominator": 4
+    }
+  ],
+  "metronome": {
+    "clickSound": "woodblock",
+    "accentPattern": [
+      1,
+      0.4,
+      0.6,
+      0.4
+    ],
+    "subdivisions": 1
+  },
+  "markers": [
+    {
+      "name": "Start",
+      "beat": 0,
+      "color": "#22c55e"
+    }
+  ],
+  "tapMap": [
+    {
+      "time": 4.717792,
+      "type": "section",
+      "label": "Intro"
+    },
+    {
+      "time": 5.168125,
+      "type": "beat"
+    },
+    {
+      "time": 5.797458,
+      "type": "beat"
+    },
+    {
+      "time": 6.359083,
+      "type": "beat"
+    },
+    {
+      "time": 6.958125,
+      "type": "measure"
+    },
+    {
+      "time": 7.557438,
+      "type": "beat"
+    },
+    {
+      "time": 8.096771,
+      "type": "beat"
+    },
+    {
+      "time": 8.66675,
+      "type": "beat"
+    },
+    {
+      "time": 9.267125,
+      "type": "measure"
+    },
+    {
+      "time": 9.808125,
+      "type": "beat"
+    },
+    {
+      "time": 10.380438,
+      "type": "beat"
+    },
+    {
+      "time": 10.925438,
+      "type": "beat"
+    },
+    {
+      "time": 11.517771,
+      "type": "measure"
+    },
+    {
+      "time": 12.089771,
+      "type": "beat"
+    },
+    {
+      "time": 12.659771,
+      "type": "beat"
+    },
+    {
+      "time": 13.192458,
+      "type": "beat"
+    },
+    {
+      "time": 13.777125,
+      "type": "measure"
+    },
+    {
+      "time": 14.424771,
+      "type": "beat"
+    },
+    {
+      "time": 15.002792,
+      "type": "beat"
+    },
+    {
+      "time": 15.564438,
+      "type": "beat"
+    },
+    {
+      "time": 16.153771,
+      "type": "measure"
+    },
+    {
+      "time": 16.745104,
+      "type": "beat"
+    },
+    {
+      "time": 17.33775,
+      "type": "beat"
+    },
+    {
+      "time": 17.935104,
+      "type": "beat"
+    },
+    {
+      "time": 18.518104,
+      "type": "measure"
+    },
+    {
+      "time": 19.071771,
+      "type": "beat"
+    },
+    {
+      "time": 19.626438,
+      "type": "beat"
+    },
+    {
+      "time": 20.223771,
+      "type": "beat"
+    },
+    {
+      "time": 20.759083,
+      "type": "measure"
+    },
+    {
+      "time": 21.375792,
+      "type": "beat"
+    },
+    {
+      "time": 21.941104,
+      "type": "beat"
+    },
+    {
+      "time": 22.494792,
+      "type": "beat"
+    },
+    {
+      "time": 23.157381768334467,
+      "type": "section",
+      "label": "Verse1"
+    },
+    {
+      "time": 23.590458,
+      "type": "beat"
+    },
+    {
+      "time": 24.262104,
+      "type": "beat"
+    },
+    {
+      "time": 24.812771,
+      "type": "beat"
+    },
+    {
+      "time": 25.386771,
+      "type": "measure"
+    },
+    {
+      "time": 26.036438,
+      "type": "beat"
+    },
+    {
+      "time": 26.573771,
+      "type": "beat"
+    },
+    {
+      "time": 27.119771,
+      "type": "beat"
+    },
+    {
+      "time": 27.669458,
+      "type": "measure"
+    },
+    {
+      "time": 28.254125,
+      "type": "beat"
+    },
+    {
+      "time": 28.844792,
+      "type": "beat"
+    },
+    {
+      "time": 29.418438,
+      "type": "beat"
+    },
+    {
+      "time": 29.995792,
+      "type": "measure"
+    },
+    {
+      "time": 30.549458,
+      "type": "beat"
+    },
+    {
+      "time": 31.136125,
+      "type": "beat"
+    },
+    {
+      "time": 31.735438,
+      "type": "beat"
+    },
+    {
+      "time": 32.313438,
+      "type": "measure"
+    },
+    {
+      "time": 32.929125,
+      "type": "beat"
+    },
+    {
+      "time": 33.497104,
+      "type": "beat"
+    },
+    {
+      "time": 34.050104,
+      "type": "beat"
+    },
+    {
+      "time": 34.621083,
+      "type": "measure"
+    },
+    {
+      "time": 35.184438,
+      "type": "beat"
+    },
+    {
+      "time": 35.738438,
+      "type": "beat"
+    },
+    {
+      "time": 36.332771,
+      "type": "beat"
+    },
+    {
+      "time": 36.863771,
+      "type": "measure"
+    },
+    {
+      "time": 37.424438,
+      "type": "beat"
+    },
+    {
+      "time": 38.045125,
+      "type": "beat"
+    },
+    {
+      "time": 38.626104,
+      "type": "beat"
+    },
+    {
+      "time": 39.230083,
+      "type": "measure"
+    },
+    {
+      "time": 39.766438,
+      "type": "beat"
+    },
+    {
+      "time": 40.375438,
+      "type": "beat"
+    },
+    {
+      "time": 40.962104,
+      "type": "beat"
+    },
+    {
+      "time": 41.550771,
+      "type": "section",
+      "label": "Verse2"
+    },
+    {
+      "time": 42.136438,
+      "type": "beat"
+    },
+    {
+      "time": 42.668771,
+      "type": "beat"
+    },
+    {
+      "time": 43.244792,
+      "type": "beat"
+    },
+    {
+      "time": 43.817771,
+      "type": "measure"
+    },
+    {
+      "time": 44.417771,
+      "type": "beat"
+    },
+    {
+      "time": 45.027792,
+      "type": "beat"
+    },
+    {
+      "time": 45.568125,
+      "type": "beat"
+    },
+    {
+      "time": 46.149771,
+      "type": "measure"
+    },
+    {
+      "time": 46.703771,
+      "type": "beat"
+    },
+    {
+      "time": 47.275792,
+      "type": "beat"
+    },
+    {
+      "time": 47.901104,
+      "type": "beat"
+    },
+    {
+      "time": 48.395438,
+      "type": "measure"
+    },
+    {
+      "time": 48.992104,
+      "type": "beat"
+    },
+    {
+      "time": 49.559438,
+      "type": "beat"
+    },
+    {
+      "time": 50.175125,
+      "type": "beat"
+    },
+    {
+      "time": 50.712458,
+      "type": "measure"
+    },
+    {
+      "time": 51.302771,
+      "type": "beat"
+    },
+    {
+      "time": 51.928438,
+      "type": "beat"
+    },
+    {
+      "time": 52.491771,
+      "type": "beat"
+    },
+    {
+      "time": 53.089771,
+      "type": "measure"
+    },
+    {
+      "time": 53.633104,
+      "type": "beat"
+    },
+    {
+      "time": 54.259438,
+      "type": "beat"
+    },
+    {
+      "time": 54.849125,
+      "type": "beat"
+    },
+    {
+      "time": 55.418438,
+      "type": "measure"
+    },
+    {
+      "time": 55.957438,
+      "type": "beat"
+    },
+    {
+      "time": 56.589771,
+      "type": "beat"
+    },
+    {
+      "time": 57.192771,
+      "type": "beat"
+    },
+    {
+      "time": 57.687438,
+      "type": "measure"
+    },
+    {
+      "time": 58.25675,
+      "type": "beat"
+    },
+    {
+      "time": 58.856771,
+      "type": "beat"
+    },
+    {
+      "time": 59.460771,
+      "type": "beat"
+    },
+    {
+      "time": 59.976771,
+      "type": "section",
+      "label": "Let-her-go"
+    },
+    {
+      "time": 60.539125,
+      "type": "beat"
+    },
+    {
+      "time": 61.164792,
+      "type": "beat"
+    },
+    {
+      "time": 61.719438,
+      "type": "beat"
+    },
+    {
+      "time": 62.300438,
+      "type": "measure"
+    },
+    {
+      "time": 62.871458,
+      "type": "beat"
+    },
+    {
+      "time": 63.458125,
+      "type": "beat"
+    },
+    {
+      "time": 64.020458,
+      "type": "beat"
+    },
+    {
+      "time": 64.580875,
+      "type": "measure"
+    },
+    {
+      "time": 65.160542,
+      "type": "beat"
+    },
+    {
+      "time": 65.761875,
+      "type": "beat"
+    },
+    {
+      "time": 66.347542,
+      "type": "beat"
+    },
+    {
+      "time": 66.934208,
+      "type": "measure"
+    },
+    {
+      "time": 67.462875,
+      "type": "beat"
+    },
+    {
+      "time": 68.054208,
+      "type": "beat"
+    },
+    {
+      "time": 68.640542,
+      "type": "beat"
+    },
+    {
+      "time": 69.190875,
+      "type": "measure"
+    },
+    {
+      "time": 69.759854,
+      "type": "beat"
+    },
+    {
+      "time": 70.344875,
+      "type": "beat"
+    },
+    {
+      "time": 70.882875,
+      "type": "beat"
+    },
+    {
+      "time": 71.486875,
+      "type": "measure"
+    },
+    {
+      "time": 72.063896,
+      "type": "beat"
+    },
+    {
+      "time": 72.702875,
+      "type": "beat"
+    },
+    {
+      "time": 73.295563,
+      "type": "beat"
+    },
+    {
+      "time": 73.927875,
+      "type": "measure"
+    },
+    {
+      "time": 76.604208,
+      "type": "measure"
+    },
+    {
+      "time": 78.84789599999999,
+      "type": "measure"
+    },
+    {
+      "time": 88.5,
+      "type": "section",
+      "label": "Sax-Solo"
+    },
+    {
+      "time": 88.96822900000001,
+      "type": "beat"
+    },
+    {
+      "time": 89.509563,
+      "type": "beat"
+    },
+    {
+      "time": 90.055583,
+      "type": "beat"
+    },
+    {
+      "time": 90.59156300000001,
+      "type": "measure"
+    },
+    {
+      "time": 91.170146,
+      "type": "beat"
+    },
+    {
+      "time": 91.646125,
+      "type": "beat"
+    },
+    {
+      "time": 92.143813,
+      "type": "beat"
+    },
+    {
+      "time": 92.629479,
+      "type": "measure"
+    },
+    {
+      "time": 93.130813,
+      "type": "beat"
+    },
+    {
+      "time": 93.691479,
+      "type": "beat"
+    },
+    {
+      "time": 94.184792,
+      "type": "beat"
+    },
+    {
+      "time": 94.682479,
+      "type": "measure"
+    },
+    {
+      "time": 95.195458,
+      "type": "beat"
+    },
+    {
+      "time": 95.713146,
+      "type": "beat"
+    },
+    {
+      "time": 96.205813,
+      "type": "beat"
+    },
+    {
+      "time": 96.681792,
+      "type": "measure"
+    },
+    {
+      "time": 97.190146,
+      "type": "beat"
+    },
+    {
+      "time": 97.751479,
+      "type": "beat"
+    },
+    {
+      "time": 98.255813,
+      "type": "beat"
+    },
+    {
+      "time": 98.788792,
+      "type": "measure"
+    },
+    {
+      "time": 99.301125,
+      "type": "beat"
+    },
+    {
+      "time": 99.81981300000001,
+      "type": "beat"
+    },
+    {
+      "time": 100.32879199999999,
+      "type": "beat"
+    },
+    {
+      "time": 100.853479,
+      "type": "measure"
+    },
+    {
+      "time": 101.355813,
+      "type": "beat"
+    },
+    {
+      "time": 101.86979199999999,
+      "type": "beat"
+    },
+    {
+      "time": 102.370146,
+      "type": "beat"
+    },
+    {
+      "time": 102.884125,
+      "type": "measure"
+    },
+    {
+      "time": 103.385458,
+      "type": "beat"
+    },
+    {
+      "time": 103.94179199999999,
+      "type": "beat"
+    },
+    {
+      "time": 104.411479,
+      "type": "beat"
+    },
+    {
+      "time": 104.921479,
+      "type": "section",
+      "label": "Verse3"
+    },
+    {
+      "time": 105.399479,
+      "type": "beat"
+    },
+    {
+      "time": 105.943479,
+      "type": "beat"
+    },
+    {
+      "time": 106.489146,
+      "type": "beat"
+    },
+    {
+      "time": 107.014125,
+      "type": "measure"
+    },
+    {
+      "time": 107.539458,
+      "type": "beat"
+    },
+    {
+      "time": 108.06581299999999,
+      "type": "beat"
+    },
+    {
+      "time": 108.56747899999999,
+      "type": "beat"
+    },
+    {
+      "time": 109.075458,
+      "type": "measure"
+    },
+    {
+      "time": 109.597125,
+      "type": "beat"
+    },
+    {
+      "time": 110.107146,
+      "type": "beat"
+    },
+    {
+      "time": 110.58945800000001,
+      "type": "beat"
+    },
+    {
+      "time": 111.104146,
+      "type": "measure"
+    },
+    {
+      "time": 111.635125,
+      "type": "beat"
+    },
+    {
+      "time": 112.173813,
+      "type": "beat"
+    },
+    {
+      "time": 112.67016699999999,
+      "type": "beat"
+    },
+    {
+      "time": 113.141479,
+      "type": "measure"
+    },
+    {
+      "time": 113.687479,
+      "type": "beat"
+    },
+    {
+      "time": 114.203125,
+      "type": "beat"
+    },
+    {
+      "time": 114.700479,
+      "type": "beat"
+    },
+    {
+      "time": 115.274813,
+      "type": "measure"
+    },
+    {
+      "time": 115.775146,
+      "type": "beat"
+    },
+    {
+      "time": 116.302813,
+      "type": "beat"
+    },
+    {
+      "time": 116.78581299999999,
+      "type": "beat"
+    },
+    {
+      "time": 117.30212499999999,
+      "type": "measure"
+    },
+    {
+      "time": 117.789458,
+      "type": "beat"
+    },
+    {
+      "time": 118.309146,
+      "type": "beat"
+    },
+    {
+      "time": 118.82879199999999,
+      "type": "beat"
+    },
+    {
+      "time": 119.335125,
+      "type": "measure"
+    },
+    {
+      "time": 119.845125,
+      "type": "beat"
+    },
+    {
+      "time": 120.365458,
+      "type": "beat"
+    },
+    {
+      "time": 120.844813,
+      "type": "beat"
+    },
+    {
+      "time": 121.330458,
+      "type": "section",
+      "label": "Verse4"
+    }
+  ]
+}

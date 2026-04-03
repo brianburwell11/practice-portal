@@ -1,0 +1,355 @@
+{
+  "id": "gunk-palace-sooza",
+  "title": "Bite",
+  "artist": "SOOZA",
+  "key": "Fm",
+  "durationSeconds": 209.51,
+  "beatOffset": 0,
+  "stems": [
+    {
+      "id": "drm",
+      "label": "Drums",
+      "file": "DRM.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": 0,
+      "color": "#0055ff"
+    },
+    {
+      "id": "sooza",
+      "label": "Sousa",
+      "file": "Sooza.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": 0,
+      "color": "#ff9500"
+    },
+    {
+      "id": "bone",
+      "label": "Trombone",
+      "file": "Bone.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": 0.3,
+      "color": "#2bff00"
+    },
+    {
+      "id": "horns-3",
+      "label": "Sax",
+      "file": "Sax.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": -0.3,
+      "color": "#ff0000"
+    },
+    {
+      "id": "horns",
+      "label": "Trumpet 2",
+      "file": "Trumpet 2.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": 0.5,
+      "color": "#fbff0f"
+    },
+    {
+      "id": "horns-2",
+      "label": "Trumpet 1",
+      "file": "Trumpet 1.mp3",
+      "defaultVolume": 0.7,
+      "defaultPan": -0.5,
+      "color": "#ec4899"
+    }
+  ],
+  "tempoMap": [
+    {
+      "beat": 0,
+      "bpm": 120
+    }
+  ],
+  "timeSignatureMap": [
+    {
+      "beat": 0,
+      "numerator": 4,
+      "denominator": 4
+    }
+  ],
+  "metronome": {
+    "clickSound": "woodblock",
+    "accentPattern": [
+      1,
+      0.4,
+      0.6,
+      0.4
+    ],
+    "subdivisions": 1
+  },
+  "markers": [
+    {
+      "name": "Sax-In",
+      "beat": 62.67,
+      "color": "#22c55e"
+    }
+  ],
+  "tapMap": [
+    {
+      "time": 2.272,
+      "type": "measure"
+    },
+    {
+      "time": 2.7786666666666666,
+      "type": "beat"
+    },
+    {
+      "time": 3.210666666666667,
+      "type": "beat"
+    },
+    {
+      "time": 3.68,
+      "type": "beat"
+    },
+    {
+      "time": 4.208,
+      "type": "measure"
+    },
+    {
+      "time": 4.709333333333333,
+      "type": "beat"
+    },
+    {
+      "time": 5.1946666666666665,
+      "type": "beat"
+    },
+    {
+      "time": 5.653333333333334,
+      "type": "beat"
+    },
+    {
+      "time": 6.192,
+      "type": "measure"
+    },
+    {
+      "time": 6.672000000000001,
+      "type": "beat"
+    },
+    {
+      "time": 7.141333333333334,
+      "type": "beat"
+    },
+    {
+      "time": 7.626666666666667,
+      "type": "beat"
+    },
+    {
+      "time": 8.048,
+      "type": "measure"
+    },
+    {
+      "time": 8.592,
+      "type": "beat"
+    },
+    {
+      "time": 9.082666666666666,
+      "type": "beat"
+    },
+    {
+      "time": 9.541333333333334,
+      "type": "beat"
+    },
+    {
+      "time": 10.037333333333335,
+      "type": "measure"
+    },
+    {
+      "time": 10.522666666666668,
+      "type": "beat"
+    },
+    {
+      "time": 11.002666666666666,
+      "type": "beat"
+    },
+    {
+      "time": 11.504,
+      "type": "beat"
+    },
+    {
+      "time": 11.957333333333334,
+      "type": "measure"
+    },
+    {
+      "time": 12.410666666666668,
+      "type": "beat"
+    },
+    {
+      "time": 12.896,
+      "type": "beat"
+    },
+    {
+      "time": 13.349333333333334,
+      "type": "beat"
+    },
+    {
+      "time": 13.882666666666665,
+      "type": "measure"
+    },
+    {
+      "time": 14.400000000000002,
+      "type": "beat"
+    },
+    {
+      "time": 14.890666666666668,
+      "type": "beat"
+    },
+    {
+      "time": 15.408000000000001,
+      "type": "beat"
+    },
+    {
+      "time": 15.850666666666665,
+      "type": "measure"
+    },
+    {
+      "time": 16.32,
+      "type": "beat"
+    },
+    {
+      "time": 16.805333333333333,
+      "type": "beat"
+    },
+    {
+      "time": 17.322666666666667,
+      "type": "beat"
+    },
+    {
+      "time": 17.792,
+      "type": "measure"
+    },
+    {
+      "time": 18.293333333333333,
+      "type": "beat"
+    },
+    {
+      "time": 18.757333333333335,
+      "type": "beat"
+    },
+    {
+      "time": 19.285333333333334,
+      "type": "beat"
+    },
+    {
+      "time": 19.776,
+      "type": "measure"
+    },
+    {
+      "time": 20.234666666666666,
+      "type": "beat"
+    },
+    {
+      "time": 20.741333333333333,
+      "type": "beat"
+    },
+    {
+      "time": 21.21066666666667,
+      "type": "beat"
+    },
+    {
+      "time": 21.712,
+      "type": "measure"
+    },
+    {
+      "time": 22.192,
+      "type": "beat"
+    },
+    {
+      "time": 22.656,
+      "type": "beat"
+    },
+    {
+      "time": 23.157333333333334,
+      "type": "beat"
+    },
+    {
+      "time": 23.637333333333334,
+      "type": "measure"
+    },
+    {
+      "time": 24.128,
+      "type": "beat"
+    },
+    {
+      "time": 24.608,
+      "type": "beat"
+    },
+    {
+      "time": 25.072,
+      "type": "beat"
+    },
+    {
+      "time": 25.541333333333334,
+      "type": "measure"
+    },
+    {
+      "time": 26.026666666666667,
+      "type": "beat"
+    },
+    {
+      "time": 26.490666666666666,
+      "type": "beat"
+    },
+    {
+      "time": 26.965333333333334,
+      "type": "beat"
+    },
+    {
+      "time": 27.477333333333334,
+      "type": "measure"
+    },
+    {
+      "time": 27.941333333333333,
+      "type": "beat"
+    },
+    {
+      "time": 28.432,
+      "type": "beat"
+    },
+    {
+      "time": 28.933333333333334,
+      "type": "beat"
+    },
+    {
+      "time": 29.44,
+      "type": "measure"
+    },
+    {
+      "time": 29.94666666666667,
+      "type": "beat"
+    },
+    {
+      "time": 30.410666666666668,
+      "type": "beat"
+    },
+    {
+      "time": 30.874666666666666,
+      "type": "beat"
+    },
+    {
+      "time": 31.333333333333332,
+      "type": "section",
+      "label": "Sax-In"
+    },
+    {
+      "time": 31.808000000000003,
+      "type": "beat"
+    },
+    {
+      "time": 32.31466666666666,
+      "type": "beat"
+    },
+    {
+      "time": 32.794666666666664,
+      "type": "beat"
+    },
+    {
+      "time": 33.26933333333333,
+      "type": "measure"
+    },
+    {
+      "time": 33.76533333333333,
+      "type": "beat"
+    }
+  ]
+}
