@@ -1,4 +1,5 @@
 import type { SongConfig, StemConfig, StemGroupConfig } from '../audio/types';
+import type { UploadProgress } from './utils/uploadWithProgress';
 
 export interface EditSongState {
   config: SongConfig | null;
@@ -6,6 +7,7 @@ export interface EditSongState {
   saving: boolean;
   error: string | null;
   saveSuccess: boolean;
+  uploadProgress: UploadProgress | null;
 }
 
 export type EditSongAction =
@@ -22,7 +24,8 @@ export type EditSongAction =
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_SAVE_SUCCESS' }
-  | { type: 'RESET_DIRTY' };
+  | { type: 'RESET_DIRTY' }
+  | { type: 'SET_UPLOAD_PROGRESS'; progress: UploadProgress | null };
 
 export const initialEditState: EditSongState = {
   config: null,
@@ -30,6 +33,7 @@ export const initialEditState: EditSongState = {
   saving: false,
   error: null,
   saveSuccess: false,
+  uploadProgress: null,
 };
 
 export function isDirty(state: EditSongState): boolean {
@@ -103,10 +107,12 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
     case 'SET_SAVING':
       return { ...state, saving: action.saving, error: null };
     case 'SET_ERROR':
-      return { ...state, error: action.error, saving: false };
+      return { ...state, error: action.error, saving: false, uploadProgress: null };
     case 'SET_SAVE_SUCCESS':
-      return { ...state, saveSuccess: true, saving: false };
+      return { ...state, saveSuccess: true, saving: false, uploadProgress: null };
     case 'RESET_DIRTY':
       return { ...state, original: state.config ? structuredClone(state.config) : null };
+    case 'SET_UPLOAD_PROGRESS':
+      return { ...state, uploadProgress: action.progress };
   }
 }

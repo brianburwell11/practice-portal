@@ -1,4 +1,5 @@
 import type { TapMapEntry, StemGroupConfig } from '../audio/types';
+import type { UploadProgress } from './utils/uploadWithProgress';
 
 export interface StemEntry {
   file: File;
@@ -29,6 +30,7 @@ export interface WizardState {
   // Step 4: Save
   saving: boolean;
   error: string | null;
+  uploadProgress: UploadProgress | null;
 }
 
 export type WizardAction =
@@ -47,7 +49,8 @@ export type WizardAction =
   | { type: 'NEXT_STEP' }
   | { type: 'PREV_STEP' }
   | { type: 'SET_SAVING'; saving: boolean }
-  | { type: 'SET_ERROR'; error: string | null };
+  | { type: 'SET_ERROR'; error: string | null }
+  | { type: 'SET_UPLOAD_PROGRESS'; progress: UploadProgress | null };
 
 function deriveId(title: string, artist: string): string {
   return `${title}-${artist}`
@@ -72,6 +75,7 @@ export const initialState: WizardState = {
   groups: [],
   saving: false,
   error: null,
+  uploadProgress: null,
 };
 
 export function wizardReducer(state: WizardState, action: WizardAction): WizardState {
@@ -121,6 +125,8 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case 'SET_SAVING':
       return { ...state, saving: action.saving };
     case 'SET_ERROR':
-      return { ...state, error: action.error };
+      return { ...state, error: action.error, uploadProgress: null };
+    case 'SET_UPLOAD_PROGRESS':
+      return { ...state, uploadProgress: action.progress };
   }
 }
