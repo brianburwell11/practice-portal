@@ -2,7 +2,7 @@ import { useReducer, useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema, songManifestSchema } from '../config/schema';
-import { detectStem, isAudioFile, deduplicateIds } from './utils/stemDetection';
+import { detectStem, isAudioFile } from './utils/stemDetection';
 import { uploadFormWithProgress } from './utils/uploadWithProgress';
 import { assetUrl } from '../utils/url';
 import type { StemConfig, StemGroupConfig } from '../audio/types';
