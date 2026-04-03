@@ -1,4 +1,5 @@
 import { useReducer, useEffect, useRef, useState, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema, songManifestSchema } from '../config/schema';
 import { detectStem, isAudioFile, deduplicateIds } from './utils/stemDetection';
@@ -10,7 +11,8 @@ const groupColors = [
 ];
 
 export default function EditSongPage() {
-  const songId = window.location.hash.replace('#/admin/edit-song/', '');
+  const { songId = '', bandSlug = '' } = useParams();
+  const navigate = useNavigate();
   const [state, dispatch] = useReducer(editSongReducer, initialEditState);
   const [songPath, setSongPath] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -55,9 +57,8 @@ export default function EditSongPage() {
 
   const handleBack = useCallback(() => {
     if (isDirty(state) && !window.confirm('You have unsaved changes. Leave anyway?')) return;
-    window.location.hash = '';
-    setTimeout(() => location.reload(), 0);
-  }, [state]);
+    navigate(`/${bandSlug}`);
+  }, [state, navigate, bandSlug]);
 
   // Stem reorder handlers
   const onStemDragStart = (idx: number) => setDragIdx(idx);

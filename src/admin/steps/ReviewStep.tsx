@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
@@ -10,6 +11,8 @@ interface Props {
 
 export function ReviewStep({ state, dispatch }: Props) {
   const [result, setResult] = useState<'success' | null>(null);
+  const { bandSlug = '' } = useParams();
+  const navigate = useNavigate();
   const config = buildConfig(state);
   const validation = songConfigSchema.safeParse(config);
 
@@ -77,13 +80,12 @@ export function ReviewStep({ state, dispatch }: Props) {
           <span className="font-mono text-gray-300">public/audio/song-{state.id}/</span>
         </p>
         <div className="flex justify-center gap-3">
-          <a
-            href="#/"
-            onClick={() => setTimeout(() => location.reload(), 0)}
+          <button
+            onClick={() => navigate(`/${bandSlug}`)}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
           >
             Open in Practice Portal
-          </a>
+          </button>
           <button
             onClick={() => location.reload()}
             className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"

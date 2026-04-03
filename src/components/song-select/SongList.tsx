@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
+import { useBandStore } from '../../store/bandStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { songManifestSchema, songConfigSchema } from '../../config/schema';
 import type { SongManifestEntry } from '../../audio/types';
@@ -10,6 +11,7 @@ export function SongList() {
   const { manifest, selectedSong, loading, setManifest, setSelectedSong, setLoading, setLoadProgress, setError } =
     useSongStore();
   const { initStems, initGroups } = useMixerStore();
+  const currentBand = useBandStore((s) => s.currentBand);
 
   useEffect(() => {
     fetch('/audio/manifest.json')
@@ -20,6 +22,12 @@ export function SongList() {
       })
       .catch((err) => setError(String(err)));
   }, [setManifest, setError]);
+
+  const filteredSongs = useMemo(() => {
+    if (!manifest) return [];
+    if (!currentBand) return manifest.songs;
+    return manifest.songs.filter((s) => currentBand.songIds.includes(s.id));
+  }, [manifest, currentBand]);
 
   const handleSelect = async (entry: SongManifestEntry) => {
     if (loading) return;
@@ -74,7 +82,7 @@ export function SongList() {
         className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500"
         value={selectedSong?.id ?? ''}
         onChange={(e) => {
-          const entry = manifest.songs.find((s) => s.id === e.target.value);
+          const entry = filteredSongs.find((s) => s.id === e.target.value);
           if (entry) handleSelect(entry);
         }}
         disabled={loading}
@@ -82,7 +90,7 @@ export function SongList() {
         <option value="" disabled>
           {loading ? 'Loading...' : 'Select a song'}
         </option>
-        {manifest.songs.map((song) => (
+        {filteredSongs.map((song) => (
           <option key={song.id} value={song.id}>
             {song.title} — {song.artist}
           </option>

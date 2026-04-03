@@ -5,39 +5,66 @@ import { MixerPanel } from './components/mixer/MixerPanel';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
 import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useSongStore } from './store/songStore';
+import { useBandStore } from './store/bandStore';
+import { useNavigate } from 'react-router-dom';
 
 export default function App() {
   const engine = useCreateEngine();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const openMarkerEditor = useMarkerEditorStore((s) => s.open);
+  const currentBand = useBandStore((s) => s.currentBand);
+  const navigate = useNavigate();
+
+  const bandRoute = currentBand?.route ?? '';
 
   return (
     <AudioEngineContext.Provider value={engine}>
-      <div className="min-h-screen flex flex-col bg-gray-900 text-gray-100">
+      <div
+        className="min-h-screen flex flex-col"
+        style={{
+          backgroundColor: 'var(--band-bg, #111827)',
+          color: 'var(--band-text, #f3f4f6)',
+        }}
+      >
         {/* Header */}
-        <header className="px-4 py-3 border-b border-gray-700 flex items-center gap-3">
-          <h1 className="text-lg font-semibold tracking-tight">Practice Portal</h1>
+        <header
+          className="px-4 py-3 border-b border-gray-700 flex items-center gap-3"
+          style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
+        >
+          {!currentBand?.logo ? (
+            <h1 className="text-lg font-semibold tracking-tight">
+              {currentBand?.name ?? 'Practice Portal'}
+            </h1>
+          ) : (
+            <img
+              src={currentBand.logo}
+              alt={currentBand.name}
+              className="h-10 object-contain"
+            />
+          )}
           {import.meta.env.DEV && (
-            <a
-              href="#/admin/add-song"
-              onClick={() => setTimeout(() => location.reload(), 0)}
+            <button
+              onClick={() => navigate(`/${bandRoute}/admin/add-song`)}
               className="text-xs text-gray-500 hover:text-gray-300"
             >
               + Add Song
-            </a>
+            </button>
           )}
           {import.meta.env.DEV && selectedSong && (
-            <a
-              href={`#/admin/edit-song/${selectedSong.id}`}
-              onClick={() => setTimeout(() => location.reload(), 0)}
+            <button
+              onClick={() => navigate(`/${bandRoute}/admin/edit-song/${selectedSong.id}`)}
               className="text-xs text-gray-500 hover:text-gray-300"
             >
               Edit Song
-            </a>
+            </button>
           )}
           {selectedSong && (
             <button
-              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded"
+              className="px-3 py-1 text-sm rounded"
+              style={{
+                backgroundColor: 'var(--band-primary, #374151)',
+                color: 'var(--band-text, #f3f4f6)',
+              }}
               onClick={() =>
                 openMarkerEditor(selectedSong.tapMap ?? [])
               }

@@ -1,0 +1,35 @@
+{
+  "bands": [
+    {
+      "id": "sooza-brass-band",
+      "name": "Sooza Brass Band",
+      "route": "soozabrassband",
+      "colors": {
+        "primary": "#7c3aed",
+        "accent": "#fff403",
+        "background": "#0f0f0f",
+        "text": "#fafafa"
+      },
+      "logo": "/bands/sooza-brass-band/logo.png",
+      "songIds": [
+        "wiggle-sooza",
+        "gunk-palace-sooza"
+      ]
+    },
+    {
+      "id": "dirty-chai",
+      "name": "Dirty Chai",
+      "route": "dirtychaignv",
+      "colors": {
+        "primary": "#da2333",
+        "accent": "#16392f",
+        "background": "#ca9253",
+        "text": "#000000"
+      },
+      "logo": "/bands/dirty-chai/logo.png",
+      "songIds": [
+        "st-james"
+      ]
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import { useReducer } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { wizardReducer, initialState } from './wizardReducer';
 import { MetadataStep } from './steps/MetadataStep';
 import { StemsStep } from './steps/StemsStep';
@@ -9,19 +10,20 @@ const stepLabels = ['Metadata', 'Stems & Groups', 'Timing', 'Review'];
 
 export default function AddSongWizard() {
   const [state, dispatch] = useReducer(wizardReducer, initialState);
+  const { bandSlug = '' } = useParams();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100">
       {/* Header */}
       <header className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
         <h1 className="text-lg font-semibold tracking-tight">Add Song</h1>
-        <a
-          href="#/"
-          onClick={() => setTimeout(() => location.reload(), 0)}
+        <button
+          onClick={() => navigate(`/${bandSlug}`)}
           className="text-sm text-gray-400 hover:text-gray-200"
         >
           Back to app
-        </a>
+        </button>
       </header>
 
       {/* Step indicator */}
