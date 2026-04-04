@@ -59,16 +59,12 @@ export default function App() {
               Edit Song
             </button>
           )}
-          {selectedSong && (
+          {import.meta.env.DEV && selectedSong && (
             <button
-              className="px-3 py-1 text-sm rounded"
-              style={{
-                backgroundColor: 'var(--band-primary, #374151)',
-                color: 'var(--band-text, #f3f4f6)',
-              }}
               onClick={() =>
                 openMarkerEditor(selectedSong.tapMap ?? [])
               }
+              className="text-xs text-gray-500 hover:text-gray-300"
             >
               TapMap Editor
             </button>
