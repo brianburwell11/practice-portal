@@ -1,6 +1,6 @@
 # Song Configuration Guide
 
-Each song in Practice Portal is defined by a `config.json` file located in its own directory under `public/audio/song-{id}/`. This file describes the song's metadata, audio stems, grouping, tempo, time signatures, metronome behavior, and timeline markers.
+Each song in Practice Portal is defined by a `config.json` file located in its own directory under `public/audio/{band-id}/song-{id}/`. This file describes the song's metadata, audio stems, grouping, tempo, time signatures, metronome behavior, and timeline markers.
 
 The config is validated at runtime using Zod schemas defined in `src/config/schema.ts` and typed in `src/audio/types.ts`.
 
@@ -9,11 +9,14 @@ The config is validated at runtime using Zod schemas defined in `src/config/sche
 ```
 public/audio/
 ├── manifest.json                 # Index of all songs (see Manifest section below)
-├── song-my-song/
-│   ├── config.json               # This file
-│   ├── drums.mp3                 # Audio stem files (referenced by config)
-│   ├── bass.mp3
-│   └── ...
+├── {band-id}/
+│   ├── song-my-song/
+│   │   ├── config.json           # This file
+│   │   ├── drums.mp3             # Audio stem files (referenced by config)
+│   │   ├── bass.mp3
+│   │   └── ...
+│   └── song-another-song/
+│       └── ...
 ```
 
 ## Full Schema
@@ -234,7 +237,7 @@ Each song must also be registered in `public/audio/manifest.json`:
 
       // Path to the song's directory, relative to the public root.
       // Do not include a leading slash.
-      "path": "audio/song-blue-bossa"
+      "path": "audio/jazz-combo/song-blue-bossa"
     }
   ]
 }

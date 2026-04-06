@@ -23,6 +23,23 @@ function getR2Client(): S3Client | null {
   });
 }
 
+function resolveBandForSong(songId: string): string | null {
+  const bandsPath = path.resolve(process.cwd(), 'public', 'bands.json');
+  const bands = JSON.parse(fs.readFileSync(bandsPath, 'utf-8')).bands;
+  return bands.find((b: any) => b.songIds.includes(songId))?.id ?? null;
+}
+
+function songDirPath(songId: string): string {
+  const bandId = resolveBandForSong(songId);
+  const base = path.resolve(process.cwd(), 'public', 'audio');
+  return bandId ? path.join(base, bandId, `song-${songId}`) : path.join(base, `song-${songId}`);
+}
+
+function r2SongPrefix(songId: string): string {
+  const bandId = resolveBandForSong(songId);
+  return bandId ? `${bandId}/song-${songId}` : `song-${songId}`;
+}
+
 const TARGET_LUFS = -16;
 
 interface ProbeResult {
@@ -121,7 +138,7 @@ export function configApiPlugin(): Plugin {
         const configMatch = req.url?.match(/^\/api\/song\/([^/]+)\/config$/);
         if (configMatch && req.method === 'POST') {
           const songId = configMatch[1];
-          const songDir = path.resolve(process.cwd(), 'public', 'audio', `song-${songId}`);
+          const songDir = songDirPath(songId);
 
           fs.mkdirSync(songDir, { recursive: true });
 
@@ -143,7 +160,7 @@ export function configApiPlugin(): Plugin {
         const uploadMatch = req.url?.match(/^\/api\/song\/([^/]+)\/upload$/);
         if (uploadMatch && req.method === 'POST') {
           const songId = uploadMatch[1];
-          const songDir = path.resolve(process.cwd(), 'public', 'audio', `song-${songId}`);
+          const songDir = songDirPath(songId);
 
           fs.mkdirSync(songDir, { recursive: true });
 
@@ -261,7 +278,7 @@ export function configApiPlugin(): Plugin {
               transcodeToMp3(tmpPath, uploadPath, probe, loudness);
 
               // Upload to R2
-              const key = `song-${songId}/${uploadName}`;
+              const key = `${r2SongPrefix(songId)}/${uploadName}`;
               const body = fs.readFileSync(uploadPath);
               await r2.send(new PutObjectCommand({
                 Bucket: bucket,
@@ -274,7 +291,7 @@ export function configApiPlugin(): Plugin {
               fileMap[origName] = uploadName;
             }
 
-            const publicBase = `${process.env.R2_PUBLIC_URL}/song-${songId}`;
+            const publicBase = `${process.env.R2_PUBLIC_URL}/${r2SongPrefix(songId)}`;
             jsonResponse(res, 200, { ok: true, fileMap, publicBase });
           } catch (err: any) {
             jsonResponse(res, 500, { error: err.message ?? 'Transcode/upload failed' });
@@ -302,7 +319,7 @@ export function configApiPlugin(): Plugin {
 
             const urls: Record<string, string> = {};
             for (const filename of files) {
-              const key = `song-${songId}/${filename}`;
+              const key = `${r2SongPrefix(songId)}/${filename}`;
               const url = await getSignedUrl(r2, new PutObjectCommand({
                 Bucket: bucket,
                 Key: key,
@@ -310,7 +327,7 @@ export function configApiPlugin(): Plugin {
               urls[filename] = url;
             }
 
-            jsonResponse(res, 200, { urls, publicBase: `${process.env.R2_PUBLIC_URL}/song-${songId}` });
+            jsonResponse(res, 200, { urls, publicBase: `${process.env.R2_PUBLIC_URL}/${r2SongPrefix(songId)}` });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Presign failed' });
           }

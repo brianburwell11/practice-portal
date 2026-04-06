@@ -44,6 +44,12 @@ const dryRun = process.argv.includes('--dry-run');
 const publicRoot = path.resolve('public');
 const manifestPath = path.join(publicRoot, 'audio', 'manifest.json');
 
+function resolveBandForSong(songId: string): string | null {
+  const bandsPath = path.join(publicRoot, 'bands.json');
+  const bands = JSON.parse(fs.readFileSync(bandsPath, 'utf-8')).bands;
+  return bands.find((b: any) => b.songIds.includes(songId))?.id ?? null;
+}
+
 // --- ffmpeg helpers (mirrored from vite-plugin-config-api.ts) ---
 
 interface ProbeResult {
@@ -141,7 +147,9 @@ async function migrateSong(entry: ManifestEntry): Promise<{ fileMap: Record<stri
     fileMap[stem.file] = uploadName;
 
     if (!dryRun) {
-      const key = `song-${entry.id}/${uploadName}`;
+      const bandId = resolveBandForSong(entry.id);
+      const prefix = bandId ? `${bandId}/song-${entry.id}` : `song-${entry.id}`;
+      const key = `${prefix}/${uploadName}`;
       const body = fs.readFileSync(uploadPath);
       const sizeMB = (body.length / 1024 / 1024).toFixed(1);
       console.log(`  [upload] ${key} (${sizeMB} MB)`);
@@ -199,7 +207,9 @@ async function main() {
     }
 
     // Update manifest entry with audioBasePath
-    entry.audioBasePath = `${R2_PUBLIC_URL}/song-${entry.id}`;
+    const bandId = resolveBandForSong(entry.id);
+    const prefix = bandId ? `${bandId}/song-${entry.id}` : `song-${entry.id}`;
+    entry.audioBasePath = `${R2_PUBLIC_URL}/${prefix}`;
     if (!dryRun) {
       console.log(`  [update] manifest.json — audioBasePath = ${entry.audioBasePath}`);
     } else {

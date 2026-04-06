@@ -14,6 +14,7 @@ interface Props {
 
 export function ReviewStep({ state, dispatch }: Props) {
   const [result, setResult] = useState<'success' | null>(null);
+  const [savedPath, setSavedPath] = useState('');
   const { bandSlug = '' } = useParams();
   const navigate = useNavigate();
   const bandName = useBandStore((s) => s.currentBand?.name ?? '');
@@ -68,7 +69,27 @@ export function ReviewStep({ state, dispatch }: Props) {
         throw new Error(err.error || 'Config save failed');
       }
 
-      // 4. Update manifest with R2 audio path
+      // 4. Resolve band and auto-add song to it
+      let bandId = '';
+      if (bandSlug) {
+        const bandsRes = await fetch(assetUrl('bands.json'));
+        const bandsData = await bandsRes.json();
+        const band = bandsData.bands.find((b: any) => b.route === bandSlug);
+        if (band) {
+          bandId = band.id;
+          if (!band.songIds.includes(state.id)) {
+            band.songIds.push(state.id);
+            await fetch('/api/bands', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(bandsData),
+            });
+          }
+        }
+      }
+
+      // 5. Update manifest with R2 audio path
+      const songPath = bandId ? `audio/${bandId}/song-${state.id}` : `audio/song-${state.id}`;
       const manifestRes = await fetch('/api/manifest/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,7 +97,7 @@ export function ReviewStep({ state, dispatch }: Props) {
           id: state.id,
           title: state.title,
           artist: state.artist,
-          path: `audio/song-${state.id}`,
+          path: songPath,
           audioBasePath: publicBase,
         }),
       });
@@ -85,21 +106,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         throw new Error(err.error || 'Manifest update failed');
       }
 
-      // 5. Auto-add song to current band
-      if (bandSlug) {
-        const bandsRes = await fetch(assetUrl('bands.json'));
-        const bandsData = await bandsRes.json();
-        const band = bandsData.bands.find((b: any) => b.route === bandSlug);
-        if (band && !band.songIds.includes(state.id)) {
-          band.songIds.push(state.id);
-          await fetch('/api/bands', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(bandsData),
-          });
-        }
-      }
-
+      setSavedPath(songPath);
       setResult('success');
     } catch (err: any) {
       dispatch({ type: 'SET_ERROR', error: err.message });
@@ -115,7 +122,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         <p className="text-gray-400">
           <span className="font-mono text-gray-300">{state.title}</span> by{' '}
           <span className="text-gray-300">{state.artist}</span> has been saved to{' '}
-          <span className="font-mono text-gray-300">public/audio/song-{state.id}/</span>
+          <span className="font-mono text-gray-300">public/{savedPath}/</span>
         </p>
         <div className="flex justify-center gap-3">
           <button

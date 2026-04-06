@@ -16,7 +16,7 @@ Building a fully static, client-side web app for musicians to practice along wit
 
 ## Song Configuration (JSON per song)
 
-Each song lives in `public/audio/song-{id}/` with a `config.json`:
+Each song lives in `public/audio/{band-id}/song-{id}/` with a `config.json`:
 
 ```jsonc
 {
@@ -104,7 +104,7 @@ Plain TypeScript class (not a React component). Provided to React via context. P
 practice-portal/
 ├── public/audio/                    # Static audio assets (not processed by Vite)
 │   ├── manifest.json
-│   └── song-{id}/config.json + stems
+│   └── {band-id}/song-{id}/config.json + stems
 ├── src/
 │   ├── audio/                       # Audio engine (plain TS, no React)
 │   │   ├── AudioEngine.ts

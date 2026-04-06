@@ -28,15 +28,15 @@ Move audio stem files out of the Git repository and into external cloud storage.
 
 ### Current Flow
 ```
-Admin uploads stems → saved to public/audio/song-{id}/ on disk
-Static site serves  → /audio/song-{id}/bass.mp3 (same origin)
+Admin uploads stems → saved to public/audio/{band-id}/song-{id}/ on disk
+Static site serves  → /audio/{band-id}/song-{id}/bass.mp3 (same origin)
 ```
 
 ### Proposed Flow
 ```
 Admin uploads stems → browser uploads directly to R2 via presigned URL
-Config stays local  → public/audio/song-{id}/config.json (in repo, part of build)
-Static site plays   → fetches audio from https://{bucket}.r2.dev/song-{id}/bass.mp3
+Config stays local  → public/audio/{band-id}/song-{id}/config.json (in repo, part of build)
+Static site plays   → fetches audio from https://{bucket}.r2.dev/{band-id}/song-{id}/bass.mp3
 ```
 
 Key principle: **config is code, audio is data.** Config files are small, version-controlled, and part of the build. Audio files are large, binary, and stored externally.
@@ -53,7 +53,7 @@ When the admin creates or edits a song, stems are uploaded directly from the bro
 2. Frontend requests presigned upload URLs from the dev server:
    ```
    POST /api/r2/presign
-   Body: { songId: "wiggle", files: ["bass.mp3", "melody.mp3"] }
+   Body: { bandId: "sooza", songId: "wiggle", files: ["bass.mp3", "melody.mp3"] }
    Response: { urls: { "bass.mp3": "https://...", "melody.mp3": "https://..." } }
    ```
 3. Frontend uploads each file directly to R2 using the presigned URL:
@@ -87,7 +87,7 @@ const s3 = new S3Client({
 // For each file, generate a presigned PUT URL:
 const url = await getSignedUrl(s3, new PutObjectCommand({
   Bucket: process.env.R2_BUCKET,
-  Key: `song-${songId}/${filename}`,
+  Key: `${bandId}/song-${songId}/${filename}`,
 }), { expiresIn: 3600 });
 ```
 
@@ -105,15 +105,15 @@ Deploy a small Worker that validates requests and returns presigned URLs. This w
 Currently in `AudioEngine.ts:109`:
 ```ts
 const url = `${basePath}/${stemConfig.file}`;
-// basePath = "/audio/song-test", file = "bass.mp3"
-// Result: "/audio/song-test/bass.mp3" (same-origin)
+// basePath = "/audio/sooza/song-test", file = "bass.mp3"
+// Result: "/audio/sooza/song-test/bass.mp3" (same-origin)
 ```
 
 With R2, `basePath` becomes an absolute URL:
 ```ts
 const url = `${basePath}/${stemConfig.file}`;
-// basePath = "https://practice-portal.r2.dev/song-test", file = "bass.mp3"
-// Result: "https://practice-portal.r2.dev/song-test/bass.mp3"
+// basePath = "https://practice-portal.r2.dev/sooza/song-test", file = "bass.mp3"
+// Result: "https://practice-portal.r2.dev/sooza/song-test/bass.mp3"
 ```
 
 **The AudioEngine code doesn't need to change** — it already concatenates `basePath` + `file`. We just need the manifest's `path` field to be the R2 base URL instead of a relative path.
@@ -127,7 +127,7 @@ const url = `${basePath}/${stemConfig.file}`;
       "id": "st-james",
       "title": "St. James",
       "artist": "Unknown",
-      "path": "https://practice-portal.r2.dev/song-st-james"
+      "path": "https://practice-portal.r2.dev/dirty-chai/song-st-james"
     }
   ]
 }
@@ -142,7 +142,7 @@ const configUrl = `/${entry.path}/config.json`;
 
 This would need a small change — config is always local, audio is always R2:
 ```ts
-const configUrl = `/audio/song-${entry.id}/config.json`;
+const configUrl = `/audio/${entry.bandId}/song-${entry.id}/config.json`;
 // Audio basePath comes from a separate field or is derived from R2 base URL + song ID
 ```
 
@@ -153,8 +153,8 @@ const configUrl = `/audio/song-${entry.id}/config.json`;
   "id": "st-james",
   "title": "St. James",
   "artist": "Unknown",
-  "path": "audio/song-st-james",
-  "audioBasePath": "https://practice-portal.r2.dev/song-st-james"
+  "path": "audio/dirty-chai/song-st-james",
+  "audioBasePath": "https://practice-portal.r2.dev/dirty-chai/song-st-james"
 }
 ```
 
@@ -212,11 +212,11 @@ R2_PUBLIC_URL=https://practice-portal-audio.<account>.r2.dev
 1. Install `@aws-sdk/client-s3` as a dev dependency
 2. Write a one-time migration script (`scripts/migrate-to-r2.ts`):
    - Read `manifest.json`
-   - For each song, upload all audio files from `public/audio/song-{id}/` to R2
+   - For each song, upload all audio files from `public/audio/{band-id}/song-{id}/` to R2
    - Update manifest entries with `audioBasePath`
    - Skip `config.json` (stays local)
-3. After migration, remove audio files from `public/audio/song-*/` (keep config.json)
-4. Add `*.mp3` and `*.wav` to `.gitignore` under `public/audio/`
+3. After migration, remove audio files from `public/audio/*/song-*/` (keep config.json)
+4. Add `*.mp3` and `*.wav` to `.gitignore` under `public/audio/*/`
 
 ---
 
@@ -241,18 +241,20 @@ R2_PUBLIC_URL=https://practice-portal-audio.<account>.r2.dev
 
 ```
 practice-portal-audio/
-├── song-st-james/
-│   ├── St James Kick.wav
-│   ├── St James Snare.wav
-│   └── ...
-├── song-wiggle-sooza/
-│   ├── Wiggle Trumpet 1.mp3
-│   └── ...
-└── song-gunk-palace-sooza/
-    └── ...
+├── dirty-chai/
+│   └── song-st-james/
+│       ├── St James Kick.wav
+│       ├── St James Snare.wav
+│       └── ...
+├── sooza/
+│   ├── song-wiggle/
+│   │   ├── Wiggle Trumpet 1.mp3
+│   │   └── ...
+│   └── song-gunk-palace/
+│       └── ...
 ```
 
-Mirrors the current `public/audio/song-{id}/` structure, minus `config.json`.
+Mirrors the current `public/audio/{band-id}/song-{id}/` structure, minus `config.json`.
 
 ---
 
