@@ -27,8 +27,8 @@ export function useSongLoader() {
         .map((e) => e.type === 'song' ? manifest.songs.find((s) => s.id === e.songId) : undefined)
         .filter((s): s is SongManifestEntry => !!s);
     }
-    if (!currentBand) return manifest.songs;
-    return manifest.songs.filter((s) => currentBand.songIds.includes(s.id));
+    if (!currentBand) return [...manifest.songs].sort((a, b) => a.title.localeCompare(b.title));
+    return manifest.songs.filter((s) => currentBand.songIds.includes(s.id)).sort((a, b) => a.title.localeCompare(b.title));
   }, [manifest, currentBand, activeSetlist]);
 
   const handleSelect = useCallback(async (entry: SongManifestEntry) => {
