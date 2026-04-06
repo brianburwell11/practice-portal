@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
 import { MixerPanel } from './components/mixer/MixerPanel';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
+import { DeleteSongModal } from './components/song-select/DeleteSongModal';
 import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
@@ -15,6 +17,7 @@ export default function App() {
   const openMarkerEditor = useMarkerEditorStore((s) => s.open);
   const currentBand = useBandStore((s) => s.currentBand);
   const navigate = useNavigate();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const bandRoute = currentBand?.route ?? '';
 
@@ -69,6 +72,14 @@ export default function App() {
               TapMap Editor
             </button>
           )}
+          {import.meta.env.DEV && selectedSong && (
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="text-xs text-gray-500 hover:text-red-400"
+            >
+              Delete Song
+            </button>
+          )}
         </header>
 
         {/* Song selector */}
@@ -82,6 +93,13 @@ export default function App() {
       </div>
 
       <MarkerEditorModal />
+      {showDeleteModal && selectedSong && (
+        <DeleteSongModal
+          songId={selectedSong.id}
+          songTitle={selectedSong.title}
+          onClose={() => setShowDeleteModal(false)}
+        />
+      )}
     </AudioEngineContext.Provider>
   );
 }

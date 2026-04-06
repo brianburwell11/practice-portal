@@ -5,7 +5,7 @@ import os from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 import Busboy from 'busboy';
 import dotenv from 'dotenv';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 dotenv.config();
@@ -368,6 +368,60 @@ export function configApiPlugin(): Plugin {
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Invalid request' });
+          }
+          return;
+        }
+
+        // --- DELETE /api/song/{songId} ---
+        const deleteMatch = req.url?.match(/^\/api\/song\/([^/]+)$/);
+        if (deleteMatch && req.method === 'DELETE') {
+          const songId = deleteMatch[1];
+
+          try {
+            // 1. Delete from R2
+            const r2 = getR2Client();
+            const bucket = process.env.R2_BUCKET;
+            if (r2 && bucket) {
+              const prefix = `${r2SongPrefix(songId)}/`;
+              let continuationToken: string | undefined;
+              do {
+                const list = await r2.send(new ListObjectsV2Command({
+                  Bucket: bucket,
+                  Prefix: prefix,
+                  ContinuationToken: continuationToken,
+                }));
+                for (const obj of list.Contents ?? []) {
+                  if (obj.Key) {
+                    await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: obj.Key }));
+                  }
+                }
+                continuationToken = list.NextContinuationToken;
+              } while (continuationToken);
+            }
+
+            // 2. Delete local song directory
+            const songDir = songDirPath(songId);
+            if (fs.existsSync(songDir)) {
+              fs.rmSync(songDir, { recursive: true, force: true });
+            }
+
+            // 3. Remove from manifest.json
+            const manifestPath = path.resolve(process.cwd(), 'public', 'audio', 'manifest.json');
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+            manifest.songs = manifest.songs.filter((s: any) => s.id !== songId);
+            fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+
+            // 4. Remove from all bands in bands.json
+            const bandsPath = path.resolve(process.cwd(), 'public', 'bands.json');
+            const bandsData = JSON.parse(fs.readFileSync(bandsPath, 'utf-8'));
+            for (const band of bandsData.bands) {
+              band.songIds = band.songIds.filter((id: string) => id !== songId);
+            }
+            fs.writeFileSync(bandsPath, JSON.stringify(bandsData, null, 2) + '\n');
+
+            jsonResponse(res, 200, { ok: true });
+          } catch (err: any) {
+            jsonResponse(res, 500, { error: err.message ?? 'Delete failed' });
           }
           return;
         }
