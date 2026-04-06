@@ -34,8 +34,8 @@ export interface WizardState {
 }
 
 export type WizardAction =
-  | { type: 'SET_TITLE'; title: string }
-  | { type: 'SET_ARTIST'; artist: string }
+  | { type: 'SET_TITLE'; title: string; fallbackArtist?: string }
+  | { type: 'SET_ARTIST'; artist: string; fallbackArtist?: string }
   | { type: 'SET_KEY'; key: string }
   | { type: 'SET_STEMS'; stems: StemEntry[]; durationSeconds: number }
   | { type: 'UPDATE_STEM'; index: number; updates: Partial<Omit<StemEntry, 'file'>> }
@@ -81,9 +81,9 @@ export const initialState: WizardState = {
 export function wizardReducer(state: WizardState, action: WizardAction): WizardState {
   switch (action.type) {
     case 'SET_TITLE':
-      return { ...state, title: action.title, id: deriveId(action.title, state.artist) };
+      return { ...state, title: action.title, id: deriveId(action.title, state.artist || action.fallbackArtist || '') };
     case 'SET_ARTIST':
-      return { ...state, artist: action.artist, id: deriveId(state.title, action.artist) };
+      return { ...state, artist: action.artist, id: deriveId(state.title, action.artist || action.fallbackArtist || '') };
     case 'SET_KEY':
       return { ...state, key: action.key };
     case 'SET_STEMS':

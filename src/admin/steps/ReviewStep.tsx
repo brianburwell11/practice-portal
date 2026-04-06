@@ -5,6 +5,7 @@ import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
 import { uploadFormWithProgress } from '../utils/uploadWithProgress';
 import { assetUrl } from '../../utils/url';
+import { useBandStore } from '../../store/bandStore';
 
 interface Props {
   state: WizardState;
@@ -15,7 +16,8 @@ export function ReviewStep({ state, dispatch }: Props) {
   const [result, setResult] = useState<'success' | null>(null);
   const { bandSlug = '' } = useParams();
   const navigate = useNavigate();
-  const config = buildConfig(state);
+  const bandName = useBandStore((s) => s.currentBand?.name ?? '');
+  const config = buildConfig(state, bandName);
   const validation = songConfigSchema.safeParse(config);
 
   const handleSave = async () => {

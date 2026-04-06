@@ -1,4 +1,5 @@
 import type { WizardState, WizardAction } from '../wizardReducer';
+import { useBandStore } from '../../store/bandStore';
 
 interface Props {
   state: WizardState;
@@ -6,7 +7,8 @@ interface Props {
 }
 
 export function MetadataStep({ state, dispatch }: Props) {
-  const canProceed = state.title.trim() !== '' && state.artist.trim() !== '';
+  const bandName = useBandStore((s) => s.currentBand?.name ?? '');
+  const canProceed = state.title.trim() !== '' && state.key.trim() !== '';
 
   return (
     <div className="space-y-6">
@@ -18,9 +20,9 @@ export function MetadataStep({ state, dispatch }: Props) {
           <input
             type="text"
             value={state.title}
-            onChange={(e) => dispatch({ type: 'SET_TITLE', title: e.target.value })}
+            onChange={(e) => dispatch({ type: 'SET_TITLE', title: e.target.value, fallbackArtist: bandName })}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:border-blue-500"
-            placeholder="Blue Bossa"
+            placeholder="Song Title"
           />
         </div>
 
@@ -29,9 +31,9 @@ export function MetadataStep({ state, dispatch }: Props) {
           <input
             type="text"
             value={state.artist}
-            onChange={(e) => dispatch({ type: 'SET_ARTIST', artist: e.target.value })}
+            onChange={(e) => dispatch({ type: 'SET_ARTIST', artist: e.target.value, fallbackArtist: bandName })}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:border-blue-500"
-            placeholder="Kenny Dorham"
+            placeholder={bandName || 'Artist'}
           />
         </div>
 
@@ -42,7 +44,7 @@ export function MetadataStep({ state, dispatch }: Props) {
             value={state.key}
             onChange={(e) => dispatch({ type: 'SET_KEY', key: e.target.value })}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:border-blue-500"
-            placeholder="Cm"
+            placeholder="Em"
           />
         </div>
 

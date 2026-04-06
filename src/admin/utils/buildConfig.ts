@@ -6,9 +6,9 @@ const markerColors = [
   '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
 ];
 
-export function buildConfig(state: WizardState): SongConfig {
+export function buildConfig(state: WizardState, fallbackArtist?: string): SongConfig {
   const stems = state.stems.map((s) => ({
-    id: s.id,
+    id: s.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || s.id,
     label: s.label,
     file: s.file.name,
     defaultVolume: s.defaultVolume,
@@ -45,7 +45,7 @@ export function buildConfig(state: WizardState): SongConfig {
   return {
     id: state.id,
     title: state.title,
-    artist: state.artist,
+    artist: state.artist.trim() || fallbackArtist || '',
     key: state.key,
     durationSeconds: state.durationSeconds,
     beatOffset: 0,

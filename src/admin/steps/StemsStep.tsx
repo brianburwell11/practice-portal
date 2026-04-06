@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import type { WizardState, WizardAction, StemEntry } from '../wizardReducer';
-import { detectStem, deduplicateIds, isAudioFile } from '../utils/stemDetection';
+import { detectStem, deduplicateIds, isAudioFile, sortStems } from '../utils/stemDetection';
 import { convertToMono, getAudioDuration } from '../utils/audioConvert';
+import { previewStem } from '../utils/stemPreview';
 
 interface Props {
   state: WizardState;
@@ -50,8 +51,9 @@ function buildStems(files: File[]): StemEntry[] {
     file,
     ...detectStem(file.name),
   }));
-  const deduped = deduplicateIds(detected);
-  return detected.map((stem, i) => ({
+  const sorted = sortStems(detected);
+  const deduped = deduplicateIds(sorted);
+  return sorted.map((stem, i) => ({
     ...stem,
     id: deduped[i].id,
   }));
@@ -63,6 +65,8 @@ export function StemsStep({ state, dispatch }: Props) {
   const [loading, setLoading] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
+  const [previewingIdx, setPreviewingIdx] = useState<number | null>(null);
+  const stopRef = useRef<(() => void) | null>(null);
 
   // Group creation state
   const [groupLabel, setGroupLabel] = useState('');
@@ -117,6 +121,22 @@ export function StemsStep({ state, dispatch }: Props) {
     }
     setDragIdx(null);
     setDropIdx(null);
+  };
+
+  const togglePreview = async (idx: number, file: File) => {
+    if (previewingIdx === idx) {
+      stopRef.current?.();
+      stopRef.current = null;
+      setPreviewingIdx(null);
+      return;
+    }
+    stopRef.current?.();
+    setPreviewingIdx(idx);
+    const { stop } = await previewStem(file, () => {
+      setPreviewingIdx((cur) => (cur === idx ? null : cur));
+      stopRef.current = null;
+    });
+    stopRef.current = stop;
   };
 
   // Group helpers
@@ -242,6 +262,15 @@ export function StemsStep({ state, dispatch }: Props) {
                 {/* Filename */}
                 <span className="text-xs text-gray-500 truncate max-w-48">{stem.file.name}</span>
 
+                {/* Preview */}
+                <button
+                  onClick={() => togglePreview(i, stem.file)}
+                  className="text-gray-400 hover:text-blue-400 text-sm px-1"
+                  title={previewingIdx === i ? 'Stop preview' : 'Preview stem'}
+                >
+                  {previewingIdx === i ? '\u25A0' : '\u25B6'}
+                </button>
+
                 {/* Remove */}
                 <button
                   onClick={() => dispatch({ type: 'REMOVE_STEM', index: i })}
@@ -298,7 +327,9 @@ export function StemsStep({ state, dispatch }: Props) {
                   </span>
                 </label>
 
-                <span className="text-gray-600 ml-auto font-mono">{stem.id}</span>
+                <span className="text-gray-600 ml-auto font-mono">
+                  {stem.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || stem.id}
+                </span>
               </div>
             </div>
           ))}
