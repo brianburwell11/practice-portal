@@ -1,5 +1,6 @@
 import type { SongConfig, StemConfig, StemGroupConfig } from '../audio/types';
 import type { UploadProgress } from './utils/uploadWithProgress';
+import { deriveId } from '../utils/deriveId';
 
 export interface EditSongState {
   config: SongConfig | null;
@@ -57,9 +58,15 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
       };
 
     case 'SET_TITLE':
-      return updateConfig(state, { title: action.title });
+      return updateConfig(state, {
+        title: action.title,
+        id: deriveId(action.title, state.config!.artist),
+      });
     case 'SET_ARTIST':
-      return updateConfig(state, { artist: action.artist });
+      return updateConfig(state, {
+        artist: action.artist,
+        id: deriveId(state.config!.title, action.artist),
+      });
     case 'SET_KEY':
       return updateConfig(state, { key: action.key });
 

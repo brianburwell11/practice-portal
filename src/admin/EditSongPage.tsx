@@ -140,7 +140,11 @@ export default function EditSongPage() {
     if (!config || !songPath) return;
     dispatch({ type: 'SET_SAVING', saving: true });
     try {
-      // Upload new stem files: transcode + upload to R2
+      const oldId = state.original!.id;
+      const newId = config.id;
+      const idChanged = oldId !== newId;
+
+      // Upload new stem files using OLD id (files still at old location)
       if (newStemFiles.size > 0) {
         const formData = new FormData();
         for (const [, file] of newStemFiles) {
@@ -152,7 +156,7 @@ export default function EditSongPage() {
         }});
 
         const uploadResult = await uploadFormWithProgress(
-          `/api/r2/transcode-upload/${config.id}`,
+          `/api/r2/transcode-upload/${oldId}`,
           formData,
           (bytesSent, bytesTotal) => {
             dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
@@ -172,19 +176,30 @@ export default function EditSongPage() {
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
       }
 
-      // Save config
-      const res = await fetch(`/api/song/${config.id}/config`, {
+      // Save config to OLD location (so latest changes are persisted before rename)
+      const res = await fetch(`/api/song/${oldId}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify({ ...config, id: oldId }),
       });
       if (!res.ok) throw new Error('Failed to save config');
 
-      // Update manifest if title/artist changed
-      if (
+      if (idChanged) {
+        // Rename: moves files, updates manifest/bands/config
+        const renameRes = await fetch(`/api/song/${oldId}/rename`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newId }),
+        });
+        if (!renameRes.ok) {
+          const err = await renameRes.json();
+          throw new Error(err.error ?? 'Rename failed');
+        }
+      } else if (
         state.original &&
         (config.title !== state.original.title || config.artist !== state.original.artist)
       ) {
+        // Title/artist text changed but ID stayed the same — just update manifest
         await fetch('/api/manifest/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -195,6 +210,11 @@ export default function EditSongPage() {
       newStemFiles.clear();
       dispatch({ type: 'SET_SAVE_SUCCESS' });
       dispatch({ type: 'RESET_DIRTY' });
+
+      // Navigate to new URL if ID changed
+      if (idChanged) {
+        navigate(`/${bandSlug}/admin/edit-song/${newId}`, { replace: true });
+      }
     } catch (err: any) {
       dispatch({ type: 'SET_ERROR', error: err.message ?? 'Save failed' });
     }
@@ -267,6 +287,14 @@ export default function EditSongPage() {
               <p className="px-3 py-2 text-gray-400">{config.durationSeconds.toFixed(1)}s</p>
             </div>
           </div>
+
+          {state.original && config.id !== state.original.id && (
+            <div className="bg-yellow-900/30 border border-yellow-700 rounded p-3 text-sm text-yellow-300">
+              Song ID will change: <code className="font-mono">{state.original.id}</code> &rarr; <code className="font-mono">{config.id}</code>
+              <br />
+              This will move all files and update all references.
+            </div>
+          )}
         </section>
 
         {/* Stems */}

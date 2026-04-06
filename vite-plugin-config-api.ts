@@ -5,7 +5,7 @@ import os from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 import Busboy from 'busboy';
 import dotenv from 'dotenv';
-import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, CopyObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 dotenv.config();
@@ -38,6 +38,14 @@ function songDirPath(songId: string): string {
 function r2SongPrefix(songId: string): string {
   const bandId = resolveBandForSong(songId);
   return bandId ? `${bandId}/song-${songId}` : `song-${songId}`;
+}
+
+// Keep in sync with src/utils/deriveId.ts
+function deriveId(title: string, artist: string): string {
+  return `${title}-${artist}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 const TARGET_LUFS = -16;
@@ -152,6 +160,106 @@ export function configApiPlugin(): Plugin {
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Invalid request' });
+          }
+          return;
+        }
+
+        // --- POST /api/song/{songId}/rename ---
+        const renameMatch = req.url?.match(/^\/api\/song\/([^/]+)\/rename$/);
+        if (renameMatch && req.method === 'POST') {
+          const oldId = renameMatch[1];
+
+          try {
+            const raw = await readBody(req);
+            const { newId } = JSON.parse(raw) as { newId: string };
+
+            if (!newId || oldId === newId) {
+              return jsonResponse(res, 200, { ok: true, noChange: true });
+            }
+
+            // Conflict check
+            const manifestPath = path.resolve(process.cwd(), 'public', 'audio', 'manifest.json');
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+            if (manifest.songs.some((s: any) => s.id === newId)) {
+              return jsonResponse(res, 409, { error: `Song ID "${newId}" already exists` });
+            }
+
+            // 1. Rename local directory
+            const oldDir = songDirPath(oldId);
+            const newDir = oldDir.replace(`song-${oldId}`, `song-${newId}`);
+            if (fs.existsSync(oldDir)) {
+              fs.renameSync(oldDir, newDir);
+            }
+
+            // 2. Patch config.json id field
+            const configPath = path.join(newDir, 'config.json');
+            if (fs.existsSync(configPath)) {
+              const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+              config.id = newId;
+              fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+            }
+
+            // 3. Copy R2 objects from old prefix to new prefix, then delete old
+            const r2 = getR2Client();
+            const bucket = process.env.R2_BUCKET;
+            if (r2 && bucket) {
+              const oldPrefix = `${r2SongPrefix(oldId)}/`;
+              // Compute new prefix before updating bands.json (resolveBandForSong still finds old ID)
+              const bandId = resolveBandForSong(oldId);
+              const newPrefix = bandId ? `${bandId}/song-${newId}/` : `song-${newId}/`;
+
+              const objectKeys: string[] = [];
+              let continuationToken: string | undefined;
+              do {
+                const list = await r2.send(new ListObjectsV2Command({
+                  Bucket: bucket,
+                  Prefix: oldPrefix,
+                  ContinuationToken: continuationToken,
+                }));
+                for (const obj of list.Contents ?? []) {
+                  if (obj.Key) objectKeys.push(obj.Key);
+                }
+                continuationToken = list.NextContinuationToken;
+              } while (continuationToken);
+
+              // Copy to new prefix
+              for (const key of objectKeys) {
+                const filename = key.slice(oldPrefix.length);
+                await r2.send(new CopyObjectCommand({
+                  Bucket: bucket,
+                  CopySource: `${bucket}/${key}`,
+                  Key: `${newPrefix}${filename}`,
+                }));
+              }
+
+              // Delete old objects
+              for (const key of objectKeys) {
+                await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+              }
+            }
+
+            // 4. Update manifest.json
+            const entry = manifest.songs.find((s: any) => s.id === oldId);
+            if (entry) {
+              entry.id = newId;
+              entry.path = entry.path.replace(`song-${oldId}`, `song-${newId}`);
+              if (entry.audioBasePath) {
+                entry.audioBasePath = entry.audioBasePath.replace(`song-${oldId}`, `song-${newId}`);
+              }
+            }
+            fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+
+            // 5. Update bands.json
+            const bandsPath = path.resolve(process.cwd(), 'public', 'bands.json');
+            const bandsData = JSON.parse(fs.readFileSync(bandsPath, 'utf-8'));
+            for (const band of bandsData.bands) {
+              band.songIds = band.songIds.map((id: string) => id === oldId ? newId : id);
+            }
+            fs.writeFileSync(bandsPath, JSON.stringify(bandsData, null, 2) + '\n');
+
+            jsonResponse(res, 200, { ok: true, newId });
+          } catch (err: any) {
+            jsonResponse(res, 500, { error: err.message ?? 'Rename failed' });
           }
           return;
         }

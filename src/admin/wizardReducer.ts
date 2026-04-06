@@ -1,5 +1,6 @@
 import type { TapMapEntry, StemGroupConfig } from '../audio/types';
 import type { UploadProgress } from './utils/uploadWithProgress';
+import { deriveId } from '../utils/deriveId';
 
 export interface StemEntry {
   file: File;
@@ -51,13 +52,6 @@ export type WizardAction =
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_UPLOAD_PROGRESS'; progress: UploadProgress | null };
-
-function deriveId(title: string, artist: string): string {
-  return `${title}-${artist}`
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
 
 export const initialState: WizardState = {
   step: 1,
