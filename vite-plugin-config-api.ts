@@ -2,7 +2,7 @@ import type { Plugin, ViteDevServer } from 'vite';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import Busboy from 'busboy';
 import dotenv from 'dotenv';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -23,11 +23,21 @@ function getR2Client(): S3Client | null {
   });
 }
 
+const TARGET_LUFS = -16;
+
 interface ProbeResult {
   codec: string;
   bitrate: number;
   channels: number;
   sampleRate: number;
+}
+
+interface LoudnessInfo {
+  input_i: string;
+  input_tp: string;
+  input_lra: string;
+  input_thresh: string;
+  target_offset: string;
 }
 
 function ffprobe(filePath: string): ProbeResult {
@@ -46,17 +56,39 @@ function ffprobe(filePath: string): ProbeResult {
   };
 }
 
-function shouldSkipTranscode(probe: ProbeResult): boolean {
-  return probe.codec === 'mp3' && probe.bitrate >= 256000;
+function measureLoudness(filePath: string): LoudnessInfo {
+  const proc = spawnSync('ffmpeg', [
+    '-i', filePath,
+    '-af', `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:print_format=json`,
+    '-f', 'null', '-',
+  ], { encoding: 'utf-8' });
+
+  if (proc.status !== 0) {
+    throw new Error(`loudnorm measurement failed: ${proc.stderr?.slice(-500)}`);
+  }
+
+  const jsonMatch = proc.stderr.match(/\{[^{}]*"input_i"\s*:[^{}]*\}/s);
+  if (!jsonMatch) {
+    throw new Error('Could not parse loudnorm JSON from ffmpeg output');
+  }
+  return JSON.parse(jsonMatch[0]);
 }
 
-function transcodeToMp3(inputPath: string, outputPath: string, probe: ProbeResult): void {
-  // Mono stems get 128k (equivalent quality to 256k stereo)
+function transcodeToMp3(
+  inputPath: string,
+  outputPath: string,
+  probe: ProbeResult,
+  loudness?: LoudnessInfo,
+): void {
   const isMono = probe.channels === 1;
   const bitrate = isMono ? '128k' : '256k';
   const channelFlag = isMono ? '-ac 1' : '';
+  let filterFlag = '';
+  if (loudness) {
+    filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:measured_I=${loudness.input_i}:measured_TP=${loudness.input_tp}:measured_LRA=${loudness.input_lra}:measured_thresh=${loudness.input_thresh}:offset=${loudness.target_offset}:linear=true`;
+  }
   execSync(
-    `ffmpeg -y -i "${inputPath}" -codec:a libmp3lame -b:a ${bitrate} ${channelFlag} -ar 44100 "${outputPath}"`,
+    `ffmpeg -y -i "${inputPath}" ${filterFlag} -codec:a libmp3lame -b:a ${bitrate} ${channelFlag} -ar 44100 "${outputPath}"`,
     { stdio: 'ignore' },
   );
 }
@@ -214,21 +246,19 @@ export function configApiPlugin(): Plugin {
             const fileMap: Record<string, string> = {}; // origName → transcoded name
 
             for (const { origName, tmpPath } of received) {
-              let uploadPath = tmpPath;
-              let uploadName = origName;
-
               const probe = ffprobe(tmpPath);
 
-              if (shouldSkipTranscode(probe)) {
-                // Already MP3 ≥256k, upload as-is
-                uploadName = origName;
-              } else {
-                // Transcode to MP3
-                const baseName = path.basename(origName, path.extname(origName));
-                uploadName = `${baseName}.mp3`;
-                uploadPath = path.join(tmpDir, `out-${uploadName}`);
-                transcodeToMp3(tmpPath, uploadPath, probe);
+              let loudness: LoudnessInfo | undefined;
+              try {
+                loudness = measureLoudness(tmpPath);
+              } catch (err: any) {
+                console.warn(`Loudness measurement failed for ${origName}, transcoding without normalization:`, err.message);
               }
+
+              const baseName = path.basename(origName, path.extname(origName));
+              const uploadName = `${baseName}.mp3`;
+              const uploadPath = path.join(tmpDir, `out-${uploadName}`);
+              transcodeToMp3(tmpPath, uploadPath, probe, loudness);
 
               // Upload to R2
               const key = `song-${songId}/${uploadName}`;
