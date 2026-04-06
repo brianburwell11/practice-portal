@@ -58,7 +58,12 @@ export function MetadataStep({ state, dispatch }: Props) {
       <div className="flex justify-end">
         <button
           disabled={!canProceed}
-          onClick={() => dispatch({ type: 'NEXT_STEP' })}
+          onClick={() => {
+            if (!state.artist.trim() && bandName) {
+              dispatch({ type: 'SET_ARTIST', artist: bandName, fallbackArtist: bandName });
+            }
+            dispatch({ type: 'NEXT_STEP' });
+          }}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium"
         >
           Next: Stems & Groups

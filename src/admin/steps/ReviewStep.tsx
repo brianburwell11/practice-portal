@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
@@ -16,7 +16,6 @@ export function ReviewStep({ state, dispatch }: Props) {
   const [result, setResult] = useState<'success' | null>(null);
   const [savedPath, setSavedPath] = useState('');
   const { bandSlug = '' } = useParams();
-  const navigate = useNavigate();
   const bandName = useBandStore((s) => s.currentBand?.name ?? '');
   const config = buildConfig(state, bandName);
   const validation = songConfigSchema.safeParse(config);
@@ -124,20 +123,6 @@ export function ReviewStep({ state, dispatch }: Props) {
           <span className="text-gray-300">{state.artist}</span> has been saved to{' '}
           <span className="font-mono text-gray-300">public/{savedPath}/</span>
         </p>
-        <div className="flex justify-center gap-3">
-          <button
-            onClick={() => navigate(`/${bandSlug}`)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
-          >
-            Open in Practice Portal
-          </button>
-          <button
-            onClick={() => location.reload()}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
-          >
-            Add another song
-          </button>
-        </div>
       </div>
     );
   }
