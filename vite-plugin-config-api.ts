@@ -40,14 +40,6 @@ function r2SongPrefix(songId: string): string {
   return bandId ? `${bandId}/song-${songId}` : `song-${songId}`;
 }
 
-// Keep in sync with src/utils/deriveId.ts
-function deriveId(title: string, artist: string): string {
-  return `${title}-${artist}`
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
 const TARGET_LUFS = -16;
 
 interface ProbeResult {
