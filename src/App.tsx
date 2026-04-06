@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SongSelectDropdown } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
@@ -11,6 +11,10 @@ import { useBandStore } from './store/bandStore';
 import { useNavigate } from 'react-router-dom';
 import { assetUrl } from './utils/url';
 
+const SetlistModal = import.meta.env.DEV
+  ? lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })))
+  : null;
+
 export default function App() {
   const engine = useCreateEngine();
   const selectedSong = useSongStore((s) => s.selectedSong);
@@ -18,6 +22,7 @@ export default function App() {
   const currentBand = useBandStore((s) => s.currentBand);
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showSetlistModal, setShowSetlistModal] = useState(false);
 
   const bandRoute = currentBand?.route ?? '';
 
@@ -87,6 +92,12 @@ export default function App() {
                 Delete Song
               </button>
             )}
+            <button
+              onClick={() => setShowSetlistModal(true)}
+              className="text-xs text-gray-500 hover:text-gray-300"
+            >
+              Create Setlist
+            </button>
           </div>
         )}
 
@@ -107,6 +118,11 @@ export default function App() {
           songTitle={selectedSong.title}
           onClose={() => setShowDeleteModal(false)}
         />
+      )}
+      {showSetlistModal && SetlistModal && (
+        <Suspense fallback={null}>
+          <SetlistModal onClose={() => setShowSetlistModal(false)} />
+        </Suspense>
       )}
     </AudioEngineContext.Provider>
   );
