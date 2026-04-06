@@ -5,7 +5,7 @@ import os from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 import Busboy from 'busboy';
 import dotenv from 'dotenv';
-import { S3Client, PutObjectCommand, CopyObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, CopyObjectCommand, ListObjectsV2Command, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 dotenv.config();
@@ -522,6 +522,110 @@ export function configApiPlugin(): Plugin {
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
             jsonResponse(res, 500, { error: err.message ?? 'Delete failed' });
+          }
+          return;
+        }
+
+        // --- POST /api/bands/{bandId}/setlists/{setlistId} ---
+        const setlistSaveMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/setlists\/([^/]+)$/);
+        if (setlistSaveMatch && req.method === 'POST') {
+          const bandId = setlistSaveMatch[1];
+          const setlistId = setlistSaveMatch[2];
+          const r2 = getR2Client();
+          const bucket = process.env.R2_BUCKET;
+
+          if (!r2 || !bucket) {
+            return jsonResponse(res, 500, { error: 'R2 not configured — check .env' });
+          }
+
+          try {
+            const raw = await readBody(req);
+            const body = JSON.parse(raw);
+            const { setlistConfigSchema } = await server.ssrLoadModule('/src/config/schema.ts');
+            const validated = (setlistConfigSchema as any).parse(body);
+
+            // Upload setlist JSON to R2
+            const setlistKey = `${bandId}/setlists/${setlistId}.json`;
+            await r2.send(new PutObjectCommand({
+              Bucket: bucket,
+              Key: setlistKey,
+              Body: JSON.stringify(validated, null, 2),
+              ContentType: 'application/json',
+              CacheControl: 'no-cache',
+            }));
+
+            // Read existing index.json from R2 (or start fresh)
+            const indexKey = `${bandId}/setlists/index.json`;
+            let index: { setlists: { id: string; name: string }[] } = { setlists: [] };
+            try {
+              const existing = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: indexKey }));
+              const indexBody = await existing.Body?.transformToString();
+              if (indexBody) index = JSON.parse(indexBody);
+            } catch {
+              // index.json doesn't exist yet — use empty
+            }
+
+            // Upsert entry
+            index.setlists = index.setlists.filter((s) => s.id !== setlistId);
+            index.setlists.push({ id: setlistId, name: validated.name });
+
+            // Upload updated index
+            await r2.send(new PutObjectCommand({
+              Bucket: bucket,
+              Key: indexKey,
+              Body: JSON.stringify(index, null, 2),
+              ContentType: 'application/json',
+              CacheControl: 'no-cache',
+            }));
+
+            jsonResponse(res, 200, { ok: true });
+          } catch (err: any) {
+            jsonResponse(res, 400, { error: err.message ?? 'Save setlist failed' });
+          }
+          return;
+        }
+
+        // --- DELETE /api/bands/{bandId}/setlists/{setlistId} ---
+        const setlistDeleteMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/setlists\/([^/]+)$/);
+        if (setlistDeleteMatch && req.method === 'DELETE') {
+          const bandId = setlistDeleteMatch[1];
+          const setlistId = setlistDeleteMatch[2];
+          const r2 = getR2Client();
+          const bucket = process.env.R2_BUCKET;
+
+          if (!r2 || !bucket) {
+            return jsonResponse(res, 500, { error: 'R2 not configured — check .env' });
+          }
+
+          try {
+            // Delete setlist JSON from R2
+            const setlistKey = `${bandId}/setlists/${setlistId}.json`;
+            await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: setlistKey }));
+
+            // Update index.json
+            const indexKey = `${bandId}/setlists/index.json`;
+            let index: { setlists: { id: string; name: string }[] } = { setlists: [] };
+            try {
+              const existing = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: indexKey }));
+              const indexBody = await existing.Body?.transformToString();
+              if (indexBody) index = JSON.parse(indexBody);
+            } catch {
+              // no index — nothing to update
+            }
+
+            index.setlists = index.setlists.filter((s) => s.id !== setlistId);
+
+            await r2.send(new PutObjectCommand({
+              Bucket: bucket,
+              Key: indexKey,
+              Body: JSON.stringify(index, null, 2),
+              ContentType: 'application/json',
+              CacheControl: 'no-cache',
+            }));
+
+            jsonResponse(res, 200, { ok: true });
+          } catch (err: any) {
+            jsonResponse(res, 500, { error: err.message ?? 'Delete setlist failed' });
           }
           return;
         }

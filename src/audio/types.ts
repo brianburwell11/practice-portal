@@ -90,3 +90,17 @@ export interface BandConfig {
 export interface BandsManifest {
   bands: BandConfig[];
 }
+
+export type SetlistEntry =
+  | { type: 'song'; songId: string }
+  | { type: 'heading'; label: string };
+
+export interface SetlistConfig {
+  id: string;
+  name: string;
+  entries: SetlistEntry[];
+}
+
+export interface SetlistIndex {
+  setlists: { id: string; name: string }[];
+}

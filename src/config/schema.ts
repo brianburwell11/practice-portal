@@ -92,3 +92,18 @@ export const bandConfigSchema = z.object({
 export const bandsManifestSchema = z.object({
   bands: z.array(bandConfigSchema),
 });
+
+export const setlistEntrySchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('song'), songId: z.string() }),
+  z.object({ type: z.literal('heading'), label: z.string() }),
+]);
+
+export const setlistConfigSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  entries: z.array(setlistEntrySchema),
+});
+
+export const setlistIndexSchema = z.object({
+  setlists: z.array(z.object({ id: z.string(), name: z.string() })),
+});
