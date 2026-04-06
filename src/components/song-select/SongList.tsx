@@ -143,11 +143,9 @@ export function SongSelectDropdown() {
   const activeIndex = useSetlistStore((s) => s.activeIndex);
   const setActiveIndex = useSetlistStore((s) => s.setActiveIndex);
 
-  if (!manifest) return null;
-
   const inSetlist = !!activeSetlist;
 
-  // Build grouped options for setlist mode
+  // Build grouped options for setlist mode (must be before early return to preserve hook order)
   const setlistOptions = useMemo(() => {
     if (!inSetlist || !activeSetlist || !manifest) return null;
     const groups: { label: string | null; songs: { idx: number; song: SongManifestEntry }[] }[] = [];
@@ -168,6 +166,8 @@ export function SongSelectDropdown() {
     }
     return groups;
   }, [inSetlist, activeSetlist, manifest]);
+
+  if (!manifest) return null;
 
   return (
     <select
