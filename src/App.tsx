@@ -1,6 +1,6 @@
 import { useState, lazy, Suspense } from 'react';
 import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
-import { SongList, SongSelectDropdown, SetlistDropdown } from './components/song-select/SongList';
+import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
 import { MixerPanel } from './components/mixer/MixerPanel';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
@@ -52,7 +52,7 @@ export default function App() {
             />
           )}
           <div className="absolute left-1/2 -translate-x-1/2">
-            <SongSelectDropdown />
+            <SetlistNav />
           </div>
           <SetlistDropdown />
         </header>

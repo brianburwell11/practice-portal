@@ -259,3 +259,43 @@ export function SetlistDropdown() {
     </select>
   );
 }
+
+/** Song dropdown with prev/next when a setlist is active, plain dropdown otherwise */
+export function SetlistNav() {
+  const activeSetlist = useSetlistStore((s) => s.activeSetlist);
+  const activeIndex = useSetlistStore((s) => s.activeIndex);
+  const setActiveIndex = useSetlistStore((s) => s.setActiveIndex);
+  const loading = useSongStore((s) => s.loading);
+  const { filteredSongs, handleSelect } = useSongLoader();
+
+  if (!activeSetlist) return <SongSelectDropdown />;
+
+  const prevSong = activeIndex > 0 ? filteredSongs[activeIndex - 1] : null;
+  const nextSong = activeIndex < filteredSongs.length - 1 ? filteredSongs[activeIndex + 1] : null;
+
+  const navigate = (idx: number) => {
+    setActiveIndex(idx);
+    const entry = filteredSongs[idx];
+    if (entry) handleSelect(entry);
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        disabled={!prevSong || loading}
+        onClick={() => navigate(activeIndex - 1)}
+        className="text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default whitespace-nowrap"
+      >
+        {prevSong ? `\u2190 ${prevSong.title}` : ''}
+      </button>
+      <SongSelectDropdown />
+      <button
+        disabled={!nextSong || loading}
+        onClick={() => navigate(activeIndex + 1)}
+        className="text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default whitespace-nowrap"
+      >
+        {nextSong ? `${nextSong.title} \u2192` : ''}
+      </button>
+    </div>
+  );
+}
