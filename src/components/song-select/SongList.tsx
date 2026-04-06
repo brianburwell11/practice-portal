@@ -48,7 +48,12 @@ export function useSongLoader() {
       });
 
       setSelectedSong(config);
-      history.pushState(null, '', `#${entry.id}`);
+      const setlistState = useSetlistStore.getState();
+      if (setlistState.activeSetlist) {
+        history.pushState(null, '', `#${setlistState.activeIndex + 1}`);
+      } else {
+        history.pushState(null, '', `#${entry.id}`);
+      }
 
       const stemStates: Record<string, { volume: number; pan: number; muted: boolean; soloed: boolean }> = {};
       for (const stem of config.stems) {
@@ -94,6 +99,8 @@ export function SongList() {
       .catch((err) => setError(String(err)));
   }, [setManifest, setError]);
 
+  const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
+
   // Load setlist index from R2
   useEffect(() => {
     if (!currentBand) return;
@@ -108,24 +115,73 @@ export function SongList() {
       .catch(() => setSetlistIndex([]));
   }, [currentBand, setSetlistIndex]);
 
-  const hasAutoLoaded = useRef(false);
+  // Preload setlist from URL ?setlist= parameter
+  const hasPreloadedSetlist = useRef(false);
+  const setlistPending = useRef(false);
   useEffect(() => {
-    if (hasAutoLoaded.current || filteredSongs.length === 0) return;
+    if (hasPreloadedSetlist.current || !currentBand) return;
+    const params = new URLSearchParams(window.location.search);
+    const setlistParam = params.get('setlist');
+    if (!setlistParam) return;
+    const r2Base = import.meta.env.VITE_R2_PUBLIC_URL;
+    if (!r2Base) return;
+    hasPreloadedSetlist.current = true;
+    setlistPending.current = true;
+    const fullId = setlistParam.startsWith('setlist-') ? setlistParam : `setlist-${setlistParam}`;
+    fetch(`${r2Base}/${currentBand.id}/setlists/${fullId}.json`)
+      .then((r) => {
+        if (!r.ok) throw new Error('Not found');
+        return r.json();
+      })
+      .then((data) => {
+        const config = setlistConfigSchema.parse(data);
+        setActiveSetlist(config);
+      })
+      .catch(() => {})
+      .finally(() => { setlistPending.current = false; });
+  }, [currentBand, setActiveSetlist]);
+
+  const hasAutoLoaded = useRef(false);
+  const setActiveIndex = useSetlistStore((s) => s.setActiveIndex);
+  useEffect(() => {
+    // Wait for setlist preload to complete before auto-selecting a song
+    if (hasAutoLoaded.current || setlistPending.current || filteredSongs.length === 0) return;
     const hash = window.location.hash.replace('#', '');
     if (!hash) return;
-    const entry = filteredSongs.find((s) => s.id === hash);
-    if (entry) {
-      hasAutoLoaded.current = true;
-      handleSelect(entry);
+    const activeSetlist = useSetlistStore.getState().activeSetlist;
+    if (activeSetlist) {
+      // Hash is a 1-based song index when setlist is active
+      const idx = parseInt(hash) - 1;
+      if (!isNaN(idx) && idx >= 0 && idx < filteredSongs.length) {
+        hasAutoLoaded.current = true;
+        setActiveIndex(idx);
+        handleSelect(filteredSongs[idx]);
+      }
+    } else {
+      const entry = filteredSongs.find((s) => s.id === hash);
+      if (entry) {
+        hasAutoLoaded.current = true;
+        handleSelect(entry);
+      }
     }
-  }, [filteredSongs, handleSelect]);
+  }, [filteredSongs, handleSelect, setActiveIndex]);
 
   useEffect(() => {
     const onPopState = () => {
       const hash = window.location.hash.replace('#', '');
-      if (!hash || hash === useSongStore.getState().selectedSong?.id) return;
-      const entry = filteredSongs.find((s) => s.id === hash);
-      if (entry) handleSelect(entry);
+      if (!hash) return;
+      const activeSetlist = useSetlistStore.getState().activeSetlist;
+      if (activeSetlist) {
+        const idx = parseInt(hash) - 1;
+        if (!isNaN(idx) && idx >= 0 && idx < filteredSongs.length) {
+          setActiveIndex(idx);
+          handleSelect(filteredSongs[idx]);
+        }
+      } else {
+        if (hash === useSongStore.getState().selectedSong?.id) return;
+        const entry = filteredSongs.find((s) => s.id === hash);
+        if (entry) handleSelect(entry);
+      }
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -222,6 +278,11 @@ export function SetlistDropdown() {
     if (!currentBand) return;
     if (setlistId === '') {
       setActiveSetlist(null);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('setlist');
+      const songId = useSongStore.getState().selectedSong?.id;
+      url.hash = songId ? `#${songId}` : '';
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
       return;
     }
     const r2Base = import.meta.env.VITE_R2_PUBLIC_URL;
@@ -229,6 +290,11 @@ export function SetlistDropdown() {
       const res = await fetch(`${r2Base}/${currentBand.id}/setlists/${setlistId}.json`);
       const data: SetlistConfig = setlistConfigSchema.parse(await res.json());
       setActiveSetlist(data);
+      const url = new URL(window.location.href);
+      url.searchParams.set('setlist', setlistId.replace(/^setlist-/, ''));
+      // activeIndex resets to 0 via setActiveSetlist, so first song
+      url.hash = '#1';
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
     } catch {
       // silently fail
     }
