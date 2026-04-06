@@ -7,23 +7,15 @@ import { songManifestSchema, songConfigSchema } from '../../config/schema';
 import { assetUrl } from '../../utils/url';
 import type { SongManifestEntry } from '../../audio/types';
 
-export function SongList() {
+function useSongLoader() {
   const engine = useAudioEngine();
-  const { manifest, selectedSong, loading, loadProgress, setManifest, setSelectedSong, setLoading, setLoadProgress, setError } =
-    useSongStore();
   const { initStems, initGroups } = useMixerStore();
   const currentBand = useBandStore((s) => s.currentBand);
-  const loadingRef = useRef(false);
-
-  useEffect(() => {
-    fetch(assetUrl('audio/manifest.json'))
-      .then((r) => r.json())
-      .then((data) => {
-        const parsed = songManifestSchema.parse(data);
-        setManifest(parsed);
-      })
-      .catch((err) => setError(String(err)));
-  }, [setManifest, setError]);
+  const manifest = useSongStore((s) => s.manifest);
+  const setLoading = useSongStore((s) => s.setLoading);
+  const setLoadProgress = useSongStore((s) => s.setLoadProgress);
+  const setSelectedSong = useSongStore((s) => s.setSelectedSong);
+  const setError = useSongStore((s) => s.setError);
 
   const filteredSongs = useMemo(() => {
     if (!manifest) return [];
@@ -32,8 +24,7 @@ export function SongList() {
   }, [manifest, currentBand]);
 
   const handleSelect = useCallback(async (entry: SongManifestEntry) => {
-    if (loadingRef.current) return;
-    loadingRef.current = true;
+    if (useSongStore.getState().loading) return;
     setLoading(true);
     setError(null);
 
@@ -51,7 +42,6 @@ export function SongList() {
       setSelectedSong(config);
       history.pushState(null, '', `#${entry.id}`);
 
-      // Initialize mixer store with stem defaults
       const stemStates: Record<string, { volume: number; pan: number; muted: boolean; soloed: boolean }> = {};
       for (const stem of config.stems) {
         stemStates[stem.id] = {
@@ -63,7 +53,6 @@ export function SongList() {
       }
       initStems(stemStates);
 
-      // Initialize group state
       const groupStates: Record<string, { volume: number; muted: boolean; soloed: boolean; expanded: boolean }> = {};
       for (const group of config.groups ?? []) {
         groupStates[group.id] = { volume: 1, muted: false, soloed: false, expanded: false };
@@ -72,12 +61,29 @@ export function SongList() {
     } catch (err) {
       setError(String(err));
     } finally {
-      loadingRef.current = false;
       setLoading(false);
     }
   }, [engine, setLoading, setError, setLoadProgress, setSelectedSong, initStems, initGroups]);
 
-  // Auto-select song from URL hash on initial load
+  return { filteredSongs, handleSelect };
+}
+
+/** Headless component — runs manifest fetch, auto-select, and popstate effects. Renders nothing. */
+export function SongList() {
+  const { filteredSongs, handleSelect } = useSongLoader();
+  const setManifest = useSongStore((s) => s.setManifest);
+  const setError = useSongStore((s) => s.setError);
+
+  useEffect(() => {
+    fetch(assetUrl('audio/manifest.json'))
+      .then((r) => r.json())
+      .then((data) => {
+        const parsed = songManifestSchema.parse(data);
+        setManifest(parsed);
+      })
+      .catch((err) => setError(String(err)));
+  }, [setManifest, setError]);
+
   const hasAutoLoaded = useRef(false);
   useEffect(() => {
     if (hasAutoLoaded.current || filteredSongs.length === 0) return;
@@ -90,7 +96,6 @@ export function SongList() {
     }
   }, [filteredSongs, handleSelect]);
 
-  // Listen for popstate (browser back/forward)
   useEffect(() => {
     const onPopState = () => {
       const hash = window.location.hash.replace('#', '');
@@ -102,44 +107,35 @@ export function SongList() {
     return () => window.removeEventListener('popstate', onPopState);
   }, [filteredSongs, handleSelect]);
 
-  if (!manifest) {
-    return <div className="text-gray-400 p-4">Loading song list...</div>;
-  }
+  return null;
+}
+
+export function SongSelectDropdown() {
+  const { filteredSongs, handleSelect } = useSongLoader();
+  const selectedSong = useSongStore((s) => s.selectedSong);
+  const loading = useSongStore((s) => s.loading);
+  const manifest = useSongStore((s) => s.manifest);
+
+  if (!manifest) return null;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-700">
-      <label className="text-sm text-gray-400 shrink-0">Song:</label>
-      <select
-        className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500"
-        value={selectedSong?.id ?? ''}
-        onChange={(e) => {
-          const entry = filteredSongs.find((s) => s.id === e.target.value);
-          if (entry) handleSelect(entry);
-        }}
-        disabled={loading}
-      >
-        <option value="" disabled>
-          {loading ? 'Loading...' : 'Select a song'}
+    <select
+      className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500"
+      value={selectedSong?.id ?? ''}
+      onChange={(e) => {
+        const entry = filteredSongs.find((s) => s.id === e.target.value);
+        if (entry) handleSelect(entry);
+      }}
+      disabled={loading}
+    >
+      <option value="" disabled>
+        {loading ? 'Loading...' : 'Select a song'}
+      </option>
+      {filteredSongs.map((song) => (
+        <option key={song.id} value={song.id}>
+          {song.title} — {song.artist}
         </option>
-        {filteredSongs.map((song) => (
-          <option key={song.id} value={song.id}>
-            {song.title} — {song.artist}
-          </option>
-        ))}
-      </select>
-      {loading && loadProgress && (
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="flex-1 bg-gray-700 rounded-full h-2">
-            <div
-              className="bg-blue-500 h-2 rounded-full transition-all"
-              style={{ width: `${Math.round((loadProgress.loaded / loadProgress.total) * 100)}%` }}
-            />
-          </div>
-          <span className="text-xs text-gray-500 shrink-0">
-            {loadProgress.loaded}/{loadProgress.total}
-          </span>
-        </div>
-      )}
-    </div>
+      ))}
+    </select>
   );
 }

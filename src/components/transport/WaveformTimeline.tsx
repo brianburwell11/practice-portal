@@ -19,6 +19,7 @@ export function WaveformTimeline() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sizeRef = useRef({ width: 0, height: 0 });
+  const [canvasReady, setCanvasReady] = useState(false);
 
   // Overview canvas refs
   const overviewCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -245,6 +246,7 @@ export function WaveformTimeline() {
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       sizeRef.current = { width, height };
+      setCanvasReady(true);
     });
 
     observer.observe(container);
@@ -455,7 +457,7 @@ export function WaveformTimeline() {
       ctx.fillStyle = '#3B82F6';
       ctx.fillRect(Math.round(playheadX) - 1, 0, 2, height);
     }
-  }, [engine.peakData, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB, loopEnabled]);
+  }, [engine.peakData, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB, loopEnabled, canvasReady]);
 
   // Draw overview canvas (full song, only when zoomed)
   useEffect(() => {

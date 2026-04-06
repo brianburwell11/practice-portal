@@ -16,6 +16,8 @@ export function TransportBar() {
   const engine = useAudioEngine();
   const { playing, position, duration, loopA, loopB, loopEnabled, toggleFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
+  const stemLoading = useSongStore((s) => s.loading);
+  const loadProgress = useSongStore((s) => s.loadProgress);
   const { masterVolume, setMasterVolume } = useMixerStore();
 
   const disabled = !selectedSong;
@@ -174,8 +176,22 @@ export function TransportBar() {
         </div>
       </div>
 
-      {/* Waveform timeline */}
-      <WaveformTimeline />
+      {/* Waveform timeline / Loading progress */}
+      {stemLoading && loadProgress ? (
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          <div className="flex-1 bg-gray-700 rounded-full h-2">
+            <div
+              className="bg-blue-500 h-2 rounded-full transition-all"
+              style={{ width: `${Math.round((loadProgress.loaded / loadProgress.total) * 100)}%` }}
+            />
+          </div>
+          <span className="text-xs text-gray-500 shrink-0">
+            {loadProgress.loaded}/{loadProgress.total}
+          </span>
+        </div>
+      ) : (
+        <WaveformTimeline />
+      )}
 
       {/* Song info */}
       {selectedSong && (
