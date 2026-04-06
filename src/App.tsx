@@ -8,11 +8,15 @@ import { DeleteSongModal } from './components/song-select/DeleteSongModal';
 import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
+import { useSetlistStore } from './store/setlistStore';
 import { useNavigate } from 'react-router-dom';
 import { assetUrl } from './utils/url';
 
 const SetlistModal = import.meta.env.DEV
   ? lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })))
+  : null;
+const DeleteSetlistModal = import.meta.env.DEV
+  ? lazy(() => import('./admin/DeleteSetlistModal').then((m) => ({ default: m.DeleteSetlistModal })))
   : null;
 
 export default function App() {
@@ -23,6 +27,9 @@ export default function App() {
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSetlistModal, setShowSetlistModal] = useState(false);
+  const [editSetlistId, setEditSetlistId] = useState<string | undefined>(undefined);
+  const [showDeleteSetlistModal, setShowDeleteSetlistModal] = useState(false);
+  const activeSetlist = useSetlistStore((s) => s.activeSetlist);
 
   const bandRoute = currentBand?.route ?? '';
 
@@ -94,11 +101,27 @@ export default function App() {
               </button>
             )}
             <button
-              onClick={() => setShowSetlistModal(true)}
+              onClick={() => { setEditSetlistId(undefined); setShowSetlistModal(true); }}
               className="text-xs text-gray-500 hover:text-gray-300"
             >
               Create Setlist
             </button>
+            {activeSetlist && (
+              <button
+                onClick={() => { setEditSetlistId(activeSetlist.id); setShowSetlistModal(true); }}
+                className="text-xs text-gray-500 hover:text-gray-300"
+              >
+                Edit Setlist
+              </button>
+            )}
+            {activeSetlist && (
+              <button
+                onClick={() => setShowDeleteSetlistModal(true)}
+                className="text-xs text-gray-500 hover:text-red-400"
+              >
+                Delete Setlist
+              </button>
+            )}
           </div>
         )}
 
@@ -122,7 +145,16 @@ export default function App() {
       )}
       {showSetlistModal && SetlistModal && (
         <Suspense fallback={null}>
-          <SetlistModal onClose={() => setShowSetlistModal(false)} />
+          <SetlistModal setlistId={editSetlistId} onClose={() => setShowSetlistModal(false)} />
+        </Suspense>
+      )}
+      {showDeleteSetlistModal && DeleteSetlistModal && activeSetlist && (
+        <Suspense fallback={null}>
+          <DeleteSetlistModal
+            setlistId={activeSetlist.id}
+            setlistName={activeSetlist.name}
+            onClose={() => setShowDeleteSetlistModal(false)}
+          />
         </Suspense>
       )}
     </AudioEngineContext.Provider>

@@ -26,6 +26,8 @@ export function SetlistModal({ setlistId, onClose }: Props) {
   const manifest = useSongStore((s) => s.manifest);
   const setIndex = useSetlistStore((s) => s.setIndex);
   const storeIndex = useSetlistStore((s) => s.index);
+  const activeSetlist = useSetlistStore((s) => s.activeSetlist);
+  const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
 
   const [name, setName] = useState('');
   const [entries, setEntries] = useState<SetlistEntry[]>([]);
@@ -113,11 +115,13 @@ export function SetlistModal({ setlistId, onClose }: Props) {
     setSaving(true);
     setError(null);
 
-    const id = isEdit ? setlistId! : deriveSetlistId(name);
-    const config: SetlistConfig = { id, name: name.trim(), entries };
+    const newId = deriveSetlistId(name);
+    const oldId = isEdit ? setlistId! : null;
+    const renamed = oldId !== null && oldId !== newId;
+    const config: SetlistConfig = { id: newId, name: name.trim(), entries };
 
     try {
-      const res = await fetch(`/api/bands/${currentBand.id}/setlists/${id}`, {
+      const res = await fetch(`/api/bands/${currentBand.id}/setlists/${newId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -127,11 +131,21 @@ export function SetlistModal({ setlistId, onClose }: Props) {
         throw new Error(body.error ?? 'Save failed');
       }
 
+      // If renamed, delete the old setlist from R2
+      if (renamed) {
+        await fetch(`/api/bands/${currentBand.id}/setlists/${oldId}`, { method: 'DELETE' }).catch(() => {});
+      }
+
       // Update store index optimistically
       const existing = storeIndex ?? [];
-      const updated = existing.filter((s) => s.id !== id);
-      updated.push({ id, name: name.trim() });
+      const updated = existing.filter((s) => s.id !== newId && s.id !== oldId);
+      updated.push({ id: newId, name: name.trim() });
       setIndex(updated);
+
+      // If editing the active setlist, update it in the store
+      if (activeSetlist?.id === oldId || activeSetlist?.id === newId) {
+        setActiveSetlist(config);
+      }
 
       onClose();
     } catch (err: any) {
