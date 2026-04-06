@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
 import { useBandStore } from '../../store/bandStore';
@@ -13,6 +13,7 @@ export function SongList() {
     useSongStore();
   const { initStems, initGroups } = useMixerStore();
   const currentBand = useBandStore((s) => s.currentBand);
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     fetch(assetUrl('audio/manifest.json'))
@@ -30,8 +31,9 @@ export function SongList() {
     return manifest.songs.filter((s) => currentBand.songIds.includes(s.id));
   }, [manifest, currentBand]);
 
-  const handleSelect = async (entry: SongManifestEntry) => {
-    if (loading) return;
+  const handleSelect = useCallback(async (entry: SongManifestEntry) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
 
@@ -47,6 +49,7 @@ export function SongList() {
       });
 
       setSelectedSong(config);
+      history.pushState(null, '', `#${entry.id}`);
 
       // Initialize mixer store with stem defaults
       const stemStates: Record<string, { volume: number; pan: number; muted: boolean; soloed: boolean }> = {};
@@ -69,9 +72,35 @@ export function SongList() {
     } catch (err) {
       setError(String(err));
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  };
+  }, [engine, setLoading, setError, setLoadProgress, setSelectedSong, initStems, initGroups]);
+
+  // Auto-select song from URL hash on initial load
+  const hasAutoLoaded = useRef(false);
+  useEffect(() => {
+    if (hasAutoLoaded.current || filteredSongs.length === 0) return;
+    const hash = window.location.hash.replace('#', '');
+    if (!hash) return;
+    const entry = filteredSongs.find((s) => s.id === hash);
+    if (entry) {
+      hasAutoLoaded.current = true;
+      handleSelect(entry);
+    }
+  }, [filteredSongs, handleSelect]);
+
+  // Listen for popstate (browser back/forward)
+  useEffect(() => {
+    const onPopState = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (!hash || hash === useSongStore.getState().selectedSong?.id) return;
+      const entry = filteredSongs.find((s) => s.id === hash);
+      if (entry) handleSelect(entry);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [filteredSongs, handleSelect]);
 
   if (!manifest) {
     return <div className="text-gray-400 p-4">Loading song list...</div>;
