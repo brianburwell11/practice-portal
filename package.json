@@ -4,10 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --open",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "prod": "tsc -b && vite build && vite preview --open",
     "prepare": "git config core.hooksPath .hooks"
   },
   "dependencies": {
