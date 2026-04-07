@@ -65,7 +65,6 @@ export const songManifestEntrySchema = z.object({
   id: z.string(),
   title: z.string(),
   artist: z.string(),
-  path: z.string().optional(),
   audioBasePath: z.string().optional(),
 });
 

@@ -12,11 +12,6 @@ dist
 dist-ssr
 *.local
 
-# Large audio stems — use Git LFS or host separately
-public/audio/**/*.wav
-public/audio/**/*.mp3
-public/audio/**/*.ogg
-public/audio/**/*.flac
 
 # Environment variables
 .env
