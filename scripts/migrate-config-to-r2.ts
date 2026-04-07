@@ -6,7 +6,7 @@
  *
  *   registry.json                          — band list
  *   {bandId}/logo.{ext}                    — band logo
- *   {bandId}/songs/index.json              — per-band song catalog
+ *   {bandId}/songs/discography.json              — per-band song catalog
  *   {bandId}/songs/{songId}/config.json    — song config
  *
  * Usage:
@@ -154,7 +154,7 @@ async function main() {
     };
 
     console.log(`  ${bandSongs.length} songs in this band`);
-    await uploadJson(`${band.id}/songs/index.json`, songIndex);
+    await uploadJson(`${band.id}/songs/discography.json`, songIndex);
 
     // 3. Upload each song config
     for (const song of bandSongs) {
@@ -189,8 +189,8 @@ async function main() {
     if (!ok) allGood = false;
 
     for (const band of bandsData.bands) {
-      const ok = await verifyJson(`${band.id}/songs/index.json`);
-      console.log(`  ${band.id}/songs/index.json: ${ok ? 'OK' : 'FAILED'}`);
+      const ok = await verifyJson(`${band.id}/songs/discography.json`);
+      console.log(`  ${band.id}/songs/discography.json: ${ok ? 'OK' : 'FAILED'}`);
       if (!ok) allGood = false;
 
       const bandSongs = manifestData.songs.filter((s) => band.songIds.includes(s.id));

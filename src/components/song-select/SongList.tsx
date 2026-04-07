@@ -91,7 +91,7 @@ export function SongList() {
 
   useEffect(() => {
     if (!currentBand) return;
-    fetch(r2Url(`${currentBand.id}/songs/index.json`))
+    fetch(r2Url(`${currentBand.id}/songs/discography.json`))
       .then((r) => r.json())
       .then((data) => {
         const parsed = songManifestSchema.parse(data);

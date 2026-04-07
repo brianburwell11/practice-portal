@@ -44,7 +44,7 @@ export default function ManageBandsPage() {
         const allSongEntries: SongManifestEntry[] = [];
         await Promise.all(
           parsed.bands.map((band) =>
-            fetch(r2Url(`${band.id}/songs/index.json`))
+            fetch(r2Url(`${band.id}/songs/discography.json`))
               .then((r) => r.json())
               .then((d) => {
                 const songs = songManifestSchema.parse(d).songs;

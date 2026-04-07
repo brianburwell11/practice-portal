@@ -16,7 +16,7 @@ R2 bucket:
   {bandId}/
     logo.png                              # band logo
     songs/
-      index.json                          # per-band song catalog [{id, title, artist, audioBasePath}]
+      discography.json                     # per-band song catalog [{id, title, artist, audioBasePath}]
       {songId}/
         config.json                       # full song config
     song-{songId}/                        # audio stems (already exists, unchanged)
@@ -53,7 +53,7 @@ git checkout -b feat/r2-config
 ### 1.4 Write migration script
 - **File:** `scripts/migrate-config-to-r2.ts`
 - Read local `bands.json` and `manifest.json`
-- For each band: upload logo, build + upload `songs/index.json`, upload each song's `config.json`
+- For each band: upload logo, build + upload `songs/discography.json`, upload each song's `config.json`
 - Build + upload `registry.json` (bands with R2 logo URLs)
 - Support `--dry-run`
 - Verify uploaded data by re-fetching and validating with Zod
@@ -74,7 +74,7 @@ git checkout -b feat/r2-config
 
 ### 2.2 SongList manifest fetch
 - **File:** `src/components/song-select/SongList.tsx`
-- `fetch(assetUrl('audio/manifest.json'))` → `fetch(r2Url(\`${bandId}/songs/index.json\`))`
+- `fetch(assetUrl('audio/manifest.json'))` → `fetch(r2Url(\`${bandId}/songs/discography.json\`))`
 - Add `currentBand` dependency (manifest is now per-band)
 
 ### 2.3 Song config fetch
@@ -98,7 +98,7 @@ git checkout -b feat/r2-config
 | `POST /api/bands` | Write `registry.json` to R2 (not local `bands.json`) |
 | `POST /api/bands/{bandId}/logo` | Upload to `{bandId}/logo.png` on R2 |
 | `POST /api/song/{songId}/config` | Write to `{bandId}/songs/{songId}/config.json` on R2 |
-| `POST /api/manifest/add` | Write to `{bandId}/songs/index.json` on R2 |
+| `POST /api/manifest/add` | Write to `{bandId}/songs/discography.json` on R2 |
 | `POST /api/song/{songId}/rename` | Copy R2 config + audio, update R2 registry + index |
 | `DELETE /api/song/{songId}` | Delete from R2, update R2 registry + index |
 
