@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
+import { useSetlistStore } from '../../store/setlistStore';
 
 interface Props {
   songId: string;
@@ -18,6 +19,8 @@ export function DeleteSongModal({ songId, songTitle, onClose }: Props) {
   const currentBand = useBandStore((s) => s.currentBand);
   const setBandsManifest = useBandStore((s) => s.setBandsManifest);
   const bandsManifest = useBandStore((s) => s.bandsManifest);
+  const activeSetlist = useSetlistStore((s) => s.activeSetlist);
+  const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
 
   const expected = `delete ${songId}`;
   const canDelete = confirmation === expected && !deleting;
@@ -45,6 +48,15 @@ export function DeleteSongModal({ songId, songTitle, onClose }: Props) {
             b.id === currentBand.id
               ? { ...b, songIds: b.songIds.filter((id) => id !== songId) }
               : b,
+          ),
+        });
+      }
+
+      if (activeSetlist) {
+        setActiveSetlist({
+          ...activeSetlist,
+          entries: activeSetlist.entries.filter(
+            (e) => !(e.type === 'song' && e.songId === songId),
           ),
         });
       }

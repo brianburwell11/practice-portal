@@ -6,6 +6,8 @@ import { detectStem, isAudioFile } from './utils/stemDetection';
 import { uploadFormWithProgress } from './utils/uploadWithProgress';
 import { r2Url } from '../utils/url';
 import { useBandStore } from '../store/bandStore';
+import { useSongStore } from '../store/songStore';
+import { useSetlistStore } from '../store/setlistStore';
 import type { StemConfig, StemGroupConfig } from '../audio/types';
 
 const groupColors = [
@@ -17,6 +19,13 @@ export default function EditSongPage() {
   const { songId = '', bandSlug = '' } = useParams();
   const navigate = useNavigate();
   const currentBand = useBandStore((s) => s.currentBand);
+  const bandsManifest = useBandStore((s) => s.bandsManifest);
+  const setBandsManifest = useBandStore((s) => s.setBandsManifest);
+  const setCurrentBand = useBandStore((s) => s.setCurrentBand);
+  const manifest = useSongStore((s) => s.manifest);
+  const setManifest = useSongStore((s) => s.setManifest);
+  const activeSetlist = useSetlistStore((s) => s.activeSetlist);
+  const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
   const [state, dispatch] = useReducer(editSongReducer, initialEditState);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [newStemFiles] = useState(() => new Map<string, File>());
@@ -31,8 +40,10 @@ export default function EditSongPage() {
   const [groupColor, setGroupColor] = useState(groupColors[0]);
   const [selectedStemIds, setSelectedStemIds] = useState<Set<string>>(new Set());
 
-  // Load config on mount
+  // Load config on mount (only once — skip if already loaded)
+  const configLoaded = useRef(false);
   useEffect(() => {
+    if (configLoaded.current) return;
     if (!songId || !currentBand) { if (!songId) setLoadError('No song ID in URL'); return; }
     (async () => {
       try {
@@ -40,6 +51,7 @@ export default function EditSongPage() {
         if (!configRes.ok) { setLoadError(`Song "${songId}" config not found`); return; }
         const config = songConfigSchema.parse(await configRes.json());
         dispatch({ type: 'INIT', config });
+        configLoaded.current = true;
       } catch (err: any) {
         setLoadError(err.message ?? 'Failed to load config');
       }
@@ -208,9 +220,51 @@ export default function EditSongPage() {
       dispatch({ type: 'SET_SAVE_SUCCESS' });
       dispatch({ type: 'RESET_DIRTY' });
 
-      // Navigate to new URL if ID changed
       if (idChanged) {
-        navigate(`/${bandSlug}/admin/edit-song/${newId}`, { replace: true });
+        // Update song manifest: replace old entry with new id
+        if (manifest) {
+          setManifest({
+            songs: manifest.songs.map((s) =>
+              s.id === oldId
+                ? { ...s, id: newId, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${newId}` }
+                : s,
+            ),
+          });
+        }
+
+        // Update band songIds: replace old id with new id
+        if (bandsManifest && currentBand) {
+          const updatedBands = bandsManifest.bands.map((b) =>
+            b.id === currentBand.id
+              ? { ...b, songIds: b.songIds.map((id) => (id === oldId ? newId : id)) }
+              : b,
+          );
+          setBandsManifest({ bands: updatedBands });
+          const updatedBand = updatedBands.find((b) => b.id === currentBand.id);
+          if (updatedBand) setCurrentBand(updatedBand);
+        }
+
+        // Update active setlist if it references the renamed song
+        if (activeSetlist) {
+          setActiveSetlist({
+            ...activeSetlist,
+            entries: activeSetlist.entries.map((e) =>
+              e.type === 'song' && e.songId === oldId ? { ...e, songId: newId } : e,
+            ),
+          });
+        }
+
+        window.history.replaceState(null, '', `/${bandSlug}/admin/edit-song/${newId}`);
+      } else if (
+        manifest && state.original &&
+        (config.title !== state.original.title || config.artist !== state.original.artist)
+      ) {
+        // Title/artist changed without ID change — update manifest
+        setManifest({
+          songs: manifest.songs.map((s) =>
+            s.id === config.id ? { ...s, title: config.title, artist: config.artist } : s,
+          ),
+        });
       }
     } catch (err: any) {
       dispatch({ type: 'SET_ERROR', error: err.message ?? 'Save failed' });
@@ -281,7 +335,7 @@ export default function EditSongPage() {
             </label>
             <div className="space-y-1">
               <span className="text-sm text-gray-400">Duration</span>
-              <p className="px-3 py-2 text-gray-400">{config.durationSeconds.toFixed(1)}s</p>
+              <p className="px-3 py-2 text-gray-400">{Math.floor(config.durationSeconds / 60)}:{Math.floor(config.durationSeconds % 60).toString().padStart(2, '0')}</p>
             </div>
           </div>
 
@@ -476,12 +530,6 @@ export default function EditSongPage() {
             </div>
           )}
 
-          {state.saveSuccess && (
-            <div className="bg-green-900/30 border border-green-700 rounded p-3 text-sm text-green-300">
-              Config saved successfully.
-            </div>
-          )}
-
           {state.uploadProgress && (() => {
             const pct = state.uploadProgress.bytesTotal
               ? Math.round((state.uploadProgress.bytesSent / state.uploadProgress.bytesTotal) * 100)
@@ -505,8 +553,8 @@ export default function EditSongPage() {
           })()}
 
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-500">
-              {isDirty(state) ? 'Unsaved changes' : 'No changes'}
+            <span className={`text-sm ${state.saveSuccess ? 'text-green-400' : 'text-gray-500'}`}>
+              {state.saveSuccess ? 'Saved successfully' : isDirty(state) ? 'Unsaved changes' : 'No changes'}
             </span>
             <button
               disabled={!canSave}

@@ -88,6 +88,35 @@ export async function r2ListKeys(prefix: string): Promise<string[]> {
   return keys;
 }
 
+// --- Setlist cascading update helper ---
+
+type SetlistEntryTransform = (entry: { type: string; songId?: string; label?: string }) =>
+  | { type: string; songId?: string; label?: string }
+  | null; // null = remove entry
+
+async function updateSetlistEntries(bandId: string, transform: SetlistEntryTransform): Promise<void> {
+  const allKeys = await r2ListKeys(`${bandId}/setlists/`);
+  const setlistKeys = allKeys.filter((k) => k.endsWith('.json') && !k.endsWith('/index.json'));
+
+  for (const key of setlistKeys) {
+    try {
+      const setlist = await r2ReadJson(key);
+      if (!Array.isArray(setlist.entries)) continue;
+
+      const updated = setlist.entries
+        .map((e: any) => transform(e))
+        .filter((e: any) => e !== null);
+
+      if (updated.length !== setlist.entries.length || JSON.stringify(updated) !== JSON.stringify(setlist.entries)) {
+        setlist.entries = updated;
+        await r2WriteJson(key, setlist);
+      }
+    } catch {
+      // skip setlists that can't be read
+    }
+  }
+}
+
 const TARGET_LUFS = -16;
 
 interface ProbeResult {
@@ -269,6 +298,13 @@ export function configApiPlugin(): Plugin {
               band.songIds = band.songIds.map((id: string) => id === oldId ? newId : id);
             }
             await r2WriteJson('registry.json', registry);
+
+            // 5. Update songId in any setlists
+            await updateSetlistEntries(bandId, (entry) =>
+              entry.type === 'song' && entry.songId === oldId
+                ? { ...entry, songId: newId }
+                : entry,
+            );
 
             jsonResponse(res, 200, { ok: true, newId });
           } catch (err: any) {
@@ -512,6 +548,11 @@ export function configApiPlugin(): Plugin {
             } catch {
               // registry may not exist
             }
+
+            // 5. Remove song from any setlists
+            await updateSetlistEntries(bandId, (entry) =>
+              entry.type === 'song' && entry.songId === songId ? null : entry,
+            );
 
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
