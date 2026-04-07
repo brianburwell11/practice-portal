@@ -28,6 +28,7 @@ jobs:
       - run: npm run build
         env:
           VITE_BASE_PATH: /practice-portal/pr/${{ github.event.pull_request.number }}/
+          VITE_R2_PUBLIC_URL: https://pub-9e583788dafa4ce193a3eee1987d93b6.r2.dev
 
       - run: cp dist/index.html dist/404.html
 
