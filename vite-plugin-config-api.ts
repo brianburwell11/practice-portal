@@ -335,17 +335,22 @@ export function configApiPlugin(): Plugin {
             // 1. Receive files via busboy → temp dir
             const received = await new Promise<{ origName: string; tmpPath: string }[]>((resolve, reject) => {
               const files: { origName: string; tmpPath: string }[] = [];
+              const writePromises: Promise<void>[] = [];
               const busboy = Busboy({ headers: req.headers as Record<string, string> });
 
               busboy.on('file', (_field, stream, info) => {
                 const tmpPath = path.join(tmpDir, info.filename);
                 const ws = fs.createWriteStream(tmpPath);
                 stream.pipe(ws);
-                ws.on('finish', () => files.push({ origName: info.filename, tmpPath }));
-                ws.on('error', reject);
+                writePromises.push(new Promise<void>((res, rej) => {
+                  ws.on('finish', () => { files.push({ origName: info.filename, tmpPath }); res(); });
+                  ws.on('error', rej);
+                }));
               });
 
-              busboy.on('finish', () => resolve(files));
+              busboy.on('finish', () => {
+                Promise.all(writePromises).then(() => resolve(files)).catch(reject);
+              });
               busboy.on('error', reject);
               req.pipe(busboy);
             });
