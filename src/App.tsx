@@ -5,6 +5,7 @@ import { TransportBar } from './components/transport/TransportBar';
 import { MixerPanel } from './components/mixer/MixerPanel';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
 import { DeleteSongModal } from './components/song-select/DeleteSongModal';
+import { AdminRibbon } from './admin/AdminRibbon';
 import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
@@ -66,63 +67,17 @@ export default function App() {
 
         {/* Dev toolbar */}
         {import.meta.env.DEV && (
-          <div
-            className="px-4 py-1.5 border-b border-gray-700 flex items-center gap-3"
-            style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
-          >
-            <button
-              onClick={() => navigate(`/${bandRoute}/admin/add-song`)}
-              className="text-xs text-gray-500 hover:text-gray-300"
-            >
-              + Add Song
-            </button>
-            {selectedSong && (
-              <button
-                onClick={() => navigate(`/${bandRoute}/admin/edit-song/${selectedSong.id}`)}
-                className="text-xs text-gray-500 hover:text-gray-300"
-              >
-                Edit Song
-              </button>
-            )}
-            {selectedSong && (
-              <button
-                onClick={() => openMarkerEditor(selectedSong.tapMap ?? [])}
-                className="text-xs text-gray-500 hover:text-gray-300"
-              >
-                TapMap Editor
-              </button>
-            )}
-            {selectedSong && (
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="text-xs text-gray-500 hover:text-red-400"
-              >
-                Delete Song
-              </button>
-            )}
-            <button
-              onClick={() => { setEditSetlistId(undefined); setShowSetlistModal(true); }}
-              className="text-xs text-gray-500 hover:text-gray-300"
-            >
-              Create Setlist
-            </button>
-            {activeSetlist && (
-              <button
-                onClick={() => { setEditSetlistId(activeSetlist.id); setShowSetlistModal(true); }}
-                className="text-xs text-gray-500 hover:text-gray-300"
-              >
-                Edit Setlist
-              </button>
-            )}
-            {activeSetlist && (
-              <button
-                onClick={() => setShowDeleteSetlistModal(true)}
-                className="text-xs text-gray-500 hover:text-red-400"
-              >
-                Delete Setlist
-              </button>
-            )}
-          </div>
+          <AdminRibbon
+            hasSong={!!selectedSong}
+            hasSetlist={!!activeSetlist}
+            onAddSong={() => navigate(`/${bandRoute}/admin/add-song`)}
+            onEditSong={() => selectedSong && navigate(`/${bandRoute}/admin/edit-song/${selectedSong.id}`)}
+            onTapMapEditor={() => selectedSong && openMarkerEditor(selectedSong.tapMap ?? [])}
+            onDeleteSong={() => setShowDeleteModal(true)}
+            onAddSetlist={() => { setEditSetlistId(undefined); setShowSetlistModal(true); }}
+            onEditSetlist={() => { activeSetlist && setEditSetlistId(activeSetlist.id); setShowSetlistModal(true); }}
+            onDeleteSetlist={() => setShowDeleteSetlistModal(true)}
+          />
         )}
 
         {/* Song loader (headless — runs effects only) */}

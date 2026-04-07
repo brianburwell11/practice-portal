@@ -1,0 +1,115 @@
+import { useState, useRef, useEffect } from 'react';
+
+type DropdownId = 'songs' | 'setlists' | null;
+
+interface Props {
+  hasSong: boolean;
+  hasSetlist: boolean;
+  onAddSong: () => void;
+  onEditSong: () => void;
+  onTapMapEditor: () => void;
+  onDeleteSong: () => void;
+  onAddSetlist: () => void;
+  onEditSetlist: () => void;
+  onDeleteSetlist: () => void;
+}
+
+function MenuItem({
+  label,
+  enabled,
+  danger,
+  onClick,
+}: {
+  label: string;
+  enabled: boolean;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={enabled ? onClick : undefined}
+      className={`block w-full text-left px-3 py-1.5 text-xs whitespace-nowrap ${
+        enabled
+          ? danger
+            ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700/50'
+            : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+          : 'text-gray-600 cursor-default'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+export function AdminRibbon({
+  hasSong,
+  hasSetlist,
+  onAddSong,
+  onEditSong,
+  onTapMapEditor,
+  onDeleteSong,
+  onAddSetlist,
+  onEditSetlist,
+  onDeleteSetlist,
+}: Props) {
+  const [open, setOpen] = useState<DropdownId>(null);
+  const ribbonRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ribbonRef.current && !ribbonRef.current.contains(e.target as Node)) {
+        setOpen(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const toggle = (id: DropdownId) => setOpen((prev) => (prev === id ? null : id));
+
+  const close = () => setOpen(null);
+
+  return (
+    <div
+      ref={ribbonRef}
+      className="px-4 py-1.5 border-b flex items-center gap-3"
+      style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
+    >
+      {/* Songs dropdown */}
+      <div className="relative">
+        <button
+          onClick={() => toggle('songs')}
+          className="text-xs text-gray-500 hover:text-gray-300"
+        >
+          Songs <span className="text-base">▾</span>
+        </button>
+        {open === 'songs' && (
+          <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+            <MenuItem label="Add Song" enabled onClick={() => { close(); onAddSong(); }} />
+            <MenuItem label="Edit Song" enabled={hasSong} onClick={() => { close(); onEditSong(); }} />
+            <MenuItem label="TapMap Editor" enabled={hasSong} onClick={() => { close(); onTapMapEditor(); }} />
+            <MenuItem label="Delete Song" enabled={hasSong} danger onClick={() => { close(); onDeleteSong(); }} />
+          </div>
+        )}
+      </div>
+
+      {/* Setlists dropdown */}
+      <div className="relative">
+        <button
+          onClick={() => toggle('setlists')}
+          className="text-xs text-gray-500 hover:text-gray-300"
+        >
+          Setlists <span className="text-base">▾</span>
+        </button>
+        {open === 'setlists' && (
+          <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+            <MenuItem label="Add Setlist" enabled onClick={() => { close(); onAddSetlist(); }} />
+            <MenuItem label="Edit Setlist" enabled={hasSetlist} onClick={() => { close(); onEditSetlist(); }} />
+            <MenuItem label="Delete Setlist" enabled={hasSetlist} danger onClick={() => { close(); onDeleteSetlist(); }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
