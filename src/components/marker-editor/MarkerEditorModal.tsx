@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useSongStore } from '../../store/songStore';
+import { useBandStore } from '../../store/bandStore';
 import { useTransportStore } from '../../store/transportStore';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
@@ -14,6 +15,7 @@ export function MarkerEditorModal() {
     useMarkerEditorStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const setSelectedSong = useSongStore((s) => s.setSelectedSong);
+  const currentBand = useBandStore((s) => s.currentBand);
   const engine = useAudioEngine();
   const duration = useTransportStore((s) => s.duration);
   const [saving, setSaving] = useState(false);
@@ -51,7 +53,7 @@ export function MarkerEditorModal() {
     };
 
     try {
-      const res = await fetch(`/api/song/${selectedSong.id}/config`, {
+      const res = await fetch(`/api/bands/${currentBand!.id}/songs/${selectedSong.id}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedConfig),

@@ -27,7 +27,7 @@ export function DeleteSongModal({ songId, songTitle, onClose }: Props) {
     setError(null);
 
     try {
-      const res = await fetch(`/api/song/${songId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/bands/${currentBand!.id}/songs/${songId}`, { method: 'DELETE' });
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.error ?? 'Delete failed');

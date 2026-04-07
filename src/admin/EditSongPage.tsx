@@ -153,7 +153,7 @@ export default function EditSongPage() {
         }});
 
         const uploadResult = await uploadFormWithProgress(
-          `/api/r2/transcode-upload/${oldId}`,
+          `/api/r2/transcode-upload/${currentBand.id}/${oldId}`,
           formData,
           (bytesSent, bytesTotal) => {
             dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
@@ -173,8 +173,8 @@ export default function EditSongPage() {
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
       }
 
-      // Save config to OLD location (so latest changes are persisted before rename)
-      const res = await fetch(`/api/song/${oldId}/config`, {
+      // Save config to R2 (persisted before rename)
+      const res = await fetch(`/api/bands/${currentBand.id}/songs/${oldId}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...config, id: oldId }),
@@ -182,8 +182,8 @@ export default function EditSongPage() {
       if (!res.ok) throw new Error('Failed to save config');
 
       if (idChanged) {
-        // Rename: moves files, updates manifest/bands/config
-        const renameRes = await fetch(`/api/song/${oldId}/rename`, {
+        // Rename: copies R2 objects, updates discography/registry
+        const renameRes = await fetch(`/api/bands/${currentBand.id}/songs/${oldId}/rename`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ newId }),
@@ -196,11 +196,11 @@ export default function EditSongPage() {
         state.original &&
         (config.title !== state.original.title || config.artist !== state.original.artist)
       ) {
-        // Title/artist text changed but ID stayed the same — just update manifest
-        await fetch('/api/manifest/add', {
+        // Title/artist text changed but ID stayed the same — update discography
+        await fetch(`/api/bands/${currentBand.id}/songs/discography`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, path: `audio/${currentBand.id}/song-${config.id}` }),
+          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/song-${config.id}` }),
         });
       }
 
