@@ -1,10 +1,11 @@
 import { useReducer, useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
-import { songConfigSchema, songManifestSchema } from '../config/schema';
+import { songConfigSchema } from '../config/schema';
 import { detectStem, isAudioFile } from './utils/stemDetection';
 import { uploadFormWithProgress } from './utils/uploadWithProgress';
-import { assetUrl } from '../utils/url';
+import { r2Url } from '../utils/url';
+import { useBandStore } from '../store/bandStore';
 import type { StemConfig, StemGroupConfig } from '../audio/types';
 
 const groupColors = [
@@ -15,8 +16,8 @@ const groupColors = [
 export default function EditSongPage() {
   const { songId = '', bandSlug = '' } = useParams();
   const navigate = useNavigate();
+  const currentBand = useBandStore((s) => s.currentBand);
   const [state, dispatch] = useReducer(editSongReducer, initialEditState);
-  const [songPath, setSongPath] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [newStemFiles] = useState(() => new Map<string, File>());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,22 +33,18 @@ export default function EditSongPage() {
 
   // Load config on mount
   useEffect(() => {
-    if (!songId) { setLoadError('No song ID in URL'); return; }
+    if (!songId || !currentBand) { if (!songId) setLoadError('No song ID in URL'); return; }
     (async () => {
       try {
-        const manifestRes = await fetch(assetUrl('audio/manifest.json'));
-        const manifest = songManifestSchema.parse(await manifestRes.json());
-        const entry = manifest.songs.find((s) => s.id === songId);
-        if (!entry) { setLoadError(`Song "${songId}" not found in manifest`); return; }
-        setSongPath(entry.path);
-        const configRes = await fetch(assetUrl(`${entry.path}/config.json`));
+        const configRes = await fetch(r2Url(`${currentBand.id}/songs/${songId}/config.json`));
+        if (!configRes.ok) { setLoadError(`Song "${songId}" config not found`); return; }
         const config = songConfigSchema.parse(await configRes.json());
         dispatch({ type: 'INIT', config });
       } catch (err: any) {
         setLoadError(err.message ?? 'Failed to load config');
       }
     })();
-  }, [songId]);
+  }, [songId, currentBand]);
 
   // Dirty-state warning
   useEffect(() => {
@@ -137,7 +134,7 @@ export default function EditSongPage() {
   const canSave = isDirty(state) && validation?.success && !state.saving;
 
   const handleSave = async () => {
-    if (!config || !songPath) return;
+    if (!config || !currentBand) return;
     dispatch({ type: 'SET_SAVING', saving: true });
     try {
       const oldId = state.original!.id;
@@ -156,7 +153,7 @@ export default function EditSongPage() {
         }});
 
         const uploadResult = await uploadFormWithProgress(
-          `/api/r2/transcode-upload/${oldId}`,
+          `/api/r2/transcode-upload/${currentBand.id}/${oldId}`,
           formData,
           (bytesSent, bytesTotal) => {
             dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
@@ -176,8 +173,8 @@ export default function EditSongPage() {
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
       }
 
-      // Save config to OLD location (so latest changes are persisted before rename)
-      const res = await fetch(`/api/song/${oldId}/config`, {
+      // Save config to R2 (persisted before rename)
+      const res = await fetch(`/api/bands/${currentBand.id}/songs/${oldId}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...config, id: oldId }),
@@ -185,8 +182,8 @@ export default function EditSongPage() {
       if (!res.ok) throw new Error('Failed to save config');
 
       if (idChanged) {
-        // Rename: moves files, updates manifest/bands/config
-        const renameRes = await fetch(`/api/song/${oldId}/rename`, {
+        // Rename: copies R2 objects, updates discography/registry
+        const renameRes = await fetch(`/api/bands/${currentBand.id}/songs/${oldId}/rename`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ newId }),
@@ -199,11 +196,11 @@ export default function EditSongPage() {
         state.original &&
         (config.title !== state.original.title || config.artist !== state.original.artist)
       ) {
-        // Title/artist text changed but ID stayed the same — just update manifest
-        await fetch('/api/manifest/add', {
+        // Title/artist text changed but ID stayed the same — update discography
+        await fetch(`/api/bands/${currentBand.id}/songs/discography`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, path: songPath }),
+          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${config.id}` }),
         });
       }
 

@@ -11,7 +11,7 @@ import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
 import { useSetlistStore } from './store/setlistStore';
 import { useNavigate } from 'react-router-dom';
-import { assetUrl } from './utils/url';
+
 
 const SetlistModal = import.meta.env.DEV
   ? lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })))
@@ -54,7 +54,7 @@ export default function App() {
             </h1>
           ) : (
             <img
-              src={assetUrl(currentBand.logo)}
+              src={currentBand.logo}
               alt={currentBand.name}
               className="h-10 object-contain"
             />

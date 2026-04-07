@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bandsManifestSchema, songManifestSchema } from '../config/schema';
-import { assetUrl } from '../utils/url';
+import { r2Url } from '../utils/url';
 import type { BandConfig, BandColors, SongManifestEntry } from '../audio/types';
 
 const defaultColors: BandColors = {
@@ -34,16 +34,27 @@ export default function ManageBandsPage() {
   const [logoCacheBust, setLogoCacheBust] = useState(0);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
-  // Load bands + songs manifest
+  // Load bands from R2 registry, then fetch per-band song indexes
   useEffect(() => {
-    fetch(assetUrl('bands.json'))
+    fetch(r2Url('registry.json'))
       .then((r) => r.json())
-      .then((data) => setBands(bandsManifestSchema.parse(data).bands))
-      .catch((err) => setError(String(err)));
-
-    fetch(assetUrl('audio/manifest.json'))
-      .then((r) => r.json())
-      .then((data) => setAllSongs(songManifestSchema.parse(data).songs))
+      .then(async (data) => {
+        const parsed = bandsManifestSchema.parse(data);
+        setBands(parsed.bands);
+        const allSongEntries: SongManifestEntry[] = [];
+        await Promise.all(
+          parsed.bands.map((band) =>
+            fetch(r2Url(`${band.id}/songs/discography.json`))
+              .then((r) => r.json())
+              .then((d) => {
+                const songs = songManifestSchema.parse(d).songs;
+                allSongEntries.push(...songs);
+              })
+              .catch(() => {}),
+          ),
+        );
+        setAllSongs(allSongEntries);
+      })
       .catch((err) => setError(String(err)));
   }, []);
 

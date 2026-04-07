@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
-import { assetUrl } from '../utils/url';
+import { r2Url } from '../utils/url';
 import type { SetlistConfig, SetlistEntry } from '../audio/types';
 
 interface SongMeta {
@@ -65,13 +65,14 @@ export function SetlistModal({ setlistId, onClose }: Props) {
   // Fetch song metadata (key, duration) from config files
   const [songMeta, setSongMeta] = useState<Record<string, SongMeta>>({});
   useEffect(() => {
-    if (availableSongs.length === 0) return;
+    if (availableSongs.length === 0 || !currentBand) return;
+    const bandId = currentBand.id;
     const fetchMeta = async () => {
       const results: [string, SongMeta][] = [];
       await Promise.all(
         availableSongs.map(async (song) => {
           try {
-            const res = await fetch(assetUrl(`${song.path}/config.json`));
+            const res = await fetch(r2Url(`${bandId}/songs/${song.id}/config.json`));
             const config = await res.json();
             results.push([song.id, { key: config.key ?? '', durationSeconds: config.durationSeconds ?? 0 }]);
           } catch {

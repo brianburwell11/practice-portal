@@ -5,7 +5,7 @@ import { useBandStore } from '../../store/bandStore';
 import { useSetlistStore } from '../../store/setlistStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { songManifestSchema, songConfigSchema, setlistConfigSchema } from '../../config/schema';
-import { assetUrl } from '../../utils/url';
+import { r2Url } from '../../utils/url';
 import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
 
 export function useSongLoader() {
@@ -27,9 +27,8 @@ export function useSongLoader() {
         .map((e) => e.type === 'song' ? manifest.songs.find((s) => s.id === e.songId) : undefined)
         .filter((s): s is SongManifestEntry => !!s);
     }
-    if (!currentBand) return [...manifest.songs].sort((a, b) => a.title.localeCompare(b.title));
-    return manifest.songs.filter((s) => currentBand.songIds.includes(s.id)).sort((a, b) => a.title.localeCompare(b.title));
-  }, [manifest, currentBand, activeSetlist]);
+    return [...manifest.songs].sort((a, b) => a.title.localeCompare(b.title));
+  }, [manifest, activeSetlist]);
 
   const handleSelect = useCallback(async (entry: SongManifestEntry) => {
     if (useSongStore.getState().loading) return;
@@ -37,12 +36,13 @@ export function useSongLoader() {
     setError(null);
 
     try {
-      const configUrl = assetUrl(`${entry.path}/config.json`);
+      const bandId = currentBand?.id;
+      const configUrl = r2Url(`${bandId}/songs/${entry.id}/config.json`);
       const res = await fetch(configUrl);
       const configData = await res.json();
       const config = songConfigSchema.parse(configData);
 
-      const audioBase = entry.audioBasePath ?? assetUrl(entry.path);
+      const audioBase = entry.audioBasePath ?? r2Url(`${bandId}/songs/${entry.id}`);
       await engine.loadSong(config, audioBase, (loaded, total) => {
         setLoadProgress(loaded, total);
       });
@@ -90,14 +90,15 @@ export function SongList() {
   const setSetlistIndex = useSetlistStore((s) => s.setIndex);
 
   useEffect(() => {
-    fetch(assetUrl('audio/manifest.json'))
+    if (!currentBand) return;
+    fetch(r2Url(`${currentBand.id}/songs/discography.json`))
       .then((r) => r.json())
       .then((data) => {
         const parsed = songManifestSchema.parse(data);
         setManifest(parsed);
       })
       .catch((err) => setError(String(err)));
-  }, [setManifest, setError]);
+  }, [currentBand, setManifest, setError]);
 
   const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
 

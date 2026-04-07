@@ -23,21 +23,69 @@ function getR2Client(): S3Client | null {
   });
 }
 
-function resolveBandForSong(songId: string): string | null {
-  const bandsPath = path.resolve(process.cwd(), 'public', 'bands.json');
-  const bands = JSON.parse(fs.readFileSync(bandsPath, 'utf-8')).bands;
-  return bands.find((b: any) => b.songIds.includes(songId))?.id ?? null;
+// --- R2 JSON read/write helpers ---
+
+export async function r2ReadJson(key: string): Promise<any> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  const result = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const body = await result.Body?.transformToString();
+  if (!body) throw new Error(`Empty body for R2 key: ${key}`);
+  return JSON.parse(body);
 }
 
-function songDirPath(songId: string): string {
-  const bandId = resolveBandForSong(songId);
-  const base = path.resolve(process.cwd(), 'public', 'audio');
-  return bandId ? path.join(base, bandId, `song-${songId}`) : path.join(base, `song-${songId}`);
+export async function r2WriteJson(key: string, data: unknown, cacheControl = 'no-cache'): Promise<void> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  await r2.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: JSON.stringify(data, null, 2),
+    ContentType: 'application/json',
+    CacheControl: cacheControl,
+  }));
 }
 
-function r2SongPrefix(songId: string): string {
-  const bandId = resolveBandForSong(songId);
-  return bandId ? `${bandId}/song-${songId}` : `song-${songId}`;
+export async function r2DeleteKey(key: string): Promise<void> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+export async function r2PutFile(key: string, body: Buffer, contentType: string, cacheControl: string): Promise<void> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  await r2.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+    CacheControl: cacheControl,
+  }));
+}
+
+export async function r2ListKeys(prefix: string): Promise<string[]> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+  do {
+    const list = await r2.send(new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    }));
+    for (const obj of list.Contents ?? []) {
+      if (obj.Key) keys.push(obj.Key);
+    }
+    continuationToken = list.NextContinuationToken;
+  } while (continuationToken);
+  return keys;
 }
 
 const TARGET_LUFS = -16;
@@ -134,21 +182,18 @@ export function configApiPlugin(): Plugin {
     name: 'config-api',
     configureServer(server: ViteDevServer) {
       server.middlewares.use(async (req, res, next) => {
-        // --- POST /api/song/{songId}/config ---
-        const configMatch = req.url?.match(/^\/api\/song\/([^/]+)\/config$/);
+        // --- POST /api/bands/{bandId}/songs/{songId}/config ---
+        const configMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/songs\/([^/]+)\/config$/);
         if (configMatch && req.method === 'POST') {
-          const songId = configMatch[1];
-          const songDir = songDirPath(songId);
-
-          fs.mkdirSync(songDir, { recursive: true });
+          const bandId = configMatch[1];
+          const songId = configMatch[2];
 
           try {
             const raw = await readBody(req);
             const body = JSON.parse(raw);
             const { songConfigSchema } = await server.ssrLoadModule('/src/config/schema.ts');
             const validated = (songConfigSchema as any).parse(body);
-            const configPath = path.join(songDir, 'config.json');
-            fs.writeFileSync(configPath, JSON.stringify(validated, null, 2) + '\n');
+            await r2WriteJson(`${bandId}/songs/${songId}/config.json`, validated);
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Invalid request' });
@@ -156,10 +201,11 @@ export function configApiPlugin(): Plugin {
           return;
         }
 
-        // --- POST /api/song/{songId}/rename ---
-        const renameMatch = req.url?.match(/^\/api\/song\/([^/]+)\/rename$/);
+        // --- POST /api/bands/{bandId}/songs/{songId}/rename ---
+        const renameMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/songs\/([^/]+)\/rename$/);
         if (renameMatch && req.method === 'POST') {
-          const oldId = renameMatch[1];
+          const bandId = renameMatch[1];
+          const oldId = renameMatch[2];
 
           try {
             const raw = await readBody(req);
@@ -169,85 +215,60 @@ export function configApiPlugin(): Plugin {
               return jsonResponse(res, 200, { ok: true, noChange: true });
             }
 
-            // Conflict check
-            const manifestPath = path.resolve(process.cwd(), 'public', 'audio', 'manifest.json');
-            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-            if (manifest.songs.some((s: any) => s.id === newId)) {
+            // Conflict check against R2 discography
+            const discography = await r2ReadJson(`${bandId}/songs/discography.json`);
+            if (discography.songs.some((s: any) => s.id === newId)) {
               return jsonResponse(res, 409, { error: `Song ID "${newId}" already exists` });
             }
 
-            // 1. Rename local directory
-            const oldDir = songDirPath(oldId);
-            const newDir = oldDir.replace(`song-${oldId}`, `song-${newId}`);
-            if (fs.existsSync(oldDir)) {
-              fs.renameSync(oldDir, newDir);
-            }
-
-            // 2. Patch config.json id field
-            const configPath = path.join(newDir, 'config.json');
-            if (fs.existsSync(configPath)) {
-              const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-              config.id = newId;
-              fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
-            }
-
-            // 3. Copy R2 objects from old prefix to new prefix, then delete old
+            // 1. Copy song config to new key on R2
             const r2 = getR2Client();
             const bucket = process.env.R2_BUCKET;
             if (r2 && bucket) {
-              const oldPrefix = `${r2SongPrefix(oldId)}/`;
-              // Compute new prefix before updating bands.json (resolveBandForSong still finds old ID)
-              const bandId = resolveBandForSong(oldId);
-              const newPrefix = bandId ? `${bandId}/song-${newId}/` : `song-${newId}/`;
+              // Copy config.json
+              try {
+                const oldConfig = await r2ReadJson(`${bandId}/songs/${oldId}/config.json`);
+                oldConfig.id = newId;
+                await r2WriteJson(`${bandId}/songs/${newId}/config.json`, oldConfig);
+                await r2DeleteKey(`${bandId}/songs/${oldId}/config.json`);
+              } catch {
+                // config may not exist yet
+              }
 
-              const objectKeys: string[] = [];
-              let continuationToken: string | undefined;
-              do {
-                const list = await r2.send(new ListObjectsV2Command({
-                  Bucket: bucket,
-                  Prefix: oldPrefix,
-                  ContinuationToken: continuationToken,
-                }));
-                for (const obj of list.Contents ?? []) {
-                  if (obj.Key) objectKeys.push(obj.Key);
-                }
-                continuationToken = list.NextContinuationToken;
-              } while (continuationToken);
+              // 2. Copy audio stems from old prefix to new prefix
+              const oldAudioPrefix = `${bandId}/songs/${oldId}/`;
+              const newAudioPrefix = `${bandId}/songs/${newId}/`;
+              const audioKeys = await r2ListKeys(oldAudioPrefix);
 
-              // Copy to new prefix
-              for (const key of objectKeys) {
-                const filename = key.slice(oldPrefix.length);
+              for (const key of audioKeys) {
+                const filename = key.slice(oldAudioPrefix.length);
                 await r2.send(new CopyObjectCommand({
                   Bucket: bucket,
                   CopySource: `${bucket}/${key}`,
-                  Key: `${newPrefix}${filename}`,
+                  Key: `${newAudioPrefix}${filename}`,
                 }));
               }
-
-              // Delete old objects
-              for (const key of objectKeys) {
-                await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+              for (const key of audioKeys) {
+                await r2DeleteKey(key);
               }
             }
 
-            // 4. Update manifest.json
-            const entry = manifest.songs.find((s: any) => s.id === oldId);
+            // 3. Update discography.json
+            const entry = discography.songs.find((s: any) => s.id === oldId);
             if (entry) {
               entry.id = newId;
-              entry.path = entry.path.replace(`song-${oldId}`, `song-${newId}`);
               if (entry.audioBasePath) {
-                entry.audioBasePath = entry.audioBasePath.replace(`song-${oldId}`, `song-${newId}`);
+                entry.audioBasePath = entry.audioBasePath.replace(`songs/${oldId}`, `songs/${newId}`);
               }
             }
-            fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+            await r2WriteJson(`${bandId}/songs/discography.json`, discography);
 
-            // 5. Update bands.json
-            const bandsPath = path.resolve(process.cwd(), 'public', 'bands.json');
-            const bandsData = JSON.parse(fs.readFileSync(bandsPath, 'utf-8'));
-            for (const band of bandsData.bands) {
+            // 4. Update registry.json
+            const registry = await r2ReadJson('registry.json');
+            for (const band of registry.bands) {
               band.songIds = band.songIds.map((id: string) => id === oldId ? newId : id);
             }
-            fs.writeFileSync(bandsPath, JSON.stringify(bandsData, null, 2) + '\n');
+            await r2WriteJson('registry.json', registry);
 
             jsonResponse(res, 200, { ok: true, newId });
           } catch (err: any) {
@@ -256,88 +277,58 @@ export function configApiPlugin(): Plugin {
           return;
         }
 
-        // --- POST /api/song/{songId}/upload ---
-        const uploadMatch = req.url?.match(/^\/api\/song\/([^/]+)\/upload$/);
-        if (uploadMatch && req.method === 'POST') {
-          const songId = uploadMatch[1];
-          const songDir = songDirPath(songId);
-
-          fs.mkdirSync(songDir, { recursive: true });
-
-          try {
-            const files = await new Promise<string[]>((resolve, reject) => {
-              const written: string[] = [];
-              const busboy = Busboy({ headers: req.headers as Record<string, string> });
-
-              busboy.on('file', (_fieldname, fileStream, info) => {
-                const filePath = path.join(songDir, info.filename);
-                const writeStream = fs.createWriteStream(filePath);
-                fileStream.pipe(writeStream);
-                writeStream.on('finish', () => written.push(info.filename));
-                writeStream.on('error', reject);
-              });
-
-              busboy.on('finish', () => resolve(written));
-              busboy.on('error', reject);
-              req.pipe(busboy);
-            });
-
-            jsonResponse(res, 200, { ok: true, files });
-          } catch (err: any) {
-            jsonResponse(res, 400, { error: err.message ?? 'Upload failed' });
-          }
-          return;
-        }
-
         // --- POST /api/bands/{bandId}/logo ---
         const logoMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/logo$/);
         if (logoMatch && req.method === 'POST') {
           const bandId = logoMatch[1];
-          const bandDir = path.resolve(process.cwd(), 'public', 'bands', bandId);
-          fs.mkdirSync(bandDir, { recursive: true });
 
           try {
-            const result = await new Promise<{ filename: string }>((resolve, reject) => {
+            const result = await new Promise<{ buffer: Buffer; ext: string }>((resolve, reject) => {
               const busboy = Busboy({ headers: req.headers as Record<string, string> });
+              const chunks: Buffer[] = [];
+              let ext = '.png';
 
               busboy.on('file', (_fieldname, fileStream, info) => {
-                // Remove any existing logo files
-                for (const ext of ['png', 'jpg', 'jpeg', 'svg']) {
-                  const old = path.join(bandDir, `logo.${ext}`);
-                  if (fs.existsSync(old)) fs.unlinkSync(old);
-                }
-
-                const ext = path.extname(info.filename).toLowerCase() || '.png';
-                const filename = `logo${ext}`;
-                const filePath = path.join(bandDir, filename);
-                const writeStream = fs.createWriteStream(filePath);
-                fileStream.pipe(writeStream);
-                writeStream.on('finish', () => resolve({ filename }));
-                writeStream.on('error', reject);
+                ext = path.extname(info.filename).toLowerCase() || '.png';
+                fileStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+                fileStream.on('end', () => resolve({ buffer: Buffer.concat(chunks), ext }));
+                fileStream.on('error', reject);
               });
 
               busboy.on('error', reject);
               req.pipe(busboy);
             });
 
-            const logoPath = `/bands/${bandId}/${result.filename}`;
-            jsonResponse(res, 200, { ok: true, path: logoPath });
+            const contentType = {
+              '.png': 'image/png',
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.svg': 'image/svg+xml',
+            }[result.ext] ?? 'application/octet-stream';
+
+            const key = `${bandId}/assets/logo${result.ext}`;
+            await r2PutFile(key, result.buffer, contentType, 'public, max-age=86400');
+
+            const logoUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
+            jsonResponse(res, 200, { ok: true, path: logoUrl });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Upload failed' });
           }
           return;
         }
 
-        // --- POST /api/r2/transcode-upload ---
-        const transcodeMatch = req.url?.match(/^\/api\/r2\/transcode-upload\/([^/]+)$/);
+        // --- POST /api/r2/transcode-upload/{bandId}/{songId} ---
+        const transcodeMatch = req.url?.match(/^\/api\/r2\/transcode-upload\/([^/]+)\/([^/]+)$/);
         if (transcodeMatch && req.method === 'POST') {
-          const songId = transcodeMatch[1];
+          const bandId = transcodeMatch[1];
+          const songId = transcodeMatch[2];
           const r2 = getR2Client();
           const bucket = process.env.R2_BUCKET;
           if (!r2 || !bucket) {
             return jsonResponse(res, 500, { error: 'R2 not configured — check .env' });
           }
 
+          const r2Prefix = `${bandId}/songs/${songId}`;
           const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pp-transcode-'));
 
           try {
@@ -378,7 +369,7 @@ export function configApiPlugin(): Plugin {
               transcodeToMp3(tmpPath, uploadPath, probe, loudness);
 
               // Upload to R2
-              const key = `${r2SongPrefix(songId)}/${uploadName}`;
+              const key = `${r2Prefix}/${uploadName}`;
               const body = fs.readFileSync(uploadPath);
               await r2.send(new PutObjectCommand({
                 Bucket: bucket,
@@ -391,12 +382,11 @@ export function configApiPlugin(): Plugin {
               fileMap[origName] = uploadName;
             }
 
-            const publicBase = `${process.env.R2_PUBLIC_URL}/${r2SongPrefix(songId)}`;
+            const publicBase = `${process.env.R2_PUBLIC_URL}/${r2Prefix}`;
             jsonResponse(res, 200, { ok: true, fileMap, publicBase });
           } catch (err: any) {
             jsonResponse(res, 500, { error: err.message ?? 'Transcode/upload failed' });
           } finally {
-            // Clean up temp dir
             fs.rmSync(tmpDir, { recursive: true, force: true });
           }
           return;
@@ -412,14 +402,15 @@ export function configApiPlugin(): Plugin {
 
           try {
             const raw = await readBody(req);
-            const { songId, files } = JSON.parse(raw) as { songId: string; files: string[] };
-            if (!songId || !files?.length) {
-              return jsonResponse(res, 400, { error: 'songId and files[] required' });
+            const { bandId, songId, files } = JSON.parse(raw) as { bandId: string; songId: string; files: string[] };
+            if (!bandId || !songId || !files?.length) {
+              return jsonResponse(res, 400, { error: 'bandId, songId and files[] required' });
             }
 
+            const r2Prefix = `${bandId}/songs/${songId}`;
             const urls: Record<string, string> = {};
             for (const filename of files) {
-              const key = `${r2SongPrefix(songId)}/${filename}`;
+              const key = `${r2Prefix}/${filename}`;
               const url = await getSignedUrl(r2, new PutObjectCommand({
                 Bucket: bucket,
                 Key: key,
@@ -427,7 +418,7 @@ export function configApiPlugin(): Plugin {
               urls[filename] = url;
             }
 
-            jsonResponse(res, 200, { urls, publicBase: `${process.env.R2_PUBLIC_URL}/${r2SongPrefix(songId)}` });
+            jsonResponse(res, 200, { urls, publicBase: `${process.env.R2_PUBLIC_URL}/${r2Prefix}` });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Presign failed' });
           }
@@ -436,14 +427,12 @@ export function configApiPlugin(): Plugin {
 
         // --- POST /api/bands ---
         if (req.url === '/api/bands' && req.method === 'POST') {
-          const bandsPath = path.resolve(process.cwd(), 'public', 'bands.json');
-
           try {
             const raw = await readBody(req);
             const body = JSON.parse(raw);
             const { bandsManifestSchema } = await server.ssrLoadModule('/src/config/schema.ts');
             const validated = (bandsManifestSchema as any).parse(body);
-            fs.writeFileSync(bandsPath, JSON.stringify(validated, null, 2) + '\n');
+            await r2WriteJson('registry.json', validated);
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Invalid request' });
@@ -451,20 +440,27 @@ export function configApiPlugin(): Plugin {
           return;
         }
 
-        // --- POST /api/manifest/add ---
-        if (req.url === '/api/manifest/add' && req.method === 'POST') {
-          const manifestPath = path.resolve(process.cwd(), 'public', 'audio', 'manifest.json');
+        // --- POST /api/bands/{bandId}/songs/discography ---
+        const discographyMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/songs\/discography$/);
+        if (discographyMatch && req.method === 'POST') {
+          const bandId = discographyMatch[1];
 
           try {
             const raw = await readBody(req);
             const entry = JSON.parse(raw);
-            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
 
-            // Avoid duplicate entries
-            manifest.songs = manifest.songs.filter((s: any) => s.id !== entry.id);
-            manifest.songs.push(entry);
+            let discography: { songs: any[] };
+            try {
+              discography = await r2ReadJson(`${bandId}/songs/discography.json`);
+            } catch {
+              discography = { songs: [] };
+            }
 
-            fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+            // Upsert entry
+            discography.songs = discography.songs.filter((s: any) => s.id !== entry.id);
+            discography.songs.push(entry);
+
+            await r2WriteJson(`${bandId}/songs/discography.json`, discography);
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Invalid request' });
@@ -472,52 +468,45 @@ export function configApiPlugin(): Plugin {
           return;
         }
 
-        // --- DELETE /api/song/{songId} ---
-        const deleteMatch = req.url?.match(/^\/api\/song\/([^/]+)$/);
+        // --- DELETE /api/bands/{bandId}/songs/{songId} ---
+        const deleteMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/songs\/([^/]+)$/);
         if (deleteMatch && req.method === 'DELETE') {
-          const songId = deleteMatch[1];
+          const bandId = deleteMatch[1];
+          const songId = deleteMatch[2];
 
           try {
-            // 1. Delete from R2
-            const r2 = getR2Client();
-            const bucket = process.env.R2_BUCKET;
-            if (r2 && bucket) {
-              const prefix = `${r2SongPrefix(songId)}/`;
-              let continuationToken: string | undefined;
-              do {
-                const list = await r2.send(new ListObjectsV2Command({
-                  Bucket: bucket,
-                  Prefix: prefix,
-                  ContinuationToken: continuationToken,
-                }));
-                for (const obj of list.Contents ?? []) {
-                  if (obj.Key) {
-                    await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: obj.Key }));
-                  }
-                }
-                continuationToken = list.NextContinuationToken;
-              } while (continuationToken);
+            // 1. Delete song config from R2
+            try {
+              await r2DeleteKey(`${bandId}/songs/${songId}/config.json`);
+            } catch {
+              // config may not exist
             }
 
-            // 2. Delete local song directory
-            const songDir = songDirPath(songId);
-            if (fs.existsSync(songDir)) {
-              fs.rmSync(songDir, { recursive: true, force: true });
+            // 2. Delete audio stems from R2
+            const audioKeys = await r2ListKeys(`${bandId}/songs/${songId}/`);
+            for (const key of audioKeys) {
+              await r2DeleteKey(key);
             }
 
-            // 3. Remove from manifest.json
-            const manifestPath = path.resolve(process.cwd(), 'public', 'audio', 'manifest.json');
-            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-            manifest.songs = manifest.songs.filter((s: any) => s.id !== songId);
-            fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
-
-            // 4. Remove from all bands in bands.json
-            const bandsPath = path.resolve(process.cwd(), 'public', 'bands.json');
-            const bandsData = JSON.parse(fs.readFileSync(bandsPath, 'utf-8'));
-            for (const band of bandsData.bands) {
-              band.songIds = band.songIds.filter((id: string) => id !== songId);
+            // 3. Remove from discography.json
+            try {
+              const discography = await r2ReadJson(`${bandId}/songs/discography.json`);
+              discography.songs = discography.songs.filter((s: any) => s.id !== songId);
+              await r2WriteJson(`${bandId}/songs/discography.json`, discography);
+            } catch {
+              // discography may not exist
             }
-            fs.writeFileSync(bandsPath, JSON.stringify(bandsData, null, 2) + '\n');
+
+            // 4. Remove from registry.json
+            try {
+              const registry = await r2ReadJson('registry.json');
+              for (const band of registry.bands) {
+                band.songIds = band.songIds.filter((id: string) => id !== songId);
+              }
+              await r2WriteJson('registry.json', registry);
+            } catch {
+              // registry may not exist
+            }
 
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
@@ -531,12 +520,6 @@ export function configApiPlugin(): Plugin {
         if (setlistSaveMatch && req.method === 'POST') {
           const bandId = setlistSaveMatch[1];
           const setlistId = setlistSaveMatch[2];
-          const r2 = getR2Client();
-          const bucket = process.env.R2_BUCKET;
-
-          if (!r2 || !bucket) {
-            return jsonResponse(res, 500, { error: 'R2 not configured — check .env' });
-          }
 
           try {
             const raw = await readBody(req);
@@ -544,39 +527,19 @@ export function configApiPlugin(): Plugin {
             const { setlistConfigSchema } = await server.ssrLoadModule('/src/config/schema.ts');
             const validated = (setlistConfigSchema as any).parse(body);
 
-            // Upload setlist JSON to R2
-            const setlistKey = `${bandId}/setlists/${setlistId}.json`;
-            await r2.send(new PutObjectCommand({
-              Bucket: bucket,
-              Key: setlistKey,
-              Body: JSON.stringify(validated, null, 2),
-              ContentType: 'application/json',
-              CacheControl: 'no-cache',
-            }));
+            await r2WriteJson(`${bandId}/setlists/${setlistId}.json`, validated);
 
-            // Read existing index.json from R2 (or start fresh)
-            const indexKey = `${bandId}/setlists/index.json`;
+            // Update setlist index
             let index: { setlists: { id: string; name: string }[] } = { setlists: [] };
             try {
-              const existing = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: indexKey }));
-              const indexBody = await existing.Body?.transformToString();
-              if (indexBody) index = JSON.parse(indexBody);
+              index = await r2ReadJson(`${bandId}/setlists/index.json`);
             } catch {
-              // index.json doesn't exist yet — use empty
+              // index doesn't exist yet
             }
 
-            // Upsert entry
             index.setlists = index.setlists.filter((s) => s.id !== setlistId);
             index.setlists.push({ id: setlistId, name: validated.name });
-
-            // Upload updated index
-            await r2.send(new PutObjectCommand({
-              Bucket: bucket,
-              Key: indexKey,
-              Body: JSON.stringify(index, null, 2),
-              ContentType: 'application/json',
-              CacheControl: 'no-cache',
-            }));
+            await r2WriteJson(`${bandId}/setlists/index.json`, index);
 
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
@@ -590,38 +553,19 @@ export function configApiPlugin(): Plugin {
         if (setlistDeleteMatch && req.method === 'DELETE') {
           const bandId = setlistDeleteMatch[1];
           const setlistId = setlistDeleteMatch[2];
-          const r2 = getR2Client();
-          const bucket = process.env.R2_BUCKET;
-
-          if (!r2 || !bucket) {
-            return jsonResponse(res, 500, { error: 'R2 not configured — check .env' });
-          }
 
           try {
-            // Delete setlist JSON from R2
-            const setlistKey = `${bandId}/setlists/${setlistId}.json`;
-            await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: setlistKey }));
+            await r2DeleteKey(`${bandId}/setlists/${setlistId}.json`);
 
-            // Update index.json
-            const indexKey = `${bandId}/setlists/index.json`;
             let index: { setlists: { id: string; name: string }[] } = { setlists: [] };
             try {
-              const existing = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: indexKey }));
-              const indexBody = await existing.Body?.transformToString();
-              if (indexBody) index = JSON.parse(indexBody);
+              index = await r2ReadJson(`${bandId}/setlists/index.json`);
             } catch {
-              // no index — nothing to update
+              // no index
             }
 
             index.setlists = index.setlists.filter((s) => s.id !== setlistId);
-
-            await r2.send(new PutObjectCommand({
-              Bucket: bucket,
-              Key: indexKey,
-              Body: JSON.stringify(index, null, 2),
-              ContentType: 'application/json',
-              CacheControl: 'no-cache',
-            }));
+            await r2WriteJson(`${bandId}/setlists/index.json`, index);
 
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {

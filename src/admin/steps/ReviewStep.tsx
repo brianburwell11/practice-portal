@@ -4,7 +4,7 @@ import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
 import { uploadFormWithProgress } from '../utils/uploadWithProgress';
-import { assetUrl } from '../../utils/url';
+import { r2Url } from '../../utils/url';
 import { useBandStore } from '../../store/bandStore';
 
 interface Props {
@@ -14,7 +14,6 @@ interface Props {
 
 export function ReviewStep({ state, dispatch }: Props) {
   const [result, setResult] = useState<'success' | null>(null);
-  const [savedPath, setSavedPath] = useState('');
   const { bandSlug = '' } = useParams();
   const bandName = useBandStore((s) => s.currentBand?.name ?? '');
   const config = buildConfig(state, bandName);
@@ -35,8 +34,14 @@ export function ReviewStep({ state, dispatch }: Props) {
         fileIndex: 0, fileCount: state.stems.length, bytesSent: 0, bytesTotal: 1,
       }});
 
+      // Resolve band first so we can use bandId in all subsequent calls
+      const bandsRes = await fetch(r2Url('registry.json'));
+      const bandsData = await bandsRes.json();
+      const band = bandsData.bands.find((b: any) => b.route === bandSlug);
+      const bandId = band?.id ?? '';
+
       const uploadResult = await uploadFormWithProgress(
-        `/api/r2/transcode-upload/${state.id}`,
+        `/api/r2/transcode-upload/${bandId}/${state.id}`,
         formData,
         (bytesSent, bytesTotal) => {
           dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
@@ -58,7 +63,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         })),
       };
 
-      const configRes = await fetch(`/api/song/${state.id}/config`, {
+      const configRes = await fetch(`/api/bands/${bandId}/songs/${state.id}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(transcodedConfig),
@@ -68,44 +73,31 @@ export function ReviewStep({ state, dispatch }: Props) {
         throw new Error(err.error || 'Config save failed');
       }
 
-      // 4. Resolve band and auto-add song to it
-      let bandId = '';
-      if (bandSlug) {
-        const bandsRes = await fetch(assetUrl('bands.json'));
-        const bandsData = await bandsRes.json();
-        const band = bandsData.bands.find((b: any) => b.route === bandSlug);
-        if (band) {
-          bandId = band.id;
-          if (!band.songIds.includes(state.id)) {
-            band.songIds.push(state.id);
-            await fetch('/api/bands', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(bandsData),
-            });
-          }
-        }
+      // 4. Auto-add song to band registry
+      if (band && !band.songIds.includes(state.id)) {
+        band.songIds.push(state.id);
+        await fetch('/api/bands', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bandsData),
+        });
       }
 
-      // 5. Update manifest with R2 audio path
-      const songPath = bandId ? `audio/${bandId}/song-${state.id}` : `audio/song-${state.id}`;
-      const manifestRes = await fetch('/api/manifest/add', {
+      // 5. Update discography with R2 audio path
+      const discographyRes = await fetch(`/api/bands/${bandId}/songs/discography`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: state.id,
           title: state.title,
           artist: state.artist,
-          path: songPath,
           audioBasePath: publicBase,
         }),
       });
-      if (!manifestRes.ok) {
-        const err = await manifestRes.json();
-        throw new Error(err.error || 'Manifest update failed');
+      if (!discographyRes.ok) {
+        const err = await discographyRes.json();
+        throw new Error(err.error || 'Discography update failed');
       }
-
-      setSavedPath(songPath);
       setResult('success');
     } catch (err: any) {
       dispatch({ type: 'SET_ERROR', error: err.message });
@@ -120,8 +112,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         <p className="text-2xl text-green-400">Song added!</p>
         <p className="text-gray-400">
           <span className="font-mono text-gray-300">{state.title}</span> by{' '}
-          <span className="text-gray-300">{state.artist}</span> has been saved to{' '}
-          <span className="font-mono text-gray-300">public/{savedPath}/</span>
+          <span className="text-gray-300">{state.artist}</span> has been saved to R2.
         </p>
       </div>
     );
