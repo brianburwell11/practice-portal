@@ -200,7 +200,7 @@ export default function EditSongPage() {
         await fetch(`/api/bands/${currentBand.id}/songs/discography`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/song-${config.id}` }),
+          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${config.id}` }),
         });
       }
 

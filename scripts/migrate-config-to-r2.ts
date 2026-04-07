@@ -134,7 +134,7 @@ async function main() {
       const localLogoPath = path.join(publicRoot, band.logo);
       if (fs.existsSync(localLogoPath)) {
         const ext = path.extname(band.logo);
-        const logoKey = `${band.id}/logo${ext}`;
+        const logoKey = `${band.id}/assets/logo${ext}`;
         await uploadFile(logoKey, localLogoPath, getContentType(ext));
         logoR2Url = `${R2_PUBLIC_URL}/${logoKey}`;
       } else {
@@ -149,7 +149,7 @@ async function main() {
         id: s.id,
         title: s.title,
         artist: s.artist,
-        audioBasePath: s.audioBasePath ?? `${R2_PUBLIC_URL}/${band.id}/song-${s.id}`,
+        audioBasePath: s.audioBasePath ?? `${R2_PUBLIC_URL}/${band.id}/songs/${s.id}`,
       })),
     };
 

@@ -42,7 +42,7 @@ export function useSongLoader() {
       const configData = await res.json();
       const config = songConfigSchema.parse(configData);
 
-      const audioBase = entry.audioBasePath ?? r2Url(`${bandId}/song-${entry.id}`);
+      const audioBase = entry.audioBasePath ?? r2Url(`${bandId}/songs/${entry.id}`);
       await engine.loadSong(config, audioBase, (loaded, total) => {
         setLoadProgress(loaded, total);
       });

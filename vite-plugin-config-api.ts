@@ -236,8 +236,8 @@ export function configApiPlugin(): Plugin {
               }
 
               // 2. Copy audio stems from old prefix to new prefix
-              const oldAudioPrefix = `${bandId}/song-${oldId}/`;
-              const newAudioPrefix = `${bandId}/song-${newId}/`;
+              const oldAudioPrefix = `${bandId}/songs/${oldId}/`;
+              const newAudioPrefix = `${bandId}/songs/${newId}/`;
               const audioKeys = await r2ListKeys(oldAudioPrefix);
 
               for (const key of audioKeys) {
@@ -258,7 +258,7 @@ export function configApiPlugin(): Plugin {
             if (entry) {
               entry.id = newId;
               if (entry.audioBasePath) {
-                entry.audioBasePath = entry.audioBasePath.replace(`song-${oldId}`, `song-${newId}`);
+                entry.audioBasePath = entry.audioBasePath.replace(`songs/${oldId}`, `songs/${newId}`);
               }
             }
             await r2WriteJson(`${bandId}/songs/discography.json`, discography);
@@ -306,7 +306,7 @@ export function configApiPlugin(): Plugin {
               '.svg': 'image/svg+xml',
             }[result.ext] ?? 'application/octet-stream';
 
-            const key = `${bandId}/logo${result.ext}`;
+            const key = `${bandId}/assets/logo${result.ext}`;
             await r2PutFile(key, result.buffer, contentType, 'public, max-age=86400');
 
             const logoUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
@@ -328,7 +328,7 @@ export function configApiPlugin(): Plugin {
             return jsonResponse(res, 500, { error: 'R2 not configured — check .env' });
           }
 
-          const r2Prefix = `${bandId}/song-${songId}`;
+          const r2Prefix = `${bandId}/songs/${songId}`;
           const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pp-transcode-'));
 
           try {
@@ -407,7 +407,7 @@ export function configApiPlugin(): Plugin {
               return jsonResponse(res, 400, { error: 'bandId, songId and files[] required' });
             }
 
-            const r2Prefix = `${bandId}/song-${songId}`;
+            const r2Prefix = `${bandId}/songs/${songId}`;
             const urls: Record<string, string> = {};
             for (const filename of files) {
               const key = `${r2Prefix}/${filename}`;
@@ -483,7 +483,7 @@ export function configApiPlugin(): Plugin {
             }
 
             // 2. Delete audio stems from R2
-            const audioKeys = await r2ListKeys(`${bandId}/song-${songId}/`);
+            const audioKeys = await r2ListKeys(`${bandId}/songs/${songId}/`);
             for (const key of audioKeys) {
               await r2DeleteKey(key);
             }

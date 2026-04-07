@@ -14,13 +14,13 @@ Work done on branch `feat/r2-config`.
 R2 bucket:
   registry.json                           # band list (replaces bands.json)
   {bandId}/
-    logo.png                              # band logo
+    assets/
+      logo.png                            # band logo
     songs/
       discography.json                     # per-band song catalog [{id, title, artist, audioBasePath}]
       {songId}/
         config.json                       # full song config
-    song-{songId}/                        # audio stems (already exists, unchanged)
-      {stem}.mp3
+        {stem}.mp3                        # audio stems (co-located with config)
     setlists/                             # already exists, unchanged
       index.json
       {setlistId}.json
