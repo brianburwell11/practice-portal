@@ -63,7 +63,7 @@ export interface SongManifestEntry {
   id: string;
   title: string;
   artist: string;
-  path: string;
+  path?: string;
   audioBasePath?: string;
 }
 

@@ -23,8 +23,74 @@ function getR2Client(): S3Client | null {
   });
 }
 
+// --- R2 JSON read/write helpers ---
+
+async function r2ReadJson(key: string): Promise<any> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  const result = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const body = await result.Body?.transformToString();
+  if (!body) throw new Error(`Empty body for R2 key: ${key}`);
+  return JSON.parse(body);
+}
+
+async function r2WriteJson(key: string, data: unknown, cacheControl = 'no-cache'): Promise<void> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  await r2.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: JSON.stringify(data, null, 2),
+    ContentType: 'application/json',
+    CacheControl: cacheControl,
+  }));
+}
+
+async function r2DeleteKey(key: string): Promise<void> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+async function r2PutFile(key: string, body: Buffer, contentType: string, cacheControl: string): Promise<void> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  await r2.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+    CacheControl: cacheControl,
+  }));
+}
+
+async function r2ListKeys(prefix: string): Promise<string[]> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+  do {
+    const list = await r2.send(new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    }));
+    for (const obj of list.Contents ?? []) {
+      if (obj.Key) keys.push(obj.Key);
+    }
+    continuationToken = list.NextContinuationToken;
+  } while (continuationToken);
+  return keys;
+}
+
 function resolveBandForSong(songId: string): string | null {
   const bandsPath = path.resolve(process.cwd(), 'public', 'bands.json');
+  if (!fs.existsSync(bandsPath)) return null;
   const bands = JSON.parse(fs.readFileSync(bandsPath, 'utf-8')).bands;
   return bands.find((b: any) => b.songIds.includes(songId))?.id ?? null;
 }
