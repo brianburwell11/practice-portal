@@ -4,7 +4,7 @@ import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
 import { uploadFormWithProgress } from '../utils/uploadWithProgress';
-import { assetUrl } from '../../utils/url';
+import { r2Url } from '../../utils/url';
 import { useBandStore } from '../../store/bandStore';
 
 interface Props {
@@ -71,7 +71,7 @@ export function ReviewStep({ state, dispatch }: Props) {
       // 4. Resolve band and auto-add song to it
       let bandId = '';
       if (bandSlug) {
-        const bandsRes = await fetch(assetUrl('bands.json'));
+        const bandsRes = await fetch(r2Url('registry.json'));
         const bandsData = await bandsRes.json();
         const band = bandsData.bands.find((b: any) => b.route === bandSlug);
         if (band) {

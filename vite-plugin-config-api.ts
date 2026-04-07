@@ -23,9 +23,9 @@ function getR2Client(): S3Client | null {
   });
 }
 
-// --- R2 JSON read/write helpers ---
+// --- R2 JSON read/write helpers (used by endpoints below and Phase 3 refactor) ---
 
-async function r2ReadJson(key: string): Promise<any> {
+export async function r2ReadJson(key: string): Promise<any> {
   const r2 = getR2Client();
   const bucket = process.env.R2_BUCKET;
   if (!r2 || !bucket) throw new Error('R2 not configured');
@@ -35,7 +35,7 @@ async function r2ReadJson(key: string): Promise<any> {
   return JSON.parse(body);
 }
 
-async function r2WriteJson(key: string, data: unknown, cacheControl = 'no-cache'): Promise<void> {
+export async function r2WriteJson(key: string, data: unknown, cacheControl = 'no-cache'): Promise<void> {
   const r2 = getR2Client();
   const bucket = process.env.R2_BUCKET;
   if (!r2 || !bucket) throw new Error('R2 not configured');
@@ -48,14 +48,14 @@ async function r2WriteJson(key: string, data: unknown, cacheControl = 'no-cache'
   }));
 }
 
-async function r2DeleteKey(key: string): Promise<void> {
+export async function r2DeleteKey(key: string): Promise<void> {
   const r2 = getR2Client();
   const bucket = process.env.R2_BUCKET;
   if (!r2 || !bucket) throw new Error('R2 not configured');
   await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
-async function r2PutFile(key: string, body: Buffer, contentType: string, cacheControl: string): Promise<void> {
+export async function r2PutFile(key: string, body: Buffer, contentType: string, cacheControl: string): Promise<void> {
   const r2 = getR2Client();
   const bucket = process.env.R2_BUCKET;
   if (!r2 || !bucket) throw new Error('R2 not configured');
@@ -68,7 +68,7 @@ async function r2PutFile(key: string, body: Buffer, contentType: string, cacheCo
   }));
 }
 
-async function r2ListKeys(prefix: string): Promise<string[]> {
+export async function r2ListKeys(prefix: string): Promise<string[]> {
   const r2 = getR2Client();
   const bucket = process.env.R2_BUCKET;
   if (!r2 || !bucket) throw new Error('R2 not configured');
