@@ -473,7 +473,26 @@ export function configApiPlugin(): Plugin {
             const body = JSON.parse(raw);
             const { bandsManifestSchema } = await server.ssrLoadModule('/src/config/schema.ts');
             const validated = (bandsManifestSchema as any).parse(body);
+
+            // Detect newly added bands so we can seed their indexes
+            let oldBandIds: Set<string> = new Set();
+            try {
+              const old = await r2ReadJson('registry.json');
+              oldBandIds = new Set((old.bands ?? []).map((b: any) => b.id));
+            } catch {
+              // registry may not exist yet
+            }
+
             await r2WriteJson('registry.json', validated);
+
+            // Create blank setlists/index.json for each new band
+            const newBands = validated.bands.filter((b: any) => !oldBandIds.has(b.id));
+            await Promise.all(
+              newBands.map((b: any) =>
+                r2WriteJson(`${b.id}/setlists/index.json`, { setlists: [] }),
+              ),
+            );
+
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
             jsonResponse(res, 400, { error: err.message ?? 'Invalid request' });
