@@ -5,6 +5,7 @@ export interface StemMixState {
   pan: number;
   muted: boolean;
   soloed: boolean;
+  stereo: boolean;
 }
 
 export interface GroupMixState {
@@ -25,6 +26,7 @@ interface MixerState {
   setStemPan: (id: string, v: number) => void;
   setStemMuted: (id: string, m: boolean) => void;
   setStemSoloed: (id: string, s: boolean) => void;
+  setStemStereo: (id: string, s: boolean) => void;
   setGroupVolume: (id: string, v: number) => void;
   setGroupMuted: (id: string, m: boolean) => void;
   setGroupSoloed: (id: string, s: boolean) => void;
@@ -53,6 +55,10 @@ export const useMixerStore = create<MixerState>((set) => ({
   setStemSoloed: (id, soloed) =>
     set((state) => ({
       stems: { ...state.stems, [id]: { ...state.stems[id], soloed } },
+    })),
+  setStemStereo: (id, stereo) =>
+    set((state) => ({
+      stems: { ...state.stems, [id]: { ...state.stems[id], stereo } },
     })),
   setGroupVolume: (id, volume) =>
     set((state) => ({

@@ -14,6 +14,7 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
     defaultVolume: s.defaultVolume,
     defaultPan: s.defaultPan,
     color: s.color,
+    ...(s.stereo ? { stereo: true } : {}),
   }));
 
   // Tempo map

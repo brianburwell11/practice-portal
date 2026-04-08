@@ -7,6 +7,7 @@ export const stemConfigSchema = z.object({
   defaultVolume: z.number().min(0).max(1),
   defaultPan: z.number().min(-1).max(1),
   color: z.string(),
+  stereo: z.boolean().optional(),
 });
 
 export const tempoMapEntrySchema = z.object({

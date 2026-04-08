@@ -55,13 +55,14 @@ export function useSongLoader() {
         history.pushState(null, '', `#${entry.id}`);
       }
 
-      const stemStates: Record<string, { volume: number; pan: number; muted: boolean; soloed: boolean }> = {};
+      const stemStates: Record<string, { volume: number; pan: number; muted: boolean; soloed: boolean; stereo: boolean }> = {};
       for (const stem of config.stems) {
         stemStates[stem.id] = {
           volume: stem.defaultVolume,
           pan: stem.defaultPan,
           muted: false,
           soloed: false,
+          stereo: stem.stereo ?? false,
         };
       }
       initStems(stemStates);

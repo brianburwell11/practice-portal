@@ -5,6 +5,7 @@ export interface StemConfig {
   defaultVolume: number;
   defaultPan: number;
   color: string;
+  stereo?: boolean;
 }
 
 export interface TempoMapEntry {

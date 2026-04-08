@@ -26,12 +26,18 @@ export async function convertToMono(file: File): Promise<File> {
   return new File([wavBytes], wavName, { type: 'audio/wav' });
 }
 
-/** Return the duration in seconds, reusing the decode from convertToMono when possible. */
+/** Return the duration in seconds. */
 export async function getAudioDuration(file: File): Promise<number> {
+  const info = await getAudioInfo(file);
+  return info.duration;
+}
+
+/** Decode an audio file and return its duration and channel count. */
+export async function getAudioInfo(file: File): Promise<{ duration: number; channels: number }> {
   const ctx = new OfflineAudioContext(1, 1, 44100);
   const buffer = await file.arrayBuffer();
   const audio = await ctx.decodeAudioData(buffer);
-  return audio.duration;
+  return { duration: audio.duration, channels: audio.numberOfChannels };
 }
 
 function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {

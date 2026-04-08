@@ -6,11 +6,13 @@ export class StemPlayer {
   private source: AudioBufferSourceNode | null = null;
   readonly gainNode: GainNode;
   readonly panNode: StereoPannerNode;
+  private monoMixer: GainNode;
   private soundtouchNode: SoundTouchNode;
   private _tempoRatio = 1.0;
   private _muted = false;
   private _soloed = false;
   private _userVolume: number;
+  private _userPan: number;
 
   constructor(
     ctx: AudioContext,
@@ -22,8 +24,15 @@ export class StemPlayer {
     this.ctx = ctx;
     this.buffer = buffer;
     this._userVolume = defaultVolume;
+    this._userPan = defaultPan;
 
     this.soundtouchNode = new SoundTouchNode(ctx);
+
+    // Mono mixer: downmixes stereo to mono by default
+    this.monoMixer = ctx.createGain();
+    this.monoMixer.channelCount = 1;
+    this.monoMixer.channelCountMode = 'explicit';
+    this.monoMixer.channelInterpretation = 'speakers';
 
     this.gainNode = ctx.createGain();
     this.gainNode.gain.value = defaultVolume;
@@ -31,8 +40,9 @@ export class StemPlayer {
     this.panNode = ctx.createStereoPanner();
     this.panNode.pan.value = defaultPan;
 
-    // Chain: soundtouch → gain → pan → master
-    this.soundtouchNode.connect(this.gainNode);
+    // Chain: soundtouch → monoMixer → gain → pan → master
+    this.soundtouchNode.connect(this.monoMixer);
+    this.monoMixer.connect(this.gainNode);
     this.gainNode.connect(this.panNode);
     this.panNode.connect(masterGain);
   }
@@ -45,7 +55,7 @@ export class StemPlayer {
     this.soundtouchNode.disconnect();
     this.soundtouchNode = new SoundTouchNode(this.ctx);
     this.soundtouchNode.playbackRate.value = this._tempoRatio;
-    this.soundtouchNode.connect(this.gainNode);
+    this.soundtouchNode.connect(this.monoMixer);
 
     this.source = this.ctx.createBufferSource();
     this.source.buffer = this.buffer;
@@ -85,11 +95,33 @@ export class StemPlayer {
   }
 
   get pan(): number {
-    return this.panNode.pan.value;
+    return this._userPan;
   }
 
   set pan(v: number) {
-    this.panNode.pan.value = v;
+    this._userPan = v;
+    if (!this.stereo) {
+      this.panNode.pan.value = v;
+    }
+  }
+
+  /** Number of channels in the source audio (1 = mono, 2 = stereo) */
+  get sourceChannels(): number {
+    return this.buffer.numberOfChannels;
+  }
+
+  get stereo(): boolean {
+    return this.monoMixer.channelCount === 2;
+  }
+
+  set stereo(s: boolean) {
+    if (s) {
+      this.monoMixer.channelCount = 2;
+      this.panNode.pan.value = 0;
+    } else {
+      this.monoMixer.channelCount = 1;
+      this.panNode.pan.value = this._userPan;
+    }
   }
 
   get muted(): boolean {
@@ -141,6 +173,7 @@ export class StemPlayer {
   disconnect(): void {
     this.stop();
     this.soundtouchNode.disconnect();
+    this.monoMixer.disconnect();
     this.gainNode.disconnect();
     this.panNode.disconnect();
   }

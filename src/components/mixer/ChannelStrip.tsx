@@ -9,7 +9,8 @@ interface ChannelStripProps {
 export function ChannelStrip({ stemConfig }: ChannelStripProps) {
   const engine = useAudioEngine();
   const stemState = useMixerStore((s) => s.stems[stemConfig.id]);
-  const { setStemVolume, setStemPan, setStemMuted, setStemSoloed } = useMixerStore();
+  const { setStemVolume, setStemPan, setStemMuted, setStemSoloed, setStemStereo } = useMixerStore();
+  const sourceChannels = engine.getStem(stemConfig.id)?.sourceChannels ?? 1;
 
   if (!stemState) return null;
 
@@ -35,11 +36,30 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
     engine.setStemSoloed(stemConfig.id, newSoloed);
   };
 
+  const handleStereoToggle = () => {
+    const newStereo = !stemState.stereo;
+    setStemStereo(stemConfig.id, newStereo);
+    engine.setStemStereo(stemConfig.id, newStereo);
+  };
+
   return (
     <div className="flex flex-col gap-2 p-3 bg-gray-800 rounded-lg min-w-[140px]">
-      {/* Label with color indicator */}
+      {/* Label with color indicator and stereo toggle */}
       <div className="flex items-center gap-2">
-        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: stemConfig.color }} />
+        {sourceChannels >= 2 ? (
+          <button
+            onClick={handleStereoToggle}
+            className="shrink-0 flex items-center gap-0.5"
+            title={stemState.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
+          >
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stemConfig.color }} />
+            {stemState.stereo && (
+              <div className="w-3 h-3 rounded-full -ml-1.5" style={{ backgroundColor: stemConfig.color, opacity: 0.7 }} />
+            )}
+          </button>
+        ) : (
+          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: stemConfig.color }} />
+        )}
         <span className="text-sm font-medium text-gray-200 truncate">{stemConfig.label}</span>
       </div>
 
@@ -60,22 +80,24 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
         </span>
       </div>
 
-      {/* Pan slider */}
-      <div className="flex items-center gap-2">
-        <label className="text-xs text-gray-500 w-7">Pan</label>
-        <input
-          type="range"
-          min={-1}
-          max={1}
-          step={0.01}
-          value={stemState.pan}
-          onChange={(e) => handlePan(parseFloat(e.target.value))}
-          className="flex-1 h-1.5 accent-blue-500 cursor-pointer"
-        />
-        <span className="text-xs text-gray-500 w-8 text-right font-mono">
-          {stemState.pan === 0 ? 'C' : stemState.pan < 0 ? `L${Math.round(Math.abs(stemState.pan) * 100)}` : `R${Math.round(stemState.pan * 100)}`}
-        </span>
-      </div>
+      {/* Pan slider — hidden in stereo mode */}
+      {!stemState.stereo && (
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500 w-7">Pan</label>
+          <input
+            type="range"
+            min={-1}
+            max={1}
+            step={0.01}
+            value={stemState.pan}
+            onChange={(e) => handlePan(parseFloat(e.target.value))}
+            className="flex-1 h-1.5 accent-blue-500 cursor-pointer"
+          />
+          <span className="text-xs text-gray-500 w-8 text-right font-mono">
+            {stemState.pan === 0 ? 'C' : stemState.pan < 0 ? `L${Math.round(Math.abs(stemState.pan) * 100)}` : `R${Math.round(stemState.pan * 100)}`}
+          </span>
+        </div>
+      )}
 
       {/* Mute / Solo buttons */}
       <div className="flex gap-2">

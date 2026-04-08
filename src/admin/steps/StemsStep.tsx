@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { WizardState, WizardAction, StemEntry } from '../wizardReducer';
 import { detectStem, deduplicateIds, isAudioFile, sortStems } from '../utils/stemDetection';
-import { convertToMono, getAudioDuration } from '../utils/audioConvert';
+import { getAudioInfo } from '../utils/audioConvert';
 import { previewStem } from '../utils/stemPreview';
 
 interface Props {
@@ -50,6 +50,8 @@ function buildStems(files: File[]): StemEntry[] {
   const detected = files.map((file) => ({
     file,
     ...detectStem(file.name),
+    channels: 1,
+    stereo: false,
   }));
   const sorted = sortStems(detected);
   const deduped = deduplicateIds(sorted);
@@ -78,9 +80,14 @@ export function StemsStep({ state, dispatch }: Props) {
       if (files.length === 0) return;
       setLoading(true);
       try {
-        const monoFiles = await Promise.all(files.map(convertToMono));
-        const stems = buildStems(monoFiles);
-        const duration = await getAudioDuration(monoFiles[0]);
+        const infos = await Promise.all(files.map(getAudioInfo));
+        const stems = buildStems(files);
+        // Attach detected channel counts (buildStems reorders, so match by file ref)
+        const channelMap = new Map(files.map((f, i) => [f, infos[i].channels]));
+        for (const stem of stems) {
+          stem.channels = channelMap.get(stem.file) ?? 1;
+        }
+        const duration = infos[0].duration;
         dispatch({ type: 'SET_STEMS', stems, durationSeconds: Math.round(duration * 100) / 100 });
       } finally {
         setLoading(false);
@@ -190,7 +197,7 @@ export function StemsStep({ state, dispatch }: Props) {
         }`}
       >
         {loading ? (
-          <p className="text-gray-400">Converting stems to mono...</p>
+          <p className="text-gray-400">Processing stems...</p>
         ) : (
           <>
             <p className="text-gray-300 mb-2">Drag a folder of stems here</p>
@@ -239,15 +246,37 @@ export function StemsStep({ state, dispatch }: Props) {
                   &#x2630;
                 </span>
 
-                {/* Color */}
-                <input
-                  type="color"
-                  value={stem.color}
-                  onChange={(e) =>
-                    dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })
-                  }
-                  className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
-                />
+                {/* Color circle (click to pick color) + stereo toggle */}
+                <div className="shrink-0 flex items-center">
+                  <label className="cursor-pointer" title="Click to change color">
+                    <div className="w-6 h-6 rounded-full border-2 border-gray-600" style={{ backgroundColor: stem.color }} />
+                    <input
+                      type="color"
+                      value={stem.color}
+                      onChange={(e) =>
+                        dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })
+                      }
+                      className="sr-only"
+                    />
+                  </label>
+                  {stem.channels >= 2 && (
+                    <button
+                      onClick={() =>
+                        dispatch({ type: 'UPDATE_STEM', index: i, updates: { stereo: !stem.stereo } })
+                      }
+                      className="-ml-2"
+                      title={stem.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
+                    >
+                      <div
+                        className="w-6 h-6 rounded-full border-2 border-gray-600"
+                        style={{
+                          backgroundColor: stem.stereo ? stem.color : 'transparent',
+                          borderColor: stem.stereo ? stem.color : undefined,
+                        }}
+                      />
+                    </button>
+                  )}
+                </div>
 
                 {/* Label */}
                 <input
@@ -301,31 +330,33 @@ export function StemsStep({ state, dispatch }: Props) {
                   <span className="w-8 text-right">{Math.round(stem.defaultVolume * 100)}%</span>
                 </label>
 
-                <label className="flex items-center gap-2">
-                  Pan
-                  <input
-                    type="range"
-                    min={-1}
-                    max={1}
-                    step={0.1}
-                    value={stem.defaultPan}
-                    onChange={(e) =>
-                      dispatch({
-                        type: 'UPDATE_STEM',
-                        index: i,
-                        updates: { defaultPan: parseFloat(e.target.value) },
-                      })
-                    }
-                    className="w-24"
-                  />
-                  <span className="w-8 text-right">
-                    {stem.defaultPan === 0
-                      ? 'C'
-                      : stem.defaultPan < 0
-                        ? `L${Math.round(Math.abs(stem.defaultPan) * 100)}`
-                        : `R${Math.round(stem.defaultPan * 100)}`}
-                  </span>
-                </label>
+                {!stem.stereo && (
+                  <label className="flex items-center gap-2">
+                    Pan
+                    <input
+                      type="range"
+                      min={-1}
+                      max={1}
+                      step={0.1}
+                      value={stem.defaultPan}
+                      onChange={(e) =>
+                        dispatch({
+                          type: 'UPDATE_STEM',
+                          index: i,
+                          updates: { defaultPan: parseFloat(e.target.value) },
+                        })
+                      }
+                      className="w-24"
+                    />
+                    <span className="w-8 text-right">
+                      {stem.defaultPan === 0
+                        ? 'C'
+                        : stem.defaultPan < 0
+                          ? `L${Math.round(Math.abs(stem.defaultPan) * 100)}`
+                          : `R${Math.round(stem.defaultPan * 100)}`}
+                    </span>
+                  </label>
+                )}
 
                 <span className="text-gray-600 ml-auto font-mono">
                   {stem.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || stem.id}

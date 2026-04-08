@@ -9,6 +9,8 @@ export interface StemEntry {
   color: string;
   defaultVolume: number;
   defaultPan: number;
+  channels: number;
+  stereo: boolean;
 }
 
 export interface WizardState {

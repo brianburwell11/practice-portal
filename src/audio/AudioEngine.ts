@@ -125,6 +125,9 @@ export class AudioEngine {
         entry.config.defaultVolume,
         entry.config.defaultPan,
       );
+      if (entry.config.stereo) {
+        player.stereo = true;
+      }
       this.stems.set(entry.config.id, player);
     }
 
@@ -265,6 +268,14 @@ export class AudioEngine {
     if (stem) {
       stem.soloed = soloed;
       this.recalcAllGains();
+      this.notify();
+    }
+  }
+
+  setStemStereo(id: string, stereo: boolean): void {
+    const stem = this.stems.get(id);
+    if (stem) {
+      stem.stereo = stereo;
       this.notify();
     }
   }
