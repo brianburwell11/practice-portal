@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { bandsManifestSchema, songManifestSchema } from '../config/schema';
 import { r2Url } from '../utils/url';
 import type { BandConfig, BandColors, SongManifestEntry } from '../audio/types';
@@ -23,6 +23,7 @@ function emptyBand(): BandConfig {
 
 export default function ManageBandsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [bands, setBands] = useState<BandConfig[]>([]);
   const [allSongs, setAllSongs] = useState<SongManifestEntry[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -32,6 +33,7 @@ export default function ManageBandsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [logoCacheBust, setLogoCacheBust] = useState(0);
+  const [formOpen, setFormOpen] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Load bands from R2 registry, then fetch per-band song indexes
@@ -57,6 +59,14 @@ export default function ManageBandsPage() {
       })
       .catch((err) => setError(String(err)));
   }, []);
+
+  // Auto-open the add form when navigated with ?new=true
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      setFormOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const isNew = editingIndex === null;
 
@@ -231,8 +241,6 @@ export default function ManageBandsPage() {
   const removeLogo = () => {
     updateDraft({ logo: undefined });
   };
-
-  const [formOpen, setFormOpen] = useState(false);
   const isEditing = formOpen || editingIndex !== null;
 
   return (
