@@ -28,7 +28,7 @@ export function BandPicker() {
             <Link
               key={band.id}
               to={`/${band.route}`}
-              className="flex items-center gap-4 p-4 rounded-lg border border-gray-700 hover:border-gray-500 transition-colors"
+              className="flex items-center gap-4 p-4 min-h-[56px] rounded-lg border border-gray-700 hover:border-gray-500 transition-colors"
               style={{ backgroundColor: band.colors.background }}
             >
               {band.logo ? (
