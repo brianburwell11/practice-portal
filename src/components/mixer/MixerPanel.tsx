@@ -30,7 +30,7 @@ export function MixerPanel() {
   return (
     <div className="flex-1 p-4 overflow-auto">
       {/* Groups and ungrouped stems */}
-      <div className="flex gap-3 flex-wrap items-start">
+      <div className="flex flex-col md:flex-row gap-3 md:flex-wrap md:items-start">
         {(selectedSong.groups ?? []).map((group) => {
           const stemConfigs = group.stemIds
             .map((id) => selectedSong.stems.find((s) => s.id === id))
