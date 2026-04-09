@@ -229,7 +229,7 @@ export function SongSelectDropdown() {
 
   return (
     <select
-      className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500"
+      className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 w-48 shrink text-center md:text-left md:w-auto md:shrink-0"
       value={inSetlist ? String(activeIndex) : (selectedSong?.id ?? '')}
       onChange={(e) => {
         if (inSetlist) {
@@ -336,10 +336,8 @@ export function SetlistNav() {
   const loading = useSongStore((s) => s.loading);
   const { filteredSongs, handleSelect } = useSongLoader();
 
-  if (!activeSetlist) return <SongSelectDropdown />;
-
-  const prevSong = activeIndex > 0 ? filteredSongs[activeIndex - 1] : null;
-  const nextSong = activeIndex < filteredSongs.length - 1 ? filteredSongs[activeIndex + 1] : null;
+  const prevSong = activeSetlist && activeIndex > 0 ? filteredSongs[activeIndex - 1] : null;
+  const nextSong = activeSetlist && activeIndex < filteredSongs.length - 1 ? filteredSongs[activeIndex + 1] : null;
 
   const navigate = (idx: number) => {
     setActiveIndex(idx);
@@ -348,22 +346,40 @@ export function SetlistNav() {
   };
 
   return (
-    <div className="flex items-center gap-3">
-      <button
-        disabled={!prevSong || loading}
-        onClick={() => navigate(activeIndex - 1)}
-        className="text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default whitespace-nowrap"
-      >
-        {prevSong ? `\u2190 ${prevSong.title}` : ''}
-      </button>
+    <div className="flex items-center gap-1 md:gap-3 w-full md:w-auto md:max-w-none">
+      <div className="flex-1 md:flex-initial text-left py-2 px-3 md:px-0">
+        {activeSetlist && (
+          <button
+            disabled={!prevSong || loading}
+            onClick={() => navigate(activeIndex - 1)}
+            className="text-sm md:text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default"
+          >
+            {prevSong ? (
+              <>
+                <span>{'\u2190'}</span>
+                <span className="hidden md:inline"> {prevSong.title}</span>
+              </>
+            ) : ''}
+          </button>
+        )}
+      </div>
       <SongSelectDropdown />
-      <button
-        disabled={!nextSong || loading}
-        onClick={() => navigate(activeIndex + 1)}
-        className="text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default whitespace-nowrap"
-      >
-        {nextSong ? `${nextSong.title} \u2192` : ''}
-      </button>
+      <div className="flex-1 md:flex-initial text-right py-2 px-3 md:px-0">
+        {activeSetlist && (
+          <button
+            disabled={!nextSong || loading}
+            onClick={() => navigate(activeIndex + 1)}
+            className="text-sm md:text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default"
+          >
+            {nextSong ? (
+              <>
+                <span className="hidden md:inline">{nextSong.title} </span>
+                <span>{'\u2192'}</span>
+              </>
+            ) : ''}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useMixerStore } from '../../store/mixerStore';
 import { ChannelStrip } from './ChannelStrip';
+import { TouchSlider } from '../ui/TouchSlider';
 import type { StemGroupConfig, StemConfig } from '../../audio/types';
 
 interface GroupStripProps {
@@ -35,7 +36,7 @@ export function GroupStrip({ groupConfig, stemConfigs }: GroupStripProps) {
   return (
     <div className="flex flex-col">
       {/* Group header */}
-      <div className="flex flex-col gap-2 p-3 bg-gray-800 rounded-lg min-w-[140px] border border-gray-600">
+      <div className="flex flex-col gap-2 p-3 bg-gray-800 rounded-lg min-w-[230px] border border-gray-600">
         {/* Label with expand toggle */}
         <div className="flex items-center gap-2">
           <button
@@ -52,15 +53,7 @@ export function GroupStrip({ groupConfig, stemConfigs }: GroupStripProps) {
         {/* Group volume slider */}
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-500 w-7">Vol</label>
-          <input
-            type="range"
-            min={0}
-            max={1.5}
-            step={0.01}
-            value={groupState.volume}
-            onChange={(e) => handleVolume(parseFloat(e.target.value))}
-            className="flex-1 h-1.5 accent-blue-500 cursor-pointer"
-          />
+          <TouchSlider min={0} max={1.5} step={0.01} value={groupState.volume} onChange={handleVolume} label={`${groupConfig.label} volume`} className="flex-1" />
           <span className="text-xs text-gray-500 w-8 text-right font-mono">
             {Math.round(groupState.volume * 100)}
           </span>
@@ -70,7 +63,7 @@ export function GroupStrip({ groupConfig, stemConfigs }: GroupStripProps) {
         <div className="flex gap-2">
           <button
             onClick={handleMute}
-            className={`flex-1 text-xs py-1 rounded font-medium transition-colors ${
+            className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors ${
               groupState.muted
                 ? 'bg-red-600 text-white'
                 : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
@@ -80,7 +73,7 @@ export function GroupStrip({ groupConfig, stemConfigs }: GroupStripProps) {
           </button>
           <button
             onClick={handleSolo}
-            className={`flex-1 text-xs py-1 rounded font-medium transition-colors ${
+            className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors ${
               groupState.soloed
                 ? 'bg-yellow-500 text-gray-900'
                 : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
