@@ -6,11 +6,12 @@ import { useSetlistStore } from '../../store/setlistStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { songManifestSchema, songConfigSchema, setlistConfigSchema } from '../../config/schema';
 import { r2Url } from '../../utils/url';
+import { loadMixerState } from '../../utils/mixerStorage';
 import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
 
 export function useSongLoader() {
   const engine = useAudioEngine();
-  const { initStems, initGroups } = useMixerStore();
+  const { initStems, initGroups, setMasterVolume } = useMixerStore();
   const currentBand = useBandStore((s) => s.currentBand);
   const manifest = useSongStore((s) => s.manifest);
   const setLoading = useSongStore((s) => s.setLoading);
@@ -55,29 +56,58 @@ export function useSongLoader() {
         history.pushState(null, '', `#${entry.id}`);
       }
 
+      const saved = loadMixerState(config.id);
+
       const stemStates: Record<string, { volume: number; pan: number; muted: boolean; soloed: boolean; stereo: boolean }> = {};
       for (const stem of config.stems) {
+        const s = saved?.stems[stem.id];
         stemStates[stem.id] = {
-          volume: stem.defaultVolume,
-          pan: stem.defaultPan,
-          muted: false,
-          soloed: false,
-          stereo: stem.stereo ?? false,
+          volume: s?.volume ?? stem.defaultVolume,
+          pan: s?.pan ?? stem.defaultPan,
+          muted: s?.muted ?? false,
+          soloed: s?.soloed ?? false,
+          stereo: s?.stereo ?? (stem.stereo ?? false),
         };
       }
       initStems(stemStates);
 
       const groupStates: Record<string, { volume: number; muted: boolean; soloed: boolean; expanded: boolean }> = {};
       for (const group of config.groups ?? []) {
-        groupStates[group.id] = { volume: 1, muted: false, soloed: false, expanded: false };
+        const g = saved?.groups[group.id];
+        groupStates[group.id] = {
+          volume: g?.volume ?? 1,
+          muted: g?.muted ?? false,
+          soloed: g?.soloed ?? false,
+          expanded: false,
+        };
       }
       initGroups(groupStates);
+
+      // Apply saved mixer state to audio engine (which initialized with config defaults)
+      if (saved) {
+        setMasterVolume(saved.masterVolume);
+        engine.setMasterVolume(saved.masterVolume);
+        for (const stem of config.stems) {
+          const ss = stemStates[stem.id];
+          engine.setStemVolume(stem.id, ss.volume);
+          engine.setStemPan(stem.id, ss.pan);
+          engine.setStemMuted(stem.id, ss.muted);
+          engine.setStemSoloed(stem.id, ss.soloed);
+          engine.setStemStereo(stem.id, ss.stereo);
+        }
+        for (const group of config.groups ?? []) {
+          const gs = groupStates[group.id];
+          engine.setGroupVolume(group.id, gs.volume);
+          engine.setGroupMuted(group.id, gs.muted);
+          engine.setGroupSoloed(group.id, gs.soloed);
+        }
+      }
     } catch (err) {
       setError(String(err));
     } finally {
       setLoading(false);
     }
-  }, [engine, setLoading, setError, setLoadProgress, setSelectedSong, initStems, initGroups]);
+  }, [engine, setLoading, setError, setLoadProgress, setSelectedSong, setMasterVolume, initStems, initGroups]);
 
   return { filteredSongs, handleSelect };
 }

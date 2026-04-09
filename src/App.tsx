@@ -11,6 +11,7 @@ import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
 import { useSetlistStore } from './store/setlistStore';
 import { useNavigate } from 'react-router-dom';
+import { useMixerPersistence } from './hooks/useMixerPersistence';
 
 
 const SetlistModal = import.meta.env.DEV
@@ -22,6 +23,7 @@ const DeleteSetlistModal = import.meta.env.DEV
 
 export default function App() {
   const engine = useCreateEngine();
+  useMixerPersistence();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const openMarkerEditor = useMarkerEditorStore((s) => s.open);
   const currentBand = useBandStore((s) => s.currentBand);
