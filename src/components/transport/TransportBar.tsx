@@ -134,7 +134,7 @@ export function TransportBar() {
             onClick={() => (playing ? engine.pause() : engine.play())}
             title={playing ? 'Pause' : 'Play'}
           >
-            {playing ? '\u23F8' : '\u25B6'}
+            {playing ? '\u2759\u2759' : '\u25B6'}
           </button>
           <button
             className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
@@ -216,7 +216,7 @@ export function TransportBar() {
           onClick={() => (playing ? engine.pause() : engine.play())}
           title={playing ? 'Pause' : 'Play'}
         >
-          {playing ? '\u23F8' : '\u25B6'}
+          {playing ? '\u2759\u2759' : '\u25B6'}
         </button>
         <button
           className={`w-12 h-12 rounded-lg flex items-center justify-center text-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
