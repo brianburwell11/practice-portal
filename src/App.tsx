@@ -45,7 +45,7 @@ export default function App() {
       >
         {/* Header */}
         <header
-          className="relative px-4 py-3 border-b border-gray-700 flex items-center"
+          className="px-4 py-3 border-b border-gray-700 flex flex-wrap items-center gap-y-2 md:relative"
           style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
         >
           {!currentBand?.logo ? (
@@ -59,10 +59,10 @@ export default function App() {
               className="h-10 object-contain"
             />
           )}
-          <div className="absolute left-1/2 -translate-x-1/2">
+          <SetlistDropdown />
+          <div className="w-full order-last flex justify-center md:w-auto md:order-none md:absolute md:left-1/2 md:-translate-x-1/2">
             <SetlistNav />
           </div>
-          <SetlistDropdown />
         </header>
 
         {/* Dev toolbar */}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
+import { TouchSlider } from '../ui/TouchSlider';
 
 const MIN = 0.25;
 const MAX = 1.5;
@@ -33,15 +34,14 @@ export function TempoControl() {
   return (
     <>
       <label className="text-xs text-gray-400 text-right">Speed</label>
-      <input
-        type="range"
+      <TouchSlider
         min={MIN}
         max={MAX}
         step={0.05}
         value={tempoRatio}
-        onChange={(e) => handleChange(parseFloat(e.target.value))}
+        onChange={handleChange}
         onDoubleClick={() => handleChange(1.0)}
-        className="w-full h-1.5 accent-blue-500 cursor-pointer"
+        label="Speed"
       />
       {editing ? (
         <input

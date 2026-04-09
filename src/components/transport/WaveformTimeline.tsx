@@ -5,10 +5,17 @@ import { useSongStore } from '../../store/songStore';
 import type { TapMapEntry } from '../../audio/types';
 import { markersToSeconds } from '../../audio/tempoUtils';
 
+/** Detect coarse pointer (touch device) */
+const isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
 /** Snap threshold in pixels — how close the cursor must be to a marker to snap. */
-const SNAP_PX = 12;
+const SNAP_PX = isCoarse ? 24 : 12;
+/** Loop marker hit test threshold in pixels */
+const HIT_PX = isCoarse ? 20 : 6;
 /** Minimum zoom level in seconds */
 const MIN_VIEW = 5;
+/** Default zoom level in seconds for mobile */
+const DEFAULT_MOBILE_VIEW = 30;
 
 export function WaveformTimeline() {
   const engine = useAudioEngine();
@@ -26,12 +33,21 @@ export function WaveformTimeline() {
   const overviewContainerRef = useRef<HTMLDivElement>(null);
   const overviewSizeRef = useRef({ width: 0, height: 0 });
 
-  // Viewport state — starts fully zoomed out
+  // Viewport state — mobile starts zoomed to ~10s, desktop fully zoomed out
   const [viewStart, setViewStart] = useState(0);
-  const [viewDuration, setViewDuration] = useState(Infinity); // Infinity = full duration
+  const [viewDuration, setViewDuration] = useState(isCoarse ? DEFAULT_MOBILE_VIEW : Infinity);
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
   const [draggingMarker, setDraggingMarker] = useState<'A' | 'B' | null>(null);
   const suppressClickRef = useRef(false);
+
+  // Pinch-to-zoom state
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStartRef = useRef<{ dist: number; viewDuration: number; centerX: number } | null>(null);
+
+  // Single-finger drag-to-pan state
+  const dragStartRef = useRef<{ x: number; viewStart: number } | null>(null);
+  const didDragRef = useRef(false);
+  const DRAG_THRESHOLD = 8;
 
   const effectiveViewDuration = Math.min(viewDuration, duration || Infinity);
   const isZoomed = duration > 0 && effectiveViewDuration < duration;
@@ -48,7 +64,7 @@ export function WaveformTimeline() {
   // Reset zoom when song changes
   useEffect(() => {
     setViewStart(0);
-    setViewDuration(Infinity);
+    setViewDuration(isCoarse ? DEFAULT_MOBILE_VIEW : Infinity);
   }, [selectedSong?.id]);
 
   // Viewport coordinate helpers
@@ -97,7 +113,7 @@ export function WaveformTimeline() {
     [duration, selectedSong, secondsToPixel],
   );
 
-  // Hit test: check if a pixel X is within 6px of loop A or B marker
+  // Hit test: check if a pixel X is within threshold of loop A or B marker
   const hitTestLoopMarker = useCallback(
     (pixelX: number): 'A' | 'B' | null => {
       if (loopA === null || loopB === null) return null;
@@ -105,12 +121,11 @@ export function WaveformTimeline() {
       if (width === 0) return null;
       const ax = secondsToPixel(loopA, width);
       const bx = secondsToPixel(loopB, width);
-      // Prefer whichever is closer if both are within range
       const distA = Math.abs(pixelX - ax);
       const distB = Math.abs(pixelX - bx);
-      if (distA <= 6 && distB <= 6) return distA <= distB ? 'A' : 'B';
-      if (distA <= 6) return 'A';
-      if (distB <= 6) return 'B';
+      if (distA <= HIT_PX && distB <= HIT_PX) return distA <= distB ? 'A' : 'B';
+      if (distA <= HIT_PX) return 'A';
+      if (distB <= HIT_PX) return 'B';
       return null;
     },
     [loopA, loopB, secondsToPixel],
@@ -118,41 +133,69 @@ export function WaveformTimeline() {
 
   const [cursorStyle, setCursorStyle] = useState<string>('pointer');
 
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (suppressClickRef.current) {
-        suppressClickRef.current = false;
+  // --- Pointer event handlers (unified mouse + touch) ---
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+
+      // Track pointer for pinch
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+      // Start pinch if two fingers
+      if (pointersRef.current.size === 2) {
+        const pts = Array.from(pointersRef.current.values());
+        const dist = Math.abs(pts[0].x - pts[1].x);
+        const centerClientX = (pts[0].x + pts[1].x) / 2;
+        const centerX = centerClientX - rect.left;
+        pinchStartRef.current = { dist, viewDuration: effectiveViewDuration, centerX };
+        dragStartRef.current = null;
+        setDraggingMarker(null);
         return;
       }
-      if (!duration) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const snap = findSnapMarker(x);
-      const seconds = snap ?? pixelToSeconds(x, sizeRef.current.width);
-      engine.seek(Math.max(0, Math.min(seconds, duration)));
-      setFollowPlayhead(true);
-    },
-    [engine, duration, findSnapMarker, pixelToSeconds, setFollowPlayhead],
-  );
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
+      // Single pointer: check loop marker hit first
       const hit = hitTestLoopMarker(x);
       if (hit) {
         e.preventDefault();
         setDraggingMarker(hit);
+        didDragRef.current = false;
+        suppressClickRef.current = false;
+        return;
       }
+
+      // Start potential drag-to-pan (on touch) or just track position
+      dragStartRef.current = { x: e.clientX, viewStart };
+      didDragRef.current = false;
     },
-    [hitTestLoopMarker],
+    [hitTestLoopMarker, effectiveViewDuration, viewStart],
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
 
+      // Update tracked pointer
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      // Pinch zoom
+      if (pointersRef.current.size === 2 && pinchStartRef.current) {
+        const pts = Array.from(pointersRef.current.values());
+        const dist = Math.abs(pts[0].x - pts[1].x);
+        if (dist < 1) return;
+        const scale = pinchStartRef.current.dist / dist;
+        const newDuration = Math.max(MIN_VIEW, Math.min(duration || Infinity, pinchStartRef.current.viewDuration * scale));
+        const centerSeconds = pixelToSeconds(pinchStartRef.current.centerX, sizeRef.current.width);
+        const newStart = centerSeconds - (pinchStartRef.current.centerX / sizeRef.current.width) * newDuration;
+        setViewDuration(newDuration);
+        setViewStart(clampViewStart(newStart, newDuration));
+        return;
+      }
+
+      // Single pointer: drag loop marker
       if (draggingMarker) {
         const seconds = pixelToSeconds(x, sizeRef.current.width);
         const clamped = Math.max(0, Math.min(seconds, duration || 0));
@@ -161,32 +204,94 @@ export function WaveformTimeline() {
         } else {
           engine.setLoop(loopA, clamped);
         }
+        suppressClickRef.current = true;
         return;
       }
 
-      // Update cursor based on loop marker proximity
-      const hit = hitTestLoopMarker(x);
-      setCursorStyle(hit ? 'col-resize' : 'pointer');
+      // Single-finger drag-to-pan (when zoomed)
+      if (dragStartRef.current && isZoomed) {
+        const dx = e.clientX - dragStartRef.current.x;
+        if (!didDragRef.current && Math.abs(dx) < DRAG_THRESHOLD) return;
+        didDragRef.current = true;
+        const { width } = sizeRef.current;
+        if (width === 0) return;
+        const secondsPerPixel = effectiveViewDuration / width;
+        const newStart = dragStartRef.current.viewStart - dx * secondsPerPixel;
+        setViewStart(clampViewStart(newStart, effectiveViewDuration));
+        setFollowPlayhead(false);
+        return;
+      }
 
-      setHoveredTime(findSnapMarker(x));
+      // Hover effects (non-touch only)
+      if (!isCoarse) {
+        const hit = hitTestLoopMarker(x);
+        setCursorStyle(hit ? 'col-resize' : 'pointer');
+        setHoveredTime(findSnapMarker(x));
+      }
     },
-    [draggingMarker, findSnapMarker, hitTestLoopMarker, pixelToSeconds, duration, engine, loopA, loopB],
+    [draggingMarker, findSnapMarker, hitTestLoopMarker, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead],
   );
 
-  const handleMouseUp = useCallback(() => {
-    if (draggingMarker) {
-      suppressClickRef.current = true;
-      setDraggingMarker(null);
-    }
-  }, [draggingMarker]);
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      pointersRef.current.delete(e.pointerId);
 
-  const handleMouseLeave = useCallback(() => {
-    setHoveredTime(null);
-    if (draggingMarker) {
-      setDraggingMarker(null);
-    }
-    setCursorStyle('pointer');
-  }, [draggingMarker]);
+      // End pinch
+      if (pinchStartRef.current) {
+        if (pointersRef.current.size < 2) {
+          pinchStartRef.current = null;
+        }
+        dragStartRef.current = null;
+        return;
+      }
+
+      // End loop marker drag
+      if (draggingMarker) {
+        suppressClickRef.current = true;
+        setDraggingMarker(null);
+        dragStartRef.current = null;
+        return;
+      }
+
+      // End drag-to-pan — if we dragged, don't seek
+      if (didDragRef.current) {
+        dragStartRef.current = null;
+        didDragRef.current = false;
+        return;
+      }
+
+      dragStartRef.current = null;
+
+      // Tap to seek
+      if (pointersRef.current.size === 0) {
+        if (!duration) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const snap = findSnapMarker(x);
+        const seconds = snap ?? pixelToSeconds(x, sizeRef.current.width);
+        engine.seek(Math.max(0, Math.min(seconds, duration)));
+        setFollowPlayhead(true);
+      }
+    },
+    [draggingMarker, duration, findSnapMarker, pixelToSeconds, engine, setFollowPlayhead],
+  );
+
+  const handlePointerLeave = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      pointersRef.current.delete(e.pointerId);
+      setHoveredTime(null);
+      if (draggingMarker) {
+        setDraggingMarker(null);
+      }
+      if (pointersRef.current.size < 2) {
+        pinchStartRef.current = null;
+      }
+      dragStartRef.current = null;
+      didDragRef.current = false;
+      setCursorStyle('pointer');
+    },
+    [draggingMarker],
+  );
 
   // Cmd+scroll zoom, shift+scroll horizontal navigation
   useEffect(() => {
@@ -559,36 +664,68 @@ export function WaveformTimeline() {
     [engine, duration, effectiveViewDuration, clampViewStart],
   );
 
+  // Mobile zoom controls
+  const handleZoom = useCallback(
+    (direction: 'in' | 'out') => {
+      if (!duration) return;
+      const { width } = sizeRef.current;
+      if (width === 0) return;
+      const centerSeconds = viewStart + effectiveViewDuration / 2;
+      const factor = direction === 'in' ? 0.6 : 1.6;
+      const newDuration = Math.max(MIN_VIEW, Math.min(duration, effectiveViewDuration * factor));
+      const newStart = centerSeconds - newDuration / 2;
+      setViewDuration(newDuration);
+      setViewStart(clampViewStart(newStart, newDuration));
+    },
+    [duration, viewStart, effectiveViewDuration, clampViewStart],
+  );
+
   return (
     <div className="flex-1 flex flex-col gap-0.5 min-w-0">
       {/* Main waveform */}
       <div
         ref={containerRef}
-        className="h-[108px] relative rounded overflow-hidden"
-        style={{ cursor: cursorStyle }}
+        className="h-[80px] md:h-[108px] relative rounded overflow-hidden"
+        style={{ cursor: cursorStyle, touchAction: 'none' }}
       >
         <canvas
           ref={canvasRef}
           className="w-full h-full"
-          onClick={handleClick}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerLeave}
         />
       </div>
 
-      {/* Overview bar — only visible when zoomed */}
+      {/* Overview bar + zoom controls — only visible when zoomed */}
       {isZoomed && (
-        <div
-          ref={overviewContainerRef}
-          className="h-5 relative cursor-pointer rounded overflow-hidden border border-gray-700/50"
-        >
-          <canvas
-            ref={overviewCanvasRef}
-            className="w-full h-full"
-            onClick={handleOverviewClick}
-          />
+        <div className="flex items-center gap-1">
+          {/* Zoom buttons — mobile only */}
+          <button
+            className="md:hidden w-7 h-5 flex items-center justify-center text-xs text-gray-400 bg-gray-700 rounded hover:bg-gray-600"
+            onClick={() => handleZoom('out')}
+            title="Zoom out"
+          >
+            −
+          </button>
+          <div
+            ref={overviewContainerRef}
+            className="flex-1 h-5 relative cursor-pointer rounded overflow-hidden border border-gray-700/50"
+          >
+            <canvas
+              ref={overviewCanvasRef}
+              className="w-full h-full"
+              onClick={handleOverviewClick}
+            />
+          </div>
+          <button
+            className="md:hidden w-7 h-5 flex items-center justify-center text-xs text-gray-400 bg-gray-700 rounded hover:bg-gray-600"
+            onClick={() => handleZoom('in')}
+            title="Zoom in"
+          >
+            +
+          </button>
         </div>
       )}
     </div>
