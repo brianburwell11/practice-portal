@@ -83,7 +83,8 @@ const posts = (await getCollection('blog')).sort(
 					{
 						posts.map((post) => (
 							<li>
-								<a href={`/blog/${post.id}/`}>
+								<a href={`/blog/${post.id}/`}
+								data-search={[post.data.title, post.data.description, ...(post.data.tags ?? []), post.body].join(' ').toLowerCase()}>
 									<h4 class="title">{post.data.title}</h4>
 									{post.data.description && <p class="description">{post.data.description}</p>}
 									<div class="meta">
@@ -98,5 +99,17 @@ const posts = (await getCollection('blog')).sort(
 			</section>
 		</main>
 		<Footer />
+		<script>
+			const input = document.getElementById('blog-search') as HTMLInputElement;
+			const items = document.querySelectorAll<HTMLLIElement>('section ul li');
+			input?.addEventListener('input', () => {
+				const terms = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+				items.forEach((li) => {
+					const text = li.querySelector('a')?.dataset.search ?? '';
+					const match = terms.length === 0 || terms.every((t) => text.includes(t));
+					li.style.display = match ? '' : 'none';
+				});
+			});
+		</script>
 	</body>
 </html>

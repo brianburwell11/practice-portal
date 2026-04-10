@@ -5,6 +5,7 @@ import { SITE_TITLE } from '../consts';
 <header>
 	<nav>
 		<h2><a href="/">{SITE_TITLE}</a></h2>
+		<input type="search" id="blog-search" placeholder="Search posts..." autocomplete="off" />
 	</nav>
 </header>
 <style>
@@ -39,5 +40,18 @@ import { SITE_TITLE } from '../consts';
 	}
 	nav a:hover {
 		color: var(--accent);
+	}
+	#blog-search {
+		padding: 0.35rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--bg-primary, #fff);
+		color: var(--text-primary);
+		font-size: 0.85rem;
+		width: 220px;
+		outline: none;
+	}
+	#blog-search:focus {
+		border-color: rgb(var(--accent));
 	}
 </style>
