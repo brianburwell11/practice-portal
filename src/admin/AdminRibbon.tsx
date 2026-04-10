@@ -3,15 +3,16 @@ import { useState, useRef, useEffect } from 'react';
 type DropdownId = 'songs' | 'setlists' | null;
 
 interface Props {
-  hasSong: boolean;
-  hasSetlist: boolean;
-  onAddSong: () => void;
-  onEditSong: () => void;
-  onTapMapEditor: () => void;
-  onDeleteSong: () => void;
-  onAddSetlist: () => void;
-  onEditSetlist: () => void;
-  onDeleteSetlist: () => void;
+  navLinks?: { title: string; url: string }[];
+  hasSong?: boolean;
+  hasSetlist?: boolean;
+  onAddSong?: () => void;
+  onEditSong?: () => void;
+  onTapMapEditor?: () => void;
+  onDeleteSong?: () => void;
+  onAddSetlist?: () => void;
+  onEditSetlist?: () => void;
+  onDeleteSetlist?: () => void;
 }
 
 function MenuItem({
@@ -42,6 +43,7 @@ function MenuItem({
 }
 
 export function AdminRibbon({
+  navLinks,
   hasSong,
   hasSetlist,
   onAddSong,
@@ -76,40 +78,60 @@ export function AdminRibbon({
       className="px-4 py-1.5 border-b flex items-center gap-3"
       style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
     >
-      {/* Songs dropdown */}
-      <div className="relative">
-        <button
-          onClick={() => toggle('songs')}
-          className="text-xs text-gray-500 hover:text-gray-300"
-        >
-          Songs <span className="text-base">▾</span>
-        </button>
-        {open === 'songs' && (
-          <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-            <MenuItem label="Add Song" enabled onClick={() => { close(); onAddSong(); }} />
-            <MenuItem label="Edit Song" enabled={hasSong} onClick={() => { close(); onEditSong(); }} />
-            <MenuItem label="TapMap Editor" enabled={hasSong} onClick={() => { close(); onTapMapEditor(); }} />
-            <MenuItem label="Delete Song" enabled={hasSong} danger onClick={() => { close(); onDeleteSong(); }} />
+      {import.meta.env.DEV && (
+        <>
+          {/* Songs dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => toggle('songs')}
+              className="text-xs text-gray-500 hover:text-gray-300"
+            >
+              Songs <span className="text-base">▾</span>
+            </button>
+            {open === 'songs' && (
+              <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+                <MenuItem label="Add Song" enabled onClick={() => { close(); onAddSong?.(); }} />
+                <MenuItem label="Edit Song" enabled={!!hasSong} onClick={() => { close(); onEditSong?.(); }} />
+                <MenuItem label="TapMap Editor" enabled={!!hasSong} onClick={() => { close(); onTapMapEditor?.(); }} />
+                <MenuItem label="Delete Song" enabled={!!hasSong} danger onClick={() => { close(); onDeleteSong?.(); }} />
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Setlists dropdown */}
-      <div className="relative">
-        <button
-          onClick={() => toggle('setlists')}
+          {/* Setlists dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => toggle('setlists')}
+              className="text-xs text-gray-500 hover:text-gray-300"
+            >
+              Setlists <span className="text-base">▾</span>
+            </button>
+            {open === 'setlists' && (
+              <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+                <MenuItem label="Add Setlist" enabled onClick={() => { close(); onAddSetlist?.(); }} />
+                <MenuItem label="Edit Setlist" enabled={!!hasSetlist} onClick={() => { close(); onEditSetlist?.(); }} />
+                <MenuItem label="Delete Setlist" enabled={!!hasSetlist} danger onClick={() => { close(); onDeleteSetlist?.(); }} />
+              </div>
+            )}
+          </div>
+
+          {navLinks && navLinks.length > 0 && (
+            <div className="border-l border-gray-700 h-4" />
+          )}
+        </>
+      )}
+
+      {navLinks?.map((link, i) => (
+        <a
+          key={i}
+          href={link.url}
+          target="_blank"
+          rel="noopener noreferrer"
           className="text-xs text-gray-500 hover:text-gray-300"
         >
-          Setlists <span className="text-base">▾</span>
-        </button>
-        {open === 'setlists' && (
-          <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-            <MenuItem label="Add Setlist" enabled onClick={() => { close(); onAddSetlist(); }} />
-            <MenuItem label="Edit Setlist" enabled={hasSetlist} onClick={() => { close(); onEditSetlist(); }} />
-            <MenuItem label="Delete Setlist" enabled={hasSetlist} danger onClick={() => { close(); onDeleteSetlist(); }} />
-          </div>
-        )}
-      </div>
+          {link.title}
+        </a>
+      ))}
     </div>
   );
 }

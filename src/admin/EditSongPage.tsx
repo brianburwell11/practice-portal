@@ -40,6 +40,13 @@ export default function EditSongPage() {
   const [groupColor, setGroupColor] = useState(groupColors[0]);
   const [selectedStemIds, setSelectedStemIds] = useState<Set<string>>(new Set());
 
+  // Nav link creation state
+  const [newLinkTitle, setNewLinkTitle] = useState('');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+
+  const ensureProtocol = (url: string) =>
+    url && !/^https?:\/\//i.test(url) ? `http://${url}` : url;
+
   // Load config on mount (only once — skip if already loaded)
   const configLoaded = useRef(false);
   useEffect(() => {
@@ -512,6 +519,68 @@ export default function EditSongPage() {
               </div>
             </div>
           )}
+        </section>
+
+        {/* Nav Links */}
+        <section className="space-y-4 border-t border-gray-700 pt-6">
+          <div>
+            <h2 className="text-xl font-semibold">Nav Links</h2>
+            <p className="text-sm text-gray-400">Links shown in the production navigation bar. Opens in a new tab.</p>
+          </div>
+
+          {(config.navLinks ?? []).map((link, i) => (
+            <div key={i} className="flex items-center gap-3 bg-gray-800 rounded-lg p-3">
+              <input
+                type="text"
+                value={link.title}
+                onChange={(e) => dispatch({ type: 'UPDATE_NAV_LINK', index: i, link: { ...link, title: e.target.value } })}
+                className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+                placeholder="Title"
+              />
+              <input
+                type="url"
+                value={link.url}
+                onChange={(e) => dispatch({ type: 'UPDATE_NAV_LINK', index: i, link: { ...link, url: e.target.value } })}
+                onBlur={(e) => { const fixed = ensureProtocol(e.target.value.trim()); if (fixed !== link.url) dispatch({ type: 'UPDATE_NAV_LINK', index: i, link: { ...link, url: fixed } }); }}
+                className="flex-[2] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+                placeholder="https://..."
+              />
+              <button
+                onClick={() => dispatch({ type: 'REMOVE_NAV_LINK', index: i })}
+                className="text-gray-500 hover:text-red-400 text-sm px-1"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+
+          <div className="flex items-center gap-3 bg-gray-800 rounded-lg p-4">
+            <input
+              type="text"
+              value={newLinkTitle}
+              onChange={(e) => setNewLinkTitle(e.target.value)}
+              placeholder="Link title"
+              className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+            />
+            <input
+              type="url"
+              value={newLinkUrl}
+              onChange={(e) => setNewLinkUrl(e.target.value)}
+              placeholder="https://..."
+              className="flex-[2] bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+            />
+            <button
+              disabled={!newLinkTitle.trim() || !newLinkUrl.trim()}
+              onClick={() => {
+                dispatch({ type: 'ADD_NAV_LINK', link: { title: newLinkTitle.trim(), url: ensureProtocol(newLinkUrl.trim()) } });
+                setNewLinkTitle('');
+                setNewLinkUrl('');
+              }}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm"
+            >
+              Add
+            </button>
+          </div>
         </section>
 
         {/* Save bar */}

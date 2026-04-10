@@ -1,4 +1,4 @@
-import type { SongConfig, StemConfig, StemGroupConfig } from '../audio/types';
+import type { SongConfig, StemConfig, StemGroupConfig, NavLinkConfig } from '../audio/types';
 import type { UploadProgress } from './utils/uploadWithProgress';
 import { deriveId } from '../utils/deriveId';
 
@@ -22,6 +22,9 @@ export type EditSongAction =
   | { type: 'ADD_STEM'; stem: StemConfig }
   | { type: 'ADD_GROUP'; group: StemGroupConfig }
   | { type: 'REMOVE_GROUP'; index: number }
+  | { type: 'ADD_NAV_LINK'; link: NavLinkConfig }
+  | { type: 'UPDATE_NAV_LINK'; index: number; link: NavLinkConfig }
+  | { type: 'REMOVE_NAV_LINK'; index: number }
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_SAVE_SUCCESS' }
@@ -110,6 +113,22 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
       return updateConfig(state, {
         groups: (state.config.groups ?? []).filter((_, i) => i !== action.index),
       });
+
+    case 'ADD_NAV_LINK':
+      if (!state.config) return state;
+      return updateConfig(state, { navLinks: [...(state.config.navLinks ?? []), action.link] });
+
+    case 'UPDATE_NAV_LINK':
+      if (!state.config) return state;
+      return updateConfig(state, {
+        navLinks: (state.config.navLinks ?? []).map((l, i) => i === action.index ? action.link : l),
+      });
+
+    case 'REMOVE_NAV_LINK': {
+      if (!state.config) return state;
+      const remaining = (state.config.navLinks ?? []).filter((_, i) => i !== action.index);
+      return updateConfig(state, { navLinks: remaining.length > 0 ? remaining : undefined });
+    }
 
     case 'SET_SAVING':
       return { ...state, saving: action.saving, error: null };

@@ -44,6 +44,11 @@ export interface TapMapEntry {
   label?: string;                            // only for sections
 }
 
+export interface NavLinkConfig {
+  title: string;
+  url: string;
+}
+
 export interface SongConfig {
   id: string;
   title: string;
@@ -58,6 +63,7 @@ export interface SongConfig {
   metronome: MetronomeConfig;
   markers: MarkerConfig[];
   tapMap?: TapMapEntry[];
+  navLinks?: NavLinkConfig[];
 }
 
 export interface SongManifestEntry {

@@ -46,6 +46,11 @@ export const tapMapEntrySchema = z.object({
   label: z.string().optional(),
 });
 
+export const navLinkConfigSchema = z.object({
+  title: z.string().min(1),
+  url: z.string().url(),
+});
+
 export const songConfigSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -60,6 +65,7 @@ export const songConfigSchema = z.object({
   metronome: metronomeConfigSchema,
   markers: z.array(markerConfigSchema),
   tapMap: z.array(tapMapEntrySchema).optional(),
+  navLinks: z.array(navLinkConfigSchema).optional(),
 });
 
 export const songManifestEntrySchema = z.object({
