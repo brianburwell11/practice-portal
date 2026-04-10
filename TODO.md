@@ -50,7 +50,13 @@
 - Two layers: admin notes (saved in config.json, visible to all band members)
   and personal notes (browser localStorage, per user)
 
-## 9. Lazy Stem Loading (Monitor)
+## 9. Clean Up Incomplete Song Uploads
+
+- If a song upload fails partway through, partial files may be left on R2
+- Detect incomplete uploads (e.g. audio uploaded but config write failed, or vice versa)
+  and clean up any artifacts so the server doesn't end up with orphaned files
+
+## 10. Lazy Stem Loading (Monitor)
 
 - Currently all stems are fetched and decoded before playback is available
 - If load times become a problem with many stems on R2, consider loading
