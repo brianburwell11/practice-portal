@@ -106,7 +106,7 @@ export class AudioEngine {
         if (localFile) {
           arrayBuffer = await localFile.arrayBuffer();
         } else {
-          const url = `${basePath}/${stemConfig.file}`;
+          const url = `${basePath}/${encodeURIComponent(stemConfig.file)}`;
           const response = await fetch(url);
           arrayBuffer = await response.arrayBuffer();
         }

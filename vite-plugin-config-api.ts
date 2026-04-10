@@ -178,8 +178,10 @@ function transcodeToMp3(
   const bitrate = isMono ? '128k' : '256k';
   const channelFlag = isMono ? '-ac 1' : '';
   let filterFlag = '';
-  if (loudness) {
+  if (loudness && parseFloat(loudness.input_i) <= 0) {
     filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:measured_I=${loudness.input_i}:measured_TP=${loudness.input_tp}:measured_LRA=${loudness.input_lra}:measured_thresh=${loudness.input_thresh}:offset=${loudness.target_offset}:linear=true`;
+  } else {
+    filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`;
   }
   execSync(
     `ffmpeg -y -i "${inputPath}" ${filterFlag} -codec:a libmp3lame -b:a ${bitrate} ${channelFlag} -ar 44100 "${outputPath}"`,
