@@ -20,18 +20,69 @@ AFTER:   source → monoMixer → gain → pan → mixBus → SoundTouch → mas
          (playbackRate on source)                      (1 instance)
 ```
 
-- [ ] Remove SoundTouchNode from `StemPlayer` — simplify chain to `source → monoMixer → gain → pan → destination`
-- [ ] Add `mixBus` GainNode and shared `SoundTouchNode` to `AudioEngine`
-- [ ] Wire chain: `mixBus → soundTouchNode → masterGain → ctx.destination`
-- [ ] Pass `mixBus` (not `masterGain`) as destination when constructing StemPlayers
-- [ ] Update `setTempo()` to set `playbackRate` on the shared SoundTouchNode once + native `playbackRate` on each source
-- [ ] Recreate shared SoundTouchNode on `play()`/`seek()` to flush internal buffers
+- [x] Remove SoundTouchNode from `StemPlayer` — simplify chain to `source → monoMixer → gain → pan → destination`
+- [x] Add `mixBus` GainNode and shared `SoundTouchNode` to `AudioEngine`
+- [x] Wire chain: `mixBus → soundTouchNode → masterGain → ctx.destination`
+- [x] Pass `mixBus` (not `masterGain`) as destination when constructing StemPlayers
+- [x] Update `setTempo()` to set `playbackRate` on the shared SoundTouchNode once + native `playbackRate` on each source
+- [x] Recreate shared SoundTouchNode on `play()`/`seek()` to flush internal buffers
 
 **Test:**
-- [ ] Play at 1x — sounds identical to before
+- [x] Play at 1x — sounds identical to before
+- [x] Slow to 0.5x — pitch stays corrected (not detuned)
+- [x] Mute/solo/volume/pan per stem — still works
+- [x] A/B loop and seek while playing — no glitches
+
+---
+
+## Phase 1b: ScriptProcessorNode fallback for mobile
+
+[Diagnostic testing](/docs/mobile-audio-diag/) revealed that `AudioWorkletNode` is unavailable on the target mobile browser. `SoundTouchNode` extends `AudioWorkletNode`, so the entire pitch-correction path fails silently — no audio reaches the speakers. Raw `AudioBufferSourceNode` playback (steps 1-5 in the diagnostic) works fine.
+
+### Problem
+
+`@soundtouchjs/audio-worklet` has no built-in fallback. Its sibling package `@soundtouchjs/core` provides the same SoundTouch algorithm via `ScriptProcessorNode`, but its `PitchShifter` class reads from a pre-decoded `AudioBuffer` — it's a **source** node, not a **pass-through** node. Our single-bus architecture needs a pass-through node between `mixBus` and `masterGain`.
+
+### Solution
+
+Create a custom `ScriptProcessorNode` wrapper (`SoundTouchFallbackNode`) that acts as a pass-through processor:
+
+```
+mixBus → ScriptProcessorNode → masterGain → destination
+              │
+              └─ onaudioprocess:
+                   read inputBuffer (mixed stems)
+                   → interleave to SoundTouch format
+                   → push to SoundTouch.inputBuffer
+                   → SoundTouch.process()
+                   → extract from SoundTouch.outputBuffer
+                   → deinterleave to outputBuffer
+```
+
+This is the same processing loop the AudioWorklet processor uses — just running on the main thread.
+
+### Implementation
+
+- [ ] Install `@soundtouchjs/core` (provides `SoundTouch` class without AudioWorklet dependency)
+- [ ] Create `src/audio/SoundTouchFallbackNode.ts`:
+  - Imports `SoundTouch` from `@soundtouchjs/core`
+  - Creates `ScriptProcessorNode(bufferSize, 2, 2)`
+  - `onaudioprocess`: interleave input → SoundTouch → deinterleave output
+  - Exposes `playbackRate` setter (maps to SoundTouch's internal tempo/pitch params)
+  - Exposes `connect()`/`disconnect()` by delegating to the inner ScriptProcessorNode
+- [ ] Update `AudioEngine.connectSoundTouch()`:
+  - Check `typeof AudioWorkletNode !== 'undefined'`
+  - If available: use `SoundTouchNode` from `@soundtouchjs/audio-worklet` (current path)
+  - If unavailable: use `SoundTouchFallbackNode` from the new file
+  - Both expose the same interface: `connect()`, `disconnect()`, `playbackRate` setter
+- [ ] Skip worklet registration (`ensureWorkletRegistered`) when using fallback path
+- [ ] Await `ctx.resume()` in `play()` (already done)
+
+**Test (on mobile device via [diagnostic page](/docs/mobile-audio-diag/)):**
+- [ ] Steps 1-5 still pass (raw playback)
+- [ ] Play a song at 1x on mobile — audio works
 - [ ] Slow to 0.5x — pitch stays corrected (not detuned)
-- [ ] Mute/solo/volume/pan per stem — still works
-- [ ] A/B loop and seek while playing — no glitches
+- [ ] Desktop still uses AudioWorklet path (no regression)
 
 ---
 
@@ -39,13 +90,13 @@ AFTER:   source → monoMixer → gain → pan → mixBus → SoundTouch → mas
 
 Decode audio at half sample rate on mobile, cutting decoded PCM memory ~50%. Frequencies above ~11 kHz are lost — inaudible on phone speakers.
 
-- [ ] Add mobile detection helper to `AudioEngine` (`navigator.maxTouchPoints > 0` or similar)
+- [ ] Add mobile detection helper to `AudioEngine`
 - [ ] Extract `decodeAudio(arrayBuffer)` helper — desktop uses `ctx.decodeAudioData()`, mobile uses `OfflineAudioContext` at 22,050 Hz
 - [ ] Replace `decodeAudioData` call in `loadSong()` with new helper
 
 **Test:**
 - [ ] Desktop: unchanged behavior (44.1/48 kHz decode)
-- [ ] Mobile (or forced flag): stems decode at 22,050 Hz
+- [ ] Mobile: stems decode at 22,050 Hz
 - [ ] Playback, tempo, mute/solo all still work at lower sample rate
 
 ---

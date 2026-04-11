@@ -1,0 +1,62 @@
+---
+title: "Mobile Audio Diagnostics"
+description: "Step-by-step diagnostic tool to identify where the Web Audio API + SoundTouch pipeline breaks on mobile browsers."
+pubDate: "Apr 11 2026"
+tags: ["audio", "mobile", "interactive", "debugging"]
+---
+
+import { MobileAudioDiag } from '../../components/react/MobileAudioDiag';
+
+This page tests each step of the audio pipeline in isolation to find exactly where mobile playback breaks. Tap the button to run all steps in sequence — each one builds on the previous, and the first failure reveals the root cause.
+
+<div class="widget-sandbox" style="max-width: 540px; margin: 2rem auto;">
+  <MobileAudioDiag client:load />
+</div>
+
+## What Each Step Tests
+
+1. **Create AudioContext** — can the browser create an audio context at all?
+2. **Resume AudioContext** — mobile browsers suspend the context until a user gesture triggers `ctx.resume()`. This must be awaited.
+3. **Decode audio file** — fetch and decode an Opus sample into a PCM AudioBuffer.
+4. **Raw playback at 1x** — play directly through `AudioBufferSourceNode → destination`. No pitch correction, no worklet. If this fails, the problem is fundamental.
+5. **Raw playback at 0.5x** — play at half speed using native `playbackRate`. Pitch drops an octave. This is the fallback path when AudioWorklet is unavailable.
+6. **Check AudioWorkletNode** — does `typeof AudioWorkletNode !== 'undefined'`? Some mobile browsers (older iOS/Safari, WKWebView) don't expose this API.
+7. **Register SoundTouch AudioWorklet** — load the `soundtouch-processor.js` worklet module.
+8. **SoundTouch at 1x** — play through the SoundTouch node at normal speed.
+9. **SoundTouch at 0.5x** — play at half speed with pitch correction.
+
+## Interpreting Results
+
+- **Fails at step 2**: AudioContext can't resume — browser is blocking audio entirely.
+- **Fails at step 3**: Can't decode Opus — try with MP3 sample (older Safari).
+- **Passes step 4-5, fails at step 6**: **AudioWorkletNode is not available.** This browser cannot run SoundTouch. The app must fall back to native `playbackRate` (step 5 shows what this sounds like — pitch drops with speed).
+- **Passes step 6, fails at step 7**: Worklet file missing or blocked by CSP.
+- **Passes step 7, fails at step 8-9**: SoundTouch node created but silent.
+- **All pass**: Pipeline works on this device.
+
+## Finding: AudioWorkletNode Missing
+
+Initial testing (2026-04-11) revealed that the target mobile browser reports `AudioWorkletNode is not defined`. This means `SoundTouchNode` (which extends `AudioWorkletNode`) cannot instantiate at all. Steps 1-5 pass — raw `AudioBufferSourceNode` playback works fine, even at modified `playbackRate`.
+
+### Why This Happens
+
+`AudioWorkletNode` requires the browser to support the AudioWorklet API. While modern desktop browsers and recent mobile browsers (Safari 14.5+, Chrome 66+) have it, some mobile contexts don't:
+- Older iOS versions (pre-14.5)
+- WKWebView embedded browsers (opening links from Messages, Mail, or other apps)
+- Some Android WebView implementations
+
+### The Fix: ScriptProcessorNode Fallback
+
+The `@soundtouchjs/audio-worklet` package has no built-in fallback. But its sibling `@soundtouchjs/core` package provides the same SoundTouch algorithm that can run via `ScriptProcessorNode` on the main thread. The tradeoff: `ScriptProcessorNode` is deprecated and runs on the main thread (not the audio thread), so heavy UI work can cause audio glitches. For a practice tool on a music stand, this is acceptable.
+
+The key design challenge: `@soundtouchjs/core`'s `PitchShifter` class reads from a pre-decoded `AudioBuffer` — it's a source, not a pass-through node. Our single-bus architecture needs a **pass-through** node that sits between `mixBus` and `masterGain`, processing whatever audio flows through it. This requires a custom `ScriptProcessorNode` wrapper that:
+
+1. Reads live audio from `event.inputBuffer` (the mixed stems)
+2. Interleaves stereo samples into SoundTouch's format
+3. Pushes to `SoundTouch.inputBuffer`, calls `process()`
+4. Extracts from `SoundTouch.outputBuffer`
+5. Deinterleaves back to `event.outputBuffer`
+
+This is the exact same processing loop the AudioWorklet processor uses — just running on the main thread instead.
+
+See [Tier 2 plan](/docs/mobile-audio-tier2-plan/) for the implementation checklist.
