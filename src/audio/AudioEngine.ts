@@ -15,6 +15,9 @@ export class AudioEngine {
   private ctx: AudioContext;
   readonly clock: TransportClock;
   readonly masterGain: GainNode;
+  private mixBus: GainNode;
+  private soundtouchNode: SoundTouchNode | null = null;
+  private _tempoRatio = 1.0;
   private stems: Map<string, StemPlayer> = new Map();
   private _songConfig: SongConfig | null = null;
   private _peakData: Float32Array | null = null;
@@ -35,6 +38,8 @@ export class AudioEngine {
     this.clock = new TransportClock(this.ctx);
     this.masterGain = this.ctx.createGain();
     this.masterGain.connect(this.ctx.destination);
+    // Mix bus: all stems connect here, single SoundTouch node sits between mixBus and masterGain
+    this.mixBus = this.ctx.createGain();
   }
 
   get songConfig(): SongConfig | null {
@@ -92,6 +97,9 @@ export class AudioEngine {
     // Register SoundTouch AudioWorklet processor (once)
     await this.ensureWorkletRegistered();
 
+    // Create shared SoundTouch node: mixBus → soundtouch → masterGain
+    this.connectSoundTouch();
+
     this._songConfig = config;
     this.clock.duration = config.durationSeconds;
 
@@ -121,7 +129,7 @@ export class AudioEngine {
       const player = new StemPlayer(
         this.ctx,
         entry.buffer,
-        this.masterGain,
+        this.mixBus,
         entry.config.defaultVolume,
         entry.config.defaultPan,
       );
@@ -153,6 +161,9 @@ export class AudioEngine {
     if (this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+
+    // Recreate SoundTouch node to flush internal buffers from previous playback
+    this.connectSoundTouch();
 
     const offset = this.clock.currentTime;
     const when = this.ctx.currentTime + 0.01; // tiny future offset for sync
@@ -207,6 +218,8 @@ export class AudioEngine {
     this.clock.seek(seconds);
 
     if (wasPlaying) {
+      // Recreate SoundTouch node to flush internal buffers
+      this.connectSoundTouch();
       const when = this.ctx.currentTime + 0.01;
       for (const stem of this.stems.values()) {
         stem.start(when, seconds);
@@ -230,7 +243,13 @@ export class AudioEngine {
   }
 
   setTempo(ratio: number): void {
+    this._tempoRatio = ratio;
     this.clock.setTempoRatio(ratio);
+    // Pitch correction on the shared bus
+    if (this.soundtouchNode) {
+      this.soundtouchNode.playbackRate.value = ratio;
+    }
+    // Native playbackRate on each source (free, drives speed)
     for (const stem of this.stems.values()) {
       stem.setTempo(ratio);
     }
@@ -378,12 +397,29 @@ export class AudioEngine {
     return peaks;
   }
 
+  /** (Re)create the shared SoundTouch node: mixBus → soundtouch → masterGain */
+  private connectSoundTouch(): void {
+    if (this.soundtouchNode) {
+      this.mixBus.disconnect();
+      this.soundtouchNode.disconnect();
+    }
+    this.soundtouchNode = new SoundTouchNode(this.ctx);
+    this.soundtouchNode.playbackRate.value = this._tempoRatio;
+    this.mixBus.connect(this.soundtouchNode);
+    this.soundtouchNode.connect(this.masterGain);
+  }
+
   private disposeStemPlayers(): void {
     for (const stem of this.stems.values()) {
       stem.disconnect();
     }
     this.stems.clear();
     this._peakData = null;
+    if (this.soundtouchNode) {
+      this.mixBus.disconnect();
+      this.soundtouchNode.disconnect();
+      this.soundtouchNode = null;
+    }
   }
 
   private startPositionUpdates(): void {
