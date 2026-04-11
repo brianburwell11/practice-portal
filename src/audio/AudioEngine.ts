@@ -34,6 +34,8 @@ export class AudioEngine {
   private pitchNode: PitchCorrectorNode | null = null;
   private _tempoRatio = 1.0;
   private stems: Map<string, StemPlayer> = new Map();
+  /** Stems deferred for lazy decode — stored as raw ArrayBuffer until unmuted */
+  private pendingStems: Map<string, { config: StemConfig; arrayBuffer: ArrayBuffer }> = new Map();
   private _songConfig: SongConfig | null = null;
   private _peakData: Float32Array | null = null;
   private onStateChange: EngineStateCallback | null = null;
@@ -119,11 +121,12 @@ export class AudioEngine {
     this._songConfig = config;
     this.clock.duration = config.durationSeconds;
 
-    // Fetch and decode all stems in parallel
+    // Fetch all stems, but only decode audible ones (lazy decode for muted stems)
     const total = config.stems.length;
     let loaded = 0;
+    this.pendingStems.clear();
 
-    const stemEntries = await Promise.all(
+    const fetched = await Promise.all(
       config.stems.map(async (stemConfig: StemConfig) => {
         let arrayBuffer: ArrayBuffer;
         const localFile = stemFiles?.get(stemConfig.id);
@@ -134,25 +137,30 @@ export class AudioEngine {
           const response = await fetch(url);
           arrayBuffer = await response.arrayBuffer();
         }
-        const audioBuffer = await this.decodeAudio(arrayBuffer);
         loaded++;
         onProgress?.(loaded, total);
-        return { config: stemConfig, buffer: audioBuffer };
+        return { config: stemConfig, arrayBuffer };
       }),
     );
 
-    for (const entry of stemEntries) {
+    // Decode audible stems now, defer muted ones
+    for (const { config: stemConfig, arrayBuffer } of fetched) {
+      if (stemConfig.defaultVolume === 0) {
+        this.pendingStems.set(stemConfig.id, { config: stemConfig, arrayBuffer });
+        continue;
+      }
+      const audioBuffer = await this.decodeAudio(arrayBuffer);
       const player = new StemPlayer(
         this.ctx,
-        entry.buffer,
+        audioBuffer,
         this.mixBus,
-        entry.config.defaultVolume,
-        entry.config.defaultPan,
+        stemConfig.defaultVolume,
+        stemConfig.defaultPan,
       );
-      if (entry.config.stereo) {
+      if (stemConfig.stereo) {
         player.stereo = true;
       }
-      this.stems.set(entry.config.id, player);
+      this.stems.set(stemConfig.id, player);
     }
 
     // Initialize group state
@@ -273,6 +281,11 @@ export class AudioEngine {
   }
 
   setStemVolume(id: string, v: number): void {
+    // Lazy decode: if raising volume on a pending stem, decode it now
+    if (v > 0 && this.pendingStems.has(id)) {
+      this.decodePendingStem(id);
+      return;
+    }
     const stem = this.stems.get(id);
     if (stem) {
       stem.volume = v;
@@ -290,6 +303,11 @@ export class AudioEngine {
   }
 
   setStemMuted(id: string, muted: boolean): void {
+    // Lazy decode: if unmuting a pending stem, decode it now
+    if (!muted && this.pendingStems.has(id)) {
+      this.decodePendingStem(id);
+      return;
+    }
     const stem = this.stems.get(id);
     if (stem) {
       stem.muted = muted;
@@ -413,6 +431,36 @@ export class AudioEngine {
     return peaks;
   }
 
+  /** Decode a deferred stem, create its StemPlayer, and join playback if active */
+  private async decodePendingStem(id: string): Promise<void> {
+    const pending = this.pendingStems.get(id);
+    if (!pending) return;
+    this.pendingStems.delete(id);
+
+    const audioBuffer = await this.decodeAudio(pending.arrayBuffer);
+    const player = new StemPlayer(
+      this.ctx,
+      audioBuffer,
+      this.mixBus,
+      pending.config.defaultVolume,
+      pending.config.defaultPan,
+    );
+    if (pending.config.stereo) {
+      player.stereo = true;
+    }
+    this.stems.set(id, player);
+
+    // If currently playing, start the new stem at the current position
+    if (this.clock.playing) {
+      const when = this.ctx.currentTime + 0.01;
+      player.setTempo(this._tempoRatio);
+      player.start(when, this.clock.currentTime);
+    }
+
+    this.recalcAllGains();
+    this.notify();
+  }
+
   /** Decode audio, downsampling to 22,050 Hz on mobile to halve memory usage */
   private async decodeAudio(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
     if (!isMobile) {
@@ -457,6 +505,7 @@ export class AudioEngine {
       stem.disconnect();
     }
     this.stems.clear();
+    this.pendingStems.clear();
     this._peakData = null;
     if (this.pitchNode) {
       this.mixBus.disconnect();
