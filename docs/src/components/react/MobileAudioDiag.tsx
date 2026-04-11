@@ -13,17 +13,17 @@ const INITIAL_STEPS: Step[] = [
   { label: '2. Resume AudioContext (user gesture)', status: 'idle', detail: '' },
   { label: '3. Decode audio file', status: 'idle', detail: '' },
   { label: '4. Play raw at 1x (no pitch correction)', status: 'idle', detail: '' },
-  { label: '5. Play raw at 0.5x (pitch drops — fallback path)', status: 'idle', detail: '' },
-  { label: '6. Check AudioWorkletNode support', status: 'idle', detail: '' },
-  { label: '7. Register SoundTouch AudioWorklet', status: 'idle', detail: '' },
-  { label: '8. Play via SoundTouch at 1x', status: 'idle', detail: '' },
-  { label: '9. Play via SoundTouch at 0.5x (pitch-corrected)', status: 'idle', detail: '' },
+  { label: '5. Detect pitch correction path', status: 'idle', detail: '' },
+  { label: '6. Register/init pitch corrector', status: 'idle', detail: '' },
+  { label: '7. Play at 1x with pitch correction', status: 'idle', detail: '' },
+  { label: '8. Play at 0.5x with pitch correction', status: 'idle', detail: '' },
 ];
 
 export function MobileAudioDiag({ sampleUrl = '/audio-samples/drum-sample.opus' }: { sampleUrl?: string }) {
   const [steps, setSteps] = useState<Step[]>(INITIAL_STEPS);
   const [running, setRunning] = useState(false);
   const [ua, setUa] = useState('');
+  const [activePath, setActivePath] = useState<'unknown' | 'AudioWorklet' | 'ScriptProcessorNode'>('unknown');
   const ctxRef = useRef<AudioContext | null>(null);
   const bufferRef = useRef<AudioBuffer | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -108,76 +108,128 @@ export function MobileAudioDiag({ sampleUrl = '/audio-samples/drum-sample.opus' 
     update(3, 'running', 'playing 2s raw at 1x...');
     try {
       await playBuffer(ctx, bufferRef.current!, 1.0, 2);
-      update(3, 'pass', 'played 2s — you should have heard audio');
+      update(3, 'pass', 'played 2s — if silent, check mute switch and volume');
     } catch (e: any) {
       update(3, 'fail', e.message);
       setRunning(false);
       return;
     }
 
-    // Step 5: Raw playback at 0.5x (fallback path — pitch drops)
-    update(4, 'running', 'playing 2s raw at 0.5x (pitch will drop)...');
-    try {
-      await playBuffer(ctx, bufferRef.current!, 0.5, 2);
-      update(4, 'pass', 'played 2s at 0.5x — pitch dropped (this is the no-worklet fallback)');
-    } catch (e: any) {
-      update(4, 'fail', e.message);
-      setRunning(false);
-      return;
-    }
-
-    // Step 6: Check AudioWorkletNode
-    update(5, 'running', 'checking typeof AudioWorkletNode...');
     const hasWorklet = typeof AudioWorkletNode !== 'undefined';
+    const path = hasWorklet ? 'AudioWorklet' as const : 'ScriptProcessorNode' as const;
+    setActivePath(path);
+    update(4, 'pass', `${path} — ${hasWorklet ? 'AudioWorklet available, using worklet path' : 'AudioWorkletNode missing, using ScriptProcessorNode fallback'}`);
+
     if (hasWorklet) {
-      update(5, 'pass', 'AudioWorkletNode is available');
+      // ---- AudioWorklet path ----
+      update(5, 'running', 'registering AudioWorklet...');
+      try {
+        const { SoundTouchNode } = await import('@soundtouchjs/audio-worklet');
+        await SoundTouchNode.register(ctx, '/soundtouch-processor.js');
+        update(5, 'pass', 'SoundTouch AudioWorklet registered');
+
+        update(6, 'running', 'playing 2s via AudioWorklet at 1x...');
+        try {
+          const stNode = new SoundTouchNode(ctx);
+          stNode.playbackRate.value = 1.0;
+          stNode.connect(ctx.destination);
+          await playBuffer(ctx, bufferRef.current!, 1.0, 2, stNode);
+          stNode.disconnect();
+          update(6, 'pass', 'played 2s via AudioWorklet SoundTouch at 1x');
+        } catch (e: any) {
+          update(6, 'fail', e.message);
+          setRunning(false);
+          return;
+        }
+
+        update(7, 'running', 'playing 3s via AudioWorklet at 0.5x...');
+        try {
+          const stNode = new SoundTouchNode(ctx);
+          stNode.playbackRate.value = 0.5;
+          stNode.connect(ctx.destination);
+          await playBuffer(ctx, bufferRef.current!, 0.5, 3, stNode);
+          stNode.disconnect();
+          update(7, 'pass', 'played 3s via AudioWorklet SoundTouch at 0.5x (pitch-corrected)');
+        } catch (e: any) {
+          update(7, 'fail', e.message);
+        }
+      } catch (e: any) {
+        update(5, 'fail', e.message);
+        update(6, 'skip', 'skipped — worklet failed');
+        update(7, 'skip', 'skipped — worklet failed');
+      }
     } else {
-      update(5, 'fail', 'AudioWorkletNode is NOT available — SoundTouch cannot run on this browser. Fallback to raw playbackRate (step 5) is the only option.');
-      update(6, 'skip', 'skipped — no AudioWorkletNode');
-      update(7, 'skip', 'skipped — no AudioWorkletNode');
-      update(8, 'skip', 'skipped — no AudioWorkletNode');
-      setRunning(false);
-      return;
-    }
-
-    // Step 7: Register SoundTouch worklet
-    update(6, 'running', 'registering AudioWorklet...');
-    try {
-      const { SoundTouchNode } = await import('@soundtouchjs/audio-worklet');
-      await SoundTouchNode.register(ctx, '/soundtouch-processor.js');
-      update(6, 'pass', 'SoundTouch AudioWorklet registered');
-
-      // Step 8: SoundTouch at 1x
-      update(7, 'running', 'playing 2s via SoundTouch at 1x...');
+      // ---- ScriptProcessorNode fallback path ----
+      update(5, 'running', 'initializing ScriptProcessorNode fallback...');
       try {
-        const stNode = new SoundTouchNode(ctx);
-        stNode.playbackRate.value = 1.0;
-        stNode.connect(ctx.destination);
-        await playBuffer(ctx, bufferRef.current!, 1.0, 2, stNode);
-        stNode.disconnect();
-        update(7, 'pass', 'played 2s via SoundTouch at 1x');
-      } catch (e: any) {
-        update(7, 'fail', e.message);
-        setRunning(false);
-        return;
-      }
+        const { SoundTouch } = await import('@soundtouchjs/core');
+        const pipe = new SoundTouch();
+        const bufferSize = 4096;
+        const processor = ctx.createScriptProcessor(bufferSize, 2, 2);
+        const samples = new Float32Array(bufferSize * 2);
+        const outputSamples = new Float32Array(bufferSize * 2);
+        let currentRate = 1.0;
 
-      // Step 9: SoundTouch at 0.5x
-      update(8, 'running', 'playing 3s via SoundTouch at 0.5x...');
-      try {
-        const stNode = new SoundTouchNode(ctx);
-        stNode.playbackRate.value = 0.5;
-        stNode.connect(ctx.destination);
-        await playBuffer(ctx, bufferRef.current!, 0.5, 3, stNode);
-        stNode.disconnect();
-        update(8, 'pass', 'played 3s via SoundTouch at 0.5x (pitch-corrected)');
+        processor.onaudioprocess = (e: AudioProcessingEvent) => {
+          const leftIn = e.inputBuffer.getChannelData(0);
+          const rightIn = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : leftIn;
+          const leftOut = e.outputBuffer.getChannelData(0);
+          const rightOut = e.outputBuffer.numberOfChannels > 1 ? e.outputBuffer.getChannelData(1) : leftOut;
+          const frames = leftIn.length;
+          pipe.pitch = 1 / currentRate;
+          for (let i = 0; i < frames; i++) {
+            samples[i * 2] = leftIn[i];
+            samples[i * 2 + 1] = rightIn[i];
+          }
+          pipe.inputBuffer.putSamples(samples, 0, frames);
+          pipe.process();
+          const avail = pipe.outputBuffer.frameCount;
+          const toExtract = Math.min(avail, frames);
+          if (toExtract > 0) {
+            pipe.outputBuffer.receiveSamples(outputSamples, toExtract);
+            for (let i = 0; i < toExtract; i++) {
+              const l = outputSamples[i * 2];
+              const r = outputSamples[i * 2 + 1];
+              leftOut[i] = Number.isFinite(l) ? l : 0;
+              rightOut[i] = Number.isFinite(r) ? r : 0;
+            }
+          }
+          for (let i = toExtract; i < frames; i++) {
+            leftOut[i] = 0;
+            rightOut[i] = 0;
+          }
+        };
+
+        update(5, 'pass', 'ScriptProcessorNode + SoundTouch core initialized');
+
+        update(6, 'running', 'playing 2s via ScriptProcessorNode at 1x...');
+        try {
+          currentRate = 1.0;
+          processor.connect(ctx.destination);
+          await playBuffer(ctx, bufferRef.current!, 1.0, 2, processor);
+          processor.disconnect();
+          update(6, 'pass', 'played 2s via ScriptProcessorNode fallback at 1x');
+        } catch (e: any) {
+          update(6, 'fail', e.message);
+          setRunning(false);
+          return;
+        }
+
+        update(7, 'running', 'playing 3s via ScriptProcessorNode at 0.5x...');
+        try {
+          currentRate = 0.5;
+          processor.connect(ctx.destination);
+          await playBuffer(ctx, bufferRef.current!, 0.5, 3, processor);
+          processor.disconnect();
+          update(7, 'pass', 'played 3s via ScriptProcessorNode fallback at 0.5x (pitch-corrected)');
+        } catch (e: any) {
+          update(7, 'fail', e.message);
+        }
       } catch (e: any) {
-        update(8, 'fail', e.message);
+        update(5, 'fail', e.message);
+        update(6, 'skip', 'skipped — fallback init failed');
+        update(7, 'skip', 'skipped — fallback init failed');
       }
-    } catch (e: any) {
-      update(6, 'fail', e.message);
-      update(7, 'skip', 'skipped — worklet failed');
-      update(8, 'skip', 'skipped — worklet failed');
     }
 
     setRunning(false);
@@ -251,6 +303,20 @@ export function MobileAudioDiag({ sampleUrl = '/audio-samples/drum-sample.opus' 
       <button style={s.btn} onClick={runDiag} disabled={running}>
         {running ? 'Running diagnostics...' : 'Run Mobile Audio Diagnostics'}
       </button>
+      {activePath !== 'unknown' && (
+        <div style={{
+          padding: '0.5rem 0.75rem',
+          marginBottom: '0.75rem',
+          borderRadius: '6px',
+          fontSize: '0.85rem',
+          fontWeight: 600,
+          background: activePath === 'AudioWorklet' ? 'rgba(74, 222, 128, 0.15)' : 'rgba(212, 168, 67, 0.15)',
+          color: activePath === 'AudioWorklet' ? '#4ade80' : '#D4A843',
+          border: `1px solid ${activePath === 'AudioWorklet' ? 'rgba(74, 222, 128, 0.3)' : 'rgba(212, 168, 67, 0.3)'}`,
+        }}>
+          Active path: {activePath}
+        </div>
+      )}
       {ua && <div style={s.ua}>{ua}</div>}
       {steps.map((step, i) => (
         <div key={i} style={s.step}>

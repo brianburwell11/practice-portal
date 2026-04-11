@@ -6,6 +6,7 @@ tags: ["audio", "mobile", "interactive", "debugging"]
 ---
 
 import { MobileAudioDiag } from '../../components/react/MobileAudioDiag';
+import { MuteSwitchBanner } from '../../components/react/MuteSwitchBanner';
 
 This page tests each step of the audio pipeline in isolation to find exactly where mobile playback breaks. Tap the button to run all steps in sequence — each one builds on the previous, and the first failure reveals the root cause.
 
@@ -18,21 +19,27 @@ This page tests each step of the audio pipeline in isolation to find exactly whe
 1. **Create AudioContext** — can the browser create an audio context at all?
 2. **Resume AudioContext** — mobile browsers suspend the context until a user gesture triggers `ctx.resume()`. This must be awaited.
 3. **Decode audio file** — fetch and decode an Opus sample into a PCM AudioBuffer.
-4. **Raw playback at 1x** — play directly through `AudioBufferSourceNode → destination`. No pitch correction, no worklet. If this fails, the problem is fundamental.
-5. **Raw playback at 0.5x** — play at half speed using native `playbackRate`. Pitch drops an octave. This is the fallback path when AudioWorklet is unavailable.
-6. **Check AudioWorkletNode** — does `typeof AudioWorkletNode !== 'undefined'`? Some mobile browsers (older iOS/Safari, WKWebView) don't expose this API.
-7. **Register SoundTouch AudioWorklet** — load the `soundtouch-processor.js` worklet module.
-8. **SoundTouch at 1x** — play through the SoundTouch node at normal speed.
-9. **SoundTouch at 0.5x** — play at half speed with pitch correction.
+4. **Raw playback at 1x** — play directly through `AudioBufferSourceNode → destination`. No pitch correction, no worklet. If this is silent, the problem is fundamental.
+5. **Detect pitch correction path** — checks `typeof AudioWorkletNode`. Shows which path this device will use: AudioWorklet (preferred) or ScriptProcessorNode (fallback).
+6. **Register/init pitch corrector** — registers the AudioWorklet or initializes the ScriptProcessorNode fallback.
+7. **Play at 1x with pitch correction** — plays through the detected pitch corrector at normal speed.
+8. **Play at 0.5x with pitch correction** — plays at half speed. Pitch should stay corrected (not detuned).
 
 ## Interpreting Results
 
-- **Fails at step 2**: AudioContext can't resume — browser is blocking audio entirely.
-- **Fails at step 3**: Can't decode Opus — try with MP3 sample (older Safari).
-- **Passes step 4-5, fails at step 6**: **AudioWorkletNode is not available.** This browser cannot run SoundTouch. The app must fall back to native `playbackRate` (step 5 shows what this sounds like — pitch drops with speed).
-- **Passes step 6, fails at step 7**: Worklet file missing or blocked by CSP.
-- **Passes step 7, fails at step 8-9**: SoundTouch node created but silent.
-- **All pass**: Pipeline works on this device.
+- **Step 4 silent but "pass"**: The audio graph runs without errors but produces no output. **Turn off your iPhone's mute switch** (side toggle — no orange showing). iOS silences all Web Audio API output when muted, and there's no way to override this from a web page.
+- **Step 5 shows ScriptProcessorNode**: AudioWorklet unavailable — fallback path active. Pitch correction runs on main thread.
+- **All pass with audible audio**: Pipeline fully working on this device.
+
+## Finding: iOS Mute Switch Silences Web Audio
+
+The primary cause of "no audio on mobile" was the iPhone's physical mute switch. iOS Safari routes Web Audio API output through the "ambient" audio session, which respects the mute switch. There is **no API to detect the switch position** and **no reliable way to override it from a web page**. The `<audio>` element workaround that works in some native WebView contexts does not work in Safari.
+
+**Conclusion:** The mute switch must be off for audio to play. The app should detect likely-muted state (all steps pass but user reports no sound) and show a clear message about the mute switch.
+
+<div class="widget-sandbox" style="max-width: 540px; margin: 2rem auto;">
+  <MuteSwitchBanner client:load />
+</div>
 
 ## Finding: AudioWorkletNode Missing
 
