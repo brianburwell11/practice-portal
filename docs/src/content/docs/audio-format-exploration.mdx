@@ -1,0 +1,34 @@
+---
+title: "Hearing the Difference: Audio Format Quality at Slow Playback"
+description: "An interactive comparison of Opus, MP3, and FLAC audio quality at various playback speeds — hear why format choice matters for time-stretched music practice."
+pubDate: "Apr 11 2026"
+tags: ["audio", "interactive", "formats", "research"]
+---
+
+import { AudioFormatExplorer } from '../../components/react/AudioFormatExplorer';
+
+The [mobile audio playback research](/docs/mobile-audio-playback/) argues that audio format matters more than you'd expect for a practice tool — not because of fidelity at normal speed, but because time-stretching amplifies codec artifacts. MP3's pre-echo swoosh, invisible at 1x, becomes a metallic shimmer at 0.5x. This page lets you hear it for yourself.
+
+## Try It
+
+Pick a sample (drums, horn, vocals), choose a format, and slow it down. Switch between formats at the same point in the track to A/B compare. The differences are most obvious on transients — drum hits, note attacks, consonants in vocals.
+
+<div class="widget-sandbox" style="max-width: 500px; margin: 2rem auto;">
+  <AudioFormatExplorer client:load />
+</div>
+
+## What You're Hearing
+
+When you slow audio down, you're stretching small moments of sound into longer ones. Any compression artifacts in the source get stretched too — like zooming into a JPEG and seeing the block boundaries.
+
+**FLAC** is lossless. There are no artifacts to reveal, so it sounds clean at any speed. The tradeoff is file size: roughly 4-5x larger than Opus for the same audio.
+
+**Opus** at 128 kbps is the best lossy codec for this use case. Its design produces fewer of the "smearing" artifacts that become audible when stretched. At moderate slow-down (0.7x-0.85x), most listeners can't distinguish it from FLAC.
+
+**MP3** at 192 kbps sounds fine at normal speed, but its reliance on the modified discrete cosine transform produces characteristic pre-echo artifacts around transients. At 0.5x, drum hits develop a metallic "swooshing" quality that's absent in the other two formats.
+
+## Technical Notes
+
+This demo uses a plain `HTMLAudioElement` with the browser's native `playbackRate` control — the pitch shifts proportionally with speed (lower pitch at slower speeds). Practice Portal's actual playback engine uses SoundTouch for pitch-corrected time-stretching, which preserves the original pitch but amplifies codec artifacts even more than raw speed change. If anything, this demo understates the difference between formats.
+
+See the [full mobile audio research](/docs/mobile-audio-playback/) for the memory math, time-stretching algorithm comparison, and our recommended encoding strategy.
