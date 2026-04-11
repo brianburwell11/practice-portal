@@ -105,5 +105,22 @@ const { title, description, pubDate, updatedDate, heroImage, tags } = Astro.prop
 			</article>
 		</main>
 		<Footer />
+		<script>
+			// Enable markdown checkboxes and persist state in localStorage
+			const key = `pp-checks:${location.pathname}`;
+			const saved: Record<string, boolean> = JSON.parse(localStorage.getItem(key) || '{}');
+			document.querySelectorAll<HTMLInputElement>('.prose input[type="checkbox"]').forEach((cb, i) => {
+				cb.disabled = false;
+				cb.style.cursor = 'pointer';
+				if (i.toString() in saved) cb.checked = saved[i];
+				cb.addEventListener('change', () => {
+					const state: Record<string, boolean> = {};
+					document.querySelectorAll<HTMLInputElement>('.prose input[type="checkbox"]').forEach((c, j) => {
+						state[j] = c.checked;
+					});
+					localStorage.setItem(key, JSON.stringify(state));
+				});
+			});
+		</script>
 	</body>
 </html>
