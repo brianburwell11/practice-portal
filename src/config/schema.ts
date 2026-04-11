@@ -4,7 +4,7 @@ export const stemConfigSchema = z.object({
   id: z.string(),
   label: z.string(),
   file: z.string(),
-  defaultVolume: z.number().min(0).max(1),
+  defaultVolume: z.number().min(0).max(1.5),
   defaultPan: z.number().min(-1).max(1),
   color: z.string(),
   stereo: z.boolean().optional(),
