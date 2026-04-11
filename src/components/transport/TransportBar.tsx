@@ -8,10 +8,65 @@ import { WaveformTimeline } from './WaveformTimeline';
 import { TempoControl } from './TempoControl';
 import { TouchSlider } from '../ui/TouchSlider';
 
+import type { TapMapEntry } from '../../audio/types';
+
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function parseTime(str: string): number | null {
+  const parts = str.split(':');
+  if (parts.length === 2) {
+    const m = parseInt(parts[0], 10);
+    const s = parseInt(parts[1], 10);
+    if (!isNaN(m) && !isNaN(s)) return m * 60 + s;
+  }
+  const n = parseFloat(str);
+  return isNaN(n) ? null : n;
+}
+
+function getMeasureBeat(tapMap: TapMapEntry[] | undefined, position: number): { measure: number; beat: number } | null {
+  if (!tapMap || tapMap.length === 0) return null;
+  let measure = 0;
+  let beat = 0;
+  for (const entry of tapMap) {
+    if (entry.time > position) break;
+    if (entry.type === 'section' || entry.type === 'measure') {
+      measure++;
+      beat = 1;
+    } else {
+      beat++;
+    }
+  }
+  return measure > 0 ? { measure, beat } : null;
+}
+
+function measureBeatToTime(tapMap: TapMapEntry[] | undefined, targetMeasure: number, targetBeat: number): number | null {
+  if (!tapMap || tapMap.length === 0) return null;
+  let measure = 0;
+  let beat = 0;
+  for (const entry of tapMap) {
+    if (entry.type === 'section' || entry.type === 'measure') {
+      measure++;
+      beat = 1;
+    } else {
+      beat++;
+    }
+    if (measure === targetMeasure && beat === targetBeat) return entry.time;
+    if (measure > targetMeasure) break;
+  }
+  // If exact beat not found, return the start of the target measure
+  measure = 0;
+  for (const entry of tapMap) {
+    if (entry.type === 'section' || entry.type === 'measure') {
+      measure++;
+      if (measure === targetMeasure) return entry.time;
+    }
+    if (measure > targetMeasure) break;
+  }
+  return null;
 }
 
 const isIOS = typeof navigator !== 'undefined' && (
@@ -40,6 +95,12 @@ export function TransportBar() {
   const [volEditing, setVolEditing] = useState(false);
   const [volEditValue, setVolEditValue] = useState('');
   const [showSliders, setShowSliders] = useState(false);
+  const [editingMeasure, setEditingMeasure] = useState(false);
+  const [editingBeat, setEditingBeat] = useState(false);
+  const [measureEditValue, setMeasureEditValue] = useState('');
+  const [beatEditValue, setBeatEditValue] = useState('');
+  const [editingTime, setEditingTime] = useState(false);
+  const [timeEditValue, setTimeEditValue] = useState('');
   const [showMuteBanner, setShowMuteBanner] = useState(false);
   const [muteBannerDismissed, setMuteBannerDismissed] = useState(() => {
     try { return localStorage.getItem(MUTE_BANNER_KEY) === '1'; } catch { return false; }
@@ -90,6 +151,7 @@ export function TransportBar() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.code === 'Space' && !disabled) {
         e.preventDefault();
         playing ? engine.pause() : engine.play();
@@ -216,8 +278,8 @@ export function TransportBar() {
       )}
       {/* Desktop: controls cluster (buttons + sliders grouped together, shrink-0) */}
       <div className="hidden md:flex md:flex-col md:gap-1 md:shrink-0">
-        {/* Transport buttons + timestamp */}
-        <div className="flex items-center gap-2">
+        {/* Transport buttons — centered over sliders */}
+        <div className="flex items-center justify-center gap-2">
           <button
             className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-lg transition-colors"
             disabled={disabled}
@@ -258,32 +320,148 @@ export function TransportBar() {
           >
             &#x21BB;
           </button>
-          <div className="font-mono text-sm text-gray-300 ml-1">
-            {formatTime(position)} / {formatTime(duration)}
-          </div>
         </div>
 
         {/* Volume + Speed sliders */}
         {slidersGrid}
       </div>
 
-      {/* Waveform — full width on mobile (row 1), flex-1 on desktop */}
-      <div className="md:flex-1 md:min-w-0">
-        {stemLoading && loadProgress ? (
-          <div className="flex items-center gap-2">
-            <div className="flex-1 bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-blue-500 h-2 rounded-full transition-all"
-                style={{ width: `${Math.round((loadProgress.loaded / loadProgress.total) * 100)}%` }}
-              />
+      {/* Waveform + timestamp — full width on mobile (row 1), flex-1 on desktop */}
+      <div className="md:flex-1 md:min-w-0 flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          {stemLoading && loadProgress ? (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-gray-700 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all"
+                  style={{ width: `${Math.round((loadProgress.loaded / loadProgress.total) * 100)}%` }}
+                />
+              </div>
+              <span className="text-xs text-gray-500 shrink-0">
+                {loadProgress.loaded}/{loadProgress.total}
+              </span>
             </div>
-            <span className="text-xs text-gray-500 shrink-0">
-              {loadProgress.loaded}/{loadProgress.total}
-            </span>
+          ) : (
+            <WaveformTimeline />
+          )}
+        </div>
+        <div className="hidden md:flex md:flex-col md:items-center font-mono text-sm text-gray-300 shrink-0 -mt-1">
+          <div>
+            {editingTime ? (
+              <input
+                type="text"
+                autoFocus
+                value={timeEditValue}
+                onChange={(e) => setTimeEditValue(e.target.value)}
+                onBlur={() => {
+                  setEditingTime(false);
+                  const t = parseTime(timeEditValue);
+                  if (t !== null && t >= 0 && t <= duration) engine.seek(t);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { setEditingTime(false); const t = parseTime(timeEditValue); if (t !== null && t >= 0 && t <= duration) engine.seek(t); }
+                  if (e.key === 'Escape') setEditingTime(false);
+                }}
+                className="w-[5ch] text-sm text-center bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
+              />
+            ) : (
+              <button
+                onClick={() => { if (playing) engine.pause(); setTimeEditValue(formatTime(position)); setEditingTime(true); }}
+                className="hover:text-white cursor-text"
+              >{formatTime(position)}</button>
+            )}
+            <span> / {formatTime(duration)}</span>
           </div>
-        ) : (
-          <WaveformTimeline />
-        )}
+          {(() => {
+            const hasTapMap = selectedSong?.tapMap && selectedSong.tapMap.length > 0;
+            if (!hasTapMap) return null;
+            const mb = getMeasureBeat(selectedSong?.tapMap, position);
+            const measure = mb?.measure ?? 0;
+            const beat = mb?.beat ?? 0;
+
+            const startMeasureEdit = () => {
+              if (playing) engine.pause();
+              setMeasureEditValue(String(measure));
+              setEditingMeasure(true);
+            };
+            const commitMeasure = () => {
+              setEditingMeasure(false);
+              const num = parseInt(measureEditValue, 10);
+              if (!isNaN(num) && num > 0) {
+                const t = measureBeatToTime(selectedSong?.tapMap, num, 1);
+                if (t !== null) engine.seek(t);
+              }
+            };
+            const startBeatEdit = () => {
+              if (playing) engine.pause();
+              setBeatEditValue(String(beat));
+              setEditingBeat(true);
+            };
+            const commitBeat = () => {
+              setEditingBeat(false);
+              const num = parseInt(beatEditValue, 10);
+              if (!isNaN(num) && num > 0) {
+                const t = measureBeatToTime(selectedSong?.tapMap, measure || 1, num);
+                if (t !== null) engine.seek(t);
+              }
+            };
+
+            return (
+              <div className="text-gray-500 flex items-center">
+                {editingMeasure ? (
+                  <input
+                    type="text"
+                    autoFocus
+                    value={measureEditValue}
+                    onChange={(e) => setMeasureEditValue(e.target.value)}
+                    onBlur={commitMeasure}
+                    onKeyDown={(e) => { if (e.key === 'Enter') commitMeasure(); if (e.key === 'Escape') setEditingMeasure(false); }}
+                    className="w-[3ch] text-sm text-right bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
+                  />
+                ) : (
+                  <button onClick={startMeasureEdit} className="inline-block w-[2.5ch] text-right hover:text-gray-300 cursor-text">{measure}</button>
+                )}
+                <span className="text-gray-600 mx-0.5">|</span>
+                {editingBeat ? (
+                  <input
+                    type="text"
+                    autoFocus
+                    value={beatEditValue}
+                    onChange={(e) => setBeatEditValue(e.target.value)}
+                    onBlur={commitBeat}
+                    onKeyDown={(e) => { if (e.key === 'Enter') commitBeat(); if (e.key === 'Escape') setEditingBeat(false); }}
+                    className="w-[2ch] text-sm bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
+                  />
+                ) : (
+                  <button onClick={startBeatEdit} className="inline-block w-[1.5ch] hover:text-gray-300 cursor-text">{beat}</button>
+                )}
+              </div>
+            );
+          })()}
+          {(() => {
+            const sections = selectedSong?.tapMap?.filter((e) => e.type === 'section');
+            if (!sections || sections.length === 0) return null;
+            return (
+              <select
+                className="text-xs bg-gray-700 border border-gray-600 rounded px-1 py-0.5 text-gray-400 cursor-pointer outline-none focus:border-blue-500 font-sans"
+                value=""
+                onChange={(e) => {
+                  const time = parseFloat(e.target.value);
+                  if (!isNaN(time)) {
+                    if (playing) engine.pause();
+                    engine.seek(time);
+                  }
+                  e.target.value = '';
+                }}
+              >
+                <option value="" disabled>Jump to Section</option>
+                {sections.map((s, i) => (
+                  <option key={i} value={s.time}>{s.label || `Section ${i + 1}`}</option>
+                ))}
+              </select>
+            );
+          })()}
+        </div>
       </div>
 
       {/* Mobile: transport buttons (row 2) */}
@@ -349,19 +527,6 @@ export function TransportBar() {
         </div>
       )}
 
-      {/* Song info — desktop only */}
-      {selectedSong && (
-        <div className="hidden md:block text-sm text-gray-400 shrink-0">
-          <span className="text-gray-200">{selectedSong.title}</span>
-          <span className="mx-1">—</span>
-          <span>{selectedSong.artist}</span>
-          {selectedSong.key && (
-            <span className="ml-2 px-1.5 py-0.5 bg-gray-700 rounded text-xs">
-              {selectedSong.key}
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
