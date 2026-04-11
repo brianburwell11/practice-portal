@@ -108,6 +108,7 @@ export const setlistConfigSchema = z.object({
   id: z.string(),
   name: z.string(),
   entries: z.array(setlistEntrySchema),
+  navLinks: z.array(navLinkConfigSchema).optional(),
 });
 
 export const setlistIndexSchema = z.object({

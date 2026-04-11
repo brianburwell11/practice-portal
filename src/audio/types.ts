@@ -105,6 +105,7 @@ export interface SetlistConfig {
   id: string;
   name: string;
   entries: SetlistEntry[];
+  navLinks?: NavLinkConfig[];
 }
 
 export interface SetlistIndex {

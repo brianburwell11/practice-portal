@@ -3,7 +3,8 @@ import { useState, useRef, useEffect } from 'react';
 type DropdownId = 'songs' | 'setlists' | null;
 
 interface Props {
-  navLinks?: { title: string; url: string }[];
+  setlistNavLinks?: { title: string; url: string }[];
+  songNavLinks?: { title: string; url: string }[];
   hasSong?: boolean;
   hasSetlist?: boolean;
   onAddSong?: () => void;
@@ -43,7 +44,8 @@ function MenuItem({
 }
 
 export function AdminRibbon({
-  navLinks,
+  setlistNavLinks,
+  songNavLinks,
   hasSong,
   hasSetlist,
   onAddSong,
@@ -115,15 +117,31 @@ export function AdminRibbon({
             )}
           </div>
 
-          {navLinks && navLinks.length > 0 && (
+          {((setlistNavLinks && setlistNavLinks.length > 0) || (songNavLinks && songNavLinks.length > 0)) && (
             <div className="border-l border-gray-700 h-4" />
           )}
         </>
       )}
 
-      {navLinks?.map((link, i) => (
+      {setlistNavLinks?.map((link, i) => (
         <a
-          key={i}
+          key={`sl-${i}`}
+          href={link.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-gray-500 hover:text-gray-300"
+        >
+          {link.title}
+        </a>
+      ))}
+
+      {setlistNavLinks && setlistNavLinks.length > 0 && songNavLinks && songNavLinks.length > 0 && (
+        <div className="border-l border-gray-700 h-4" />
+      )}
+
+      {songNavLinks?.map((link, i) => (
+        <a
+          key={`sg-${i}`}
           href={link.url}
           target="_blank"
           rel="noopener noreferrer"

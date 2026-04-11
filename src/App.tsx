@@ -68,7 +68,8 @@ export default function App() {
         {/* Admin toolbar (dev: full admin + nav links; prod: nav links only) */}
         {import.meta.env.DEV ? (
           <AdminRibbon
-            navLinks={selectedSong?.navLinks}
+            setlistNavLinks={activeSetlist?.navLinks}
+            songNavLinks={selectedSong?.navLinks}
             hasSong={!!selectedSong}
             hasSetlist={!!activeSetlist}
             onAddSong={() => navigate(`/${bandRoute}/admin/add-song`)}
@@ -80,9 +81,9 @@ export default function App() {
             onDeleteSetlist={() => setShowDeleteSetlistModal(true)}
           />
         ) : (
-          selectedSong?.navLinks && selectedSong.navLinks.length > 0 && (
-            <AdminRibbon navLinks={selectedSong.navLinks} />
-          )
+          (activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length) ? (
+            <AdminRibbon setlistNavLinks={activeSetlist?.navLinks} songNavLinks={selectedSong?.navLinks} />
+          ) : null
         )}
 
         {/* Song loader (headless — runs effects only) */}

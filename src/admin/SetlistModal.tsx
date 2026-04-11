@@ -3,7 +3,7 @@ import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
 import { r2Url } from '../utils/url';
-import type { SetlistConfig, SetlistEntry } from '../audio/types';
+import type { SetlistConfig, SetlistEntry, NavLinkConfig } from '../audio/types';
 
 interface SongMeta {
   key: string;
@@ -31,6 +31,9 @@ export function SetlistModal({ setlistId, onClose }: Props) {
 
   const [name, setName] = useState('');
   const [entries, setEntries] = useState<SetlistEntry[]>([]);
+  const [navLinks, setNavLinks] = useState<NavLinkConfig[]>([]);
+  const [newLinkTitle, setNewLinkTitle] = useState('');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +41,13 @@ export function SetlistModal({ setlistId, onClose }: Props) {
   // Drag-and-drop state
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
+
+  // Nav link drag-to-reorder state
+  const [linkDragIdx, setLinkDragIdx] = useState<number | null>(null);
+  const [linkDropIdx, setLinkDropIdx] = useState<number | null>(null);
+
+  const ensureProtocol = (url: string) =>
+    url && !/^https?:\/\//i.test(url) ? `http://${url}` : url;
 
   const isEdit = !!setlistId;
 
@@ -51,6 +61,7 @@ export function SetlistModal({ setlistId, onClose }: Props) {
       .then((data: SetlistConfig) => {
         setName(data.name);
         setEntries(data.entries);
+        setNavLinks(data.navLinks ?? []);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -119,7 +130,12 @@ export function SetlistModal({ setlistId, onClose }: Props) {
     const newId = deriveSetlistId(name);
     const oldId = isEdit ? setlistId! : null;
     const renamed = oldId !== null && oldId !== newId;
-    const config: SetlistConfig = { id: newId, name: name.trim(), entries };
+    const config: SetlistConfig = {
+      id: newId,
+      name: name.trim(),
+      entries,
+      ...(navLinks.length > 0 ? { navLinks } : {}),
+    };
 
     try {
       const res = await fetch(`/api/bands/${currentBand.id}/setlists/${newId}`, {
@@ -348,6 +364,95 @@ export function SetlistModal({ setlistId, onClose }: Props) {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* Nav Links */}
+            <div className="space-y-2 border-t border-gray-700 pt-4">
+              <h3 className="text-sm font-medium text-gray-400">Nav Links</h3>
+              <p className="text-xs text-gray-500">Links shown in the production navigation bar when this setlist is active.</p>
+              {navLinks.map((link, i) => (
+                <div
+                  key={i}
+                  draggable
+                  onDragStart={() => setLinkDragIdx(i)}
+                  onDragOver={(e) => { e.preventDefault(); setLinkDropIdx(i); }}
+                  onDragEnd={() => {
+                    if (linkDragIdx !== null && linkDropIdx !== null && linkDragIdx !== linkDropIdx) {
+                      setNavLinks((prev) => {
+                        const next = [...prev];
+                        const [moved] = next.splice(linkDragIdx, 1);
+                        next.splice(linkDropIdx, 0, moved);
+                        return next;
+                      });
+                    }
+                    setLinkDragIdx(null);
+                    setLinkDropIdx(null);
+                  }}
+                  className={`flex items-center gap-2 bg-gray-800 rounded px-3 py-1.5 text-sm transition-opacity ${
+                    linkDragIdx === i ? 'opacity-40' : ''
+                  } ${linkDropIdx === i && linkDragIdx !== null ? 'ring-1 ring-blue-500' : ''}`}
+                >
+                  <span className="text-gray-600 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder">&#x2630;</span>
+                  <input
+                    type="text"
+                    value={link.title}
+                    maxLength={40}
+                    onChange={(e) => setNavLinks((prev) => prev.map((l, j) => j === i ? { ...l, title: e.target.value } : l))}
+                    className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
+                    placeholder="Title"
+                    disabled={saving}
+                  />
+                  <input
+                    type="url"
+                    value={link.url}
+                    onChange={(e) => setNavLinks((prev) => prev.map((l, j) => j === i ? { ...l, url: e.target.value } : l))}
+                    onBlur={(e) => {
+                      const fixed = ensureProtocol(e.target.value.trim());
+                      if (fixed !== link.url) setNavLinks((prev) => prev.map((l, j) => j === i ? { ...l, url: fixed } : l));
+                    }}
+                    className="flex-[2] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
+                    placeholder="https://..."
+                    disabled={saving}
+                  />
+                  <button
+                    onClick={() => setNavLinks((prev) => prev.filter((_, j) => j !== i))}
+                    disabled={saving}
+                    className="text-gray-500 hover:text-red-400 text-sm shrink-0"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newLinkTitle}
+                  maxLength={40}
+                  onChange={(e) => setNewLinkTitle(e.target.value)}
+                  placeholder="Link title"
+                  className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-blue-500"
+                  disabled={saving}
+                />
+                <input
+                  type="url"
+                  value={newLinkUrl}
+                  onChange={(e) => setNewLinkUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="flex-[2] bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-blue-500"
+                  disabled={saving}
+                />
+                <button
+                  disabled={!newLinkTitle.trim() || !newLinkUrl.trim() || saving}
+                  onClick={() => {
+                    setNavLinks((prev) => [...prev, { title: newLinkTitle.trim(), url: ensureProtocol(newLinkUrl.trim()) }]);
+                    setNewLinkTitle('');
+                    setNewLinkUrl('');
+                  }}
+                  className="px-2 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-xs"
+                >
+                  Add
+                </button>
               </div>
             </div>
 
