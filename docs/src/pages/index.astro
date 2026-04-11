@@ -6,7 +6,7 @@ import FormattedDate from '../components/FormattedDate.astro';
 import Header from '../components/Header.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 
-const posts = (await getCollection('blog')).sort(
+const posts = (await getCollection('docs')).sort(
 	(a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
 );
 ---
@@ -83,7 +83,7 @@ const posts = (await getCollection('blog')).sort(
 					{
 						posts.map((post) => (
 							<li>
-								<a href={`/blog/${post.id}/`}
+								<a href={`/docs/${post.id}/`}
 								data-search={[post.data.title, post.data.description, ...(post.data.tags ?? []), post.body].join(' ').toLowerCase()}>
 									<h4 class="title">{post.data.title}</h4>
 									{post.data.description && <p class="description">{post.data.description}</p>}
@@ -100,7 +100,7 @@ const posts = (await getCollection('blog')).sort(
 		</main>
 		<Footer />
 		<script>
-			const input = document.getElementById('blog-search') as HTMLInputElement;
+			const input = document.getElementById('docs-search') as HTMLInputElement;
 			const items = document.querySelectorAll<HTMLLIElement>('section ul li');
 			input?.addEventListener('input', () => {
 				const terms = input.value.toLowerCase().split(/\s+/).filter(Boolean);

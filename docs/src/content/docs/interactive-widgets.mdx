@@ -1,13 +1,13 @@
 ---
-title: "Interactive Explorations: Live Widgets in the Blog"
-description: "How we embed real Practice Portal components in blog posts for testing designs and exploring ideas interactively."
+title: "Interactive Explorations: Live Widgets in the Docs"
+description: "How we embed real Practice Portal components in documentation pages for testing designs and exploring ideas interactively."
 pubDate: "Apr 09 2026"
-tags: ["architecture", "blog", "interactive", "design"]
+tags: ["architecture", "docs", "interactive", "design"]
 ---
 
 import { TempoControlDemo } from '../../components/react/TempoControlDemo';
 
-This blog isn't just for writing about Practice Portal — it's a design workspace. Posts can embed the same React components used in the actual app, making it possible to explore interaction patterns, test design variations, and document decisions alongside the live widgets that motivated them.
+This site isn't just for writing about Practice Portal — it's a design workspace. Pages can embed the same React components used in the actual app, making it possible to explore interaction patterns, test design variations, and document decisions alongside the live widgets that motivated them.
 
 ## Live Widget: Tempo Control
 
@@ -21,7 +21,7 @@ This slider uses the same touch-optimized gesture locking from the main app: on 
 
 ## How It Works
 
-The blog runs on Astro with MDX support. React components are hydrated as interactive "islands" using Astro's `client:load` directive. Components from the main app are importable via a `@app/` alias that resolves to the parent project's `src/` directory.
+The docs site runs on Astro with MDX support. React components are hydrated as interactive "islands" using Astro's `client:load` directive. Components from the main app are importable via a `@app/` alias that resolves to the parent project's `src/` directory.
 
 ```mdx
 import { TempoControlDemo } from '../../components/react/TempoControlDemo';
@@ -29,16 +29,16 @@ import { TempoControlDemo } from '../../components/react/TempoControlDemo';
 <TempoControlDemo client:load initialTempo={0.85} />
 ```
 
-Components that depend on Zustand stores or the AudioEngine singleton get thin wrapper components in `blog/src/components/react/` that replace those dependencies with local `useState`. The underlying UI components — the sliders, canvases, controls — are imported directly from the app.
+Components that depend on Zustand stores or the AudioEngine singleton get thin wrapper components in `docs/src/components/react/` that replace those dependencies with local `useState`. The underlying UI components — the sliders, canvases, controls — are imported directly from the app.
 
 ## Embedding Tiers
 
-Not every component can be dropped into a blog post. Here's how they break down:
+Not every component can be dropped into a doc page. Here's how they break down:
 
 | Tier | Components | Pattern |
 |------|-----------|---------|
 | **Direct embed** | `TouchSlider` | Import from `@app/`, pass props |
-| **Needs wrapper** | Tempo control, waveform display | Blog-local wrapper with `useState` replacing stores |
+| **Needs wrapper** | Tempo control, waveform display | Docs-local wrapper with `useState` replacing stores |
 | **Too coupled** | Full transport bar, mixer panel | Would need mock AudioEngine — not practical |
 
 The sweet spot is Tier 2: take a component that's interesting to explore interactively, write a small wrapper that gives it local state, and embed it. The wrapper is typically under 40 lines.
@@ -48,4 +48,4 @@ The sweet spot is Tier 2: take a component that's interesting to explore interac
 - **A/B design comparisons** — render two variants of a control side by side with different props
 - **Parameter exploration** — let readers (or future-us) adjust values and see the result
 - **Decision documentation** — "we chose this slider behavior because try dragging it yourself"
-- **Mobile testing** — open the blog post on a phone and interact with the actual component
+- **Mobile testing** — open the doc page on a phone and interact with the actual component

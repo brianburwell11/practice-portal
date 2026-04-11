@@ -127,7 +127,7 @@ input { font-size: 16px; }
 	.pipeline-arrow { transform: rotate(90deg); }
 }
 
-/* Isolate embedded React widgets from blog prose styling */
+/* Isolate embedded React widgets from docs prose styling */
 .widget-sandbox {
 	all: initial;
 	display: block;
