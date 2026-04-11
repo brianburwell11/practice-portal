@@ -1,7 +1,22 @@
 import type { SongConfig, StemConfig, StemGroupConfig } from './types';
 import { TransportClock } from './TransportClock';
 import { StemPlayer } from './StemPlayer';
-import { SoundTouchNode } from '@soundtouchjs/audio-worklet';
+import { SoundTouchFallbackNode } from './SoundTouchFallbackNode';
+
+/** Common interface for both AudioWorklet and ScriptProcessorNode pitch correction paths */
+interface PitchCorrectorNode {
+  readonly audioNode: AudioNode;
+  setPlaybackRate(rate: number): void;
+  connect(dest: AudioNode): void;
+  disconnect(): void;
+}
+
+const hasAudioWorklet = typeof AudioWorkletNode !== 'undefined';
+const isMobile = typeof navigator !== 'undefined' && (
+  /iPad|iPhone|iPod|Android/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+);
+const MOBILE_SAMPLE_RATE = 22050;
 
 interface GroupState {
   volume: number;
@@ -15,7 +30,12 @@ export class AudioEngine {
   private ctx: AudioContext;
   readonly clock: TransportClock;
   readonly masterGain: GainNode;
+  private mixBus: GainNode;
+  private pitchNode: PitchCorrectorNode | null = null;
+  private _tempoRatio = 1.0;
   private stems: Map<string, StemPlayer> = new Map();
+  /** Stems deferred for lazy decode — stored as raw ArrayBuffer until unmuted */
+  private pendingStems: Map<string, { config: StemConfig; arrayBuffer: ArrayBuffer }> = new Map();
   private _songConfig: SongConfig | null = null;
   private _peakData: Float32Array | null = null;
   private onStateChange: EngineStateCallback | null = null;
@@ -35,6 +55,8 @@ export class AudioEngine {
     this.clock = new TransportClock(this.ctx);
     this.masterGain = this.ctx.createGain();
     this.masterGain.connect(this.ctx.destination);
+    // Mix bus: all stems connect here, single SoundTouch node sits between mixBus and masterGain
+    this.mixBus = this.ctx.createGain();
   }
 
   get songConfig(): SongConfig | null {
@@ -70,7 +92,8 @@ export class AudioEngine {
   }
 
   private async ensureWorkletRegistered(): Promise<void> {
-    if (this.workletRegistered) return;
+    if (!hasAudioWorklet || this.workletRegistered) return;
+    const { SoundTouchNode } = await import('@soundtouchjs/audio-worklet');
     await SoundTouchNode.register(
       this.ctx,
       `${import.meta.env.BASE_URL}soundtouch-processor.js`,
@@ -92,14 +115,18 @@ export class AudioEngine {
     // Register SoundTouch AudioWorklet processor (once)
     await this.ensureWorkletRegistered();
 
+    // Create shared pitch corrector: mixBus → pitchNode → masterGain
+    await this.connectPitchNode();
+
     this._songConfig = config;
     this.clock.duration = config.durationSeconds;
 
-    // Fetch and decode all stems in parallel
+    // Fetch all stems, but only decode audible ones (lazy decode for muted stems)
     const total = config.stems.length;
     let loaded = 0;
+    this.pendingStems.clear();
 
-    const stemEntries = await Promise.all(
+    const fetched = await Promise.all(
       config.stems.map(async (stemConfig: StemConfig) => {
         let arrayBuffer: ArrayBuffer;
         const localFile = stemFiles?.get(stemConfig.id);
@@ -110,25 +137,30 @@ export class AudioEngine {
           const response = await fetch(url);
           arrayBuffer = await response.arrayBuffer();
         }
-        const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
         loaded++;
         onProgress?.(loaded, total);
-        return { config: stemConfig, buffer: audioBuffer };
+        return { config: stemConfig, arrayBuffer };
       }),
     );
 
-    for (const entry of stemEntries) {
+    // Decode audible stems now, defer muted ones
+    for (const { config: stemConfig, arrayBuffer } of fetched) {
+      if (stemConfig.defaultVolume === 0) {
+        this.pendingStems.set(stemConfig.id, { config: stemConfig, arrayBuffer });
+        continue;
+      }
+      const audioBuffer = await this.decodeAudio(arrayBuffer);
       const player = new StemPlayer(
         this.ctx,
-        entry.buffer,
-        this.masterGain,
-        entry.config.defaultVolume,
-        entry.config.defaultPan,
+        audioBuffer,
+        this.mixBus,
+        stemConfig.defaultVolume,
+        stemConfig.defaultPan,
       );
-      if (entry.config.stereo) {
+      if (stemConfig.stereo) {
         player.stereo = true;
       }
-      this.stems.set(entry.config.id, player);
+      this.stems.set(stemConfig.id, player);
     }
 
     // Initialize group state
@@ -146,13 +178,16 @@ export class AudioEngine {
     this.notify();
   }
 
-  play(): void {
+  async play(): Promise<void> {
     if (this.clock.playing || this.stems.size === 0) return;
 
-    // Resume AudioContext if suspended (browser autoplay policy)
+    // Resume AudioContext if suspended (mobile browsers require user gesture)
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      await this.ctx.resume();
     }
+
+    // Recreate pitch corrector to flush internal buffers from previous playback
+    await this.connectPitchNode();
 
     const offset = this.clock.currentTime;
     const when = this.ctx.currentTime + 0.01; // tiny future offset for sync
@@ -195,7 +230,7 @@ export class AudioEngine {
     this.notify();
   }
 
-  seek(seconds: number): void {
+  async seek(seconds: number): Promise<void> {
     const wasPlaying = this.clock.playing;
 
     if (wasPlaying) {
@@ -207,6 +242,8 @@ export class AudioEngine {
     this.clock.seek(seconds);
 
     if (wasPlaying) {
+      // Recreate pitch corrector to flush internal buffers
+      await this.connectPitchNode();
       const when = this.ctx.currentTime + 0.01;
       for (const stem of this.stems.values()) {
         stem.start(when, seconds);
@@ -230,7 +267,13 @@ export class AudioEngine {
   }
 
   setTempo(ratio: number): void {
+    this._tempoRatio = ratio;
     this.clock.setTempoRatio(ratio);
+    // Pitch correction on the shared bus
+    if (this.pitchNode) {
+      this.pitchNode.setPlaybackRate(ratio);
+    }
+    // Native playbackRate on each source (free, drives speed)
     for (const stem of this.stems.values()) {
       stem.setTempo(ratio);
     }
@@ -238,6 +281,11 @@ export class AudioEngine {
   }
 
   setStemVolume(id: string, v: number): void {
+    // Lazy decode: if raising volume on a pending stem, decode it now
+    if (v > 0 && this.pendingStems.has(id)) {
+      this.decodePendingStem(id);
+      return;
+    }
     const stem = this.stems.get(id);
     if (stem) {
       stem.volume = v;
@@ -255,6 +303,11 @@ export class AudioEngine {
   }
 
   setStemMuted(id: string, muted: boolean): void {
+    // Lazy decode: if unmuting a pending stem, decode it now
+    if (!muted && this.pendingStems.has(id)) {
+      this.decodePendingStem(id);
+      return;
+    }
     const stem = this.stems.get(id);
     if (stem) {
       stem.muted = muted;
@@ -378,12 +431,87 @@ export class AudioEngine {
     return peaks;
   }
 
+  /** Decode a deferred stem, create its StemPlayer, and join playback if active */
+  private async decodePendingStem(id: string): Promise<void> {
+    const pending = this.pendingStems.get(id);
+    if (!pending) return;
+    this.pendingStems.delete(id);
+
+    const audioBuffer = await this.decodeAudio(pending.arrayBuffer);
+    const player = new StemPlayer(
+      this.ctx,
+      audioBuffer,
+      this.mixBus,
+      pending.config.defaultVolume,
+      pending.config.defaultPan,
+    );
+    if (pending.config.stereo) {
+      player.stereo = true;
+    }
+    this.stems.set(id, player);
+
+    // If currently playing, start the new stem at the current position
+    if (this.clock.playing) {
+      const when = this.ctx.currentTime + 0.01;
+      player.setTempo(this._tempoRatio);
+      player.start(when, this.clock.currentTime);
+    }
+
+    this.recalcAllGains();
+    this.notify();
+  }
+
+  /** Decode audio, downsampling to 22,050 Hz on mobile to halve memory usage */
+  private async decodeAudio(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
+    if (!isMobile) {
+      return this.ctx.decodeAudioData(arrayBuffer);
+    }
+    // Decode at low sample rate via OfflineAudioContext — the main context
+    // resamples transparently when the buffer is connected to the graph
+    const offlineCtx = new OfflineAudioContext(1, 1, MOBILE_SAMPLE_RATE);
+    return offlineCtx.decodeAudioData(arrayBuffer);
+  }
+
+  /** (Re)create the shared pitch corrector: mixBus → pitchNode → masterGain */
+  private async connectPitchNode(): Promise<void> {
+    if (this.pitchNode) {
+      this.mixBus.disconnect();
+      this.pitchNode.disconnect();
+    }
+
+    let node: PitchCorrectorNode;
+    if (hasAudioWorklet) {
+      const { SoundTouchNode } = await import('@soundtouchjs/audio-worklet');
+      const stNode = new SoundTouchNode(this.ctx);
+      node = {
+        audioNode: stNode,
+        setPlaybackRate: (rate) => { stNode.playbackRate.value = rate; },
+        connect: (dest) => stNode.connect(dest),
+        disconnect: () => stNode.disconnect(),
+      };
+    } else {
+      const fallback = new SoundTouchFallbackNode(this.ctx);
+      node = fallback;
+    }
+
+    node.setPlaybackRate(this._tempoRatio);
+    this.mixBus.connect(node.audioNode);
+    node.connect(this.masterGain);
+    this.pitchNode = node;
+  }
+
   private disposeStemPlayers(): void {
     for (const stem of this.stems.values()) {
       stem.disconnect();
     }
     this.stems.clear();
+    this.pendingStems.clear();
     this._peakData = null;
+    if (this.pitchNode) {
+      this.mixBus.disconnect();
+      this.pitchNode.disconnect();
+      this.pitchNode = null;
+    }
   }
 
   private startPositionUpdates(): void {

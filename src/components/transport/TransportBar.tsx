@@ -13,6 +13,13 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+const isIOS = typeof navigator !== 'undefined' && (
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+);
+
+const MUTE_BANNER_KEY = 'pp-mute-banner-dismissed';
+
 export function TransportBar() {
   const engine = useAudioEngine();
   const { playing, position, duration, loopA, loopB, loopEnabled, toggleFollowPlayhead } = useTransportStore();
@@ -25,6 +32,23 @@ export function TransportBar() {
   const [volEditing, setVolEditing] = useState(false);
   const [volEditValue, setVolEditValue] = useState('');
   const [showSliders, setShowSliders] = useState(false);
+  const [showMuteBanner, setShowMuteBanner] = useState(false);
+  const [muteBannerDismissed, setMuteBannerDismissed] = useState(() => {
+    try { return localStorage.getItem(MUTE_BANNER_KEY) === '1'; } catch { return false; }
+  });
+
+  // Show mute banner on first play on iOS
+  useEffect(() => {
+    if (isIOS && playing && !muteBannerDismissed) {
+      setShowMuteBanner(true);
+    }
+  }, [playing, muteBannerDismissed]);
+
+  const dismissMuteBanner = () => {
+    setShowMuteBanner(false);
+    setMuteBannerDismissed(true);
+    try { localStorage.setItem(MUTE_BANNER_KEY, '1'); } catch {}
+  };
 
   const handleMasterVolume = (v: number) => {
     const clamped = Math.max(0, Math.min(1.5, v));
@@ -116,6 +140,26 @@ export function TransportBar() {
 
   return (
     <div className="flex flex-col md:flex-row md:items-center md:gap-4 px-4 py-3 border-b border-gray-700">
+      {showMuteBanner && (
+        <div className="flex items-center gap-2 w-full mb-2 px-3 py-2 bg-yellow-500/15 border border-yellow-500/30 rounded-lg text-sm text-yellow-200">
+          <span className="inline-flex items-center gap-0.5 shrink-0">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              <path d="M18.63 13A17.89 17.89 0 0 1 18 8" />
+              <path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14" />
+              <path d="M18 8a6 6 0 0 0-9.33-5" />
+              <line x1="1" y1="1" x2="23" y2="23" />
+            </svg>
+            <span className="text-xs mx-0.5">&rarr;</span>
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+          </span>
+          <span className="flex-1">If you can't hear audio, check that your phone isn't on silent.</span>
+          <button onClick={dismissMuteBanner} className="shrink-0 text-yellow-400 hover:text-yellow-200 text-lg leading-none">&times;</button>
+        </div>
+      )}
       {/* Desktop: controls cluster (buttons + sliders grouped together, shrink-0) */}
       <div className="hidden md:flex md:flex-col md:gap-1 md:shrink-0">
         {/* Transport buttons + timestamp */}

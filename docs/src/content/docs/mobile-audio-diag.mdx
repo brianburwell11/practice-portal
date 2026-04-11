@@ -1,0 +1,69 @@
+---
+title: "Mobile Audio Diagnostics"
+description: "Step-by-step diagnostic tool to identify where the Web Audio API + SoundTouch pipeline breaks on mobile browsers."
+pubDate: "Apr 11 2026"
+tags: ["audio", "mobile", "interactive", "debugging"]
+---
+
+import { MobileAudioDiag } from '../../components/react/MobileAudioDiag';
+import { MuteSwitchBanner } from '../../components/react/MuteSwitchBanner';
+
+This page tests each step of the audio pipeline in isolation to find exactly where mobile playback breaks. Tap the button to run all steps in sequence — each one builds on the previous, and the first failure reveals the root cause.
+
+<div class="widget-sandbox" style="max-width: 540px; margin: 2rem auto;">
+  <MobileAudioDiag client:load />
+</div>
+
+## What Each Step Tests
+
+1. **Create AudioContext** — can the browser create an audio context at all?
+2. **Resume AudioContext** — mobile browsers suspend the context until a user gesture triggers `ctx.resume()`. This must be awaited.
+3. **Decode audio file** — fetch and decode an Opus sample into a PCM AudioBuffer.
+4. **Raw playback at 1x** — play directly through `AudioBufferSourceNode → destination`. No pitch correction, no worklet. If this is silent, the problem is fundamental.
+5. **Detect pitch correction path** — checks `typeof AudioWorkletNode`. Shows which path this device will use: AudioWorklet (preferred) or ScriptProcessorNode (fallback).
+6. **Register/init pitch corrector** — registers the AudioWorklet or initializes the ScriptProcessorNode fallback.
+7. **Play at 1x with pitch correction** — plays through the detected pitch corrector at normal speed.
+8. **Play at 0.5x with pitch correction** — plays at half speed. Pitch should stay corrected (not detuned).
+
+## Interpreting Results
+
+- **Step 4 silent but "pass"**: The audio graph runs without errors but produces no output. **Turn off your iPhone's mute switch** (side toggle — no orange showing). iOS silences all Web Audio API output when muted, and there's no way to override this from a web page.
+- **Step 5 shows ScriptProcessorNode**: AudioWorklet unavailable — fallback path active. Pitch correction runs on main thread.
+- **All pass with audible audio**: Pipeline fully working on this device.
+
+## Finding: iOS Mute Switch Silences Web Audio
+
+The primary cause of "no audio on mobile" was the iPhone's physical mute switch. iOS Safari routes Web Audio API output through the "ambient" audio session, which respects the mute switch. There is **no API to detect the switch position** and **no reliable way to override it from a web page**. The `<audio>` element workaround that works in some native WebView contexts does not work in Safari.
+
+**Conclusion:** The mute switch must be off for audio to play. The app should detect likely-muted state (all steps pass but user reports no sound) and show a clear message about the mute switch.
+
+<div class="widget-sandbox" style="max-width: 540px; margin: 2rem auto;">
+  <MuteSwitchBanner client:load />
+</div>
+
+## Finding: AudioWorkletNode Missing
+
+Initial testing (2026-04-11) revealed that the target mobile browser reports `AudioWorkletNode is not defined`. This means `SoundTouchNode` (which extends `AudioWorkletNode`) cannot instantiate at all. Steps 1-5 pass — raw `AudioBufferSourceNode` playback works fine, even at modified `playbackRate`.
+
+### Why This Happens
+
+`AudioWorkletNode` requires the browser to support the AudioWorklet API. While modern desktop browsers and recent mobile browsers (Safari 14.5+, Chrome 66+) have it, some mobile contexts don't:
+- Older iOS versions (pre-14.5)
+- WKWebView embedded browsers (opening links from Messages, Mail, or other apps)
+- Some Android WebView implementations
+
+### The Fix: ScriptProcessorNode Fallback
+
+The `@soundtouchjs/audio-worklet` package has no built-in fallback. But its sibling `@soundtouchjs/core` package provides the same SoundTouch algorithm that can run via `ScriptProcessorNode` on the main thread. The tradeoff: `ScriptProcessorNode` is deprecated and runs on the main thread (not the audio thread), so heavy UI work can cause audio glitches. For a practice tool on a music stand, this is acceptable.
+
+The key design challenge: `@soundtouchjs/core`'s `PitchShifter` class reads from a pre-decoded `AudioBuffer` — it's a source, not a pass-through node. Our single-bus architecture needs a **pass-through** node that sits between `mixBus` and `masterGain`, processing whatever audio flows through it. This requires a custom `ScriptProcessorNode` wrapper that:
+
+1. Reads live audio from `event.inputBuffer` (the mixed stems)
+2. Interleaves stereo samples into SoundTouch's format
+3. Pushes to `SoundTouch.inputBuffer`, calls `process()`
+4. Extracts from `SoundTouch.outputBuffer`
+5. Deinterleaves back to `event.outputBuffer`
+
+This is the exact same processing loop the AudioWorklet processor uses — just running on the main thread instead.
+
+See [Tier 2 plan](/docs/mobile-audio-tier2-plan/) for the implementation checklist.

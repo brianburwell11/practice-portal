@@ -1,0 +1,142 @@
+---
+title: "Tier 2 Mobile Audio: Implementation Plan"
+description: "Step-by-step plan for single-bus SoundTouch, mobile downsampling, and lazy decode — the next round of mobile audio optimizations."
+pubDate: "Apr 11 2026"
+tags: ["audio", "mobile", "implementation", "plan"]
+---
+
+import { LazyDecodeMonitor } from '../../components/react/LazyDecodeMonitor';
+
+This plan implements the **Tier 2** improvements from the [mobile audio playback research](/docs/mobile-audio-playback/#tier-2-near-term-improvements-15-20-stems). The goal is comfortable 15-20 stem playback on mobile. Each phase is an independent commit, testable in isolation.
+
+## Phase 1: Single-bus SoundTouch
+
+Move from N per-stem SoundTouch instances to a single shared instance on the mix bus. CPU cost for pitch correction drops from O(n) to O(1).
+
+**Signal chain change:**
+```
+BEFORE:  source → SoundTouch → monoMixer → gain → pan → masterGain → dest
+                                                          (N instances)
+
+AFTER:   source → monoMixer → gain → pan → mixBus → SoundTouch → masterGain → dest
+         (playbackRate on source)                      (1 instance)
+```
+
+- [x] Remove SoundTouchNode from `StemPlayer` — simplify chain to `source → monoMixer → gain → pan → destination`
+- [x] Add `mixBus` GainNode and shared `SoundTouchNode` to `AudioEngine`
+- [x] Wire chain: `mixBus → soundTouchNode → masterGain → ctx.destination`
+- [x] Pass `mixBus` (not `masterGain`) as destination when constructing StemPlayers
+- [x] Update `setTempo()` to set `playbackRate` on the shared SoundTouchNode once + native `playbackRate` on each source
+- [x] Recreate shared SoundTouchNode on `play()`/`seek()` to flush internal buffers
+
+**Test:**
+- [x] Play at 1x — sounds identical to before
+- [x] Slow to 0.5x — pitch stays corrected (not detuned)
+- [x] Mute/solo/volume/pan per stem — still works
+- [x] A/B loop and seek while playing — no glitches
+
+---
+
+## Phase 1b: ScriptProcessorNode fallback for mobile
+
+[Diagnostic testing](/docs/mobile-audio-diag/) revealed that `AudioWorkletNode` is unavailable on the target mobile browser. `SoundTouchNode` extends `AudioWorkletNode`, so the entire pitch-correction path fails silently — no audio reaches the speakers. Raw `AudioBufferSourceNode` playback (steps 1-5 in the diagnostic) works fine.
+
+### Problem
+
+`@soundtouchjs/audio-worklet` has no built-in fallback. Its sibling package `@soundtouchjs/core` provides the same SoundTouch algorithm via `ScriptProcessorNode`, but its `PitchShifter` class reads from a pre-decoded `AudioBuffer` — it's a **source** node, not a **pass-through** node. Our single-bus architecture needs a pass-through node between `mixBus` and `masterGain`.
+
+### Solution
+
+Create a custom `ScriptProcessorNode` wrapper (`SoundTouchFallbackNode`) that acts as a pass-through processor:
+
+```
+mixBus → ScriptProcessorNode → masterGain → destination
+              │
+              └─ onaudioprocess:
+                   read inputBuffer (mixed stems)
+                   → interleave to SoundTouch format
+                   → push to SoundTouch.inputBuffer
+                   → SoundTouch.process()
+                   → extract from SoundTouch.outputBuffer
+                   → deinterleave to outputBuffer
+```
+
+This is the same processing loop the AudioWorklet processor uses — just running on the main thread.
+
+### Implementation
+
+- [x] Install `@soundtouchjs/core` (provides `SoundTouch` class without AudioWorklet dependency)
+- [x] Create `src/audio/SoundTouchFallbackNode.ts`:
+  - Imports `SoundTouch` from `@soundtouchjs/core`
+  - Creates `ScriptProcessorNode(bufferSize, 2, 2)`
+  - `onaudioprocess`: interleave input → SoundTouch → deinterleave output
+  - Exposes `playbackRate` setter (maps to SoundTouch's internal tempo/pitch params)
+  - Exposes `connect()`/`disconnect()` by delegating to the inner ScriptProcessorNode
+- [x] Update `AudioEngine.connectPitchNode()`:
+  - Check `typeof AudioWorkletNode !== 'undefined'`
+  - If available: use `SoundTouchNode` from `@soundtouchjs/audio-worklet` (dynamic import)
+  - If unavailable: use `SoundTouchFallbackNode`
+  - Both expose the same `PitchCorrectorNode` interface
+- [x] Skip worklet registration (`ensureWorkletRegistered`) when using fallback path
+- [x] Await `ctx.resume()` in `play()`
+
+**Test (on mobile device via [diagnostic page](/docs/mobile-audio-diag/)):**
+- [x] Steps 1-5 still pass (raw playback)
+- [x] Play a song at 1x on mobile — audio works
+- [x] Slow to 0.5x — pitch stays corrected (not detuned)
+- [x] Desktop still uses AudioWorklet path (no regression)
+
+---
+
+## Phase 2: Mobile downsample to 22,050 Hz
+
+Decode audio at half sample rate on mobile, cutting decoded PCM memory ~50%. Frequencies above ~11 kHz are lost — inaudible on phone speakers.
+
+- [x] Add mobile detection helper to `AudioEngine`
+- [x] Extract `decodeAudio(arrayBuffer)` helper — desktop uses `ctx.decodeAudioData()`, mobile uses `OfflineAudioContext` at 22,050 Hz
+- [x] Replace `decodeAudioData` call in `loadSong()` with new helper
+
+**Test:**
+- [x] Desktop: unchanged behavior (44.1/48 kHz decode)
+- [ ] Mobile: stems decode at 22,050 Hz
+- [ ] Playback, tempo, mute/solo all still work at lower sample rate
+
+---
+
+## Phase 3: Lazy decode
+
+Skip decoding muted stems at load time. Decode on-demand when the user unmutes.
+
+- [x] Add `pendingStems` map to `AudioEngine` — stores `{ config, arrayBuffer }` for undecoded stems
+- [x] In `loadSong()`: only decode stems with `defaultVolume > 0`; stash the rest in `pendingStems`
+- [x] Add `decodePendingStem(id)` method — decode pending buffer, create StemPlayer, connect to mixBus, start if currently playing
+- [x] Hook `setStemMuted(id, false)` and `setStemVolume(id, v > 0)` to trigger decode for pending stems
+- [x] Peak computation uses only decoded stems (partial waveform until all decoded)
+
+**Test:**
+- [ ] Load a song with some stems at volume 0 — those should not decode
+- [ ] Unmute a pending stem — it decodes and joins playback seamlessly
+- [ ] Memory at load time is proportional to audible stems, not total stems
+
+### Lazy Decode Monitor
+
+All sample files are fetched but start as "pending" (not decoded). Click "decode" on individual stems to see decode time and PCM memory cost — this simulates what happens when a muted stem gets unmuted in the app.
+
+<div class="widget-sandbox" style="max-width: 560px; margin: 2rem auto;">
+  <LazyDecodeMonitor client:load />
+</div>
+
+---
+
+## Memory budget after all three phases
+
+| Strategy | 25 stems × 4 min | Feasible? |
+|----------|-------------------|-----------|
+| Before (stereo, 44.1 kHz, N SoundTouch) | 2,117 MB | No |
+| After Tier 1 (mono, 44.1 kHz) | 1,058 MB | Tight |
+| + Phase 2 (mono, 22.05 kHz) | 529 MB | Yes |
+| + Phase 3 (lazy, ~10 active) | ~200 MB | Comfortable |
+
+---
+
+*Files: `src/audio/AudioEngine.ts`, `src/audio/StemPlayer.ts`*
