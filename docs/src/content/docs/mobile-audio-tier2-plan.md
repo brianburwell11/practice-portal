@@ -63,26 +63,26 @@ This is the same processing loop the AudioWorklet processor uses — just runnin
 
 ### Implementation
 
-- [ ] Install `@soundtouchjs/core` (provides `SoundTouch` class without AudioWorklet dependency)
-- [ ] Create `src/audio/SoundTouchFallbackNode.ts`:
+- [x] Install `@soundtouchjs/core` (provides `SoundTouch` class without AudioWorklet dependency)
+- [x] Create `src/audio/SoundTouchFallbackNode.ts`:
   - Imports `SoundTouch` from `@soundtouchjs/core`
   - Creates `ScriptProcessorNode(bufferSize, 2, 2)`
   - `onaudioprocess`: interleave input → SoundTouch → deinterleave output
   - Exposes `playbackRate` setter (maps to SoundTouch's internal tempo/pitch params)
   - Exposes `connect()`/`disconnect()` by delegating to the inner ScriptProcessorNode
-- [ ] Update `AudioEngine.connectSoundTouch()`:
+- [x] Update `AudioEngine.connectPitchNode()`:
   - Check `typeof AudioWorkletNode !== 'undefined'`
-  - If available: use `SoundTouchNode` from `@soundtouchjs/audio-worklet` (current path)
-  - If unavailable: use `SoundTouchFallbackNode` from the new file
-  - Both expose the same interface: `connect()`, `disconnect()`, `playbackRate` setter
-- [ ] Skip worklet registration (`ensureWorkletRegistered`) when using fallback path
-- [ ] Await `ctx.resume()` in `play()` (already done)
+  - If available: use `SoundTouchNode` from `@soundtouchjs/audio-worklet` (dynamic import)
+  - If unavailable: use `SoundTouchFallbackNode`
+  - Both expose the same `PitchCorrectorNode` interface
+- [x] Skip worklet registration (`ensureWorkletRegistered`) when using fallback path
+- [x] Await `ctx.resume()` in `play()`
 
 **Test (on mobile device via [diagnostic page](/docs/mobile-audio-diag/)):**
-- [ ] Steps 1-5 still pass (raw playback)
-- [ ] Play a song at 1x on mobile — audio works
-- [ ] Slow to 0.5x — pitch stays corrected (not detuned)
-- [ ] Desktop still uses AudioWorklet path (no regression)
+- [x] Steps 1-5 still pass (raw playback)
+- [x] Play a song at 1x on mobile — audio works
+- [x] Slow to 0.5x — pitch stays corrected (not detuned)
+- [x] Desktop still uses AudioWorklet path (no regression)
 
 ---
 
@@ -90,12 +90,12 @@ This is the same processing loop the AudioWorklet processor uses — just runnin
 
 Decode audio at half sample rate on mobile, cutting decoded PCM memory ~50%. Frequencies above ~11 kHz are lost — inaudible on phone speakers.
 
-- [ ] Add mobile detection helper to `AudioEngine`
-- [ ] Extract `decodeAudio(arrayBuffer)` helper — desktop uses `ctx.decodeAudioData()`, mobile uses `OfflineAudioContext` at 22,050 Hz
-- [ ] Replace `decodeAudioData` call in `loadSong()` with new helper
+- [x] Add mobile detection helper to `AudioEngine`
+- [x] Extract `decodeAudio(arrayBuffer)` helper — desktop uses `ctx.decodeAudioData()`, mobile uses `OfflineAudioContext` at 22,050 Hz
+- [x] Replace `decodeAudioData` call in `loadSong()` with new helper
 
 **Test:**
-- [ ] Desktop: unchanged behavior (44.1/48 kHz decode)
+- [x] Desktop: unchanged behavior (44.1/48 kHz decode)
 - [ ] Mobile: stems decode at 22,050 Hz
 - [ ] Playback, tempo, mute/solo all still work at lower sample rate
 

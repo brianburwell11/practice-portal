@@ -12,6 +12,11 @@ interface PitchCorrectorNode {
 }
 
 const hasAudioWorklet = typeof AudioWorkletNode !== 'undefined';
+const isMobile = typeof navigator !== 'undefined' && (
+  /iPad|iPhone|iPod|Android/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+);
+const MOBILE_SAMPLE_RATE = 22050;
 
 interface GroupState {
   volume: number;
@@ -129,7 +134,7 @@ export class AudioEngine {
           const response = await fetch(url);
           arrayBuffer = await response.arrayBuffer();
         }
-        const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+        const audioBuffer = await this.decodeAudio(arrayBuffer);
         loaded++;
         onProgress?.(loaded, total);
         return { config: stemConfig, buffer: audioBuffer };
@@ -406,6 +411,17 @@ export class AudioEngine {
     }
 
     return peaks;
+  }
+
+  /** Decode audio, downsampling to 22,050 Hz on mobile to halve memory usage */
+  private async decodeAudio(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
+    if (!isMobile) {
+      return this.ctx.decodeAudioData(arrayBuffer);
+    }
+    // Decode at low sample rate via OfflineAudioContext — the main context
+    // resamples transparently when the buffer is connected to the graph
+    const offlineCtx = new OfflineAudioContext(1, 1, MOBILE_SAMPLE_RATE);
+    return offlineCtx.decodeAudioData(arrayBuffer);
   }
 
   /** (Re)create the shared pitch corrector: mixBus → pitchNode → masterGain */
