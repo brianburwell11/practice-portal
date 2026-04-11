@@ -47,7 +47,7 @@ export const tapMapEntrySchema = z.object({
 });
 
 export const navLinkConfigSchema = z.object({
-  title: z.string().min(1),
+  title: z.string().min(1).max(40),
   url: z.string().url(),
 });
 

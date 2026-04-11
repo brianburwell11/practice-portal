@@ -75,7 +75,7 @@ export function AdminRibbon({
   return (
     <div
       ref={ribbonRef}
-      className="px-4 py-1.5 border-b flex items-center gap-3"
+      className="px-4 py-1.5 border-b flex items-center gap-3 min-h-[33px]"
       style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
     >
       {import.meta.env.DEV && (

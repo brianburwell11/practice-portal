@@ -44,6 +44,19 @@ export default function EditSongPage() {
   const [newLinkTitle, setNewLinkTitle] = useState('');
   const [newLinkUrl, setNewLinkUrl] = useState('');
 
+  // Nav link drag-to-reorder state
+  const [linkDragIdx, setLinkDragIdx] = useState<number | null>(null);
+  const [linkDropIdx, setLinkDropIdx] = useState<number | null>(null);
+  const onLinkDragStart = (idx: number) => setLinkDragIdx(idx);
+  const onLinkDragOver = (e: React.DragEvent, idx: number) => { e.preventDefault(); setLinkDropIdx(idx); };
+  const onLinkDragEnd = () => {
+    if (linkDragIdx !== null && linkDropIdx !== null && linkDragIdx !== linkDropIdx) {
+      dispatch({ type: 'MOVE_NAV_LINK', from: linkDragIdx, to: linkDropIdx });
+    }
+    setLinkDragIdx(null);
+    setLinkDropIdx(null);
+  };
+
   const ensureProtocol = (url: string) =>
     url && !/^https?:\/\//i.test(url) ? `http://${url}` : url;
 
@@ -529,10 +542,23 @@ export default function EditSongPage() {
           </div>
 
           {(config.navLinks ?? []).map((link, i) => (
-            <div key={i} className="flex items-center gap-3 bg-gray-800 rounded-lg p-3">
+            <div
+              key={i}
+              draggable
+              onDragStart={() => onLinkDragStart(i)}
+              onDragOver={(e) => onLinkDragOver(e, i)}
+              onDragEnd={onLinkDragEnd}
+              className={`flex items-center gap-3 bg-gray-800 rounded-lg p-3 transition-opacity ${
+                linkDragIdx === i ? 'opacity-40' : ''
+              } ${linkDropIdx === i && linkDragIdx !== null ? 'ring-1 ring-blue-500' : ''}`}
+            >
+              <span className="text-gray-600 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder">
+                &#x2630;
+              </span>
               <input
                 type="text"
                 value={link.title}
+                maxLength={40}
                 onChange={(e) => dispatch({ type: 'UPDATE_NAV_LINK', index: i, link: { ...link, title: e.target.value } })}
                 className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
                 placeholder="Title"
@@ -558,6 +584,7 @@ export default function EditSongPage() {
             <input
               type="text"
               value={newLinkTitle}
+              maxLength={40}
               onChange={(e) => setNewLinkTitle(e.target.value)}
               placeholder="Link title"
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
