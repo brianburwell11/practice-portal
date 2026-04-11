@@ -23,7 +23,7 @@ When you slow audio down, you're stretching small moments of sound into longer o
 
 **FLAC** is lossless. There are no artifacts to reveal, so it sounds clean at any speed. The tradeoff is file size: roughly 4-5x larger than Opus for the same audio.
 
-**Opus** at 128 kbps is the best lossy codec for this use case. Its design produces fewer of the "smearing" artifacts that become audible when stretched. At moderate slow-down (0.7x-0.85x), most listeners can't distinguish it from FLAC.
+**Opus** at 128 kbps is the best lossy codec for this use case. Its design produces fewer of the "smearing" artifacts that become audible when stretched. At moderate slow-down (0.7x-0.85x), most listeners can't distinguish it from FLAC. Opus also uses variable bitrate (VBR) by default — it spends more bits on complex passages like drum transients and fewer on sustained notes or silence, so file sizes vary by content even at the same target bitrate. MP3 at a fixed bitrate produces identical file sizes for the same duration regardless of content, which means it wastes bits on easy passages and starves hard ones.
 
 **MP3** at 192 kbps sounds fine at normal speed, but its reliance on the modified discrete cosine transform produces characteristic pre-echo artifacts around transients. At 0.5x, drum hits develop a metallic "swooshing" quality that's absent in the other two formats.
 

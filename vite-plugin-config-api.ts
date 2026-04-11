@@ -168,14 +168,14 @@ function measureLoudness(filePath: string): LoudnessInfo {
   return JSON.parse(jsonMatch[0]);
 }
 
-function transcodeToMp3(
+function transcodeToOpus(
   inputPath: string,
   outputPath: string,
   probe: ProbeResult,
   loudness?: LoudnessInfo,
 ): void {
   const isMono = probe.channels === 1;
-  const bitrate = isMono ? '128k' : '256k';
+  const bitrate = isMono ? '64k' : '128k';
   const channelFlag = isMono ? '-ac 1' : '';
   let filterFlag = '';
   if (loudness && parseFloat(loudness.input_i) <= 0) {
@@ -184,7 +184,7 @@ function transcodeToMp3(
     filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`;
   }
   execSync(
-    `ffmpeg -y -i "${inputPath}" ${filterFlag} -codec:a libmp3lame -b:a ${bitrate} ${channelFlag} -ar 44100 "${outputPath}"`,
+    `ffmpeg -y -i "${inputPath}" ${filterFlag} -codec:a libopus -b:a ${bitrate} ${channelFlag} -ar 48000 -vbr on "${outputPath}"`,
     { stdio: 'ignore' },
   );
 }
@@ -407,9 +407,9 @@ export function configApiPlugin(): Plugin {
               }
 
               const baseName = path.basename(origName, path.extname(origName));
-              const uploadName = `${baseName}.mp3`;
+              const uploadName = `${baseName}.opus`;
               const uploadPath = path.join(tmpDir, `out-${uploadName}`);
-              transcodeToMp3(tmpPath, uploadPath, probe, loudness);
+              transcodeToOpus(tmpPath, uploadPath, probe, loudness);
 
               // Upload to R2
               const key = `${r2Prefix}/${uploadName}`;
@@ -418,7 +418,7 @@ export function configApiPlugin(): Plugin {
                 Bucket: bucket,
                 Key: key,
                 Body: body,
-                ContentType: 'audio/mpeg',
+                ContentType: 'audio/opus',
                 CacheControl: 'public, max-age=31536000, immutable',
               }));
 
