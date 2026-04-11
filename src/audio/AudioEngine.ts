@@ -1,7 +1,17 @@
 import type { SongConfig, StemConfig, StemGroupConfig } from './types';
 import { TransportClock } from './TransportClock';
 import { StemPlayer } from './StemPlayer';
-import { SoundTouchNode } from '@soundtouchjs/audio-worklet';
+import { SoundTouchFallbackNode } from './SoundTouchFallbackNode';
+
+/** Common interface for both AudioWorklet and ScriptProcessorNode pitch correction paths */
+interface PitchCorrectorNode {
+  readonly audioNode: AudioNode;
+  setPlaybackRate(rate: number): void;
+  connect(dest: AudioNode): void;
+  disconnect(): void;
+}
+
+const hasAudioWorklet = typeof AudioWorkletNode !== 'undefined';
 
 interface GroupState {
   volume: number;
@@ -16,7 +26,7 @@ export class AudioEngine {
   readonly clock: TransportClock;
   readonly masterGain: GainNode;
   private mixBus: GainNode;
-  private soundtouchNode: SoundTouchNode | null = null;
+  private pitchNode: PitchCorrectorNode | null = null;
   private _tempoRatio = 1.0;
   private stems: Map<string, StemPlayer> = new Map();
   private _songConfig: SongConfig | null = null;
@@ -75,7 +85,8 @@ export class AudioEngine {
   }
 
   private async ensureWorkletRegistered(): Promise<void> {
-    if (this.workletRegistered) return;
+    if (!hasAudioWorklet || this.workletRegistered) return;
+    const { SoundTouchNode } = await import('@soundtouchjs/audio-worklet');
     await SoundTouchNode.register(
       this.ctx,
       `${import.meta.env.BASE_URL}soundtouch-processor.js`,
@@ -97,8 +108,8 @@ export class AudioEngine {
     // Register SoundTouch AudioWorklet processor (once)
     await this.ensureWorkletRegistered();
 
-    // Create shared SoundTouch node: mixBus → soundtouch → masterGain
-    this.connectSoundTouch();
+    // Create shared pitch corrector: mixBus → pitchNode → masterGain
+    await this.connectPitchNode();
 
     this._songConfig = config;
     this.clock.duration = config.durationSeconds;
@@ -154,16 +165,16 @@ export class AudioEngine {
     this.notify();
   }
 
-  play(): void {
+  async play(): Promise<void> {
     if (this.clock.playing || this.stems.size === 0) return;
 
-    // Resume AudioContext if suspended (browser autoplay policy)
+    // Resume AudioContext if suspended (mobile browsers require user gesture)
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      await this.ctx.resume();
     }
 
-    // Recreate SoundTouch node to flush internal buffers from previous playback
-    this.connectSoundTouch();
+    // Recreate pitch corrector to flush internal buffers from previous playback
+    await this.connectPitchNode();
 
     const offset = this.clock.currentTime;
     const when = this.ctx.currentTime + 0.01; // tiny future offset for sync
@@ -206,7 +217,7 @@ export class AudioEngine {
     this.notify();
   }
 
-  seek(seconds: number): void {
+  async seek(seconds: number): Promise<void> {
     const wasPlaying = this.clock.playing;
 
     if (wasPlaying) {
@@ -218,8 +229,8 @@ export class AudioEngine {
     this.clock.seek(seconds);
 
     if (wasPlaying) {
-      // Recreate SoundTouch node to flush internal buffers
-      this.connectSoundTouch();
+      // Recreate pitch corrector to flush internal buffers
+      await this.connectPitchNode();
       const when = this.ctx.currentTime + 0.01;
       for (const stem of this.stems.values()) {
         stem.start(when, seconds);
@@ -246,8 +257,8 @@ export class AudioEngine {
     this._tempoRatio = ratio;
     this.clock.setTempoRatio(ratio);
     // Pitch correction on the shared bus
-    if (this.soundtouchNode) {
-      this.soundtouchNode.playbackRate.value = ratio;
+    if (this.pitchNode) {
+      this.pitchNode.setPlaybackRate(ratio);
     }
     // Native playbackRate on each source (free, drives speed)
     for (const stem of this.stems.values()) {
@@ -397,16 +408,32 @@ export class AudioEngine {
     return peaks;
   }
 
-  /** (Re)create the shared SoundTouch node: mixBus → soundtouch → masterGain */
-  private connectSoundTouch(): void {
-    if (this.soundtouchNode) {
+  /** (Re)create the shared pitch corrector: mixBus → pitchNode → masterGain */
+  private async connectPitchNode(): Promise<void> {
+    if (this.pitchNode) {
       this.mixBus.disconnect();
-      this.soundtouchNode.disconnect();
+      this.pitchNode.disconnect();
     }
-    this.soundtouchNode = new SoundTouchNode(this.ctx);
-    this.soundtouchNode.playbackRate.value = this._tempoRatio;
-    this.mixBus.connect(this.soundtouchNode);
-    this.soundtouchNode.connect(this.masterGain);
+
+    let node: PitchCorrectorNode;
+    if (hasAudioWorklet) {
+      const { SoundTouchNode } = await import('@soundtouchjs/audio-worklet');
+      const stNode = new SoundTouchNode(this.ctx);
+      node = {
+        audioNode: stNode,
+        setPlaybackRate: (rate) => { stNode.playbackRate.value = rate; },
+        connect: (dest) => stNode.connect(dest),
+        disconnect: () => stNode.disconnect(),
+      };
+    } else {
+      const fallback = new SoundTouchFallbackNode(this.ctx);
+      node = fallback;
+    }
+
+    node.setPlaybackRate(this._tempoRatio);
+    this.mixBus.connect(node.audioNode);
+    node.connect(this.masterGain);
+    this.pitchNode = node;
   }
 
   private disposeStemPlayers(): void {
@@ -415,10 +442,10 @@ export class AudioEngine {
     }
     this.stems.clear();
     this._peakData = null;
-    if (this.soundtouchNode) {
+    if (this.pitchNode) {
       this.mixBus.disconnect();
-      this.soundtouchNode.disconnect();
-      this.soundtouchNode = null;
+      this.pitchNode.disconnect();
+      this.pitchNode = null;
     }
   }
 
