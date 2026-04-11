@@ -49,6 +49,7 @@ export class AudioEngine {
   private _loopB: number | null = null;
   private _loopEnabled = true;
   private loopCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private wakeLock: WakeLockSentinel | null = null;
 
   constructor() {
     this.ctx = new AudioContext();
@@ -57,6 +58,13 @@ export class AudioEngine {
     this.masterGain.connect(this.ctx.destination);
     // Mix bus: all stems connect here, single SoundTouch node sits between mixBus and masterGain
     this.mixBus = this.ctx.createGain();
+
+    // When iOS interrupts the AudioContext (screen lock), stop our playback state to match
+    this.ctx.addEventListener('statechange', () => {
+      if (this.ctx.state !== 'running' && this.clock.playing) {
+        this.pause();
+      }
+    });
   }
 
   get songConfig(): SongConfig | null {
@@ -181,8 +189,8 @@ export class AudioEngine {
   async play(): Promise<void> {
     if (this.clock.playing || this.stems.size === 0) return;
 
-    // Resume AudioContext if suspended (mobile browsers require user gesture)
-    if (this.ctx.state === 'suspended') {
+    // Resume AudioContext if not running (suspended by autoplay policy, or interrupted by screen lock)
+    if (this.ctx.state !== 'running') {
       await this.ctx.resume();
     }
 
@@ -202,6 +210,7 @@ export class AudioEngine {
     if (this._loopEnabled && this._loopA !== null && this._loopB !== null) {
       this.startLoopScheduler();
     }
+    this.acquireWakeLock();
     this.notify();
   }
 
@@ -215,6 +224,7 @@ export class AudioEngine {
 
     this.stopPositionUpdates();
     this.stopLoopScheduler();
+    this.releaseWakeLock();
     this.notify();
   }
 
@@ -227,6 +237,7 @@ export class AudioEngine {
 
     this.stopPositionUpdates();
     this.stopLoopScheduler();
+    this.releaseWakeLock();
     this.notify();
   }
 
@@ -473,6 +484,20 @@ export class AudioEngine {
   }
 
   /** (Re)create the shared pitch corrector: mixBus → pitchNode → masterGain */
+  private acquireWakeLock(): void {
+    if (this.wakeLock || !('wakeLock' in navigator)) return;
+    navigator.wakeLock.request('screen').then(
+      (lock) => { this.wakeLock = lock; },
+      () => {},
+    );
+  }
+
+  private releaseWakeLock(): void {
+    if (!this.wakeLock) return;
+    this.wakeLock.release().catch(() => {});
+    this.wakeLock = null;
+  }
+
   private async connectPitchNode(): Promise<void> {
     if (this.pitchNode) {
       this.mixBus.disconnect();
