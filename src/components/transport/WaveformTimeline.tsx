@@ -16,6 +16,8 @@ const HIT_PX = isCoarse ? 20 : 6;
 const MIN_VIEW = 5;
 /** Default zoom level in seconds for mobile */
 const DEFAULT_MOBILE_VIEW = 30;
+/** Default zoom level in seconds for desktop (songs > 4 min start zoomed) */
+const DEFAULT_DESKTOP_VIEW = 240;
 
 export function WaveformTimeline() {
   const engine = useAudioEngine();
@@ -35,7 +37,7 @@ export function WaveformTimeline() {
 
   // Viewport state — mobile starts zoomed to ~10s, desktop fully zoomed out
   const [viewStart, setViewStart] = useState(0);
-  const [viewDuration, setViewDuration] = useState(isCoarse ? DEFAULT_MOBILE_VIEW : Infinity);
+  const [viewDuration, setViewDuration] = useState(isCoarse ? DEFAULT_MOBILE_VIEW : DEFAULT_DESKTOP_VIEW);
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
   const [draggingMarker, setDraggingMarker] = useState<'A' | 'B' | null>(null);
   const suppressClickRef = useRef(false);
@@ -64,7 +66,7 @@ export function WaveformTimeline() {
   // Reset zoom when song changes
   useEffect(() => {
     setViewStart(0);
-    setViewDuration(isCoarse ? DEFAULT_MOBILE_VIEW : Infinity);
+    setViewDuration(isCoarse ? DEFAULT_MOBILE_VIEW : DEFAULT_DESKTOP_VIEW);
   }, [selectedSong?.id]);
 
   // Viewport coordinate helpers
