@@ -120,7 +120,7 @@ Skip decoding muted stems at load time. Decode on-demand when the user unmutes.
 
 ### Lazy Decode Monitor
 
-Drop audio files to simulate the lazy decode flow. All files start as "pending" — click "decode" on individual stems to see decode time and PCM memory cost, simulating what happens when a muted stem gets unmuted.
+All sample files are fetched but start as "pending" (not decoded). Click "decode" on individual stems to see decode time and PCM memory cost — this simulates what happens when a muted stem gets unmuted in the app.
 
 <div class="widget-sandbox" style="max-width: 560px; margin: 2rem auto;">
   <LazyDecodeMonitor client:load />
