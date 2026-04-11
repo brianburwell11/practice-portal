@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
+import { useLongPress } from '../../hooks/useLongPress';
 import { ChannelStrip } from './ChannelStrip';
 import { GroupStrip } from './GroupStrip';
 
@@ -19,40 +20,38 @@ export function MixerPanel() {
   const anySoloed = Object.values(stems).some((s) => s.soloed);
   const anyMuted = Object.values(stems).some((s) => s.muted);
 
-  const handleGlobalSolo = (e: React.MouseEvent) => {
-    if (e.shiftKey) {
-      // Shift+click: clear the solo group entirely
-      for (const [id, state] of Object.entries(stems)) {
-        if (state.soloed) engine.setStemSoloed(id, false);
-      }
-      clearSoloGroup();
-      return;
-    }
+  const handleToggleSolo = useCallback(() => {
     const newActive = !globalSoloActive;
     toggleGlobalSolo();
     for (const [id, state] of Object.entries(stems)) {
-      if (state.soloed) {
-        engine.setStemSoloed(id, newActive);
-      }
+      if (state.soloed) engine.setStemSoloed(id, newActive);
     }
-  };
+  }, [globalSoloActive, toggleGlobalSolo, stems, engine]);
 
-  const handleGlobalMute = (e: React.MouseEvent) => {
-    if (e.shiftKey) {
-      for (const [id, state] of Object.entries(stems)) {
-        if (state.muted) engine.setStemMuted(id, false);
-      }
-      clearMuteGroup();
-      return;
+  const handleClearSolo = useCallback(() => {
+    for (const [id, state] of Object.entries(stems)) {
+      if (state.soloed) engine.setStemSoloed(id, false);
     }
+    clearSoloGroup();
+  }, [stems, engine, clearSoloGroup]);
+
+  const handleToggleMute = useCallback(() => {
     const newActive = !globalMuteActive;
     toggleGlobalMute();
     for (const [id, state] of Object.entries(stems)) {
-      if (state.muted) {
-        engine.setStemMuted(id, newActive);
-      }
+      if (state.muted) engine.setStemMuted(id, newActive);
     }
-  };
+  }, [globalMuteActive, toggleGlobalMute, stems, engine]);
+
+  const handleClearMute = useCallback(() => {
+    for (const [id, state] of Object.entries(stems)) {
+      if (state.muted) engine.setStemMuted(id, false);
+    }
+    clearMuteGroup();
+  }, [stems, engine, clearMuteGroup]);
+
+  const soloHandlers = useLongPress(handleToggleSolo, handleClearSolo);
+  const muteHandlers = useLongPress(handleToggleMute, handleClearMute);
 
   // Compute which stems are grouped vs ungrouped
   const { ungroupedStems } = useMemo(() => {
@@ -80,7 +79,7 @@ export function MixerPanel() {
       {/* Global mute/solo */}
       <div className="flex gap-2 mb-3 md:w-[230px]">
         <button
-          onClick={handleGlobalMute}
+          {...muteHandlers}
           className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
             globalMuteActive && anyMuted
               ? 'bg-red-600 text-white border-red-600'
@@ -92,7 +91,7 @@ export function MixerPanel() {
           M
         </button>
         <button
-          onClick={handleGlobalSolo}
+          {...soloHandlers}
           className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
             globalSoloActive && anySoloed
               ? 'bg-yellow-500 text-gray-900 border-yellow-500'

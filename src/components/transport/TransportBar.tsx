@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
+import { useLongPress } from '../../hooks/useLongPress';
 import { WaveformTimeline } from './WaveformTimeline';
 import { TempoControl } from './TempoControl';
 import { TouchSlider } from '../ui/TouchSlider';
@@ -70,6 +71,22 @@ export function TransportBar() {
     }
     setVolEditing(false);
   };
+
+  const handleLoopTap = useCallback(() => {
+    if (loopA !== null && loopB !== null) {
+      engine.setLoopEnabled(!loopEnabled);
+    } else if (loopA !== null) {
+      engine.setLoop(loopA, position);
+    } else {
+      engine.setLoop(position, null);
+    }
+  }, [engine, loopA, loopB, loopEnabled, position]);
+
+  const handleLoopDoubleTap = useCallback(() => {
+    engine.clearLoop();
+  }, [engine]);
+
+  const loopHandlers = useLongPress(handleLoopTap, handleLoopDoubleTap);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -228,24 +245,12 @@ export function TransportBar() {
                   : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
             }`}
             disabled={disabled}
-            onClick={(e) => {
-              if (loopA !== null && loopB !== null) {
-                if (e.shiftKey) {
-                  engine.clearLoop();
-                } else {
-                  engine.setLoopEnabled(!loopEnabled);
-                }
-              } else if (loopA !== null) {
-                engine.setLoop(loopA, position);
-              } else {
-                engine.setLoop(position, null);
-              }
-            }}
+            {...loopHandlers}
             title={
               loopA !== null && loopB !== null
                 ? loopEnabled
-                  ? `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} — click to disable, shift+click to clear`
-                  : `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} (disabled) — click to enable, shift+click to clear`
+                  ? `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} — click to toggle, long-press to clear`
+                  : `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} (disabled) — click to toggle, long-press to clear`
                 : loopA !== null
                   ? `Loop in: ${formatTime(loopA)} — click to set out point`
                   : 'Set loop in point'
@@ -310,26 +315,14 @@ export function TransportBar() {
                 : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           disabled={disabled}
-          onClick={(e) => {
-            if (loopA !== null && loopB !== null) {
-              if (e.shiftKey) {
-                engine.clearLoop();
-              } else {
-                engine.setLoopEnabled(!loopEnabled);
-              }
-            } else if (loopA !== null) {
-              engine.setLoop(loopA, position);
-            } else {
-              engine.setLoop(position, null);
-            }
-          }}
+          {...loopHandlers}
           title={
             loopA !== null && loopB !== null
               ? loopEnabled
-                ? `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} — click to disable, shift+click to clear`
-                : `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} (disabled) — click to enable, shift+click to clear`
+                ? `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} — tap to toggle, long-press to clear`
+                : `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} (disabled) — tap to toggle, long-press to clear`
               : loopA !== null
-                ? `Loop in: ${formatTime(loopA)} — click to set out point`
+                ? `Loop in: ${formatTime(loopA)} — tap to set out point`
                 : 'Set loop in point'
           }
         >

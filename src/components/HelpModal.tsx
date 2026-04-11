@@ -16,6 +16,7 @@ const shortcuts = [
   { key: 'Cmd/Ctrl + Scroll', action: 'Zoom waveform in/out' },
   { key: 'Shift + Scroll', action: 'Scroll waveform left/right' },
   { key: 'Pinch', action: 'Zoom waveform (touch)' },
+  { key: 'Long-press', action: 'Clear loop / mute group / solo group (mobile)' },
 ];
 
 export function HelpModal({ onClose }: Props) {
