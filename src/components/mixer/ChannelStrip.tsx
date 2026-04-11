@@ -10,6 +10,8 @@ interface ChannelStripProps {
 export function ChannelStrip({ stemConfig }: ChannelStripProps) {
   const engine = useAudioEngine();
   const stemState = useMixerStore((s) => s.stems[stemConfig.id]);
+  const globalSoloActive = useMixerStore((s) => s.globalSoloActive);
+  const globalMuteActive = useMixerStore((s) => s.globalMuteActive);
   const { setStemVolume, setStemPan, setStemMuted, setStemSoloed, setStemStereo } = useMixerStore();
   const sourceChannels = engine.getStem(stemConfig.id)?.sourceChannels ?? 1;
 
@@ -104,20 +106,24 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
       <div className="flex gap-2">
         <button
           onClick={handleMute}
-          className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors ${
-            stemState.muted
-              ? 'bg-red-600 text-white'
-              : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+          className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
+            stemState.muted && globalMuteActive
+              ? 'bg-red-600 text-white border-red-600'
+              : stemState.muted && !globalMuteActive
+                ? 'bg-gray-700 text-gray-400 border-red-600'
+                : 'bg-gray-700 text-gray-400 hover:bg-gray-600 border-transparent'
           }`}
         >
           M
         </button>
         <button
           onClick={handleSolo}
-          className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors ${
-            stemState.soloed
-              ? 'bg-yellow-500 text-gray-900'
-              : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+          className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
+            stemState.soloed && globalSoloActive
+              ? 'bg-yellow-500 text-gray-900 border-yellow-500'
+              : stemState.soloed && !globalSoloActive
+                ? 'bg-gray-700 text-gray-400 border-yellow-500'
+                : 'bg-gray-700 text-gray-400 hover:bg-gray-600 border-transparent'
           }`}
         >
           S

@@ -27,6 +27,13 @@ export function TransportBar() {
   const stemLoading = useSongStore((s) => s.loading);
   const loadProgress = useSongStore((s) => s.loadProgress);
   const { masterVolume, setMasterVolume } = useMixerStore();
+  const mixerStems = useMixerStore((s) => s.stems);
+  const globalSoloActive = useMixerStore((s) => s.globalSoloActive);
+  const globalMuteActive = useMixerStore((s) => s.globalMuteActive);
+  const toggleGlobalSolo = useMixerStore((s) => s.toggleGlobalSolo);
+  const toggleGlobalMute = useMixerStore((s) => s.toggleGlobalMute);
+  const clearSoloGroup = useMixerStore((s) => s.clearSoloGroup);
+  const clearMuteGroup = useMixerStore((s) => s.clearMuteGroup);
 
   const disabled = !selectedSong;
   const [volEditing, setVolEditing] = useState(false);
@@ -78,24 +85,54 @@ export function TransportBar() {
         e.preventDefault();
         engine.setLoop(engine.loopA, position);
       }
-      if (e.key === '\\' && !disabled) {
+      if ((e.key === '\\' || e.key === 'c') && !disabled) {
         e.preventDefault();
         if (loopA !== null && loopB !== null) {
-          if (e.shiftKey) {
-            engine.clearLoop();
-          } else {
-            engine.setLoopEnabled(!loopEnabled);
-          }
+          engine.setLoopEnabled(!loopEnabled);
         }
+      }
+      if (e.key === '|' && !disabled) {
+        e.preventDefault();
+        engine.clearLoop();
       }
       if (e.key === '`') {
         e.preventDefault();
         toggleFollowPlayhead();
       }
+      if (e.key === 'm' && !disabled) {
+        e.preventDefault();
+        const newActive = !globalMuteActive;
+        toggleGlobalMute();
+        for (const [id, state] of Object.entries(mixerStems)) {
+          if (state.muted) engine.setStemMuted(id, newActive);
+        }
+      }
+      if (e.key === 'M' && !disabled) {
+        e.preventDefault();
+        for (const [id, state] of Object.entries(mixerStems)) {
+          if (state.muted) engine.setStemMuted(id, false);
+        }
+        clearMuteGroup();
+      }
+      if (e.key === 's' && !disabled) {
+        e.preventDefault();
+        const newActive = !globalSoloActive;
+        toggleGlobalSolo();
+        for (const [id, state] of Object.entries(mixerStems)) {
+          if (state.soloed) engine.setStemSoloed(id, newActive);
+        }
+      }
+      if (e.key === 'S' && !disabled) {
+        e.preventDefault();
+        for (const [id, state] of Object.entries(mixerStems)) {
+          if (state.soloed) engine.setStemSoloed(id, false);
+        }
+        clearSoloGroup();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [engine, playing, disabled, loopA, loopB, loopEnabled, position, toggleFollowPlayhead]);
+  }, [engine, playing, disabled, loopA, loopB, loopEnabled, position, toggleFollowPlayhead, mixerStems, globalSoloActive, globalMuteActive, toggleGlobalSolo, toggleGlobalMute, clearSoloGroup, clearMuteGroup]);
 
   const slidersGrid = (
     <div className="grid grid-cols-[2rem_1fr_2.5rem] md:grid-cols-[2rem_6rem_2.5rem] gap-x-2 gap-y-0.5 items-center">

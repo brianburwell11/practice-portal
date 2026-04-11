@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { HelpModal } from '../components/HelpModal';
 
 type DropdownId = 'songs' | 'setlists' | null;
 
@@ -57,6 +58,7 @@ export function AdminRibbon({
   onDeleteSetlist,
 }: Props) {
   const [open, setOpen] = useState<DropdownId>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const ribbonRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -150,6 +152,15 @@ export function AdminRibbon({
           {link.title}
         </a>
       ))}
+
+      <button
+        onClick={() => setShowHelp(true)}
+        className="ml-auto w-5 h-5 rounded-full border border-gray-600 text-gray-500 hover:text-gray-300 hover:border-gray-400 flex items-center justify-center text-xs leading-none transition-colors"
+        title="Help"
+      >
+        ?
+      </button>
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );
 }
