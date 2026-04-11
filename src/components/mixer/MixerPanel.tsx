@@ -143,8 +143,8 @@ export function MixerPanel() {
   return (
     <div className="flex-1 p-4 overflow-auto">
       {/* Global mute/solo + save defaults */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="flex gap-2 md:w-[230px]">
+      <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3">
+        <div className="flex gap-2 w-full md:w-[230px]">
           <button
             {...muteHandlers}
             className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${

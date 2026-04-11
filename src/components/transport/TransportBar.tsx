@@ -16,15 +16,20 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function parseTime(str: string): number | null {
-  const parts = str.split(':');
-  if (parts.length === 2) {
-    const m = parseInt(parts[0], 10);
-    const s = parseInt(parts[1], 10);
-    if (!isNaN(m) && !isNaN(s)) return m * 60 + s;
-  }
-  const n = parseFloat(str);
-  return isNaN(n) ? null : n;
+function parseTimeDigits(digits: string): number | null {
+  if (!digits) return null;
+  const padded = digits.padStart(3, '0');
+  const s = parseInt(padded.slice(-2), 10);
+  const m = parseInt(padded.slice(0, -2) || '0', 10);
+  return m * 60 + s;
+}
+
+function formatTimeInput(digits: string): string {
+  if (!digits) return '0:00';
+  const padded = digits.slice(0, 4).padStart(3, '0');
+  const s = padded.slice(-2);
+  const m = padded.slice(0, -2) || '0';
+  return `${parseInt(m, 10)}:${s}`;
 }
 
 function getMeasureBeat(tapMap: TapMapEntry[] | undefined, position: number): { measure: number; beat: number } | null {
@@ -95,6 +100,7 @@ export function TransportBar() {
   const [volEditing, setVolEditing] = useState(false);
   const [volEditValue, setVolEditValue] = useState('');
   const [showSliders, setShowSliders] = useState(false);
+  const [showBookmark, setShowBookmark] = useState(false);
   const [editingMeasure, setEditingMeasure] = useState(false);
   const [editingBeat, setEditingBeat] = useState(false);
   const [measureEditValue, setMeasureEditValue] = useState('');
@@ -350,23 +356,24 @@ export function TransportBar() {
             {editingTime ? (
               <input
                 type="text"
+                inputMode="numeric"
                 autoFocus
-                value={timeEditValue}
-                onChange={(e) => setTimeEditValue(e.target.value)}
+                value={formatTimeInput(timeEditValue)}
+                onChange={(e) => setTimeEditValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 onBlur={() => {
                   setEditingTime(false);
-                  const t = parseTime(timeEditValue);
+                  const t = parseTimeDigits(timeEditValue);
                   if (t !== null && t >= 0 && t <= duration) engine.seek(t);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') { setEditingTime(false); const t = parseTime(timeEditValue); if (t !== null && t >= 0 && t <= duration) engine.seek(t); }
+                  if (e.key === 'Enter') { setEditingTime(false); const t = parseTimeDigits(timeEditValue); if (t !== null && t >= 0 && t <= duration) engine.seek(t); }
                   if (e.key === 'Escape') setEditingTime(false);
                 }}
                 className="w-[5ch] text-sm text-center bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
               />
             ) : (
               <button
-                onClick={() => { if (playing) engine.pause(); setTimeEditValue(formatTime(position)); setEditingTime(true); }}
+                onClick={() => { if (playing) engine.pause(); setTimeEditValue(''); setEditingTime(true); }}
                 className="hover:text-white cursor-text"
               >{formatTime(position)}</button>
             )}
@@ -411,6 +418,7 @@ export function TransportBar() {
                 {editingMeasure ? (
                   <input
                     type="text"
+                    inputMode="numeric"
                     autoFocus
                     value={measureEditValue}
                     onChange={(e) => setMeasureEditValue(e.target.value)}
@@ -425,6 +433,7 @@ export function TransportBar() {
                 {editingBeat ? (
                   <input
                     type="text"
+                    inputMode="numeric"
                     autoFocus
                     value={beatEditValue}
                     onChange={(e) => setBeatEditValue(e.target.value)}
@@ -506,24 +515,161 @@ export function TransportBar() {
         >
           &#x21BB;
         </button>
-        <div className="font-mono text-sm text-gray-300 ml-1">
-          {formatTime(position)} / {formatTime(duration)}
-        </div>
-
         {/* Mobile slider toggle */}
         <button
-          className="w-12 h-12 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-lg transition-colors"
+          className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
+            showSliders ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+          }`}
           onClick={() => setShowSliders(!showSliders)}
           title="Volume & Speed"
         >
-          {showSliders ? '\u2715' : '\u266A'}
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="2" y1="14" x2="6" y2="14" />
+            <line x1="12" y1="21" x2="12" y2="8" /><line x1="12" y1="4" x2="12" y2="3" /><line x1="10" y1="8" x2="14" y2="8" />
+            <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="18" y1="16" x2="22" y2="16" />
+          </svg>
+        </button>
+
+        {/* Mobile bookmark toggle */}
+        <button
+          className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
+            showBookmark ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+          }`}
+          onClick={() => setShowBookmark(!showBookmark)}
+          title="Position & Sections"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
         </button>
       </div>
 
-      {/* Mobile: collapsible volume + speed sliders (row 3) */}
+      {/* Mobile: collapsible volume + speed sliders */}
       {showSliders && (
         <div className="mt-2 md:hidden">
           {slidersGrid}
+        </div>
+      )}
+
+      {/* Mobile: bookmark panel (position, measure/beat, section jump) */}
+      {showBookmark && (
+        <div className="mt-2 md:hidden flex items-center justify-center gap-4">
+          <div className="font-mono text-sm text-gray-300">
+            {editingTime ? (
+              <input
+                type="text"
+                inputMode="numeric"
+                autoFocus
+                value={formatTimeInput(timeEditValue)}
+                onChange={(e) => setTimeEditValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onBlur={() => {
+                  setEditingTime(false);
+                  const t = parseTimeDigits(timeEditValue);
+                  if (t !== null && t >= 0 && t <= duration) engine.seek(t);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { setEditingTime(false); const t = parseTimeDigits(timeEditValue); if (t !== null && t >= 0 && t <= duration) engine.seek(t); }
+                  if (e.key === 'Escape') setEditingTime(false);
+                }}
+                className="w-[5ch] text-sm text-center bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
+              />
+            ) : (
+              <button
+                onClick={() => { if (playing) engine.pause(); setTimeEditValue(''); setEditingTime(true); }}
+                className="hover:text-white cursor-text"
+              >{formatTime(position)}</button>
+            )}
+            <span> / {formatTime(duration)}</span>
+          </div>
+          {(() => {
+            const hasTapMap = selectedSong?.tapMap && selectedSong.tapMap.length > 0;
+            if (!hasTapMap) return null;
+            const mb = getMeasureBeat(selectedSong?.tapMap, position);
+            const measure = mb?.measure ?? 0;
+            const beat = mb?.beat ?? 0;
+            const startMeasureEdit = () => {
+              if (playing) engine.pause();
+              setMeasureEditValue(String(measure));
+              setEditingMeasure(true);
+            };
+            const commitMeasure = () => {
+              setEditingMeasure(false);
+              const num = parseInt(measureEditValue, 10);
+              if (!isNaN(num) && num > 0) {
+                const t = measureBeatToTime(selectedSong?.tapMap, num, 1);
+                if (t !== null) engine.seek(t);
+              }
+            };
+            const startBeatEdit = () => {
+              if (playing) engine.pause();
+              setBeatEditValue(String(beat));
+              setEditingBeat(true);
+            };
+            const commitBeat = () => {
+              setEditingBeat(false);
+              const num = parseInt(beatEditValue, 10);
+              if (!isNaN(num) && num > 0) {
+                const t = measureBeatToTime(selectedSong?.tapMap, measure || 1, num);
+                if (t !== null) engine.seek(t);
+              }
+            };
+            return (
+              <div className="font-mono text-sm text-gray-500 flex items-center">
+                {editingMeasure ? (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoFocus
+                    value={measureEditValue}
+                    onChange={(e) => setMeasureEditValue(e.target.value)}
+                    onBlur={commitMeasure}
+                    onKeyDown={(e) => { if (e.key === 'Enter') commitMeasure(); if (e.key === 'Escape') setEditingMeasure(false); }}
+                    className="w-[3ch] text-sm text-right bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
+                  />
+                ) : (
+                  <button onClick={startMeasureEdit} className="inline-block w-[2.5ch] text-right hover:text-gray-300 cursor-text">{measure}</button>
+                )}
+                <span className="text-gray-600 mx-0.5">|</span>
+                {editingBeat ? (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoFocus
+                    value={beatEditValue}
+                    onChange={(e) => setBeatEditValue(e.target.value)}
+                    onBlur={commitBeat}
+                    onKeyDown={(e) => { if (e.key === 'Enter') commitBeat(); if (e.key === 'Escape') setEditingBeat(false); }}
+                    className="w-[2ch] text-sm bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
+                  />
+                ) : (
+                  <button onClick={startBeatEdit} className="inline-block w-[1.5ch] hover:text-gray-300 cursor-text">{beat}</button>
+                )}
+              </div>
+            );
+          })()}
+          {(() => {
+            const sections = selectedSong?.tapMap?.filter((e) => e.type === 'section');
+            if (!sections || sections.length === 0) return null;
+            return (
+              <select
+                className="text-xs bg-gray-700 border border-gray-600 rounded px-1 py-1.5 min-h-[44px] text-gray-400 cursor-pointer outline-none focus:border-blue-500 font-sans"
+                value=""
+                onChange={(e) => {
+                  const time = parseFloat(e.target.value);
+                  if (!isNaN(time)) {
+                    if (playing) engine.pause();
+                    engine.seek(time);
+                  }
+                  e.target.value = '';
+                }}
+              >
+                <option value="" disabled>Jump to Section</option>
+                {sections.map((s, i) => (
+                  <option key={i} value={s.time}>{s.label || `Section ${i + 1}`}</option>
+                ))}
+              </select>
+            );
+          })()}
         </div>
       )}
 
