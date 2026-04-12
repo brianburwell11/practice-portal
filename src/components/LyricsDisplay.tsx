@@ -1,22 +1,29 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
+import { useAudioEngine } from '../hooks/useAudioEngine';
 import { useTransportStore } from '../store/transportStore';
 import { useLyricsStore } from '../store/lyricsStore';
 
 const PRE_SHIFT_MS = 500;
 
 export function LyricsDisplay() {
+  const engine = useAudioEngine();
   const position = useTransportStore((s) => s.position);
+  const playing = useTransportStore((s) => s.playing);
   const lines = useLyricsStore((s) => s.lines);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLSpanElement | null)[]>([]);
-  const [targetIndex, setTargetIndex] = useState(0);
+  const [targetIndex, setTargetIndex] = useState(-1);
   const [translateX, setTranslateX] = useState(0);
+  const manualOffsetRef = useRef(0);
+  const scrollLockedRef = useRef(false);
+  const resumeAtIndexRef = useRef(-1);
 
-  // Compute which lyric should be centered based on position + 500ms pre-shift
+  // Compute which lyric should be bolded based on playback position
   const computeTarget = useCallback(() => {
-    if (lines.length === 0) return 0;
-    let idx = 0;
+    if (lines.length === 0) return -1;
+    let idx = -1;
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].time! <= position) idx = i;
     }
@@ -28,25 +35,100 @@ export function LyricsDisplay() {
     return idx;
   }, [lines, position]);
 
-  // Update target index
+  // Update target index (always tracks playback, even during manual scroll)
   useEffect(() => {
     const next = computeTarget();
     if (next !== targetIndex) setTargetIndex(next);
   }, [computeTarget, targetIndex]);
 
-  // Compute translateX to center the target element
+  // Compute autoscroll translateX for a given index
+  const getAutoTranslateX = useCallback((idx: number) => {
+    const container = containerRef.current;
+    const elIdx = idx >= 0 ? idx : 0;
+    const el = itemRefs.current[elIdx];
+    if (!container || !el) return 0;
+    const containerWidth = container.offsetWidth;
+    const center = containerWidth * 0.25;
+    return center - el.offsetLeft - el.offsetWidth / 2;
+  }, []);
+
+  // Check if scroll lock should be released
+  useEffect(() => {
+    if (!scrollLockedRef.current || resumeAtIndexRef.current < 0) return;
+    if (targetIndex >= resumeAtIndexRef.current) {
+      scrollLockedRef.current = false;
+      resumeAtIndexRef.current = -1;
+      manualOffsetRef.current = 0;
+    }
+  }, [targetIndex]);
+
+  // On pause, clear scroll lock and snap to current lyric
+  useEffect(() => {
+    if (!playing) {
+      scrollLockedRef.current = false;
+      resumeAtIndexRef.current = -1;
+      manualOffsetRef.current = 0;
+      setTranslateX(getAutoTranslateX(targetIndex));
+    }
+  }, [playing, targetIndex, getAutoTranslateX]);
+
+  // Compute translateX — autoscroll unless manually scrolled
+  useEffect(() => {
+    if (scrollLockedRef.current) return;
+    const tx = getAutoTranslateX(targetIndex);
+    setTranslateX(tx);
+  }, [targetIndex, lines, getAutoTranslateX]);
+
+  // Find which lyric is closest to the 25% reading point at current translateX
+  const findIndexAtReadingPoint = useCallback((tx: number) => {
+    const container = containerRef.current;
+    if (!container) return -1;
+    const readingX = container.offsetWidth * 0.25;
+    let closest = 0;
+    let closestDist = Infinity;
+    for (let i = 0; i < lines.length; i++) {
+      const el = itemRefs.current[i];
+      if (!el) continue;
+      const elCenter = el.offsetLeft + el.offsetWidth / 2 + tx;
+      const dist = Math.abs(elCenter - readingX);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = i;
+      }
+    }
+    return closest;
+  }, [lines]);
+
+  // Shift+scroll handler
   useEffect(() => {
     const container = containerRef.current;
-    const el = itemRefs.current[targetIndex];
-    if (!container || !el) return;
+    if (!container) return;
 
-    const containerWidth = container.offsetWidth;
-    const elLeft = el.offsetLeft;
-    const elWidth = el.offsetWidth;
-    const center = containerWidth * 0.25;
+    const handleWheel = (e: WheelEvent) => {
+      if (!e.shiftKey) return;
+      e.preventDefault();
 
-    setTranslateX(center - elLeft - elWidth / 2);
-  }, [targetIndex, lines]);
+      // Enter scroll lock mode
+      if (!scrollLockedRef.current) {
+        scrollLockedRef.current = true;
+        manualOffsetRef.current = 0;
+      }
+
+      // Apply scroll delta
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      manualOffsetRef.current -= delta;
+
+      const autoTx = getAutoTranslateX(targetIndex);
+      const newTx = autoTx + manualOffsetRef.current;
+      setTranslateX(newTx);
+
+      // Find which lyric is at the reading point and set as resume target
+      resumeAtIndexRef.current = findIndexAtReadingPoint(newTx);
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [targetIndex, getAutoTranslateX, findIndexAtReadingPoint]);
 
   if (lines.length === 0) return null;
 
@@ -65,10 +147,11 @@ export function LyricsDisplay() {
 
       {/* Scrolling lyrics */}
       <div
+        ref={trackRef}
         className="flex items-center gap-4 whitespace-nowrap h-full"
         style={{
           transform: `translateX(${translateX}px)`,
-          transition: 'transform 500ms ease',
+          transition: scrollLockedRef.current ? 'none' : 'transform 500ms ease',
         }}
       >
         {lines.map((line, i) => {
@@ -79,7 +162,8 @@ export function LyricsDisplay() {
             <span
               key={i}
               ref={(el) => { itemRefs.current[i] = el; }}
-              className={`text-sm transition-opacity duration-300 shrink-0 ${
+              onClick={() => { if (line.time !== null) engine.seek(line.time); }}
+              className={`text-sm transition-all duration-300 shrink-0 cursor-pointer hover:text-gray-100 ${
                 line.instrumental
                   ? isCurrent
                     ? 'mx-3 text-gray-400'
