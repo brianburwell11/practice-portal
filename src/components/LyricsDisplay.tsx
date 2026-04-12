@@ -53,9 +53,17 @@ export function LyricsDisplay() {
   return (
     <div
       ref={containerRef}
-      className="relative overflow-hidden px-4 py-2 border-b border-gray-700"
+      className="relative overflow-hidden py-2 border-b border-gray-700"
       style={{ height: 40 }}
     >
+      {/* Microphone icon — aligned under play/pause */}
+      <div className="absolute left-0 top-0 h-full z-10 flex items-center pl-14 md:pl-20 pr-4"
+        style={{ background: 'linear-gradient(to right, var(--band-bg, #111827) 70%, transparent)' }}
+      >
+        <span className="text-4xl leading-none">🎤</span>
+      </div>
+
+      {/* Scrolling lyrics */}
       <div
         className="flex items-center gap-4 whitespace-nowrap h-full"
         style={{
