@@ -2,6 +2,7 @@ import { useState, lazy, Suspense } from 'react';
 import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
+import { LyricsDisplay } from './components/LyricsDisplay';
 import { MixerPanel } from './components/mixer/MixerPanel';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
 import { LyricsEditorModal } from './components/lyrics-editor/LyricsEditorModal';
@@ -104,6 +105,9 @@ export default function App() {
 
         {/* Transport controls */}
         <TransportBar />
+
+        {/* Lyrics */}
+        <LyricsDisplay />
 
         {/* Mixer */}
         <MixerPanel />
