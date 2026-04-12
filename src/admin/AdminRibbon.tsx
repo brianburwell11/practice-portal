@@ -11,6 +11,7 @@ interface Props {
   onAddSong?: () => void;
   onEditSong?: () => void;
   onTapMapEditor?: () => void;
+  onLyricsEditor?: () => void;
   onDeleteSong?: () => void;
   onAddSetlist?: () => void;
   onEditSetlist?: () => void;
@@ -52,6 +53,7 @@ export function AdminRibbon({
   onAddSong,
   onEditSong,
   onTapMapEditor,
+  onLyricsEditor,
   onDeleteSong,
   onAddSetlist,
   onEditSetlist,
@@ -97,6 +99,7 @@ export function AdminRibbon({
                 <MenuItem label="Add Song" enabled onClick={() => { close(); onAddSong?.(); }} />
                 <MenuItem label="Edit Song" enabled={!!hasSong} onClick={() => { close(); onEditSong?.(); }} />
                 <MenuItem label="TapMap Editor" enabled={!!hasSong} onClick={() => { close(); onTapMapEditor?.(); }} />
+                <MenuItem label="Lyrics Editor" enabled={!!hasSong} onClick={() => { close(); onLyricsEditor?.(); }} />
                 <MenuItem label="Delete Song" enabled={!!hasSong} danger onClick={() => { close(); onDeleteSong?.(); }} />
               </div>
             )}
