@@ -6,6 +6,7 @@ tags: ["audio", "admin", "wizard", "alignment", "plan"]
 ---
 
 import { StemAlignmentSandbox } from '../../components/react/StemAlignmentSandbox';
+import { StemDragSandbox } from '../../components/react/StemDragSandbox';
 
 ## Sandbox note
 
@@ -95,13 +96,29 @@ Live prototype of the per-stem peak renderer and the `AlignmentPlayback` engine,
 └──────────────────────────────────────────────────────┘
 ```
 
-- [ ] `AlignmentStep.tsx` skeleton, wired into `AdminWizard`
-- [ ] Render colored peak waveforms on canvas, one row per stem
-- [ ] Horizontal pointer-drag (pointerdown/move/up) tracking `startClientX` + `startOffsetSec`
-- [ ] Keyboard nudge on focused row: arrow = ±1ms, shift+arrow = ±10ms
-- [ ] Per-row mute/solo buttons styled like existing ChannelStrip
-- [ ] Transport bar: play/pause + click-to-seek; duration = `max(offsetSec + bufferDuration)` across stems
-- [ ] Offsets persist in wizard state (back/forward preserves work)
+- [x] `AlignmentStep.tsx` skeleton, wired into `AdminWizard`
+- [x] Render colored peak waveforms on canvas, one row per stem
+- [x] Horizontal pointer-drag (pointerdown/move/up) tracking `startClientX` + `startOffsetSec`
+- [x] Keyboard nudge on focused row: arrow = ±1ms, shift+arrow = ±10ms, alt+arrow = ±100ms
+- [x] Per-row mute/solo buttons styled like existing ChannelStrip
+- [x] Transport bar: play/pause + click-to-seek; duration = `max(offsetSec + bufferDuration)` across stems
+- [x] Offsets persist in wizard state (back/forward preserves work)
+- [x] Cmd/Ctrl + scroll zoom around cursor (from Phase 3 sandbox)
+- [x] Directly editable/copy-paste millisecond offset input per stem (from Phase 3 sandbox)
+- [x] Playhead rendered in each row's viewport + transport scrubber (from Phase 3 sandbox)
+- [x] Click-to-seek on any waveform
+
+### Drag & nudge sandbox
+
+Stripped-down sandbox to dial in the drag + keyboard-nudge feel before wiring it into `AlignmentStep`. Two stems only, no transport detail, no zoom. **Drag a row** to reposition it. **Click a row to focus** (blue outline), then arrow keys nudge:
+
+- `←` / `→` — ±1 ms
+- `shift + ←/→` — ±10 ms
+- `alt + ←/→` — ±100 ms
+
+**Play from 0** plays the current alignment so you can verify by ear. The white vertical line at the left edge of each row marks `t=0`; dragging right of it adds silence at the head on transcode, dragging left of it trims the head.
+
+<StemDragSandbox client:only="react" />
 
 ## Phase 5: Bake offsets into transcode
 
