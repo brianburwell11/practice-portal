@@ -94,6 +94,7 @@ export function LyricsEditorModal() {
         e.preventDefault();
         const after = focusedIndex ?? lines.length - 1;
         insertLineAfter(after, { text: '', time: null, instrumental: true });
+        focusRow(after + 1);
         return;
       }
 
@@ -250,11 +251,12 @@ export function LyricsEditorModal() {
                 }}
                 onPaste={(e) => {
                   if (line.instrumental) { e.preventDefault(); return; }
-                  const text = e.clipboardData.getData('text');
+                  const raw = e.clipboardData.getData('text');
+                  const text = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
                   if (text.includes('\n')) {
                     e.preventDefault();
                     const pastedLines = text.split('\n');
-                    updateLine(i, line.text + pastedLines[0]);
+                    updateLine(i, line.text + pastedLines[0].trim());
                     const newLines = pastedLines.slice(1).map((t) => ({
                       text: t.trim(),
                       time: null,
