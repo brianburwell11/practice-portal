@@ -32,12 +32,12 @@ export async function getAudioDuration(file: File): Promise<number> {
   return info.duration;
 }
 
-/** Decode an audio file and return its duration and channel count. */
-export async function getAudioInfo(file: File): Promise<{ duration: number; channels: number }> {
+/** Decode an audio file and return its duration, channel count, and decoded buffer. */
+export async function getAudioInfo(file: File): Promise<{ duration: number; channels: number; buffer: AudioBuffer }> {
   const ctx = new OfflineAudioContext(1, 1, 44100);
-  const buffer = await file.arrayBuffer();
-  const audio = await ctx.decodeAudioData(buffer);
-  return { duration: audio.duration, channels: audio.numberOfChannels };
+  const bytes = await file.arrayBuffer();
+  const audio = await ctx.decodeAudioData(bytes);
+  return { duration: audio.duration, channels: audio.numberOfChannels, buffer: audio };
 }
 
 function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {

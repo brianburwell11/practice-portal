@@ -83,10 +83,12 @@ export function StemsStep({ state, dispatch }: Props) {
       try {
         const infos = await Promise.all(files.map(getAudioInfo));
         const stems = buildStems(files);
-        // Attach detected channel counts (buildStems reorders, so match by file ref)
-        const channelMap = new Map(files.map((f, i) => [f, infos[i].channels]));
+        // Attach detected channel counts + decoded buffers (buildStems reorders, so match by file ref)
+        const infoMap = new Map(files.map((f, i) => [f, infos[i]]));
         for (const stem of stems) {
-          stem.channels = channelMap.get(stem.file) ?? 1;
+          const info = infoMap.get(stem.file);
+          stem.channels = info?.channels ?? 1;
+          stem.buffer = info?.buffer;
         }
         const duration = infos[0].duration;
         dispatch({ type: 'SET_STEMS', stems, durationSeconds: Math.round(duration * 100) / 100 });

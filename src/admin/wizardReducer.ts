@@ -12,6 +12,8 @@ export interface StemEntry {
   channels: number;
   stereo: boolean;
   offsetSec: number;
+  /** Decoded buffer cached at upload time — used by the alignment step for peaks + playback. */
+  buffer?: AudioBuffer;
 }
 
 export interface WizardState {

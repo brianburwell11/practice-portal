@@ -5,6 +5,8 @@ pubDate: "Apr 13 2026"
 tags: ["audio", "admin", "wizard", "alignment", "plan"]
 ---
 
+import { StemAlignmentSandbox } from '../../components/react/StemAlignmentSandbox';
+
 ## Sandbox note
 
 Alongside this work, the docs portal itself will host experiments — interactive widgets and sandboxed UI elements built against a fresh set of audio samples. Those samples let us prototype waveform rendering, drag-alignment interactions, and per-stem playback engines in isolation before wiring them into the admin wizard. Expect new MDX pages with React widgets landing next to this plan as the phases progress.
@@ -67,11 +69,18 @@ Captured during the planning conversation:
 
 ## Phase 3: Peak computation + playback engine
 
-- [ ] `stemPeaks.ts`: `computePeaks(buffer: AudioBuffer, bucketCount = 2048): Float32Array`, mirroring `AudioEngine.computeMergedPeaks` but per-stem
-- [ ] Cache decoded `AudioBuffer` on `StemEntry` during upload (skip re-decode in alignment step)
-- [ ] `alignmentPlayback.ts`: class with `load`, `play`, `pause`, `seek`, `setOffset`, `setMuted`, `setSoloed`
-- [ ] Offset handled at scheduling time: if `pos >= offsetSec`, start now at buffer offset `pos - offsetSec`; otherwise schedule `start` at `ctx.currentTime + (offsetSec - pos)` with buffer offset 0
-- [ ] Solo/mute precedence matches `AudioEngine.recalcAllGains`
+- [x] `stemPeaks.ts`: `computePeaks(buffer: AudioBuffer, bucketCount = 2048): Float32Array`, mirroring `AudioEngine.computeMergedPeaks` but per-stem
+- [x] Cache decoded `AudioBuffer` on `StemEntry` during upload (skip re-decode in alignment step)
+- [x] `alignmentPlayback.ts`: class with `load`, `play`, `pause`, `seek`, `setOffset`, `setMuted`, `setSoloed`
+- [x] Offset handled at scheduling time: if `pos >= offsetSec`, start now at buffer offset `pos - offsetSec`; otherwise schedule `start` at `ctx.currentTime + (offsetSec - pos)` with buffer offset 0
+- [x] Solo/mute precedence matches `AudioEngine.recalcAllGains`
+- [x] Docs sandbox widget (`StemAlignmentSandbox`) prototyping peaks + engine against the 10s samples
+
+### Sandbox
+
+Live prototype of the per-stem peak renderer and the `AlignmentPlayback` engine, running against the four 10-second samples in `docs/public/audio-samples/10s/`. Each row shows one stem's waveform in its own color. The **offset** slider moves that stem in time — positive values delay its start, negative values start it partway through. **M** mutes, **S** solos, and solo takes precedence over mute-less stems (matches `AudioEngine.recalcAllGains`). **Cmd/Ctrl + scroll** over a waveform zooms in/out around the cursor. Drag-to-align and keyboard nudge ship in Phase 4.
+
+<StemAlignmentSandbox client:only="react" />
 
 ## Phase 4: AlignmentStep UI
 
