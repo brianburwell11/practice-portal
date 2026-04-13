@@ -31,6 +31,8 @@ export default function App() {
   const selectedSong = useSongStore((s) => s.selectedSong);
   const openMarkerEditor = useMarkerEditorStore((s) => s.open);
   const openLyricsEditor = useLyricsEditorStore((s) => s.open);
+  const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
+  const editorLines = useLyricsEditorStore((s) => s.lines);
   const currentBand = useBandStore((s) => s.currentBand);
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -106,15 +108,14 @@ export default function App() {
         {/* Transport controls */}
         <TransportBar />
 
-        {/* Lyrics */}
-        <LyricsDisplay />
+        {/* Lyrics display — uses editor lines as live preview when editor is open */}
+        <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
 
-        {/* Mixer */}
-        <MixerPanel />
+        {/* Editor replaces mixer when open */}
+        {lyricsEditorOpen ? <LyricsEditorModal /> : <MixerPanel />}
       </div>
 
       <MarkerEditorModal />
-      <LyricsEditorModal />
       {showDeleteModal && selectedSong && (
         <DeleteSongModal
           songId={selectedSong.id}

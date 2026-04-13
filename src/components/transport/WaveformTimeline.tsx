@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
+import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
 import type { TapMapEntry } from '../../audio/types';
 import { markersToSeconds } from '../../audio/tempoUtils';
 
@@ -23,6 +24,9 @@ export function WaveformTimeline() {
   const engine = useAudioEngine();
   const { position, duration, loopA, loopB, loopEnabled, followPlayhead, setFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
+  const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
+  const lyricsLines = useLyricsEditorStore((s) => s.lines);
+  const moveLyricLine = useLyricsEditorStore((s) => s.moveLine);
 
   // Main canvas refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -133,6 +137,29 @@ export function WaveformTimeline() {
     [loopA, loopB, secondsToPixel],
   );
 
+  // Lyric marker drag state
+  const dragLyricRef = useRef<{ index: number; time: number } | null>(null);
+
+  const hitTestLyricMarker = useCallback(
+    (pixelX: number): number | null => {
+      if (!lyricsEditorOpen || !lyricsLines.length) return null;
+      const { width } = sizeRef.current;
+      if (width === 0) return null;
+      let closest: { index: number; dist: number } | null = null;
+      for (let i = 0; i < lyricsLines.length; i++) {
+        const t = lyricsLines[i].time;
+        if (t === null) continue;
+        const mx = secondsToPixel(t, width);
+        const dist = Math.abs(pixelX - mx);
+        if (dist <= HIT_PX && (!closest || dist < closest.dist)) {
+          closest = { index: i, dist };
+        }
+      }
+      return closest?.index ?? null;
+    },
+    [lyricsEditorOpen, lyricsLines, secondsToPixel],
+  );
+
   const [cursorStyle, setCursorStyle] = useState<string>('pointer');
 
   // --- Pointer event handlers (unified mouse + touch) ---
@@ -158,7 +185,17 @@ export function WaveformTimeline() {
         return;
       }
 
-      // Single pointer: check loop marker hit first
+      // Single pointer: check lyric marker hit first
+      const lyricHit = hitTestLyricMarker(x);
+      if (lyricHit !== null) {
+        e.preventDefault();
+        dragLyricRef.current = { index: lyricHit, time: lyricsLines[lyricHit].time! };
+        didDragRef.current = false;
+        suppressClickRef.current = false;
+        return;
+      }
+
+      // Check loop marker hit
       const hit = hitTestLoopMarker(x);
       if (hit) {
         e.preventDefault();
@@ -172,7 +209,7 @@ export function WaveformTimeline() {
       dragStartRef.current = { x: e.clientX, viewStart };
       didDragRef.current = false;
     },
-    [hitTestLoopMarker, effectiveViewDuration, viewStart],
+    [hitTestLoopMarker, hitTestLyricMarker, lyricsLines, effectiveViewDuration, viewStart],
   );
 
   const handlePointerMove = useCallback(
@@ -194,6 +231,14 @@ export function WaveformTimeline() {
         const newStart = centerSeconds - (pinchStartRef.current.centerX / sizeRef.current.width) * newDuration;
         setViewDuration(newDuration);
         setViewStart(clampViewStart(newStart, newDuration));
+        return;
+      }
+
+      // Single pointer: drag lyric marker
+      if (dragLyricRef.current) {
+        const seconds = pixelToSeconds(x, sizeRef.current.width);
+        dragLyricRef.current.time = Math.max(0, Math.min(seconds, duration || 0));
+        suppressClickRef.current = true;
         return;
       }
 
@@ -226,12 +271,13 @@ export function WaveformTimeline() {
 
       // Hover effects (non-touch only)
       if (!isCoarse) {
+        const lyricIdx = hitTestLyricMarker(x);
         const hit = hitTestLoopMarker(x);
-        setCursorStyle(hit ? 'col-resize' : 'pointer');
+        setCursorStyle(lyricIdx !== null || hit ? 'col-resize' : 'pointer');
         setHoveredTime(findSnapMarker(x));
       }
     },
-    [draggingMarker, findSnapMarker, hitTestLoopMarker, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead],
+    [draggingMarker, findSnapMarker, hitTestLoopMarker, hitTestLyricMarker, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead],
   );
 
   const handlePointerUp = useCallback(
@@ -243,6 +289,15 @@ export function WaveformTimeline() {
         if (pointersRef.current.size < 2) {
           pinchStartRef.current = null;
         }
+        dragStartRef.current = null;
+        return;
+      }
+
+      // End lyric marker drag
+      if (dragLyricRef.current) {
+        moveLyricLine(dragLyricRef.current.index, dragLyricRef.current.time);
+        dragLyricRef.current = null;
+        suppressClickRef.current = true;
         dragStartRef.current = null;
         return;
       }
@@ -275,7 +330,7 @@ export function WaveformTimeline() {
         setFollowPlayhead(true);
       }
     },
-    [draggingMarker, duration, findSnapMarker, pixelToSeconds, engine, setFollowPlayhead],
+    [draggingMarker, moveLyricLine, duration, findSnapMarker, pixelToSeconds, engine, setFollowPlayhead],
   );
 
   const handlePointerLeave = useCallback(
@@ -288,6 +343,7 @@ export function WaveformTimeline() {
       if (pointersRef.current.size < 2) {
         pinchStartRef.current = null;
       }
+      dragLyricRef.current = null;
       dragStartRef.current = null;
       didDragRef.current = false;
       setCursorStyle('pointer');
@@ -447,8 +503,37 @@ export function WaveformTimeline() {
           ctx.fillText(marker.name, labelX + 1, 3);
         }
       }
+
+      // Lyric markers (when editor is open)
+      if (lyricsEditorOpen && lyricsLines.length > 0) {
+        ctx.font = '9px ui-monospace, monospace';
+        ctx.textBaseline = 'bottom';
+        for (let i = 0; i < lyricsLines.length; i++) {
+          const t = dragLyricRef.current?.index === i
+            ? dragLyricRef.current.time
+            : lyricsLines[i].time;
+          if (t === null) continue;
+          const x = toPixel(t);
+          if (x < -1 || x > width + 1) continue;
+
+          ctx.strokeStyle = '#06b6d4';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+
+          const label = String(i + 1);
+          const tw = ctx.measureText(label).width;
+          const lx = Math.min(x - tw / 2, width - tw - 2);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(Math.max(0, lx - 1), height - 13, tw + 4, 12);
+          ctx.fillStyle = '#06b6d4';
+          ctx.fillText(label, Math.max(1, lx + 1), height - 2);
+        }
+      }
     },
-    [selectedSong],
+    [selectedSong, lyricsEditorOpen, lyricsLines],
   );
 
   // Draw main canvas (viewport-relative)

@@ -5,71 +5,35 @@ const MAX_UNDO = 50;
 
 interface LyricsEditorState {
   isOpen: boolean;
-  step: 'input' | 'sync';
   lines: LyricsLine[];
-  rawText: string;
   dirty: boolean;
   undoStack: LyricsLine[][];
-  currentLineIndex: number;
+  currentSyncIndex: number;
   selectedIndices: Set<number>;
+  focusedIndex: number | null;
 
   open: (lines: LyricsLine[]) => void;
   close: () => void;
-  setStep: (step: 'input' | 'sync') => void;
-  setRawText: (text: string) => void;
+  updateLine: (index: number, text: string) => void;
+  insertLineAfter: (index: number, line?: LyricsLine) => void;
+  insertLines: (index: number, newLines: LyricsLine[]) => void;
   syncLine: (index: number, time: number) => void;
-  markInstrumental: (time: number) => void;
+  moveLine: (index: number, time: number) => void;
   unsyncLine: (index: number) => void;
   unsyncSelected: () => void;
   deleteSelected: () => void;
   deleteLine: (index: number) => void;
-  setCurrentLineIndex: (index: number) => void;
+  setCurrentSyncIndex: (index: number) => void;
   setSelectedIndices: (indices: Set<number>) => void;
+  setFocusedIndex: (index: number | null) => void;
   undo: () => void;
 }
 
-function linesToText(lines: LyricsLine[]): string {
-  const result: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const l = lines[i];
-    if (l.instrumental) {
-      // Add blank line before if previous line isn't already blank
-      if (result.length > 0 && result[result.length - 1] !== '') {
-        result.push('');
-      }
-      result.push('[Instrumental]');
-      // Add blank line after if next line isn't already blank
-      const next = lines[i + 1];
-      if (next && next.text !== '' && !next.instrumental) {
-        result.push('');
-      }
-    } else {
-      result.push(l.text);
-    }
-  }
-  return result.join('\n');
-}
-
-function textToLines(text: string, stripBlanks: boolean): LyricsLine[] {
-  const rows = text.split('\n');
-  const filtered = stripBlanks ? rows.filter((line) => line.trim().length > 0) : rows;
-  return filtered.map((line) => {
-    if (/^\[instrumental\]$/i.test(line.trim())) {
-      return { text: '', time: null, instrumental: true };
-    }
-    return { text: line.trim(), time: null };
-  });
-}
-
-function isLyric(line: LyricsLine): boolean {
-  return !line.instrumental && line.text !== '';
-}
-
-function nextLyricIndex(lines: LyricsLine[], from: number): number {
+function nextNonBlankIndex(lines: LyricsLine[], from: number): number {
   for (let i = from; i < lines.length; i++) {
-    if (isLyric(lines[i])) return i;
+    if (lines[i].text !== '' || lines[i].instrumental) return i;
   }
-  return Math.max(0, lines.length - 1);
+  return lines.length;
 }
 
 function pushUndo(stack: LyricsLine[][], snapshot: LyricsLine[]): LyricsLine[][] {
@@ -80,66 +44,78 @@ function pushUndo(stack: LyricsLine[][], snapshot: LyricsLine[]): LyricsLine[][]
 
 const initialState = {
   isOpen: false,
-  step: 'input' as const,
   lines: [] as LyricsLine[],
-  rawText: '',
   dirty: false,
   undoStack: [] as LyricsLine[][],
-  currentLineIndex: 0,
+  currentSyncIndex: 0,
   selectedIndices: new Set<number>(),
+  focusedIndex: null as number | null,
 };
 
 export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
   ...initialState,
 
-  open: (lines) =>
+  open: (lines) => {
+    // Ensure at least one empty row to start editing
+    const initial = lines.length > 0 ? lines : [{ text: '', time: null }];
     set({
       isOpen: true,
-      step: 'input',
-      lines,
-      rawText: lines.length > 0 ? linesToText(lines) : '',
+      lines: initial,
       dirty: false,
       undoStack: [],
-      currentLineIndex: 0,
-    }),
+      currentSyncIndex: nextNonBlankIndex(initial, 0),
+      selectedIndices: new Set<number>(),
+      focusedIndex: null,
+    });
+  },
 
-  close: () => set({ ...initialState }),
+  close: () => set({ ...initialState, selectedIndices: new Set<number>() }),
 
-  setStep: (step) =>
+  updateLine: (index, text) =>
     set((state) => {
-      if (step === 'sync' && state.step === 'input') {
-        // Parse text into lines, preserving existing sync times where text matches
-        const newLines = textToLines(state.rawText, false);
-        const oldByText = new Map<string, LyricsLine>();
-        for (const l of state.lines) {
-          const key = l.instrumental ? '[instrumental]' : l.text.toLowerCase();
-          if (!oldByText.has(key)) oldByText.set(key, l);
-        }
-        const merged = newLines.map((nl) => {
-          const key = nl.instrumental ? '[instrumental]' : nl.text.toLowerCase();
-          const old = oldByText.get(key);
-          if (old && old.time !== null) {
-            oldByText.delete(key);
-            return { ...nl, time: old.time };
-          }
-          return nl;
-        });
-        return {
-          step: 'sync',
-          lines: merged,
-          currentLineIndex: nextLyricIndex(merged, 0),
-        };
-      }
-      if (step === 'input' && state.step === 'sync') {
-        return {
-          step: 'input',
-          rawText: linesToText(state.lines),
-        };
-      }
-      return { step };
+      const updated = state.lines.map((l, i) =>
+        i === index ? { ...l, text, instrumental: false } : l,
+      );
+      return { lines: updated, dirty: true };
     }),
 
-  setRawText: (text) => set({ rawText: text, dirty: true }),
+  insertLineAfter: (index, line) =>
+    set((state) => {
+      const newLine = line ?? { text: '', time: null };
+      const updated = [
+        ...state.lines.slice(0, index + 1),
+        newLine,
+        ...state.lines.slice(index + 1),
+      ];
+      // Adjust currentSyncIndex if insertion was at or before it
+      const newSyncIdx = index + 1 <= state.currentSyncIndex
+        ? state.currentSyncIndex + 1
+        : state.currentSyncIndex;
+      return {
+        undoStack: pushUndo(state.undoStack, state.lines),
+        lines: updated,
+        currentSyncIndex: newSyncIdx,
+        dirty: true,
+      };
+    }),
+
+  insertLines: (index, newLines) =>
+    set((state) => {
+      const updated = [
+        ...state.lines.slice(0, index + 1),
+        ...newLines,
+        ...state.lines.slice(index + 1),
+      ];
+      const newSyncIdx = index + 1 <= state.currentSyncIndex
+        ? state.currentSyncIndex + newLines.length
+        : state.currentSyncIndex;
+      return {
+        undoStack: pushUndo(state.undoStack, state.lines),
+        lines: updated,
+        currentSyncIndex: newSyncIdx,
+        dirty: true,
+      };
+    }),
 
   syncLine: (index, time) =>
     set((state) => {
@@ -149,34 +125,19 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
       return {
         undoStack: pushUndo(state.undoStack, state.lines),
         lines: updated,
-        currentLineIndex: nextLyricIndex(updated, index + 1),
+        currentSyncIndex: nextNonBlankIndex(updated, index + 1),
         dirty: true,
       };
     }),
 
-  markInstrumental: (time) =>
-    set((state) => {
-      const marker: LyricsLine = { text: '', time, instrumental: true };
-      // Insert after the last synced line whose time <= marker time
-      let insertAt = 0;
-      for (let i = 0; i < state.lines.length; i++) {
-        if (state.lines[i].time !== null && state.lines[i].time! <= time) {
-          insertAt = i + 1;
-        }
-      }
-      const updated = [
-        ...state.lines.slice(0, insertAt),
-        marker,
-        ...state.lines.slice(insertAt),
-      ];
-      // Advance to the next lyric after the inserted instrumental
-      return {
-        undoStack: pushUndo(state.undoStack, state.lines),
-        lines: updated,
-        currentLineIndex: nextLyricIndex(updated, insertAt + 1),
-        dirty: true,
-      };
-    }),
+  moveLine: (index, time) =>
+    set((state) => ({
+      undoStack: pushUndo(state.undoStack, state.lines),
+      lines: state.lines.map((l, i) =>
+        i === index ? { ...l, time } : l,
+      ),
+      dirty: true,
+    })),
 
   unsyncLine: (index) =>
     set((state) => ({
@@ -204,11 +165,11 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
     set((state) => {
       if (state.selectedIndices.size === 0) return state;
       const updated = state.lines.filter((_, i) => !state.selectedIndices.has(i));
-      const newIndex = Math.min(state.currentLineIndex, Math.max(0, updated.length - 1));
+      const final = updated.length > 0 ? updated : [{ text: '', time: null }];
       return {
         undoStack: pushUndo(state.undoStack, state.lines),
-        lines: updated,
-        currentLineIndex: newIndex,
+        lines: final,
+        currentSyncIndex: Math.min(state.currentSyncIndex, final.length - 1),
         selectedIndices: new Set<number>(),
         dirty: true,
       };
@@ -217,19 +178,21 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
   deleteLine: (index) =>
     set((state) => {
       const updated = state.lines.filter((_, i) => i !== index);
-      const newIndex = Math.min(state.currentLineIndex, Math.max(0, updated.length - 1));
+      const final = updated.length > 0 ? updated : [{ text: '', time: null }];
       return {
         undoStack: pushUndo(state.undoStack, state.lines),
-        lines: updated,
-        currentLineIndex: newIndex,
+        lines: final,
+        currentSyncIndex: Math.min(state.currentSyncIndex, final.length - 1),
         selectedIndices: new Set<number>(),
         dirty: true,
       };
     }),
 
-  setCurrentLineIndex: (index) => set({ currentLineIndex: index }),
+  setCurrentSyncIndex: (index) => set({ currentSyncIndex: index }),
 
   setSelectedIndices: (indices) => set({ selectedIndices: indices }),
+
+  setFocusedIndex: (index) => set({ focusedIndex: index }),
 
   undo: () =>
     set((state) => {
@@ -239,7 +202,7 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
       return {
         undoStack: stack,
         lines: previous,
-        currentLineIndex: nextLyricIndex(previous, 0),
+        currentSyncIndex: nextNonBlankIndex(previous, 0),
         dirty: true,
       };
     }),

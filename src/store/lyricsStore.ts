@@ -11,9 +11,7 @@ export const useLyricsStore = create<LyricsState>((set) => ({
   lines: [],
   setLyrics: (raw) =>
     set({
-      lines: raw
-        .filter((l) => l.time !== null && (l.text !== '' || l.instrumental))
-        .sort((a, b) => a.time! - b.time!),
+      lines: raw.filter((l) => l.text !== '' || l.instrumental),
     }),
   clear: () => set({ lines: [] }),
 }));
