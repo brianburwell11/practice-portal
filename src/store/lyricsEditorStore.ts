@@ -8,6 +8,7 @@ interface LyricsEditorState {
   lines: LyricsLine[];
   dirty: boolean;
   undoStack: LyricsLine[][];
+  redoStack: LyricsLine[][];
   currentSyncIndex: number;
   selectedIndices: Set<number>;
   focusedIndex: number | null;
@@ -27,6 +28,10 @@ interface LyricsEditorState {
   setSelectedIndices: (indices: Set<number>) => void;
   setFocusedIndex: (index: number | null) => void;
   undo: () => void;
+  redo: () => void;
+  moveLineInDirection: (direction: 'up' | 'down') => void;
+  duplicateLines: () => void;
+  selectAll: () => void;
 }
 
 function nextNonBlankIndex(lines: LyricsLine[], from: number): number {
@@ -47,6 +52,7 @@ const initialState = {
   lines: [] as LyricsLine[],
   dirty: false,
   undoStack: [] as LyricsLine[][],
+  redoStack: [] as LyricsLine[][],
   currentSyncIndex: 0,
   selectedIndices: new Set<number>(),
   focusedIndex: null as number | null,
@@ -63,6 +69,7 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
       lines: initial,
       dirty: false,
       undoStack: [],
+      redoStack: [],
       currentSyncIndex: nextNonBlankIndex(initial, 0),
       selectedIndices: new Set<number>(),
       focusedIndex: null,
@@ -93,6 +100,7 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
         : state.currentSyncIndex;
       return {
         undoStack: pushUndo(state.undoStack, state.lines),
+        redoStack: [],
         lines: updated,
         currentSyncIndex: newSyncIdx,
         dirty: true,
@@ -111,6 +119,7 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
         : state.currentSyncIndex;
       return {
         undoStack: pushUndo(state.undoStack, state.lines),
+        redoStack: [],
         lines: updated,
         currentSyncIndex: newSyncIdx,
         dirty: true,
@@ -124,6 +133,7 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
       );
       return {
         undoStack: pushUndo(state.undoStack, state.lines),
+        redoStack: [],
         lines: updated,
         currentSyncIndex: nextNonBlankIndex(updated, index + 1),
         dirty: true,
@@ -133,6 +143,7 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
   moveLine: (index, time) =>
     set((state) => ({
       undoStack: pushUndo(state.undoStack, state.lines),
+      redoStack: [],
       lines: state.lines.map((l, i) =>
         i === index ? { ...l, time } : l,
       ),
@@ -142,6 +153,7 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
   unsyncLine: (index) =>
     set((state) => ({
       undoStack: pushUndo(state.undoStack, state.lines),
+      redoStack: [],
       lines: state.lines.map((l, i) =>
         i === index ? { ...l, time: null } : l,
       ),
@@ -153,6 +165,7 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
       if (state.selectedIndices.size === 0) return state;
       return {
         undoStack: pushUndo(state.undoStack, state.lines),
+        redoStack: [],
         lines: state.lines.map((l, i) =>
           state.selectedIndices.has(i) ? { ...l, time: null } : l,
         ),
@@ -168,6 +181,7 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
       const final = updated.length > 0 ? updated : [{ text: '', time: null }];
       return {
         undoStack: pushUndo(state.undoStack, state.lines),
+        redoStack: [],
         lines: final,
         currentSyncIndex: Math.min(state.currentSyncIndex, final.length - 1),
         selectedIndices: new Set<number>(),
@@ -181,6 +195,7 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
       const final = updated.length > 0 ? updated : [{ text: '', time: null }];
       return {
         undoStack: pushUndo(state.undoStack, state.lines),
+        redoStack: [],
         lines: final,
         currentSyncIndex: Math.min(state.currentSyncIndex, final.length - 1),
         selectedIndices: new Set<number>(),
@@ -201,9 +216,101 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
       const previous = stack.pop()!;
       return {
         undoStack: stack,
+        redoStack: pushUndo(state.redoStack, state.lines),
         lines: previous,
         currentSyncIndex: nextNonBlankIndex(previous, 0),
         dirty: true,
       };
     }),
+
+  redo: () =>
+    set((state) => {
+      if (state.redoStack.length === 0) return state;
+      const stack = [...state.redoStack];
+      const next = stack.pop()!;
+      return {
+        redoStack: stack,
+        undoStack: pushUndo(state.undoStack, state.lines),
+        lines: next,
+        currentSyncIndex: nextNonBlankIndex(next, 0),
+        dirty: true,
+      };
+    }),
+
+  moveLineInDirection: (direction) =>
+    set((state) => {
+      const indices = state.focusedIndex !== null
+        ? [state.focusedIndex]
+        : [...state.selectedIndices].sort((a, b) => a - b);
+      if (indices.length === 0) return state;
+
+      const min = indices[0];
+      const max = indices[indices.length - 1];
+      if (direction === 'up' && min === 0) return state;
+      if (direction === 'down' && max === state.lines.length - 1) return state;
+
+      const delta = direction === 'up' ? -1 : 1;
+      const newLines = [...state.lines];
+      const ordered = direction === 'up' ? indices : [...indices].reverse();
+      for (const idx of ordered) {
+        [newLines[idx], newLines[idx + delta]] = [newLines[idx + delta], newLines[idx]];
+      }
+
+      const movedSet = new Set(indices);
+      let newSyncIndex = state.currentSyncIndex;
+      if (movedSet.has(state.currentSyncIndex)) {
+        newSyncIndex = state.currentSyncIndex + delta;
+      } else if (direction === 'up' && state.currentSyncIndex === min - 1) {
+        newSyncIndex = state.currentSyncIndex + indices.length;
+      } else if (direction === 'down' && state.currentSyncIndex === max + 1) {
+        newSyncIndex = state.currentSyncIndex - indices.length;
+      }
+
+      return {
+        undoStack: pushUndo(state.undoStack, state.lines),
+        redoStack: [],
+        lines: newLines,
+        dirty: true,
+        focusedIndex: state.focusedIndex !== null ? state.focusedIndex + delta : null,
+        selectedIndices: new Set([...state.selectedIndices].map((i) => i + delta)),
+        currentSyncIndex: Math.max(0, Math.min(newLines.length - 1, newSyncIndex)),
+      };
+    }),
+
+  duplicateLines: () =>
+    set((state) => {
+      const indices = state.focusedIndex !== null
+        ? [state.focusedIndex]
+        : [...state.selectedIndices].sort((a, b) => a - b);
+      if (indices.length === 0) return state;
+
+      const copies = indices.map((i) => ({ ...state.lines[i], time: null }));
+      const insertAfter = indices[indices.length - 1];
+      const newLines = [
+        ...state.lines.slice(0, insertAfter + 1),
+        ...copies,
+        ...state.lines.slice(insertAfter + 1),
+      ];
+
+      const newSyncIdx = insertAfter + 1 <= state.currentSyncIndex
+        ? state.currentSyncIndex + copies.length
+        : state.currentSyncIndex;
+
+      return {
+        undoStack: pushUndo(state.undoStack, state.lines),
+        redoStack: [],
+        lines: newLines,
+        dirty: true,
+        currentSyncIndex: newSyncIdx,
+        focusedIndex: state.focusedIndex !== null ? insertAfter + 1 : null,
+        selectedIndices: state.focusedIndex === null
+          ? new Set(copies.map((_, j) => insertAfter + 1 + j))
+          : new Set<number>(),
+      };
+    }),
+
+  selectAll: () =>
+    set((state) => ({
+      selectedIndices: new Set(state.lines.map((_, i) => i)),
+    })),
 }));

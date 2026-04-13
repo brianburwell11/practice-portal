@@ -24,7 +24,8 @@ export function LyricsEditorModal() {
     isOpen, lines, dirty, currentSyncIndex, selectedIndices, focusedIndex,
     close, updateLine, insertLineAfter, insertLines, syncLine,
     unsyncLine, unsyncSelected, deleteSelected, deleteLine,
-    setCurrentSyncIndex, setSelectedIndices, setFocusedIndex, undo,
+    setCurrentSyncIndex, setSelectedIndices, setFocusedIndex,
+    undo, redo, moveLineInDirection, duplicateLines, selectAll,
   } = useLyricsEditorStore();
 
   const [saving, setSaving] = useState(false);
@@ -98,10 +99,38 @@ export function LyricsEditorModal() {
         return;
       }
 
+      // Cmd/Ctrl+Shift+Z — redo (only if not in input)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z') && !isFocused) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
       // Cmd/Ctrl+Z — undo (only if not in input, let native undo work there)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !isFocused) {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z' && !isFocused) {
         e.preventDefault();
         undo();
+        return;
+      }
+
+      // Cmd/Ctrl+A — select all (only if not in input, let native select-all work there)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !isFocused) {
+        e.preventDefault();
+        selectAll();
+        return;
+      }
+
+      // Cmd/Ctrl+D — duplicate selected (only if not in input)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'd' && !isFocused && selectedIndices.size > 0) {
+        e.preventDefault();
+        duplicateLines();
+        return;
+      }
+
+      // Alt+ArrowUp/Down — move selected lines (only if not in input)
+      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !isFocused && selectedIndices.size > 0) {
+        e.preventDefault();
+        moveLineInDirection(e.key === 'ArrowUp' ? 'up' : 'down');
         return;
       }
 
@@ -121,21 +150,20 @@ export function LyricsEditorModal() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, focusedIndex, currentSyncIndex, lines.length, position, playing, engine, selectedIndices.size, syncLine, insertLineAfter, undo, deleteSelected, focusRow]);
+  }, [isOpen, focusedIndex, currentSyncIndex, lines.length, position, playing, engine, selectedIndices.size, syncLine, insertLineAfter, undo, redo, deleteSelected, moveLineInDirection, duplicateLines, selectAll, focusRow]);
 
 
   if (!isOpen || !selectedSong) return null;
 
-  const syncedCount = lines.filter((l) => l.time !== null).length;
+  const contentLines = lines.filter((l) => l.text !== '' || l.instrumental);
+  const syncedCount = contentLines.filter((l) => l.time !== null).length;
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-5 py-2 border-b border-gray-700">
+      <div className="relative flex items-center justify-between px-5 py-2">
+        <h2 className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-100 pointer-events-none">Add/Edit Lyrics</h2>
         <div className="flex items-center gap-4">
-          <h2 className="text-sm font-semibold text-gray-100">Lyrics Editor</h2>
-        </div>
-        <div className="flex items-center gap-2">
           {selectedIndices.size > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-blue-400">{selectedIndices.size} selected</span>
@@ -148,8 +176,10 @@ export function LyricsEditorModal() {
               <button onClick={() => setSelectedIndices(new Set())} className="text-xs px-1.5 py-0.5 rounded text-gray-500 hover:text-gray-300 transition-colors">&times;</button>
             </div>
           )}
-          <span className="text-xs text-gray-500">{syncedCount}/{lines.length}</span>
           {error && <span className="text-xs text-red-400">{error}</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">{syncedCount}/{contentLines.length} lyrics synced</span>
           <button
             className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
             onClick={handleSave}
@@ -236,13 +266,31 @@ export function LyricsEditorModal() {
                       focusRow(Math.max(0, i - 1));
                     }
                   }
-                  if (e.key === 'ArrowUp' && i > 0) {
+                  if (e.altKey && e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    moveLineInDirection('up');
+                    if (i > 0) focusRow(i - 1);
+                    return;
+                  }
+                  if (e.altKey && e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    moveLineInDirection('down');
+                    if (i < lines.length - 1) focusRow(i + 1);
+                    return;
+                  }
+                  if (e.key === 'ArrowUp' && !e.altKey && i > 0) {
                     e.preventDefault();
                     focusRow(i - 1);
                   }
-                  if (e.key === 'ArrowDown' && i < lines.length - 1) {
+                  if (e.key === 'ArrowDown' && !e.altKey && i < lines.length - 1) {
                     e.preventDefault();
                     focusRow(i + 1);
+                  }
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
+                    e.preventDefault();
+                    duplicateLines();
+                    focusRow(i + 1);
+                    return;
                   }
                   if (e.key === 'Escape') {
                     e.preventDefault();
@@ -271,7 +319,7 @@ export function LyricsEditorModal() {
                 className={`flex-1 bg-transparent border-none outline-none text-sm min-w-0 ${
                   line.instrumental ? 'italic text-gray-500' : 'text-gray-200 placeholder-gray-600'
                 }`}
-                placeholder={!line.instrumental && i === 0 && lines.length === 1 ? 'Type lyrics here...' : ''}
+                placeholder={!line.instrumental && i === 0 && lines.length === 1 ? 'Double-click to add/edit lyrics...' : ''}
                 spellCheck={false}
                 autoComplete="off"
               />
@@ -302,6 +350,8 @@ export function LyricsEditorModal() {
               <div className="flex items-center gap-x-4 px-3 py-1 pl-9 text-[10px] text-gray-600">
                 <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">↵</kbd> new line</span>
                 <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘I</kbd> instrumental</span>
+                <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌥↑↓</kbd> move line</span>
+                <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘D</kbd> duplicate</span>
               </div>
             )}
           </React.Fragment>
@@ -310,13 +360,17 @@ export function LyricsEditorModal() {
       </div>
 
       {/* Footer hints */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2 text-[10px] text-gray-600 border-t border-gray-700">
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-5 py-2 text-[10px] text-gray-600 border-t border-gray-700">
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Space</kbd> play/pause</span>
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Tab</kbd> sync</span>
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘I</kbd> instrumental</span>
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Space</kbd> play/pause</span>
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘Z</kbd> undo</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘D</kbd> duplicate</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌥↑↓</kbd> move</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘A</kbd> select all</span>
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Shift</kbd>+click range</span>
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Del</kbd> delete selected</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Del</kbd> delete</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘Z</kbd> undo</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘⇧Z</kbd> redo</span>
       </div>
     </div>
   );
