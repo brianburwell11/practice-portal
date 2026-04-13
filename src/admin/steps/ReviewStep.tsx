@@ -24,7 +24,9 @@ export function ReviewStep({ state, dispatch }: Props) {
     dispatch({ type: 'SET_ERROR', error: null });
 
     try {
-      // 1. Upload stems to server for transcoding + R2 upload
+      // 1. Upload stems to server for transcoding + R2 upload.
+      // Alignment offsets are NOT baked in — they live in config.json's
+      // offsetSec fields and are applied at playback time by StemPlayer.
       const formData = new FormData();
       for (const stem of state.stems) {
         formData.append('stems', stem.file, stem.file.name);
@@ -146,7 +148,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         </div>
         <div>
           <span className="text-gray-400">Duration:</span>{' '}
-          <span className="text-gray-100">{state.durationSeconds.toFixed(1)}s</span>
+          <span className="text-gray-100">{config.durationSeconds.toFixed(2)}s</span>
         </div>
         <div>
           <span className="text-gray-400">Timing:</span>{' '}

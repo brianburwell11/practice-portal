@@ -10,6 +10,7 @@ export class StemPlayer {
   private _soloed = false;
   private _userVolume: number;
   private _userPan: number;
+  private _offsetSec: number;
 
   constructor(
     ctx: AudioContext,
@@ -17,11 +18,13 @@ export class StemPlayer {
     destination: AudioNode,
     defaultVolume: number,
     defaultPan: number,
+    offsetSec = 0,
   ) {
     this.ctx = ctx;
     this.buffer = buffer;
     this._userVolume = defaultVolume;
     this._userPan = defaultPan;
+    this._offsetSec = offsetSec;
 
     // Mono mixer: downmixes stereo to mono by default
     this.monoMixer = ctx.createGain();
@@ -41,15 +44,33 @@ export class StemPlayer {
     this.panNode.connect(destination);
   }
 
-  /** Start playback at a precise AudioContext time from a song offset */
-  start(when: number, offset: number): void {
+  /**
+   * Start playback at a precise AudioContext time, from a global song position.
+   * Applies this stem's alignment offsetSec: if the global position hasn't
+   * reached the stem's start yet, schedules the start in the future with
+   * buffer offset 0; otherwise starts now at the appropriate buffer offset.
+   */
+  start(when: number, globalPos: number): void {
     this.stop();
+
+    const stemPos = globalPos - this._offsetSec;
+    if (stemPos >= this.buffer.duration) return; // already past the end of this stem
 
     this.source = this.ctx.createBufferSource();
     this.source.buffer = this.buffer;
     this.source.playbackRate.value = this._tempoRatio;
     this.source.connect(this.monoMixer);
-    this.source.start(when, offset);
+
+    if (stemPos >= 0) {
+      this.source.start(when, stemPos);
+    } else {
+      // Delay start until globalPos reaches offsetSec
+      this.source.start(when + -stemPos, 0);
+    }
+  }
+
+  get offsetSec(): number {
+    return this._offsetSec;
   }
 
   setTempo(ratio: number): void {

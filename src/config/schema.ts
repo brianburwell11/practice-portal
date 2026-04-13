@@ -8,6 +8,8 @@ export const stemConfigSchema = z.object({
   defaultPan: z.number().min(-1).max(1),
   color: z.string(),
   stereo: z.boolean().optional(),
+  /** Alignment offset in seconds. Positive delays start, negative seeks into the buffer. */
+  offsetSec: z.number().optional(),
 });
 
 export const tempoMapEntrySchema = z.object({

@@ -12,6 +12,9 @@ const AddSongWizard = import.meta.env.DEV
 const EditSongPage = import.meta.env.DEV
   ? lazy(() => import('./admin/EditSongPage.tsx'))
   : null;
+const AlignSongPage = import.meta.env.DEV
+  ? lazy(() => import('./admin/AlignSongPage.tsx'))
+  : null;
 const ManageBandsPage = import.meta.env.DEV
   ? lazy(() => import('./admin/ManageBandsPage.tsx'))
   : null;
@@ -55,6 +58,16 @@ createRoot(document.getElementById('root')!).render(
               element={
                 <Suspense fallback={adminFallback}>
                   <EditSongPage />
+                </Suspense>
+              }
+            />
+          )}
+          {AlignSongPage && (
+            <Route
+              path="admin/align/:songId"
+              element={
+                <Suspense fallback={adminFallback}>
+                  <AlignSongPage />
                 </Suspense>
               }
             />

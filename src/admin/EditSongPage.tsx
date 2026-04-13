@@ -319,6 +319,15 @@ export default function EditSongPage() {
         </button>
         <h1 className="text-lg font-semibold">Edit Song</h1>
         <span className="text-sm text-gray-500 font-mono">{config.id}</span>
+        <button
+          onClick={() => {
+            if (isDirty(state) && !window.confirm('You have unsaved edits. Leave anyway?')) return;
+            navigate(`/${bandSlug}/admin/align/${config.id}`);
+          }}
+          className="ml-auto text-sm px-3 py-1 bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded text-gray-200"
+        >
+          Align stems
+        </button>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-8">

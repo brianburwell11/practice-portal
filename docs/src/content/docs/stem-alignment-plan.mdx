@@ -1,0 +1,179 @@
+---
+title: "Stem Alignment: Revamping the Add/Edit Stems Flow"
+description: "A new alignment step in the song wizard — stack waveforms, drag to align, and bake offsets into the audio during transcode."
+pubDate: "Apr 13 2026"
+tags: ["audio", "admin", "wizard", "alignment", "plan"]
+---
+
+import { StemAlignmentSandbox } from '../../components/react/StemAlignmentSandbox';
+import { StemDragSandbox } from '../../components/react/StemDragSandbox';
+
+## Sandbox note
+
+Alongside this work, the docs portal itself will host experiments — interactive widgets and sandboxed UI elements built against a fresh set of audio samples. Those samples let us prototype waveform rendering, drag-alignment interactions, and per-stem playback engines in isolation before wiring them into the admin wizard. Expect new MDX pages with React widgets landing next to this plan as the phases progress.
+
+## Original request
+
+> I have a bunch of stems to the same song, but some of them start a couple of seconds in to the recording. The new add song process should look like: upload stems (either from a folder or individual files), relabel and adds colors (keep the audio preview of the loudest couple seconds or whatever, but get rid of setting default volume and panning at this stage. also allow keeping mono vs stereo, this is also where you set the order of stems), then display the waveforms for each stem in their color, stacked vertically on top of each other. allow me to mute or solo individual waveforms. and then manually drag them into alignment. i should be able to drag positive or negative in time. when you transcode and upload to r2, include this offset so it's just a regular stem that's aligned. if i moved the stem later in time, add silence to the beginning. if i moved the stem to the left, trim the beginning.
+
+## Context
+
+Today every stem is assumed to begin at `t=0` with no way to compensate — the only way to correct misaligned sources is to pre-trim outside the app. The current add-song wizard also asks for default volume and pan during upload, which is premature: those are live mixing decisions, not ingest-time ones.
+
+The goal: replace the single upload step with a two-stage flow — first **label/color/stereo/order**, then a new **alignment** stage where the user sees each stem's waveform stacked vertically, can mute/solo and play them together, and drags them horizontally until they line up. The drag offset is **baked into the audio during transcode** (silence prepended for positive offset, head trimmed for negative), so what lands on R2 is a set of aligned stems — no per-stem offset field in `SongConfig`, no runtime sync logic to add.
+
+## Decisions
+
+Captured during the planning conversation:
+
+| Question | Decision | Why |
+|---|---|---|
+| Playback during alignment? | **Full transport + per-stem mute/solo** | Matches how stems will be used in the real player; reuses `AudioEngine` patterns. |
+| Drag snapping? | **Freeform + keyboard nudge** (arrow = ~1ms, shift+arrow = ~10ms) | Pro-DAW feel; detection-based snapping fights the user. |
+| Editing existing songs? | **Re-align requires re-upload** | Simpler — R2 stems are baked; no need to store originals. |
+| `defaultVolume` / `defaultPan` in `StemConfig`? | **Keep with defaults** (0.7 / 0) | Least disruptive. Mixer-side edit of these values is a follow-up. |
+| Zero-point on alignment canvas? | **Implicit t=0** — whatever is leftmost at save time | If every stem ends up right of zero, every stem gets silence padded at the head. |
+| Stem end handling? | **Preserve native length** | Current player already tolerates differing durations. |
+| When to compute peaks? | **Client-side after upload** | Reuse the `AudioBuffer` already decoded for preview / channel detection. |
+
+## Architecture touchpoints
+
+**Frontend — modify:**
+- `src/admin/steps/StemsStep.tsx` — strip the Vol/Pan sliders; keep label, color, stereo, drag-reorder, preview.
+- `src/admin/wizardReducer.ts` — bump `step` union to `1|2|3|4|5`, add `offsetSec` to `StemEntry`, add `SET_STEM_OFFSET` action.
+- `src/admin/AdminWizard.tsx` — wire new step between stems and timing.
+- `src/admin/steps/ReviewStep.tsx` — include offsets in the FormData POST as a JSON sidecar field.
+
+**Frontend — new:**
+- `src/admin/steps/AlignmentStep.tsx` — stacked waveform rows, per-row mute/solo, transport strip, pointer-drag + keyboard nudge.
+- `src/admin/utils/stemPeaks.ts` — compute `Float32Array` min/max peaks from an `AudioBuffer`.
+- `src/admin/utils/alignmentPlayback.ts` — lightweight per-stem source+gain engine; offset handled at scheduling time (no buffer re-padding on drag).
+
+**Backend — modify:**
+- `vite-plugin-config-api.ts` transcode endpoint — parse `offsets` sidecar; pad (`adelay`) for positive offset, trim (`-ss`) for negative, unchanged for zero.
+
+**Schema — no change:**
+- `stemConfigSchema` stays as-is — offsets are baked into the audio, not persisted.
+
+## Phase 1: Branch + wizard state
+
+- [x] Create branch `feat/stem-alignment`
+- [x] Extend `step` union in `wizardReducer.ts` to `1|2|3|4|5`; bump `NEXT_STEP` / `PREV_STEP` bounds
+- [x] Add `offsetSec: number` to `StemEntry` (default `0` in `buildStems`)
+- [x] Add action `SET_STEM_OFFSET { index: number; offsetSec: number }`
+
+## Phase 2: Trim the StemsStep UI
+
+- [x] Delete the Vol and Pan `<label>` blocks in `StemsStep.tsx` (lines 312–359)
+- [x] Keep `defaultVolume: 0.7` and `defaultPan: 0` defaults from `detectStem` flowing through unchanged
+- [x] Change the Next button label to `Next: Align`
+
+## Phase 3: Peak computation + playback engine
+
+- [x] `stemPeaks.ts`: `computePeaks(buffer: AudioBuffer, bucketCount = 2048): Float32Array`, mirroring `AudioEngine.computeMergedPeaks` but per-stem
+- [x] Cache decoded `AudioBuffer` on `StemEntry` during upload (skip re-decode in alignment step)
+- [x] `alignmentPlayback.ts`: class with `load`, `play`, `pause`, `seek`, `setOffset`, `setMuted`, `setSoloed`
+- [x] Offset handled at scheduling time: if `pos >= offsetSec`, start now at buffer offset `pos - offsetSec`; otherwise schedule `start` at `ctx.currentTime + (offsetSec - pos)` with buffer offset 0
+- [x] Solo/mute precedence matches `AudioEngine.recalcAllGains`
+- [x] Docs sandbox widget (`StemAlignmentSandbox`) prototyping peaks + engine against the 10s samples
+
+### Sandbox
+
+Live prototype of the per-stem peak renderer and the `AlignmentPlayback` engine, running against the four 10-second samples in `docs/public/audio-samples/10s/`. Each row shows one stem's waveform in its own color. The **offset** slider moves that stem in time — positive values delay its start, negative values start it partway through. **M** mutes, **S** solos, and solo takes precedence over mute-less stems (matches `AudioEngine.recalcAllGains`). **Cmd/Ctrl + scroll** over a waveform zooms in/out around the cursor. Drag-to-align and keyboard nudge ship in Phase 4.
+
+<StemAlignmentSandbox client:only="react" />
+
+## Phase 4: AlignmentStep UI
+
+```
+┌──────────────────────────────────────────────────────┐
+│  [play/pause] [00:12.3 / 04:22.0]      [Next: Timing]│
+├──────────────────────────────────────────────────────┤
+│  ▌Bass     [M][S]  ──▓▓▓▓▒▒──────────────────        │  ← draggable, colored
+│  ▌Drums    [M][S]  ────▒▒▓▓▓▓▒▒────                  │
+│  ▌Vocals   [M][S]       ──▒▒▓▓▓▓▓▓▓▓──               │
+│            ▲t=0 (fixed vertical line)                 │
+└──────────────────────────────────────────────────────┘
+```
+
+- [x] `AlignmentStep.tsx` skeleton, wired into `AdminWizard`
+- [x] Render colored peak waveforms on canvas, one row per stem
+- [x] Horizontal pointer-drag (pointerdown/move/up) tracking `startClientX` + `startOffsetSec`
+- [x] Keyboard nudge on focused row: arrow = ±1ms, shift+arrow = ±10ms, alt+arrow = ±100ms
+- [x] Per-row mute/solo buttons styled like existing ChannelStrip
+- [x] Transport bar: play/pause + click-to-seek; duration = `max(offsetSec + bufferDuration)` across stems
+- [x] Offsets persist in wizard state (back/forward preserves work)
+- [x] Cmd/Ctrl + scroll zoom around cursor (from Phase 3 sandbox)
+- [x] Directly editable/copy-paste millisecond offset input per stem (from Phase 3 sandbox)
+- [x] Playhead rendered in each row's viewport + transport scrubber (from Phase 3 sandbox)
+- [x] Click-to-seek on any waveform
+
+### Drag & nudge sandbox
+
+Stripped-down sandbox to dial in the drag + keyboard-nudge feel before wiring it into `AlignmentStep`. Two stems only, no transport detail, no zoom. **Drag a row** to reposition it. **Click a row to focus** (blue outline), then arrow keys nudge:
+
+- `←` / `→` — ±1 ms
+- `shift + ←/→` — ±10 ms
+- `alt + ←/→` — ±100 ms
+
+**Play from 0** plays the current alignment so you can verify by ear. The white vertical line at the left edge of each row marks `t=0`; dragging right of it adds silence at the head on transcode, dragging left of it trims the head.
+
+<StemDragSandbox client:only="react" />
+
+## Phase 5: Bake offsets into transcode
+
+- [x] `ReviewStep.tsx`: build `offsets: Record<string, number>` keyed by `file.name`, append as `formData.append('offsets', JSON.stringify(offsets))`
+- [x] `vite-plugin-config-api.ts`: capture non-file `offsets` field in busboy (`on('field', ...)`)
+- [x] `transcodeToOpus` now accepts an `offsetSec` arg and prepends an offset filter ahead of loudnorm:
+  - `offsetSec > 0`: `adelay={ms}|{ms}|…` (per-channel)
+  - `offsetSec < 0`: `atrim=start={abs(offset)},asetpts=PTS-STARTPTS`
+  - `offsetSec == 0`: unchanged path
+- [x] `measureLoudness` also applies the same offset filter so targets reflect the encoded output
+- [x] Preserve existing `fileMap` return shape
+
+## Phase 6: Pivot to dynamic offsets
+
+The original Phase 6 plan (read-only placeholders + "Replace stems" re-upload) was reworked once it became clear baking offsets into audio is the wrong default. Phase 6 now replaces baking with **dynamic offsets at playback** — the opus on R2 is the unmodified stem, and `offsetSec` lives in `config.json` and is applied at scheduling time by `StemPlayer`. Re-alignment becomes "fetch opus, decode, drag, save config" — no re-transcode.
+
+### Why the pivot
+- **Non-destructive**: head-trim and prepended silence aren't lost on re-align.
+- **No re-upload to tweak alignment**: round-trip is just config.json.
+- **Eliminates the duration-ceiling bug class** that prompted Phase 5.1.
+
+### Tasks
+- [x] Revert Phase 5 ffmpeg baking (no `adelay`/`atrim`; restore `transcodeToOpus` and `measureLoudness` signatures)
+- [x] Add `offsetSec?: number` to `StemConfig` (zod schema + TS type)
+- [x] `StemPlayer.start(when, globalPos)` applies `_offsetSec` at scheduling time (mirror of `AlignmentPlayback.scheduleStem`)
+- [x] `AudioEngine.loadSong` + `decodePendingStem` pass `stemConfig.offsetSec` to each `StemPlayer`
+- [x] `buildConfig` writes `offsetSec` onto each built stem (when non-zero); `durationSeconds = max(offsetSec + buffer.duration)` stays
+- [x] `ReviewStep` drops the `formData.append('offsets', ...)` sidecar — offsets travel in `config.json`
+- [x] Extract `AlignmentCanvas` from `AlignmentStep` so both wizard + re-align page can reuse the same UI
+- [x] New `AlignSongPage` at route `/:bandSlug/admin/align/:songId` — fetches config, decodes each opus, renders `AlignmentCanvas`, saves updated `offsetSec` + `durationSeconds`
+- [x] EditSongPage adds an "Align stems" button linking to the new route
+
+### Out of scope follow-ups
+- Time-aware merged peaks in the main player's WaveformTimeline (currently merges by sample index, not by global time — visual-only drift on offset songs)
+- Migration of Phase 5-era baked songs (the few that exist keep working with `offsetSec=0`)
+
+## Verification
+
+1. **Typecheck + build**: `npm run build` (full tsc+vite, not just vite).
+2. **Upload golden path**: `npm run dev`, add a song via `/admin` with 3 stems where one starts late.
+   - Waveforms render in their colors, stacked.
+   - Solo each one — only the soloed one is audible.
+   - Play, hear misalignment. Drag the late stem left until transients line up. Replay — aligned.
+   - Nudge with arrows / shift+arrows; watch offset readout update.
+3. **Transcode verification**: complete upload. Inspect the resulting opus files:
+   - Stem with `+1.5s` offset has 1.5s of silence at the start (ffprobe / visual).
+   - Stem with `−0.8s` offset has its first 0.8s gone.
+   - Stem with `0` offset is byte-similar to the pre-revamp output.
+4. **Cross-check against main player**: uploaded song plays cleanly — all stems start together at `t=0` with no global `beatOffset` correction.
+5. **Schema stability**: existing songs still load; `defaultVolume` / `defaultPan` still set to 0.7 / 0.
+6. **Edit mode**: open an existing song's wizard; alignment step shows read-only state; "Replace stems" re-enters upload flow.
+
+## Out of scope (follow-ups)
+
+- Storing original (pre-transcode) files to allow non-destructive re-alignment.
+- Transient / zero-crossing snapping.
+- Mixer-side edit that writes `defaultVolume` / `defaultPan` back to `config.json`.
+- Per-stem end padding/trim to a uniform song duration.

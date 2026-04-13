@@ -11,10 +11,13 @@ export interface StemEntry {
   defaultPan: number;
   channels: number;
   stereo: boolean;
+  offsetSec: number;
+  /** Decoded buffer cached at upload time — used by the alignment step for peaks + playback. */
+  buffer?: AudioBuffer;
 }
 
 export interface WizardState {
-  step: 1 | 2 | 3 | 4;
+  step: 1 | 2 | 3 | 4 | 5;
   // Step 1: Metadata
   title: string;
   artist: string;
@@ -44,6 +47,7 @@ export type WizardAction =
   | { type: 'UPDATE_STEM'; index: number; updates: Partial<Omit<StemEntry, 'file'>> }
   | { type: 'REMOVE_STEM'; index: number }
   | { type: 'MOVE_STEM'; from: number; to: number }
+  | { type: 'SET_STEM_OFFSET'; index: number; offsetSec: number }
   | { type: 'SET_TIMING_XSC'; tapMap: TapMapEntry[] }
   | { type: 'SET_TIMING_MANUAL'; bpm: number; numerator: number; denominator: number }
   | { type: 'CLEAR_TIMING' }
@@ -98,6 +102,12 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       stems.splice(action.to, 0, moved);
       return { ...state, stems };
     }
+    case 'SET_STEM_OFFSET': {
+      const stems = state.stems.map((s, i) =>
+        i === action.index ? { ...s, offsetSec: action.offsetSec } : s,
+      );
+      return { ...state, stems };
+    }
     case 'SET_TIMING_XSC':
       return { ...state, timingMode: 'xsc', tapMap: action.tapMap };
     case 'SET_TIMING_MANUAL':
@@ -115,7 +125,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case 'REMOVE_GROUP':
       return { ...state, groups: state.groups.filter((_, i) => i !== action.index) };
     case 'NEXT_STEP':
-      return { ...state, step: Math.min(state.step + 1, 4) as WizardState['step'] };
+      return { ...state, step: Math.min(state.step + 1, 5) as WizardState['step'] };
     case 'PREV_STEP':
       return { ...state, step: Math.max(state.step - 1, 1) as WizardState['step'] };
     case 'SET_SAVING':

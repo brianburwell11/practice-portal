@@ -177,12 +177,14 @@ function transcodeToOpus(
   const isMono = probe.channels === 1;
   const bitrate = isMono ? '64k' : '128k';
   const channelFlag = isMono ? '-ac 1' : '';
-  let filterFlag = '';
+
+  let filterFlag: string;
   if (loudness && parseFloat(loudness.input_i) <= 0) {
     filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:measured_I=${loudness.input_i}:measured_TP=${loudness.input_tp}:measured_LRA=${loudness.input_lra}:measured_thresh=${loudness.input_thresh}:offset=${loudness.target_offset}:linear=true`;
   } else {
     filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`;
   }
+
   execSync(
     `ffmpeg -y -i "${inputPath}" ${filterFlag} -codec:a libopus -b:a ${bitrate} ${channelFlag} -ar 48000 -vbr on "${outputPath}"`,
     { stdio: 'ignore' },
@@ -389,7 +391,10 @@ export function configApiPlugin(): Plugin {
           const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pp-transcode-'));
 
           try {
-            // 1. Receive files via busboy → temp dir
+            // 1. Receive files via busboy → temp dir. Alignment offsets are NOT
+            // baked in anymore — they live in config.json and are applied at
+            // playback time by StemPlayer. The opus files on R2 are authoritative
+            // and unmodified.
             const received = await new Promise<{ origName: string; tmpPath: string }[]>((resolve, reject) => {
               const files: { origName: string; tmpPath: string }[] = [];
               const writePromises: Promise<void>[] = [];

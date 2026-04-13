@@ -6,6 +6,8 @@ export interface StemConfig {
   defaultPan: number;
   color: string;
   stereo?: boolean;
+  /** Alignment offset in seconds. Positive delays start, negative seeks into the buffer. */
+  offsetSec?: number;
 }
 
 export interface TempoMapEntry {
