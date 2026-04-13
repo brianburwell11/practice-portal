@@ -11,9 +11,7 @@ interface LyricsDisplayProps {
 }
 
 export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
-  const engine = useAudioEngine();
   const position = useTransportStore((s) => s.position);
-  const playing = useTransportStore((s) => s.playing);
   const storeLines = useLyricsStore((s) => s.lines);
 
   // Use override lines (from editor) or store lines, excluding blank lines
@@ -21,15 +19,6 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
     const raw = overrideLines ?? storeLines;
     return raw.filter((l) => l.text !== '' || l.instrumental);
   }, [overrideLines, storeLines]);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<(HTMLSpanElement | null)[]>([]);
-  const [targetIndex, setTargetIndex] = useState(-1);
-  const [translateX, setTranslateX] = useState(0);
-  const manualOffsetRef = useRef(0);
-  const scrollLockedRef = useRef(false);
-  const resumeAtIndexRef = useRef(-1);
 
   // Compute which lyric should be bolded based on playback position
   const computeTarget = useCallback(() => {
@@ -46,11 +35,43 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
     return idx;
   }, [lines, position]);
 
+  const [targetIndex, setTargetIndex] = useState(-1);
+
   // Update target index (always tracks playback, even during manual scroll)
   useEffect(() => {
     const next = computeTarget();
     if (next !== targetIndex) setTargetIndex(next);
   }, [computeTarget, targetIndex]);
+
+  if (lines.length === 0) return null;
+
+  return (
+    <>
+      <HorizontalTrack lines={lines} targetIndex={targetIndex} className="hidden md:block" />
+      <VerticalTrack lines={lines} targetIndex={targetIndex} className="md:hidden" />
+    </>
+  );
+}
+
+interface TrackProps {
+  lines: LyricsLine[];
+  targetIndex: number;
+  className?: string;
+}
+
+/* ---------- Horizontal (desktop) ---------- */
+
+function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
+  const engine = useAudioEngine();
+  const playing = useTransportStore((s) => s.playing);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const [translateX, setTranslateX] = useState(0);
+  const manualOffsetRef = useRef(0);
+  const scrollLockedRef = useRef(false);
+  const resumeAtIndexRef = useRef(-1);
 
   // Compute autoscroll translateX for a given index
   const getAutoTranslateX = useCallback((idx: number) => {
@@ -90,7 +111,7 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
     setTranslateX(tx);
   }, [targetIndex, lines, getAutoTranslateX]);
 
-  // Find which lyric is closest to the 25% reading point at current translateX
+  // Find which lyric is closest to the reading point at current translateX
   const findIndexAtReadingPoint = useCallback((tx: number) => {
     const container = containerRef.current;
     if (!container) return -1;
@@ -141,12 +162,10 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
     return () => container.removeEventListener('wheel', handleWheel);
   }, [targetIndex, getAutoTranslateX, findIndexAtReadingPoint]);
 
-  if (lines.length === 0) return null;
-
   return (
     <div
       ref={containerRef}
-      className="relative overflow-hidden py-2"
+      className={`relative overflow-hidden py-2 ${className ?? ''}`}
       style={{
         height: 40,
         maskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 160px), transparent calc(100% - 112px))',
@@ -196,15 +215,99 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
                       : 'text-gray-500'
               }`}
             >
-              {line.instrumental ? (
-                <svg className="inline-block w-7 h-7" viewBox="-5.5 0 32 32" fill="currentColor">
-                  <path d="M5.688 9.656v10.906c-0.469-0.125-0.969-0.219-1.406-0.219-1 0-2.031 0.344-2.875 0.906s-1.406 1.469-1.406 2.531c0 1.125 0.563 1.969 1.406 2.531s1.875 0.875 2.875 0.875c0.938 0 2-0.313 2.844-0.875s1.375-1.406 1.375-2.531v-11.438l9.531-2.719v7.531c-0.438-0.125-0.969-0.188-1.438-0.188-0.969 0-2.031 0.281-2.875 0.844s-1.375 1.469-1.375 2.531c0 1.125 0.531 2 1.375 2.531 0.844 0.563 1.906 0.906 2.875 0.906 0.938 0 2.031-0.344 2.875-0.906 0.875-0.531 1.406-1.406 1.406-2.531v-14.406c0-0.688-0.469-1.156-1.156-1.156-0.063 0-0.438 0.125-1.031 0.281-1.25 0.344-3.125 0.875-5.25 1.5-1.094 0.281-2.063 0.594-3.031 0.844-0.938 0.281-1.75 0.563-2.469 0.75-0.75 0.219-1.219 0.344-1.406 0.406-0.5 0.156-0.844 0.594-0.844 1.094z" />
-                </svg>
-              ) : line.text}
+              {line.instrumental ? <InstrumentalIcon /> : line.text}
             </span>
           );
         })}
       </div>
     </div>
+  );
+}
+
+/* ---------- Vertical (mobile) ---------- */
+
+const MOBILE_LINE_HEIGHT = 40;
+const MOBILE_VISIBLE_LINES = 6;
+const MOBILE_CONTAINER_HEIGHT = MOBILE_LINE_HEIGHT * MOBILE_VISIBLE_LINES;
+
+function VerticalTrack({ lines, targetIndex, className }: TrackProps) {
+  const engine = useAudioEngine();
+  const playing = useTransportStore((s) => s.playing);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [translateY, setTranslateY] = useState(0);
+
+  // Compute autoscroll translateY for a given index — current lyric's top edge sits at 1/3 from top
+  const getAutoTranslateY = useCallback((idx: number) => {
+    const container = containerRef.current;
+    const elIdx = idx >= 0 ? idx : 0;
+    const el = itemRefs.current[elIdx];
+    if (!container || !el) return 0;
+    const readingY = MOBILE_LINE_HEIGHT; // second line from top
+    return readingY - el.offsetTop;
+  }, []);
+
+  // Autoscroll on target change
+  useEffect(() => {
+    setTranslateY(getAutoTranslateY(targetIndex));
+  }, [targetIndex, lines, getAutoTranslateY]);
+
+  // On pause, snap to current lyric
+  useEffect(() => {
+    if (!playing) setTranslateY(getAutoTranslateY(targetIndex));
+  }, [playing, targetIndex, getAutoTranslateY]);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`relative overflow-hidden ${className ?? ''}`}
+      style={{
+        height: MOBILE_CONTAINER_HEIGHT,
+        maskImage: 'linear-gradient(to bottom, transparent 0%, black 16.67%, black 83.33%, transparent 100%)',
+        WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16.67%, black 83.33%, transparent 100%)',
+      }}
+    >
+      <div
+        className="flex flex-col items-center"
+        style={{
+          transform: `translateY(${translateY}px)`,
+          transition: 'transform 500ms ease',
+        }}
+      >
+        {lines.map((line, i) => {
+          const isCurrent = i === targetIndex;
+          const isPast = i < targetIndex;
+
+          return (
+            <div
+              key={i}
+              ref={(el) => { itemRefs.current[i] = el; }}
+              onClick={() => { if (line.time !== null) engine.seek(line.time); }}
+              className={`w-full flex items-center justify-center text-center text-base transition-all duration-300 cursor-pointer px-4 ${
+                isCurrent
+                  ? 'text-gray-100 font-medium'
+                  : isPast
+                    ? 'text-gray-600'
+                    : 'text-gray-500'
+              }`}
+              style={{ height: MOBILE_LINE_HEIGHT }}
+            >
+              {line.instrumental ? <InstrumentalIcon /> : line.text}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Shared instrumental icon ---------- */
+
+function InstrumentalIcon() {
+  return (
+    <svg className="inline-block w-7 h-7" viewBox="-5.5 0 32 32" fill="currentColor">
+      <path d="M5.688 9.656v10.906c-0.469-0.125-0.969-0.219-1.406-0.219-1 0-2.031 0.344-2.875 0.906s-1.406 1.469-1.406 2.531c0 1.125 0.563 1.969 1.406 2.531s1.875 0.875 2.875 0.875c0.938 0 2-0.313 2.844-0.875s1.375-1.406 1.375-2.531v-11.438l9.531-2.719v7.531c-0.438-0.125-0.969-0.188-1.438-0.188-0.969 0-2.031 0.281-2.875 0.844s-1.375 1.469-1.375 2.531c0 1.125 0.531 2 1.375 2.531 0.844 0.563 1.906 0.906 2.875 0.906 0.938 0 2.031-0.344 2.875-0.906 0.875-0.531 1.406-1.406 1.406-2.531v-14.406c0-0.688-0.469-1.156-1.156-1.156-0.063 0-0.438 0.125-1.031 0.281-1.25 0.344-3.125 0.875-5.25 1.5-1.094 0.281-2.063 0.594-3.031 0.844-0.938 0.281-1.75 0.563-2.469 0.75-0.75 0.219-1.219 0.344-1.406 0.406-0.5 0.156-0.844 0.594-0.844 1.094z" />
+    </svg>
   );
 }
