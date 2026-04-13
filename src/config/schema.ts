@@ -46,6 +46,16 @@ export const tapMapEntrySchema = z.object({
   label: z.string().optional(),
 });
 
+export const lyricsLineSchema = z.object({
+  text: z.string(),
+  time: z.number().min(0).nullable(),
+  instrumental: z.boolean().optional(),
+});
+
+export const lyricsDataSchema = z.object({
+  lines: z.array(lyricsLineSchema),
+});
+
 export const navLinkConfigSchema = z.object({
   title: z.string().min(1).max(40),
   url: z.string().url(),

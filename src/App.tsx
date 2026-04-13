@@ -2,11 +2,15 @@ import { useState, lazy, Suspense } from 'react';
 import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
+import { LyricsDisplay } from './components/LyricsDisplay';
 import { MixerPanel } from './components/mixer/MixerPanel';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
+import { LyricsEditorModal } from './components/lyrics-editor/LyricsEditorModal';
 import { DeleteSongModal } from './components/song-select/DeleteSongModal';
 import { AdminRibbon } from './admin/AdminRibbon';
 import { useMarkerEditorStore } from './store/markerEditorStore';
+import { useLyricsEditorStore } from './store/lyricsEditorStore';
+import { r2Url } from './utils/url';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
 import { useSetlistStore } from './store/setlistStore';
@@ -26,6 +30,9 @@ export default function App() {
   useMixerPersistence();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const openMarkerEditor = useMarkerEditorStore((s) => s.open);
+  const openLyricsEditor = useLyricsEditorStore((s) => s.open);
+  const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
+  const editorLines = useLyricsEditorStore((s) => s.lines);
   const currentBand = useBandStore((s) => s.currentBand);
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -77,6 +84,13 @@ export default function App() {
             onAddSong={() => navigate(`/${bandRoute}/admin/add-song`)}
             onEditSong={() => selectedSong && navigate(`/${bandRoute}/admin/edit-song/${selectedSong.id}`)}
             onTapMapEditor={() => selectedSong && openMarkerEditor(selectedSong.tapMap ?? [])}
+            onLyricsEditor={() => {
+              if (!selectedSong || !currentBand) return;
+              fetch(r2Url(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`))
+                .then((r) => (r.ok ? r.json() : { lines: [] }))
+                .then((data) => openLyricsEditor(data.lines ?? []))
+                .catch(() => openLyricsEditor([]));
+            }}
             onDeleteSong={() => setShowDeleteModal(true)}
             onAddSetlist={() => { setEditSetlistId(undefined); setShowSetlistModal(true); }}
             onEditSetlist={() => { activeSetlist && setEditSetlistId(activeSetlist.id); setShowSetlistModal(true); }}
@@ -94,8 +108,11 @@ export default function App() {
         {/* Transport controls */}
         <TransportBar />
 
-        {/* Mixer */}
-        <MixerPanel />
+        {/* Lyrics display — uses editor lines as live preview when editor is open */}
+        <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
+
+        {/* Editor replaces mixer when open */}
+        {lyricsEditorOpen ? <LyricsEditorModal /> : <MixerPanel />}
       </div>
 
       <MarkerEditorModal />

@@ -232,6 +232,25 @@ export function configApiPlugin(): Plugin {
           return;
         }
 
+        // --- POST /api/bands/{bandId}/songs/{songId}/lyrics ---
+        const lyricsMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/songs\/([^/]+)\/lyrics$/);
+        if (lyricsMatch && req.method === 'POST') {
+          const bandId = lyricsMatch[1];
+          const songId = lyricsMatch[2];
+
+          try {
+            const raw = await readBody(req);
+            const body = JSON.parse(raw);
+            const { lyricsDataSchema } = await server.ssrLoadModule('/src/config/schema.ts');
+            const validated = (lyricsDataSchema as any).parse(body);
+            await r2WriteJson(`${bandId}/songs/${songId}/lyrics.json`, validated);
+            jsonResponse(res, 200, { ok: true });
+          } catch (err: any) {
+            jsonResponse(res, 400, { error: err.message ?? 'Invalid request' });
+          }
+          return;
+        }
+
         // --- POST /api/bands/{bandId}/songs/{songId}/rename ---
         const renameMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/songs\/([^/]+)\/rename$/);
         if (renameMatch && req.method === 'POST') {

@@ -7,6 +7,7 @@ import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { songManifestSchema, songConfigSchema, setlistConfigSchema } from '../../config/schema';
 import { r2Url } from '../../utils/url';
 import { loadMixerState } from '../../utils/mixerStorage';
+import { useLyricsStore } from '../../store/lyricsStore';
 import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
 
 export function useSongLoader() {
@@ -35,6 +36,7 @@ export function useSongLoader() {
     if (useSongStore.getState().loading) return;
     setLoading(true);
     setError(null);
+    useLyricsStore.getState().clear();
 
     try {
       const bandId = currentBand?.id;
@@ -49,6 +51,13 @@ export function useSongLoader() {
       });
 
       setSelectedSong(config);
+
+      // Load lyrics (non-blocking)
+      fetch(r2Url(`${bandId}/songs/${entry.id}/lyrics.json`))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => useLyricsStore.getState().setLyrics(data?.lines ?? []))
+        .catch(() => useLyricsStore.getState().setLyrics([]));
+
       const setlistState = useSetlistStore.getState();
       if (setlistState.activeSetlist) {
         history.pushState(null, '', `#${setlistState.activeIndex + 1}`);
