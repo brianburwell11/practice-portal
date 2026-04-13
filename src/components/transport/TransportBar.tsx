@@ -104,6 +104,7 @@ export function TransportBar() {
   const [showBookmark, setShowBookmark] = useState(false);
   const lyricsMobileVisible = useLyricsStore((s) => s.mobileVisible);
   const toggleLyricsMobileVisible = useLyricsStore((s) => s.toggleMobileVisible);
+  const hasLyrics = useLyricsStore((s) => s.lines.length > 0);
   const [editingMeasure, setEditingMeasure] = useState(false);
   const [editingBeat, setEditingBeat] = useState(false);
   const [measureEditValue, setMeasureEditValue] = useState('');
@@ -546,8 +547,8 @@ export function TransportBar() {
           </svg>
         </button>
 
-        {/* Mobile lyrics toggle */}
-        <button
+        {/* Mobile lyrics toggle — only when song has lyrics */}
+        {hasLyrics && <button
           className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
             lyricsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
@@ -561,7 +562,7 @@ export function TransportBar() {
             <path d="M391.48,238.551l-118.1-118.199c-0.279-30.238,11.02-59.379,31.887-81.891l168.268,168.614c-22.131,20.18-50.791,31.484-80.695,31.484L391.48,238.551z" />
             <path d="M330.783,17.23c18.611-10.984,40.072-16.992,62.018-16.992c31.787,0,61.664,12.371,84.127,34.832c38.895,38.898,46.123,98.863,17.625,145.93L330.783,17.23z" />
           </svg>
-        </button>
+        </button>}
       </div>
 
       {/* Mobile: collapsible volume + speed sliders */}
