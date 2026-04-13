@@ -178,17 +178,6 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
         WebkitMaskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 160px), transparent calc(100% - 112px))',
       }}
     >
-      {/* Microphone icon — aligned under play/pause */}
-      <div className="absolute left-0 top-0 h-full z-10 flex items-center pl-14 md:pl-20">
-        <svg className="w-8 h-8 text-gray-300" viewBox="0 0 512 512" fill="currentColor">
-          <rect x="19.564" y="447.635" transform="matrix(-0.7071 -0.7071 0.7071 -0.7071 -285.559 842.3594)" width="24.231" height="65.371" />
-          <polygon points="0.17,494.699 46.394,448.809 63.188,465.945 17.133,511.66" />
-          <path d="M43.642,412.297l220.223-264.551l100.371,100.738L99.549,468.203L43.642,412.297z" />
-          <path d="M391.48,238.551l-118.1-118.199c-0.279-30.238,11.02-59.379,31.887-81.891l168.268,168.614c-22.131,20.18-50.791,31.484-80.695,31.484L391.48,238.551z" />
-          <path d="M330.783,17.23c18.611-10.984,40.072-16.992,62.018-16.992c31.787,0,61.664,12.371,84.127,34.832c38.895,38.898,46.123,98.863,17.625,145.93L330.783,17.23z" />
-        </svg>
-      </div>
-
       {/* Scrolling lyrics */}
       <div
         ref={trackRef}
