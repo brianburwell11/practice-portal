@@ -52,6 +52,7 @@ function buildStems(files: File[]): StemEntry[] {
     ...detectStem(file.name),
     channels: 1,
     stereo: false,
+    offsetSec: 0,
   }));
   const sorted = sortStems(detected);
   const deduped = deduplicateIds(sorted);
