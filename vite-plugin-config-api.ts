@@ -150,10 +150,28 @@ function ffprobe(filePath: string): ProbeResult {
   };
 }
 
-function measureLoudness(filePath: string): LoudnessInfo {
+/** Build the filter-chain prefix that applies an alignment offset:
+ *  - offsetSec > 0: prepend silence via `adelay` (per-channel)
+ *  - offsetSec < 0: trim head via `atrim=start=…` + reset timestamps
+ *  - offsetSec == 0: empty (no filter prepended) */
+function offsetFilters(offsetSec: number, channels: number): string[] {
+  if (!offsetSec) return [];
+  if (offsetSec > 0) {
+    const delayMs = Math.round(offsetSec * 1000);
+    const delays = Array(Math.max(1, channels)).fill(delayMs).join('|');
+    return [`adelay=${delays}`];
+  }
+  return [`atrim=start=${Math.abs(offsetSec)}`, 'asetpts=PTS-STARTPTS'];
+}
+
+function measureLoudness(filePath: string, offsetSec = 0, channels = 0): LoudnessInfo {
+  const filters = [
+    ...offsetFilters(offsetSec, channels),
+    `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:print_format=json`,
+  ];
   const proc = spawnSync('ffmpeg', [
     '-i', filePath,
-    '-af', `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:print_format=json`,
+    '-af', filters.join(','),
     '-f', 'null', '-',
   ], { encoding: 'utf-8' });
 
@@ -173,18 +191,23 @@ function transcodeToOpus(
   outputPath: string,
   probe: ProbeResult,
   loudness?: LoudnessInfo,
+  offsetSec = 0,
 ): void {
   const isMono = probe.channels === 1;
   const bitrate = isMono ? '64k' : '128k';
   const channelFlag = isMono ? '-ac 1' : '';
-  let filterFlag = '';
+
+  let loudnormFilter: string;
   if (loudness && parseFloat(loudness.input_i) <= 0) {
-    filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:measured_I=${loudness.input_i}:measured_TP=${loudness.input_tp}:measured_LRA=${loudness.input_lra}:measured_thresh=${loudness.input_thresh}:offset=${loudness.target_offset}:linear=true`;
+    loudnormFilter = `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:measured_I=${loudness.input_i}:measured_TP=${loudness.input_tp}:measured_LRA=${loudness.input_lra}:measured_thresh=${loudness.input_thresh}:offset=${loudness.target_offset}:linear=true`;
   } else {
-    filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`;
+    loudnormFilter = `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`;
   }
+
+  const filterChain = [...offsetFilters(offsetSec, probe.channels), loudnormFilter].join(',');
+
   execSync(
-    `ffmpeg -y -i "${inputPath}" ${filterFlag} -codec:a libopus -b:a ${bitrate} ${channelFlag} -ar 48000 -vbr on "${outputPath}"`,
+    `ffmpeg -y -i "${inputPath}" -af "${filterChain}" -codec:a libopus -b:a ${bitrate} ${channelFlag} -ar 48000 -vbr on "${outputPath}"`,
     { stdio: 'ignore' },
   );
 }
@@ -389,10 +412,14 @@ export function configApiPlugin(): Plugin {
           const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pp-transcode-'));
 
           try {
-            // 1. Receive files via busboy → temp dir
-            const received = await new Promise<{ origName: string; tmpPath: string }[]>((resolve, reject) => {
+            // 1. Receive files + optional `offsets` JSON sidecar via busboy → temp dir
+            const { received, offsets } = await new Promise<{
+              received: { origName: string; tmpPath: string }[];
+              offsets: Record<string, number>;
+            }>((resolve, reject) => {
               const files: { origName: string; tmpPath: string }[] = [];
               const writePromises: Promise<void>[] = [];
+              let offsetsJson = '';
               const busboy = Busboy({ headers: req.headers as Record<string, string> });
 
               busboy.on('file', (_field, stream, info) => {
@@ -405,22 +432,41 @@ export function configApiPlugin(): Plugin {
                 }));
               });
 
+              busboy.on('field', (name, value) => {
+                if (name === 'offsets') offsetsJson = value;
+              });
+
               busboy.on('finish', () => {
-                Promise.all(writePromises).then(() => resolve(files)).catch(reject);
+                Promise.all(writePromises)
+                  .then(() => {
+                    let parsed: Record<string, number> = {};
+                    if (offsetsJson) {
+                      try {
+                        parsed = JSON.parse(offsetsJson);
+                      } catch {
+                        console.warn('Failed to parse offsets JSON, ignoring');
+                      }
+                    }
+                    resolve({ received: files, offsets: parsed });
+                  })
+                  .catch(reject);
               });
               busboy.on('error', reject);
               req.pipe(busboy);
             });
 
-            // 2. Transcode each file and upload to R2
+            // 2. Transcode each file (with per-stem alignment offset baked in) and upload to R2
             const fileMap: Record<string, string> = {}; // origName → transcoded name
 
             for (const { origName, tmpPath } of received) {
               const probe = ffprobe(tmpPath);
+              const offsetSec = offsets[origName] ?? 0;
 
               let loudness: LoudnessInfo | undefined;
               try {
-                loudness = measureLoudness(tmpPath);
+                // Measure loudness on post-offset content so targets reflect what
+                // actually ends up in the encoded output
+                loudness = measureLoudness(tmpPath, offsetSec, probe.channels);
               } catch (err: any) {
                 console.warn(`Loudness measurement failed for ${origName}, transcoding without normalization:`, err.message);
               }
@@ -428,7 +474,7 @@ export function configApiPlugin(): Plugin {
               const baseName = path.basename(origName, path.extname(origName));
               const uploadName = `${baseName}.opus`;
               const uploadPath = path.join(tmpDir, `out-${uploadName}`);
-              transcodeToOpus(tmpPath, uploadPath, probe, loudness);
+              transcodeToOpus(tmpPath, uploadPath, probe, loudness, offsetSec);
 
               // Upload to R2
               const key = `${r2Prefix}/${uploadName}`;

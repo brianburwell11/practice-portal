@@ -24,11 +24,16 @@ export function ReviewStep({ state, dispatch }: Props) {
     dispatch({ type: 'SET_ERROR', error: null });
 
     try {
-      // 1. Upload stems to server for transcoding + R2 upload
+      // 1. Upload stems to server for transcoding + R2 upload.
+      // Per-stem alignment offsets (in seconds) are baked into the audio:
+      // positive offset → silence prepended; negative → head trimmed.
       const formData = new FormData();
+      const offsets: Record<string, number> = {};
       for (const stem of state.stems) {
         formData.append('stems', stem.file, stem.file.name);
+        if (stem.offsetSec) offsets[stem.file.name] = stem.offsetSec;
       }
+      formData.append('offsets', JSON.stringify(offsets));
 
       dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
         fileIndex: 0, fileCount: state.stems.length, bytesSent: 0, bytesTotal: 1,
@@ -146,7 +151,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         </div>
         <div>
           <span className="text-gray-400">Duration:</span>{' '}
-          <span className="text-gray-100">{state.durationSeconds.toFixed(1)}s</span>
+          <span className="text-gray-100">{config.durationSeconds.toFixed(2)}s</span>
         </div>
         <div>
           <span className="text-gray-400">Timing:</span>{' '}

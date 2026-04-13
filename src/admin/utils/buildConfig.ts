@@ -43,12 +43,22 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
     });
   }
 
+  // Duration must span the aligned mix: positive offsets extend a stem
+  // past its original length, so the song duration has to reflect that
+  // or the player's clock ceiling will truncate the tail.
+  const alignedEnd = state.stems.reduce((max, s) => {
+    const dur = s.buffer?.duration;
+    if (dur === undefined) return max;
+    return Math.max(max, s.offsetSec + dur);
+  }, 0);
+  const durationSeconds = Math.max(state.durationSeconds, alignedEnd);
+
   return {
     id: state.id,
     title: state.title,
     artist: state.artist.trim() || fallbackArtist || '',
     key: state.key,
-    durationSeconds: state.durationSeconds,
+    durationSeconds,
     beatOffset: 0,
     stems,
     groups: state.groups.length > 0 ? state.groups : undefined,

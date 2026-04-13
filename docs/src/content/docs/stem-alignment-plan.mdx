@@ -122,13 +122,14 @@ Stripped-down sandbox to dial in the drag + keyboard-nudge feel before wiring it
 
 ## Phase 5: Bake offsets into transcode
 
-- [ ] `ReviewStep.tsx`: build `offsets: Record<string, number>` keyed by `file.name`, append as `formData.append('offsets', JSON.stringify(offsets))`
-- [ ] `vite-plugin-config-api.ts`: capture non-file `offsets` field in busboy (`on('field', ...)`)
-- [ ] New helper `transcodeToOpusWithOffset(input, output, probe, loudness, offsetSec)` wrapping `transcodeToOpus`:
-  - `offsetSec > 0`: `-af adelay={ms}|{ms},loudnorm=...` (adelay before loudnorm)
-  - `offsetSec < 0`: `-ss {abs(offset)}` on input before filter chain; measure loudness on trimmed content
+- [x] `ReviewStep.tsx`: build `offsets: Record<string, number>` keyed by `file.name`, append as `formData.append('offsets', JSON.stringify(offsets))`
+- [x] `vite-plugin-config-api.ts`: capture non-file `offsets` field in busboy (`on('field', ...)`)
+- [x] `transcodeToOpus` now accepts an `offsetSec` arg and prepends an offset filter ahead of loudnorm:
+  - `offsetSec > 0`: `adelay={ms}|{ms}|…` (per-channel)
+  - `offsetSec < 0`: `atrim=start={abs(offset)},asetpts=PTS-STARTPTS`
   - `offsetSec == 0`: unchanged path
-- [ ] Preserve existing `fileMap` return shape
+- [x] `measureLoudness` also applies the same offset filter so targets reflect the encoded output
+- [x] Preserve existing `fileMap` return shape
 
 ## Phase 6: Edit-mode plumbing
 
