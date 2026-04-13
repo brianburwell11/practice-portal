@@ -3,6 +3,7 @@ import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
+import { useLyricsStore } from '../../store/lyricsStore';
 import { useLongPress } from '../../hooks/useLongPress';
 import { WaveformTimeline } from './WaveformTimeline';
 import { TempoControl } from './TempoControl';
@@ -101,6 +102,8 @@ export function TransportBar() {
   const [volEditValue, setVolEditValue] = useState('');
   const [showSliders, setShowSliders] = useState(false);
   const [showBookmark, setShowBookmark] = useState(false);
+  const lyricsMobileVisible = useLyricsStore((s) => s.mobileVisible);
+  const toggleLyricsMobileVisible = useLyricsStore((s) => s.toggleMobileVisible);
   const [editingMeasure, setEditingMeasure] = useState(false);
   const [editingBeat, setEditingBeat] = useState(false);
   const [measureEditValue, setMeasureEditValue] = useState('');
@@ -540,6 +543,23 @@ export function TransportBar() {
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
+
+        {/* Mobile lyrics toggle */}
+        <button
+          className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
+            lyricsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+          }`}
+          onClick={toggleLyricsMobileVisible}
+          title="Lyrics"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 512 512" fill="currentColor">
+            <rect x="19.564" y="447.635" transform="matrix(-0.7071 -0.7071 0.7071 -0.7071 -285.559 842.3594)" width="24.231" height="65.371" />
+            <polygon points="0.17,494.699 46.394,448.809 63.188,465.945 17.133,511.66" />
+            <path d="M43.642,412.297l220.223-264.551l100.371,100.738L99.549,468.203L43.642,412.297z" />
+            <path d="M391.48,238.551l-118.1-118.199c-0.279-30.238,11.02-59.379,31.887-81.891l168.268,168.614c-22.131,20.18-50.791,31.484-80.695,31.484L391.48,238.551z" />
+            <path d="M330.783,17.23c18.611-10.984,40.072-16.992,62.018-16.992c31.787,0,61.664,12.371,84.127,34.832c38.895,38.898,46.123,98.863,17.625,145.93L330.783,17.23z" />
           </svg>
         </button>
       </div>

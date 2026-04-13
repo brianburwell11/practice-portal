@@ -13,6 +13,7 @@ interface LyricsDisplayProps {
 export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
   const position = useTransportStore((s) => s.position);
   const storeLines = useLyricsStore((s) => s.lines);
+  const mobileVisible = useLyricsStore((s) => s.mobileVisible);
 
   // Use override lines (from editor) or store lines, excluding blank lines
   const lines = useMemo(() => {
@@ -48,7 +49,7 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
   return (
     <>
       <HorizontalTrack lines={lines} targetIndex={targetIndex} className="hidden md:block" />
-      <VerticalTrack lines={lines} targetIndex={targetIndex} className="md:hidden" />
+      <VerticalTrack lines={lines} targetIndex={targetIndex} className={mobileVisible ? 'md:hidden' : 'hidden'} />
     </>
   );
 }
