@@ -59,8 +59,8 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
     const el = itemRefs.current[elIdx];
     if (!container || !el) return 0;
     const containerWidth = container.offsetWidth;
-    const center = containerWidth * 0.25;
-    return center - el.offsetLeft - el.offsetWidth / 2;
+    const readingX = containerWidth * 0.18;
+    return readingX - el.offsetLeft;
   }, []);
 
   // Check if scroll lock should be released
@@ -94,14 +94,14 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
   const findIndexAtReadingPoint = useCallback((tx: number) => {
     const container = containerRef.current;
     if (!container) return -1;
-    const readingX = container.offsetWidth * 0.25;
+    const readingX = container.offsetWidth * 0.18;
     let closest = 0;
     let closestDist = Infinity;
     for (let i = 0; i < lines.length; i++) {
       const el = itemRefs.current[i];
       if (!el) continue;
-      const elCenter = el.offsetLeft + el.offsetWidth / 2 + tx;
-      const dist = Math.abs(elCenter - readingX);
+      const elLeft = el.offsetLeft + tx;
+      const dist = Math.abs(elLeft - readingX);
       if (dist < closestDist) {
         closestDist = dist;
         closest = i;
@@ -146,13 +146,15 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
   return (
     <div
       ref={containerRef}
-      className="relative overflow-hidden py-2 border-b border-gray-700"
-      style={{ height: 40 }}
+      className="relative overflow-hidden py-2"
+      style={{
+        height: 40,
+        maskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 160px), transparent calc(100% - 112px))',
+        WebkitMaskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 160px), transparent calc(100% - 112px))',
+      }}
     >
       {/* Microphone icon — aligned under play/pause */}
-      <div className="absolute left-0 top-0 h-full z-10 flex items-center pl-14 md:pl-20 pr-4"
-        style={{ background: 'linear-gradient(to right, var(--band-bg, #111827) 70%, transparent)' }}
-      >
+      <div className="absolute left-0 top-0 h-full z-10 flex items-center pl-14 md:pl-20">
         <svg className="w-8 h-8 text-gray-300" viewBox="0 0 512 512" fill="currentColor">
           <rect x="19.564" y="447.635" transform="matrix(-0.7071 -0.7071 0.7071 -0.7071 -285.559 842.3594)" width="24.231" height="65.371" />
           <polygon points="0.17,494.699 46.394,448.809 63.188,465.945 17.133,511.66" />
