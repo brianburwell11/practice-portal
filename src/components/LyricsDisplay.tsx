@@ -235,6 +235,14 @@ function VerticalTrack({ lines, targetIndex, visible = true, className }: TrackP
   const [animate, setAnimate] = useState(true);
   const prevVisibleRef = useRef(visible);
 
+  // Manual scroll state — mirrors desktop shift+scroll
+  const scrollLockedRef = useRef(false);
+  const resumeAtIndexRef = useRef(-1);
+  const pointerDownYRef = useRef<number | null>(null);
+  const dragStartTyRef = useRef(0);
+  const draggingRef = useRef(false);
+  const suppressClickRef = useRef(false);
+
   // Compute autoscroll translateY for a given index — current lyric's top edge sits at reading point
   const getAutoTranslateY = useCallback((idx: number) => {
     const container = containerRef.current;
@@ -245,16 +253,48 @@ function VerticalTrack({ lines, targetIndex, visible = true, className }: TrackP
     return readingY - el.offsetTop;
   }, []);
 
-  // Autoscroll on target change (only when visible — avoids stale measurements)
+  // Find which lyric is closest to the reading point at a given translateY
+  const findIndexAtReadingPoint = useCallback((ty: number) => {
+    const readingY = MOBILE_LINE_HEIGHT;
+    let closest = 0;
+    let closestDist = Infinity;
+    for (let i = 0; i < lines.length; i++) {
+      const el = itemRefs.current[i];
+      if (!el) continue;
+      const elTop = el.offsetTop + ty;
+      const dist = Math.abs(elTop - readingY);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = i;
+      }
+    }
+    return closest;
+  }, [lines]);
+
+  // Autoscroll on target change (only when visible and not scroll-locked)
   useEffect(() => {
     if (!visible) return;
+    if (scrollLockedRef.current) return;
     setTranslateY(getAutoTranslateY(targetIndex));
   }, [targetIndex, lines, getAutoTranslateY, visible]);
 
-  // On pause, snap to current lyric
+  // Release scroll lock when playback catches up to the scrolled-to index
+  useEffect(() => {
+    if (!scrollLockedRef.current || resumeAtIndexRef.current < 0) return;
+    if (targetIndex >= resumeAtIndexRef.current) {
+      scrollLockedRef.current = false;
+      resumeAtIndexRef.current = -1;
+    }
+  }, [targetIndex]);
+
+  // On pause, clear scroll lock and snap to current lyric
   useEffect(() => {
     if (!visible) return;
-    if (!playing) setTranslateY(getAutoTranslateY(targetIndex));
+    if (!playing) {
+      scrollLockedRef.current = false;
+      resumeAtIndexRef.current = -1;
+      setTranslateY(getAutoTranslateY(targetIndex));
+    }
   }, [playing, targetIndex, getAutoTranslateY, visible]);
 
   // On reveal (hidden → visible), snap to current position without animating
@@ -274,6 +314,37 @@ function VerticalTrack({ lines, targetIndex, visible = true, className }: TrackP
     }
   }, [animate]);
 
+  // Touch drag handlers — enter scroll lock, let playback catch up to resume autoscroll
+  const DRAG_THRESHOLD = 3;
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    pointerDownYRef.current = e.clientY;
+    dragStartTyRef.current = translateY;
+    draggingRef.current = false;
+  }, [translateY]);
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (pointerDownYRef.current === null) return;
+    const delta = e.clientY - pointerDownYRef.current;
+    if (!draggingRef.current && Math.abs(delta) < DRAG_THRESHOLD) return;
+    if (!draggingRef.current) {
+      draggingRef.current = true;
+      scrollLockedRef.current = true;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    }
+    const newTy = dragStartTyRef.current + delta;
+    setTranslateY(newTy);
+    resumeAtIndexRef.current = findIndexAtReadingPoint(newTy);
+  }, [findIndexAtReadingPoint]);
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (draggingRef.current) {
+      suppressClickRef.current = true;
+      // clear the suppression on the next tick so a fresh click goes through
+      setTimeout(() => { suppressClickRef.current = false; }, 0);
+      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    }
+    pointerDownYRef.current = null;
+    draggingRef.current = false;
+  }, []);
+
   return (
     <div
       ref={containerRef}
@@ -282,13 +353,18 @@ function VerticalTrack({ lines, targetIndex, visible = true, className }: TrackP
         height: MOBILE_CONTAINER_HEIGHT,
         maskImage: 'linear-gradient(to bottom, transparent 0%, black 16.67%, black 83.33%, transparent 100%)',
         WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16.67%, black 83.33%, transparent 100%)',
+        touchAction: 'none',
       }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
     >
       <div
         className="flex flex-col items-center"
         style={{
           transform: `translateY(${translateY}px)`,
-          transition: animate ? 'transform 500ms ease' : 'none',
+          transition: scrollLockedRef.current || !animate ? 'none' : 'transform 500ms ease',
         }}
       >
         {lines.map((line, i) => {
@@ -299,7 +375,10 @@ function VerticalTrack({ lines, targetIndex, visible = true, className }: TrackP
             <div
               key={i}
               ref={(el) => { itemRefs.current[i] = el; }}
-              onClick={() => { if (line.time !== null) engine.seek(line.time); }}
+              onClick={() => {
+                if (suppressClickRef.current) return;
+                if (line.time !== null) engine.seek(line.time);
+              }}
               className={`w-full flex items-center justify-center text-center text-base transition-all duration-300 cursor-pointer px-4 ${
                 isCurrent
                   ? 'text-gray-100 font-medium'
