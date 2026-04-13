@@ -159,6 +159,14 @@ export function TransportBar() {
 
   const loopHandlers = useLongPress(handleLoopTap, handleLoopDoubleTap);
 
+  const handlePlayPauseTap = useCallback(() => {
+    playing ? engine.pause() : engine.play();
+  }, [engine, playing]);
+  const handlePlayPauseLongPress = useCallback(() => {
+    engine.stop();
+  }, [engine]);
+  const playPauseHandlers = useLongPress(handlePlayPauseTap, handlePlayPauseLongPress);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -480,18 +488,10 @@ export function TransportBar() {
       {/* Mobile: transport buttons (row 2) */}
       <div className="flex items-center justify-center gap-2 mt-2 md:hidden">
         <button
-          className="w-12 h-12 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-lg transition-colors"
-          disabled={disabled}
-          onClick={() => engine.stop()}
-          title="Stop"
-        >
-          &#9632;
-        </button>
-        <button
           className="w-12 h-12 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-lg transition-colors"
           disabled={disabled}
-          onClick={() => (playing ? engine.pause() : engine.play())}
-          title={playing ? 'Pause' : 'Play'}
+          {...playPauseHandlers}
+          title={playing ? 'Pause (long-press to stop)' : 'Play (long-press to stop)'}
         >
           {playing ? '\u2759\u2759' : '\u25B6'}
         </button>
