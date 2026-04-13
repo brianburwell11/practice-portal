@@ -164,6 +164,7 @@ export class AudioEngine {
         this.mixBus,
         stemConfig.defaultVolume,
         stemConfig.defaultPan,
+        stemConfig.offsetSec ?? 0,
       );
       if (stemConfig.stereo) {
         player.stereo = true;
@@ -455,6 +456,7 @@ export class AudioEngine {
       this.mixBus,
       pending.config.defaultVolume,
       pending.config.defaultPan,
+      pending.config.offsetSec ?? 0,
     );
     if (pending.config.stereo) {
       player.stereo = true;

@@ -131,11 +131,29 @@ Stripped-down sandbox to dial in the drag + keyboard-nudge feel before wiring it
 - [x] `measureLoudness` also applies the same offset filter so targets reflect the encoded output
 - [x] Preserve existing `fileMap` return shape
 
-## Phase 6: Edit-mode plumbing
+## Phase 6: Pivot to dynamic offsets
 
-- [ ] Detect edit-of-existing via: existing config + stem `file` paths but no local `File` objects
-- [ ] Alignment step shows read-only placeholders ("Re-upload to re-align")
-- [ ] "Replace stems" button re-enters upload flow and wipes `stems` + `offsetSec`
+The original Phase 6 plan (read-only placeholders + "Replace stems" re-upload) was reworked once it became clear baking offsets into audio is the wrong default. Phase 6 now replaces baking with **dynamic offsets at playback** — the opus on R2 is the unmodified stem, and `offsetSec` lives in `config.json` and is applied at scheduling time by `StemPlayer`. Re-alignment becomes "fetch opus, decode, drag, save config" — no re-transcode.
+
+### Why the pivot
+- **Non-destructive**: head-trim and prepended silence aren't lost on re-align.
+- **No re-upload to tweak alignment**: round-trip is just config.json.
+- **Eliminates the duration-ceiling bug class** that prompted Phase 5.1.
+
+### Tasks
+- [x] Revert Phase 5 ffmpeg baking (no `adelay`/`atrim`; restore `transcodeToOpus` and `measureLoudness` signatures)
+- [x] Add `offsetSec?: number` to `StemConfig` (zod schema + TS type)
+- [x] `StemPlayer.start(when, globalPos)` applies `_offsetSec` at scheduling time (mirror of `AlignmentPlayback.scheduleStem`)
+- [x] `AudioEngine.loadSong` + `decodePendingStem` pass `stemConfig.offsetSec` to each `StemPlayer`
+- [x] `buildConfig` writes `offsetSec` onto each built stem (when non-zero); `durationSeconds = max(offsetSec + buffer.duration)` stays
+- [x] `ReviewStep` drops the `formData.append('offsets', ...)` sidecar — offsets travel in `config.json`
+- [x] Extract `AlignmentCanvas` from `AlignmentStep` so both wizard + re-align page can reuse the same UI
+- [x] New `AlignSongPage` at route `/:bandSlug/admin/align/:songId` — fetches config, decodes each opus, renders `AlignmentCanvas`, saves updated `offsetSec` + `durationSeconds`
+- [x] EditSongPage adds an "Align stems" button linking to the new route
+
+### Out of scope follow-ups
+- Time-aware merged peaks in the main player's WaveformTimeline (currently merges by sample index, not by global time — visual-only drift on offset songs)
+- Migration of Phase 5-era baked songs (the few that exist keep working with `offsetSec=0`)
 
 ## Verification
 
