@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useAudioEngine } from '../hooks/useAudioEngine';
 import { useTransportStore } from '../store/transportStore';
 import { useLyricsStore } from '../store/lyricsStore';
@@ -49,7 +49,12 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
   return (
     <>
       <HorizontalTrack lines={lines} targetIndex={targetIndex} className="hidden md:block" />
-      <VerticalTrack lines={lines} targetIndex={targetIndex} className={mobileVisible ? 'md:hidden' : 'hidden'} />
+      <VerticalTrack
+        lines={lines}
+        targetIndex={targetIndex}
+        visible={mobileVisible}
+        className={mobileVisible ? 'md:hidden' : 'hidden'}
+      />
     </>
   );
 }
@@ -231,15 +236,17 @@ const MOBILE_LINE_HEIGHT = 40;
 const MOBILE_VISIBLE_LINES = 6;
 const MOBILE_CONTAINER_HEIGHT = MOBILE_LINE_HEIGHT * MOBILE_VISIBLE_LINES;
 
-function VerticalTrack({ lines, targetIndex, className }: TrackProps) {
+function VerticalTrack({ lines, targetIndex, visible = true, className }: TrackProps & { visible?: boolean }) {
   const engine = useAudioEngine();
   const playing = useTransportStore((s) => s.playing);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [translateY, setTranslateY] = useState(0);
+  const [animate, setAnimate] = useState(true);
+  const prevVisibleRef = useRef(visible);
 
-  // Compute autoscroll translateY for a given index — current lyric's top edge sits at 1/3 from top
+  // Compute autoscroll translateY for a given index — current lyric's top edge sits at reading point
   const getAutoTranslateY = useCallback((idx: number) => {
     const container = containerRef.current;
     const elIdx = idx >= 0 ? idx : 0;
@@ -249,15 +256,34 @@ function VerticalTrack({ lines, targetIndex, className }: TrackProps) {
     return readingY - el.offsetTop;
   }, []);
 
-  // Autoscroll on target change
+  // Autoscroll on target change (only when visible — avoids stale measurements)
   useEffect(() => {
+    if (!visible) return;
     setTranslateY(getAutoTranslateY(targetIndex));
-  }, [targetIndex, lines, getAutoTranslateY]);
+  }, [targetIndex, lines, getAutoTranslateY, visible]);
 
   // On pause, snap to current lyric
   useEffect(() => {
+    if (!visible) return;
     if (!playing) setTranslateY(getAutoTranslateY(targetIndex));
-  }, [playing, targetIndex, getAutoTranslateY]);
+  }, [playing, targetIndex, getAutoTranslateY, visible]);
+
+  // On reveal (hidden → visible), snap to current position without animating
+  useLayoutEffect(() => {
+    if (visible && !prevVisibleRef.current) {
+      setAnimate(false);
+      setTranslateY(getAutoTranslateY(targetIndex));
+    }
+    prevVisibleRef.current = visible;
+  }, [visible, targetIndex, getAutoTranslateY]);
+
+  // Re-enable animation on the next frame after a reveal snap
+  useEffect(() => {
+    if (!animate) {
+      const raf = requestAnimationFrame(() => setAnimate(true));
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [animate]);
 
   return (
     <div
@@ -273,7 +299,7 @@ function VerticalTrack({ lines, targetIndex, className }: TrackProps) {
         className="flex flex-col items-center"
         style={{
           transform: `translateY(${translateY}px)`,
-          transition: 'transform 500ms ease',
+          transition: animate ? 'transform 500ms ease' : 'none',
         }}
       >
         {lines.map((line, i) => {
