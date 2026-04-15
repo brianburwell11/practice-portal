@@ -1,0 +1,157 @@
+---
+title: "Camelot Key, Enharmonics, and Song Transitions"
+description: "A quick reference on the Camelot wheel, enharmonic equivalents, and practical techniques for smooth key transitions between songs using the circle of fifths."
+pubDate: "Apr 15 2026"
+tags: ["music-theory", "setlist", "reference"]
+---
+
+import { CamelotWheel } from '../../components/react/CamelotWheel';
+import { KeyBadge } from '../../components/react/KeyBadge';
+import { CamelotWheelTransitions } from '../../components/react/CamelotWheelTransitions';
+
+# Camelot Key, Enharmonics, and Song Transitions
+
+When building a setlist, key compatibility between adjacent songs matters. A jarring key change between songs can undercut the flow of a performance, while a smooth transition keeps energy and momentum intact. The Camelot wheel is a simplified system for thinking about key relationships without needing to reason about intervals and accidentals on the fly.
+
+## The Camelot Wheel
+
+The Camelot system assigns every musical key a code: a number from 1 to 12, plus a letter — **A** for minor keys, **B** for major keys. The number corresponds to a position on the circle of fifths, and keys with the same number or adjacent numbers mix well together.
+
+Click any segment to hear the chord:
+
+<div class="widget-sandbox" style="max-width: 500px; margin: 1.5rem auto;">
+  <CamelotWheel client:load />
+</div>
+
+Here is the full mapping:
+
+| Camelot | Key | Camelot | Key |
+|---------|-----|---------|-----|
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(50 50% 25%);color:hsl(50 70% 80%);">1A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(50 50% 25%);color:hsl(50 70% 80%);">Ab minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(50 50% 25%);color:hsl(50 70% 80%);">1B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(50 50% 25%);color:hsl(50 70% 80%);">B Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">2A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">Eb minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">2B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">F# Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(120 50% 25%);color:hsl(120 70% 80%);">3A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(120 50% 25%);color:hsl(120 70% 80%);">Bb minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(120 50% 25%);color:hsl(120 70% 80%);">3B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(120 50% 25%);color:hsl(120 70% 80%);">Db Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(155 50% 25%);color:hsl(155 70% 80%);">4A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(155 50% 25%);color:hsl(155 70% 80%);">F minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(155 50% 25%);color:hsl(155 70% 80%);">4B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(155 50% 25%);color:hsl(155 70% 80%);">Ab Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(180 50% 25%);color:hsl(180 70% 80%);">5A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(180 50% 25%);color:hsl(180 70% 80%);">C minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(180 50% 25%);color:hsl(180 70% 80%);">5B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(180 50% 25%);color:hsl(180 70% 80%);">Eb Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(200 50% 25%);color:hsl(200 70% 80%);">6A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(200 50% 25%);color:hsl(200 70% 80%);">G minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(200 50% 25%);color:hsl(200 70% 80%);">6B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(200 50% 25%);color:hsl(200 70% 80%);">Bb Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(225 50% 25%);color:hsl(225 70% 80%);">7A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(225 50% 25%);color:hsl(225 70% 80%);">D minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(225 50% 25%);color:hsl(225 70% 80%);">7B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(225 50% 25%);color:hsl(225 70% 80%);">F Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(260 50% 25%);color:hsl(260 70% 80%);">8A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(260 50% 25%);color:hsl(260 70% 80%);">A minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(260 50% 25%);color:hsl(260 70% 80%);">8B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(260 50% 25%);color:hsl(260 70% 80%);">C Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(295 50% 25%);color:hsl(295 70% 80%);">9A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(295 50% 25%);color:hsl(295 70% 80%);">E minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(295 50% 25%);color:hsl(295 70% 80%);">9B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(295 50% 25%);color:hsl(295 70% 80%);">G Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(330 50% 25%);color:hsl(330 70% 80%);">10A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(330 50% 25%);color:hsl(330 70% 80%);">B minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(330 50% 25%);color:hsl(330 70% 80%);">10B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(330 50% 25%);color:hsl(330 70% 80%);">D Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(0 50% 25%);color:hsl(0 70% 80%);">11A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(0 50% 25%);color:hsl(0 70% 80%);">F# minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(0 50% 25%);color:hsl(0 70% 80%);">11B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(0 50% 25%);color:hsl(0 70% 80%);">A Major</span> |
+| <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(25 50% 25%);color:hsl(25 70% 80%);">12A</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(25 50% 25%);color:hsl(25 70% 80%);">C# minor</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(25 50% 25%);color:hsl(25 70% 80%);">12B</span> | <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(25 50% 25%);color:hsl(25 70% 80%);">E Major</span> |
+
+The number tracks position on the circle of fifths. Moving +1 or -1 on the wheel moves by a perfect fifth (or fourth), which is the most natural-sounding key change in Western music. The A/B distinction separates the minor and major key that share the same key signature — these are **relative** keys.
+
+## Enharmonic Equivalents
+
+Enharmonics are notes (and keys) that sound identical but are spelled differently. On a piano, <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">F# Major</span> (<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">2B</span>) and <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">Gb Major</span> use the exact same keys. They are the same pitch, the same sound — just different names depending on context.
+
+Common enharmonic pairs you will encounter:
+
+- <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(120 50% 25%);color:hsl(120 70% 80%);">Db Major</span> (<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(120 50% 25%);color:hsl(120 70% 80%);">3B</span>) = <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(120 50% 25%);color:hsl(120 70% 80%);">C# Major</span>
+- <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">F# Major</span> (<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">2B</span>) = <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">Gb Major</span>
+- <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(50 50% 25%);color:hsl(50 70% 80%);">Ab minor</span> (<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(50 50% 25%);color:hsl(50 70% 80%);">1A</span>) = <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(50 50% 25%);color:hsl(50 70% 80%);">G# minor</span>
+- <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(120 50% 25%);color:hsl(120 70% 80%);">Bb minor</span> (<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(120 50% 25%);color:hsl(120 70% 80%);">3A</span>) = <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(120 50% 25%);color:hsl(120 70% 80%);">A# minor</span>
+- <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">Eb minor</span> (<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">2A</span>) = <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">D# minor</span>
+
+The Camelot system sidesteps this entirely. Whether your analysis tool labels a song as <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">F# Major</span> or <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">Gb Major</span>, it is <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.88em;background:hsl(80 50% 25%);color:hsl(80 70% 80%);">2B</span> either way. The Camelot code is unambiguous.
+
+## Transition Techniques
+
+### 1. Same Key (Same Number + Letter)
+
+The simplest and most seamless transition. Both songs share the same tonal center. If the current song is in <KeyBadge c="8B" client:load>8B</KeyBadge> (<KeyBadge c="8B" client:load>C Major</KeyBadge>) and the next is also <KeyBadge c="8B" client:load>8B</KeyBadge>, they will blend effortlessly.
+
+<div class="widget-sandbox" style="max-width: 420px; margin: 1rem auto;">
+  <CamelotWheelTransitions rule="same" client:load />
+</div>
+
+### 2. Relative Key Switch (Same Number, A to B or B to A)
+
+Moving between the A and B side of the same number means switching between a minor key and its relative major (or vice versa). They share the exact same notes — just a different tonal center.
+
+- <KeyBadge c="8A" client:load>8A</KeyBadge> (<KeyBadge c="8A" client:load>A minor</KeyBadge>) to <KeyBadge c="8B" client:load>8B</KeyBadge> (<KeyBadge c="8B" client:load>C Major</KeyBadge>) — same notes, shifts from dark to bright
+- <KeyBadge c="9B" client:load>9B</KeyBadge> (<KeyBadge c="9B" client:load>G Major</KeyBadge>) to <KeyBadge c="9A" client:load>9A</KeyBadge> (<KeyBadge c="9A" client:load>E minor</KeyBadge>) — same notes, shifts from bright to dark
+
+This is a great way to change the mood without any harmonic friction.
+
+<div class="widget-sandbox" style="max-width: 420px; margin: 1rem auto;">
+  <CamelotWheelTransitions rule="relative" client:load />
+</div>
+
+### 3. Adjacent Number (+1 or -1, Same Letter)
+
+Moving one step on the Camelot wheel means moving by a perfect fifth on the circle of fifths. This changes exactly one note in the key signature — the most gentle key change possible (other than staying put).
+
+- <KeyBadge c="8B" client:load>8B</KeyBadge> (<KeyBadge c="8B" client:load>C Major</KeyBadge>) to <KeyBadge c="9B" client:load>9B</KeyBadge> (<KeyBadge c="9B" client:load>G Major</KeyBadge>) — adds one sharp (F#)
+- <KeyBadge c="8B" client:load>8B</KeyBadge> (<KeyBadge c="8B" client:load>C Major</KeyBadge>) to <KeyBadge c="7B" client:load>7B</KeyBadge> (<KeyBadge c="7B" client:load>F Major</KeyBadge>) — adds one flat (Bb)
+
+In Camelot terms: stay on the same letter, go up or down by one. The wheel wraps around, so <KeyBadge c="12B" client:load>12B</KeyBadge> to <KeyBadge c="1B" client:load>1B</KeyBadge> is also a valid adjacent move.
+
+<div class="widget-sandbox" style="max-width: 420px; margin: 1rem auto;">
+  <CamelotWheelTransitions rule="adjacent" client:load />
+</div>
+
+### 4. Energy Boost (+7, Same Letter)
+
+Jumping +7 on the Camelot wheel (equivalent to moving up a semitone, or one half-step) creates a noticeable lift in energy. This is the classic "key change up" used in pop songs to build excitement at the final chorus.
+
+- <KeyBadge c="8B" client:load>8B</KeyBadge> (<KeyBadge c="8B" client:load>C Major</KeyBadge>) to <KeyBadge c="3B" client:load>3B</KeyBadge> (<KeyBadge c="3B" client:load>Db Major</KeyBadge>) — up one semitone
+- <KeyBadge c="6A" client:load>6A</KeyBadge> (<KeyBadge c="6A" client:load>G minor</KeyBadge>) to <KeyBadge c="1A" client:load>1A</KeyBadge> (<KeyBadge c="1A" client:load>Ab minor</KeyBadge>) — up one semitone
+
+Use this deliberately. It is not smooth — it is dramatic.
+
+<div class="widget-sandbox" style="max-width: 420px; margin: 1rem auto;">
+  <CamelotWheelTransitions rule="boost" client:load />
+</div>
+
+### 5. Energy Drop (+5, Same Letter)
+
+The inverse effect. Jumping +5 (a whole step down on the chromatic scale) creates a slight drop in tension. It can work as a cooldown transition between high-energy and lower-energy songs.
+
+- <KeyBadge c="8B" client:load>8B</KeyBadge> (<KeyBadge c="8B" client:load>C Major</KeyBadge>) to <KeyBadge c="1B" client:load>1B</KeyBadge> (<KeyBadge c="1B" client:load>B Major</KeyBadge>) — down one whole step (8+5=13, mod 12=1)
+
+<div class="widget-sandbox" style="max-width: 420px; margin: 1rem auto;">
+  <CamelotWheelTransitions rule="drop" client:load />
+</div>
+
+### 6. Parallel Key (Same Root, Flip A/B at +3)
+
+Switching between a major key and its parallel minor (same root note, different mode) creates a strong mood shift. On the Camelot wheel, a major key's parallel minor is located 3 positions back on the A side.
+
+- <KeyBadge c="8B" client:load>8B</KeyBadge> (<KeyBadge c="8B" client:load>C Major</KeyBadge>) to <KeyBadge c="5A" client:load>5A</KeyBadge> (<KeyBadge c="5A" client:load>C minor</KeyBadge>) — same root, major to minor (8B to 5A: 8-3=5, flip B to A)
+- <KeyBadge c="11B" client:load>11B</KeyBadge> (<KeyBadge c="11B" client:load>A Major</KeyBadge>) to <KeyBadge c="8A" client:load>8A</KeyBadge> (<KeyBadge c="8A" client:load>A minor</KeyBadge>) — same root, major to minor
+
+This changes three notes in the scale, so it is more disruptive than a relative key switch but has a very recognizable, intentional sound.
+
+<div class="widget-sandbox" style="max-width: 420px; margin: 1rem auto;">
+  <CamelotWheelTransitions rule="parallel" client:load />
+</div>
+
+## Combining Techniques
+
+In practice, most setlists chain together several of these moves. A common DJ pattern is to "ride the wheel" — move +1 or -1 on the Camelot number for several songs in a row, gradually shifting key while keeping every transition smooth. You might walk from <KeyBadge c="8B" client:load>8B</KeyBadge> to <KeyBadge c="9B" client:load>9B</KeyBadge> to <KeyBadge c="10B" client:load>10B</KeyBadge> to <KeyBadge c="11B" client:load>11B</KeyBadge>, covering four keys that are far apart on the keyboard but each individual step is only one note different.
+
+For a live band setlist, the rules are looser. You have silence between songs (rather than a crossfade), so larger jumps are more forgivable. Still, the Camelot badges on the setlist builder make it easy to eyeball compatibility — same or similar colors adjacent to each other suggests a smooth flow.
+
+The key insight: you do not need to memorize any of this. The color-coded key badges in the setlist builder give you an instant visual signal. Adjacent songs with matching or nearby colors will transition well. Songs with wildly different colors will feel like a reset — sometimes that is exactly what you want.
+
+## Quick Reference: Compatible Moves from Any Key
+
+For any Camelot code **NX** (where N is the number and X is A or B):
+
+| Move | Camelot | Interval | Feel |
+|------|---------|----------|------|
+| Same key | NX | Unison | Seamless |
+| Relative key | NA / NB | Relative major/minor | Mood shift, same notes |
+| Up a fifth | (N+1)X | Perfect 5th | Smooth, one note changes |
+| Down a fifth | (N-1)X | Perfect 4th | Smooth, one note changes |
+| Up a semitone | (N+7)X | Minor 2nd up | Energy boost |
+| Down a whole step | (N+5)X | Major 2nd down | Energy drop |
+| Parallel key | (N-3) flip X | Parallel major/minor | Strong mood shift |
+
+Numbers wrap around: after 12 comes 1.
+
+---
+
+*The Camelot color mapping is implemented in [`src/admin/SetlistModal.tsx`](https://github.com/brianburwell11/practice-portal/blob/main/src/admin/SetlistModal.tsx) — see `getCamelotStyle()` and `CAMELOT_HUE`.*
