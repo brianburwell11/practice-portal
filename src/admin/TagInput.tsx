@@ -12,14 +12,13 @@ export function TagInput({ tags, onChange, disabled, placeholder = 'Add tags…'
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commit = (raw: string) => {
-    const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
+    const parts = raw.split(',').map((p) => p.trim().toLowerCase()).filter(Boolean);
     if (parts.length === 0) return;
-    const lower = new Set(tags.map((t) => t.toLowerCase()));
+    const existing = new Set(tags.map((t) => t.toLowerCase()));
     const additions: string[] = [];
     for (const p of parts) {
-      const k = p.toLowerCase();
-      if (!lower.has(k)) {
-        lower.add(k);
+      if (!existing.has(p)) {
+        existing.add(p);
         additions.push(p);
       }
     }
