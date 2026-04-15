@@ -1,5 +1,6 @@
 import type { WizardState, WizardAction } from '../wizardReducer';
 import { useBandStore } from '../../store/bandStore';
+import { TagInput } from '../TagInput';
 
 interface Props {
   state: WizardState;
@@ -45,6 +46,14 @@ export function MetadataStep({ state, dispatch }: Props) {
             onChange={(e) => dispatch({ type: 'SET_KEY', key: e.target.value })}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:border-blue-500"
             placeholder="Em"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Tags</label>
+          <TagInput
+            tags={state.tags}
+            onChange={(tags) => dispatch({ type: 'SET_TAGS', tags })}
           />
         </div>
 

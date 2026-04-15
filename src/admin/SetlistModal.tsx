@@ -9,6 +9,7 @@ import type { SetlistConfig, SetlistEntry, NavLinkConfig } from '../audio/types'
 interface SongMeta {
   key: string;
   durationSeconds: number;
+  tags: string[];
 }
 
 function formatDuration(seconds: number): string {
@@ -119,6 +120,7 @@ export function SetlistModal({ setlistId, onClose }: Props) {
   // Filter state
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterKeys, setFilterKeys] = useState<Set<string>>(new Set());
+  const [filterTags, setFilterTags] = useState<Set<string>>(new Set());
   const [durationMode, setDurationMode] = useState<'' | 'longer' | 'shorter' | 'fits'>('');
   const [durationText, setDurationText] = useState('');
   const filterRef = useRef<HTMLDivElement>(null);
@@ -194,7 +196,7 @@ export function SetlistModal({ setlistId, onClose }: Props) {
           try {
             const res = await fetch(r2Url(`${bandId}/songs/${song.id}/config.json`));
             const config = await res.json();
-            results.push([song.id, { key: config.key ?? '', durationSeconds: config.durationSeconds ?? 0 }]);
+            results.push([song.id, { key: config.key ?? '', durationSeconds: config.durationSeconds ?? 0, tags: config.tags ?? [] }]);
           } catch {
             // skip songs whose config can't be loaded
           }
@@ -238,6 +240,14 @@ export function SetlistModal({ setlistId, onClose }: Props) {
     return [...keys].sort();
   }, [availableSongs, songMeta]);
 
+  const uniqueTags = useMemo(() => {
+    const tags = new Set<string>();
+    for (const song of availableSongs) {
+      for (const t of songMeta[song.id]?.tags ?? []) tags.add(t);
+    }
+    return [...tags].sort();
+  }, [availableSongs, songMeta]);
+
   // Compute time remaining for "fits remaining" filter
   const timeRemaining = desiredLengthSeconds && desiredLengthSeconds > 0
     ? desiredLengthSeconds - totalSeconds
@@ -248,7 +258,7 @@ export function SetlistModal({ setlistId, onClose }: Props) {
     (durationMode === 'shorter' && !!parseDuration(durationText)) ||
     (durationMode === 'fits' && timeRemaining !== null && timeRemaining > 0);
 
-  const hasActiveFilters = filterKeys.size > 0 || durationActive;
+  const hasActiveFilters = filterKeys.size > 0 || filterTags.size > 0 || durationActive;
 
   // Filtered available songs
   const filteredSongs = useMemo(() => {
@@ -257,13 +267,17 @@ export function SetlistModal({ setlistId, onClose }: Props) {
     return availableSongs.filter((song) => {
       const meta = songMeta[song.id];
       if (filterKeys.size > 0 && (!meta?.key || !filterKeys.has(meta.key))) return false;
+      if (filterTags.size > 0) {
+        const songTags = meta?.tags ?? [];
+        if (!songTags.some((t) => filterTags.has(t))) return false;
+      }
       const dur = meta?.durationSeconds ?? 0;
       if (durationMode === 'longer' && durSec && dur < durSec) return false;
       if (durationMode === 'shorter' && durSec && dur > durSec) return false;
       if (durationMode === 'fits' && timeRemaining !== null && timeRemaining > 0 && dur > timeRemaining) return false;
       return true;
     });
-  }, [availableSongs, songMeta, filterKeys, durationMode, durationText, timeRemaining, hasActiveFilters]);
+  }, [availableSongs, songMeta, filterKeys, filterTags, durationMode, durationText, timeRemaining, hasActiveFilters]);
 
   const deriveSetlistId = (n: string) =>
     'setlist-' + n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -442,32 +456,6 @@ export function SetlistModal({ setlistId, onClose }: Props) {
                       style={{ width: 220, top: filterPos.top, left: filterPos.left }}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {/* Key filter */}
-                      {uniqueKeys.length > 0 && (
-                        <div>
-                          <div className="text-xs text-gray-400 mb-1.5">Key</div>
-                          <div className="flex flex-wrap gap-1">
-                            {uniqueKeys.map((k) => {
-                              const selected = filterKeys.has(k);
-                              const cs = getCamelotStyle(k);
-                              return (
-                                <button
-                                  key={k}
-                                  onClick={() => setFilterKeys((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(k)) next.delete(k); else next.add(k);
-                                    return next;
-                                  })}
-                                  className={`px-1.5 py-0.5 rounded text-xs transition-opacity ${selected ? 'ring-1 ring-white/50' : 'opacity-50 hover:opacity-80'}`}
-                                  style={cs ? { backgroundColor: cs.bg, color: cs.color } : { backgroundColor: '#374151', color: '#9ca3af' }}
-                                >
-                                  {k}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
                       {/* Duration filter */}
                       <div className="space-y-1.5">
                         <div className="text-xs text-gray-400">Duration</div>
@@ -500,11 +488,62 @@ export function SetlistModal({ setlistId, onClose }: Props) {
                           )}
                         </div>
                       </div>
+                      {/* Key filter */}
+                      {uniqueKeys.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-1.5">Key</div>
+                          <div className="flex flex-wrap gap-1">
+                            {uniqueKeys.map((k) => {
+                              const selected = filterKeys.has(k);
+                              const cs = getCamelotStyle(k);
+                              return (
+                                <button
+                                  key={k}
+                                  onClick={() => setFilterKeys((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(k)) next.delete(k); else next.add(k);
+                                    return next;
+                                  })}
+                                  className={`px-1.5 py-0.5 rounded text-xs transition-opacity ${selected ? 'ring-1 ring-white/50' : 'opacity-50 hover:opacity-80'}`}
+                                  style={cs ? { backgroundColor: cs.bg, color: cs.color } : { backgroundColor: '#374151', color: '#9ca3af' }}
+                                >
+                                  {k}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {/* Tag filter */}
+                      {uniqueTags.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-1.5">Tags</div>
+                          <div className="flex flex-wrap gap-1">
+                            {uniqueTags.map((t) => {
+                              const selected = filterTags.has(t);
+                              return (
+                                <button
+                                  key={t}
+                                  onClick={() => setFilterTags((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(t)) next.delete(t); else next.add(t);
+                                    return next;
+                                  })}
+                                  className={`px-1.5 py-0.5 rounded text-xs bg-gray-700 text-gray-300 transition-opacity ${selected ? 'ring-1 ring-white/50' : 'opacity-50 hover:opacity-80'}`}
+                                >
+                                  {t}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                       {/* Clear */}
                       {hasActiveFilters && (
                         <button
                           onClick={() => {
                             setFilterKeys(new Set());
+                            setFilterTags(new Set());
                             setDurationMode('');
                             setDurationText('');
                           }}

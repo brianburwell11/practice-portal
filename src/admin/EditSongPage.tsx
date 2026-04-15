@@ -9,6 +9,7 @@ import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
 import type { StemConfig, StemGroupConfig } from '../audio/types';
+import { TagInput } from './TagInput';
 
 const groupColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
@@ -366,6 +367,14 @@ export default function EditSongPage() {
               <span className="text-sm text-gray-400">Duration</span>
               <p className="px-3 py-2 text-gray-400">{Math.floor(config.durationSeconds / 60)}:{Math.floor(config.durationSeconds % 60).toString().padStart(2, '0')}</p>
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-sm text-gray-400">Tags</span>
+            <TagInput
+              tags={config.tags ?? []}
+              onChange={(tags) => dispatch({ type: 'SET_TAGS', tags })}
+            />
           </div>
 
           {state.original && config.id !== state.original.id && (

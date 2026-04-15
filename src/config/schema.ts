@@ -78,6 +78,7 @@ export const songConfigSchema = z.object({
   markers: z.array(markerConfigSchema),
   tapMap: z.array(tapMapEntrySchema).optional(),
   navLinks: z.array(navLinkConfigSchema).optional(),
+  tags: z.array(z.string().min(1).max(40)).optional(),
 });
 
 export const songManifestEntrySchema = z.object({

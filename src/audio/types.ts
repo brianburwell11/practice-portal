@@ -66,6 +66,7 @@ export interface SongConfig {
   markers: MarkerConfig[];
   tapMap?: TapMapEntry[];
   navLinks?: NavLinkConfig[];
+  tags?: string[];
 }
 
 export interface SongManifestEntry {

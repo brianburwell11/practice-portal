@@ -72,6 +72,7 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
     },
     markers,
     tapMap: state.tapMap.length > 0 ? state.tapMap : undefined,
+    ...(state.tags.length > 0 ? { tags: state.tags } : {}),
   };
 }
 

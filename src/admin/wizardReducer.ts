@@ -23,6 +23,7 @@ export interface WizardState {
   artist: string;
   key: string;
   id: string;
+  tags: string[];
   // Step 2: Stems & Groups
   stems: StemEntry[];
   durationSeconds: number;
@@ -43,6 +44,7 @@ export type WizardAction =
   | { type: 'SET_TITLE'; title: string; fallbackArtist?: string }
   | { type: 'SET_ARTIST'; artist: string; fallbackArtist?: string }
   | { type: 'SET_KEY'; key: string }
+  | { type: 'SET_TAGS'; tags: string[] }
   | { type: 'SET_STEMS'; stems: StemEntry[]; durationSeconds: number }
   | { type: 'UPDATE_STEM'; index: number; updates: Partial<Omit<StemEntry, 'file'>> }
   | { type: 'REMOVE_STEM'; index: number }
@@ -65,6 +67,7 @@ export const initialState: WizardState = {
   artist: '',
   key: '',
   id: '',
+  tags: [],
   stems: [],
   durationSeconds: 0,
   timingMode: null,
@@ -86,6 +89,8 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return { ...state, artist: action.artist, id: deriveId(state.title, action.artist || action.fallbackArtist || '') };
     case 'SET_KEY':
       return { ...state, key: action.key };
+    case 'SET_TAGS':
+      return { ...state, tags: action.tags };
     case 'SET_STEMS':
       return { ...state, stems: action.stems, durationSeconds: action.durationSeconds };
     case 'UPDATE_STEM': {

@@ -26,6 +26,7 @@ export type EditSongAction =
   | { type: 'UPDATE_NAV_LINK'; index: number; link: NavLinkConfig }
   | { type: 'REMOVE_NAV_LINK'; index: number }
   | { type: 'MOVE_NAV_LINK'; from: number; to: number }
+  | { type: 'SET_TAGS'; tags: string[] }
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_SAVE_SUCCESS' }
@@ -138,6 +139,10 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
       links.splice(action.to, 0, moved);
       return updateConfig(state, { navLinks: links });
     }
+
+    case 'SET_TAGS':
+      if (!state.config) return state;
+      return updateConfig(state, { tags: action.tags.length > 0 ? action.tags : undefined });
 
     case 'SET_SAVING':
       return { ...state, saving: action.saving, error: null };
