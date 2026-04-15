@@ -75,6 +75,7 @@ export function SetlistModal({ setlistId, onClose }: Props) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterKeys, setFilterKeys] = useState<Set<string>>(new Set());
   const [filterTags, setFilterTags] = useState<Set<string>>(new Set());
+  const [allowDuplicates, setAllowDuplicates] = useState(true);
   const [durationMode, setDurationMode] = useState<'' | 'longer' | 'shorter' | 'fits'>('');
   const [durationText, setDurationText] = useState('');
   const filterRef = useRef<HTMLDivElement>(null);
@@ -212,13 +213,23 @@ export function SetlistModal({ setlistId, onClose }: Props) {
     (durationMode === 'shorter' && !!parseDuration(durationText)) ||
     (durationMode === 'fits' && timeRemaining !== null && timeRemaining > 0);
 
-  const hasActiveFilters = filterKeys.size > 0 || filterTags.size > 0 || durationActive;
+  const hasActiveFilters = filterKeys.size > 0 || filterTags.size > 0 || durationActive || !allowDuplicates;
+
+  // IDs of songs already in the setlist (for the "no duplicates" filter)
+  const setlistSongIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const e of entries) {
+      if (e.type === 'song') ids.add(e.songId);
+    }
+    return ids;
+  }, [entries]);
 
   // Filtered available songs
   const filteredSongs = useMemo(() => {
     if (!hasActiveFilters) return availableSongs;
     const durSec = parseDuration(durationText);
     return availableSongs.filter((song) => {
+      if (!allowDuplicates && setlistSongIds.has(song.id)) return false;
       const meta = songMeta[song.id];
       if (filterKeys.size > 0 && (!meta?.key || !filterKeys.has(meta.key))) return false;
       if (filterTags.size > 0) {
@@ -231,7 +242,7 @@ export function SetlistModal({ setlistId, onClose }: Props) {
       if (durationMode === 'fits' && timeRemaining !== null && timeRemaining > 0 && dur > timeRemaining) return false;
       return true;
     });
-  }, [availableSongs, songMeta, filterKeys, filterTags, durationMode, durationText, timeRemaining, hasActiveFilters]);
+  }, [availableSongs, songMeta, filterKeys, filterTags, durationMode, durationText, timeRemaining, hasActiveFilters, allowDuplicates, setlistSongIds]);
 
   const deriveSetlistId = (n: string) =>
     'setlist-' + n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -410,6 +421,31 @@ export function SetlistModal({ setlistId, onClose }: Props) {
                       style={{ width: 220, top: filterPos.top, left: filterPos.left }}
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {/* Allow duplicates toggle */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400">Allow duplicates</span>
+                        <button
+                          type="button"
+                          onClick={() => setAllowDuplicates((v) => !v)}
+                          aria-pressed={allowDuplicates}
+                          className={`relative inline-flex h-4 w-10 items-center rounded-full transition-colors ${
+                            allowDuplicates ? 'bg-green-600' : 'bg-red-600'
+                          }`}
+                        >
+                          <span
+                            className={`absolute inset-y-0 flex items-center text-[8px] font-bold text-white tracking-wide leading-none ${
+                              allowDuplicates ? 'left-1' : 'right-1'
+                            }`}
+                          >
+                            {allowDuplicates ? 'YES' : 'NO'}
+                          </span>
+                          <span
+                            className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                              allowDuplicates ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
                       {/* Duration filter */}
                       <div className="space-y-1.5">
                         <div className="text-xs text-gray-400">Duration</div>
@@ -500,6 +536,7 @@ export function SetlistModal({ setlistId, onClose }: Props) {
                             setFilterTags(new Set());
                             setDurationMode('');
                             setDurationText('');
+                            setAllowDuplicates(true);
                           }}
                           className="text-xs text-gray-500 hover:text-gray-300"
                         >
