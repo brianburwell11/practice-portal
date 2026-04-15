@@ -1,6 +1,7 @@
 import type { WizardState, WizardAction } from '../wizardReducer';
 import { useBandStore } from '../../store/bandStore';
 import { TagInput } from '../TagInput';
+import { SongKeyInput } from '../SongKeyInput';
 
 interface Props {
   state: WizardState;
@@ -9,7 +10,7 @@ interface Props {
 
 export function MetadataStep({ state, dispatch }: Props) {
   const bandName = useBandStore((s) => s.currentBand?.name ?? '');
-  const canProceed = state.title.trim() !== '' && state.key.trim() !== '';
+  const canProceed = state.title.trim() !== '';
 
   return (
     <div className="space-y-6">
@@ -40,12 +41,9 @@ export function MetadataStep({ state, dispatch }: Props) {
 
         <div>
           <label className="block text-sm text-gray-400 mb-1">Key</label>
-          <input
-            type="text"
+          <SongKeyInput
             value={state.key}
-            onChange={(e) => dispatch({ type: 'SET_KEY', key: e.target.value })}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:border-blue-500"
-            placeholder="Em"
+            onChange={(key) => dispatch({ type: 'SET_KEY', key })}
           />
         </div>
 

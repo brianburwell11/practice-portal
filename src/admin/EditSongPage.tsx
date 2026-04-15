@@ -10,6 +10,7 @@ import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
 import type { StemConfig, StemGroupConfig } from '../audio/types';
 import { TagInput } from './TagInput';
+import { SongKeyInput } from './SongKeyInput';
 
 const groupColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
@@ -356,11 +357,9 @@ export default function EditSongPage() {
             </label>
             <label className="space-y-1">
               <span className="text-sm text-gray-400">Key</span>
-              <input
-                type="text"
+              <SongKeyInput
                 value={config.key}
-                onChange={(e) => dispatch({ type: 'SET_KEY', key: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:border-blue-500"
+                onChange={(key) => dispatch({ type: 'SET_KEY', key })}
               />
             </label>
             <div className="space-y-1">
