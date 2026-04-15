@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
@@ -11,9 +12,84 @@ interface SongMeta {
 }
 
 function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function parseDuration(input: string): number | null {
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) return null;
+
+  // H:MM:SS
+  let match = trimmed.match(/^(\d+):([0-5]?\d):([0-5]?\d)$/);
+  if (match) return +match[1] * 3600 + +match[2] * 60 + +match[3];
+
+  // M:SS (or MM:SS)
+  match = trimmed.match(/^(\d{1,3}):([0-5]?\d)$/);
+  if (match) return +match[1] * 60 + +match[2];
+
+  // Written forms: 1hour45minutes, 1h45m, 1hour30, 2h, 45m, 90min, etc.
+  const hMatch = trimmed.match(/(\d+)\s*(?:hours?|h)/);
+  const mMatch = trimmed.match(/(\d+)\s*(?:minutes?|mins?|m(?!s))/);
+  if (hMatch || mMatch) {
+    return (hMatch ? +hMatch[1] * 3600 : 0) + (mMatch ? +mMatch[1] * 60 : 0);
+  }
+
+  // Plain number as minutes
+  const mins = parseInt(trimmed, 10);
+  if (!isNaN(mins) && mins >= 0 && /^\d+$/.test(trimmed)) return mins * 60;
+
+  return null;
+}
+
+/* ── Camelot wheel key → colour mapping ── */
+
+const NOTE_TO_SEMITONE: Record<string, number> = {
+  C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3,
+  E: 4, Fb: 4, 'E#': 5, F: 5, 'F#': 6, Gb: 6,
+  G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10,
+  B: 11, Cb: 11, 'B#': 0,
+};
+
+// semitone → [major camelot#, minor camelot#]
+const SEMITONE_TO_CAMELOT: [number, number][] = [
+  [8, 5], [3, 12], [10, 7], [5, 2], [12, 9], [7, 4],
+  [2, 11], [9, 6], [4, 1], [11, 8], [6, 3], [1, 10],
+];
+
+const CAMELOT_HUE: Record<number, number> = {
+  1: 50, 2: 80, 3: 120, 4: 155, 5: 180, 6: 200,
+  7: 225, 8: 260, 9: 295, 10: 330, 11: 0, 12: 25,
+};
+
+function getCamelotStyle(raw: string): { bg: string; color: string } | null {
+  const trimmed = raw.trim();
+
+  // Match Camelot codes like "8B", "12A"
+  const cam = trimmed.match(/^(\d{1,2})([ABab])$/);
+  if (cam) {
+    const h = CAMELOT_HUE[parseInt(cam[1], 10)];
+    if (h !== undefined) return { bg: `hsl(${h} 50% 25%)`, color: `hsl(${h} 70% 80%)` };
+  }
+
+  // Match key names like "C", "Bbm", "F# minor"
+  const m = trimmed.match(/^([A-Ga-g])\s*([#♯b♭]?)[\s-]*(flat|sharp)?\s*(m|min|minor|M|maj|major)?$/i);
+  if (!m) return null;
+
+  let acc = m[2];
+  if (m[3]) acc = m[3].toLowerCase() === 'flat' ? 'b' : '#';
+  else if (acc === '♯') acc = '#';
+  else if (acc === '♭') acc = 'b';
+
+  const semi = NOTE_TO_SEMITONE[m[1].toUpperCase() + acc];
+  if (semi === undefined) return null;
+
+  const minor = m[4] ? /^(m|min|minor)$/i.test(m[4]) : false;
+  const h = CAMELOT_HUE[SEMITONE_TO_CAMELOT[semi][minor ? 1 : 0]];
+  return { bg: `hsl(${h} 50% 25%)`, color: `hsl(${h} 70% 80%)` };
 }
 
 interface Props {
@@ -34,9 +110,20 @@ export function SetlistModal({ setlistId, onClose }: Props) {
   const [navLinks, setNavLinks] = useState<NavLinkConfig[]>([]);
   const [newLinkTitle, setNewLinkTitle] = useState('');
   const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [desiredLengthSeconds, setDesiredLengthSeconds] = useState<number | null>(null);
+  const [desiredLengthText, setDesiredLengthText] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Filter state
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterKeys, setFilterKeys] = useState<Set<string>>(new Set());
+  const [durationMode, setDurationMode] = useState<'' | 'longer' | 'shorter' | 'fits'>('');
+  const [durationText, setDurationText] = useState('');
+  const filterRef = useRef<HTMLDivElement>(null);
+  const filterBtnRef = useRef<HTMLButtonElement>(null);
+  const [filterPos, setFilterPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   // Drag-and-drop state
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -45,6 +132,24 @@ export function SetlistModal({ setlistId, onClose }: Props) {
   // Nav link drag-to-reorder state
   const [linkDragIdx, setLinkDragIdx] = useState<number | null>(null);
   const [linkDropIdx, setLinkDropIdx] = useState<number | null>(null);
+
+  // Close filter dropdown on click outside
+  useEffect(() => {
+    if (!filterOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [filterOpen]);
+
+  const openFilter = useCallback(() => {
+    if (filterBtnRef.current) {
+      const rect = filterBtnRef.current.getBoundingClientRect();
+      setFilterPos({ top: rect.bottom + 4, left: rect.right - 220 });
+    }
+    setFilterOpen((v) => !v);
+  }, []);
 
   const ensureProtocol = (url: string) =>
     url && !/^https?:\/\//i.test(url) ? `http://${url}` : url;
@@ -62,6 +167,10 @@ export function SetlistModal({ setlistId, onClose }: Props) {
         setName(data.name);
         setEntries(data.entries);
         setNavLinks(data.navLinks ?? []);
+        if (data.desiredLengthSeconds) {
+          setDesiredLengthSeconds(data.desiredLengthSeconds);
+          setDesiredLengthText(formatDuration(data.desiredLengthSeconds));
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -119,6 +228,43 @@ export function SetlistModal({ setlistId, onClose }: Props) {
     return { totalSeconds: total, sets: setGroups };
   }, [entries, songMeta]);
 
+  // Unique keys across available songs, sorted
+  const uniqueKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const song of availableSongs) {
+      const k = songMeta[song.id]?.key;
+      if (k) keys.add(k);
+    }
+    return [...keys].sort();
+  }, [availableSongs, songMeta]);
+
+  // Compute time remaining for "fits remaining" filter
+  const timeRemaining = desiredLengthSeconds && desiredLengthSeconds > 0
+    ? desiredLengthSeconds - totalSeconds
+    : null;
+
+  const durationActive =
+    (durationMode === 'longer' && !!parseDuration(durationText)) ||
+    (durationMode === 'shorter' && !!parseDuration(durationText)) ||
+    (durationMode === 'fits' && timeRemaining !== null && timeRemaining > 0);
+
+  const hasActiveFilters = filterKeys.size > 0 || durationActive;
+
+  // Filtered available songs
+  const filteredSongs = useMemo(() => {
+    if (!hasActiveFilters) return availableSongs;
+    const durSec = parseDuration(durationText);
+    return availableSongs.filter((song) => {
+      const meta = songMeta[song.id];
+      if (filterKeys.size > 0 && (!meta?.key || !filterKeys.has(meta.key))) return false;
+      const dur = meta?.durationSeconds ?? 0;
+      if (durationMode === 'longer' && durSec && dur < durSec) return false;
+      if (durationMode === 'shorter' && durSec && dur > durSec) return false;
+      if (durationMode === 'fits' && timeRemaining !== null && timeRemaining > 0 && dur > timeRemaining) return false;
+      return true;
+    });
+  }, [availableSongs, songMeta, filterKeys, durationMode, durationText, timeRemaining, hasActiveFilters]);
+
   const deriveSetlistId = (n: string) =>
     'setlist-' + n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -135,6 +281,7 @@ export function SetlistModal({ setlistId, onClose }: Props) {
       name: name.trim(),
       entries,
       ...(navLinks.length > 0 ? { navLinks } : {}),
+      ...(desiredLengthSeconds ? { desiredLengthSeconds } : {}),
     };
 
     try {
@@ -237,12 +384,141 @@ export function SetlistModal({ setlistId, onClose }: Props) {
               />
             </div>
 
+            {/* Set length + time remaining */}
+            <div className="flex items-end gap-3">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Set Length</label>
+                <input
+                  type="text"
+                  value={desiredLengthText}
+                  onChange={(e) => {
+                    setDesiredLengthText(e.target.value);
+                    const parsed = parseDuration(e.target.value);
+                    if (parsed !== null) setDesiredLengthSeconds(parsed);
+                  }}
+                  onBlur={() => {
+                    if (desiredLengthSeconds) {
+                      setDesiredLengthText(formatDuration(desiredLengthSeconds));
+                    } else {
+                      setDesiredLengthText('');
+                      setDesiredLengthSeconds(null);
+                    }
+                  }}
+                  className="w-20 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                  placeholder="HH:MM:SS"
+                  disabled={saving}
+                />
+              </div>
+              {desiredLengthSeconds != null && desiredLengthSeconds > 0 && (() => {
+                const remaining = desiredLengthSeconds - totalSeconds;
+                const isOver = remaining < 0;
+                return (
+                  <span className={`text-xs pb-1 ml-auto ${isOver ? 'text-red-400' : 'text-gray-500'}`}>
+                    {isOver ? '-' : ''}{formatDuration(Math.abs(remaining))} {isOver ? 'over' : 'remaining'}
+                  </span>
+                );
+              })()}
+            </div>
+
             <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
               {/* Song picker */}
               <div className="w-1/2 space-y-2">
-                <h3 className="text-sm font-medium text-gray-400">Available Songs</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-gray-400">Available Songs</h3>
+                  <button
+                    ref={filterBtnRef}
+                    onClick={openFilter}
+                    className={`p-1 rounded hover:bg-gray-700 ${hasActiveFilters ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
+                    title="Filter songs"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1.5 2h13M3.5 5.5h9M5.5 9h5M7 12.5h2" />
+                    </svg>
+                  </button>
+                  {filterOpen && createPortal(
+                    <div
+                      ref={filterRef}
+                      className="fixed z-[100] bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 space-y-3"
+                      style={{ width: 220, top: filterPos.top, left: filterPos.left }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Key filter */}
+                      {uniqueKeys.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-1.5">Key</div>
+                          <div className="flex flex-wrap gap-1">
+                            {uniqueKeys.map((k) => {
+                              const selected = filterKeys.has(k);
+                              const cs = getCamelotStyle(k);
+                              return (
+                                <button
+                                  key={k}
+                                  onClick={() => setFilterKeys((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(k)) next.delete(k); else next.add(k);
+                                    return next;
+                                  })}
+                                  className={`px-1.5 py-0.5 rounded text-xs transition-opacity ${selected ? 'ring-1 ring-white/50' : 'opacity-50 hover:opacity-80'}`}
+                                  style={cs ? { backgroundColor: cs.bg, color: cs.color } : { backgroundColor: '#374151', color: '#9ca3af' }}
+                                >
+                                  {k}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {/* Duration filter */}
+                      <div className="space-y-1.5">
+                        <div className="text-xs text-gray-400">Duration</div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={durationMode}
+                            onChange={(e) => setDurationMode(e.target.value as typeof durationMode)}
+                            className="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="">No filter</option>
+                            <option value="longer">Longer than</option>
+                            <option value="shorter">Shorter than</option>
+                            {timeRemaining !== null && timeRemaining > 0 && (
+                              <option value="fits">Fits remaining</option>
+                            )}
+                          </select>
+                          {(durationMode === 'longer' || durationMode === 'shorter') && (
+                            <input
+                              type="text"
+                              value={durationText}
+                              onChange={(e) => setDurationText(e.target.value)}
+                              className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                              placeholder="3:00"
+                            />
+                          )}
+                          {durationMode === 'fits' && timeRemaining !== null && timeRemaining > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-gray-700 text-xs text-gray-300">
+                              ≤ {formatDuration(timeRemaining)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Clear */}
+                      {hasActiveFilters && (
+                        <button
+                          onClick={() => {
+                            setFilterKeys(new Set());
+                            setDurationMode('');
+                            setDurationText('');
+                          }}
+                          className="text-xs text-gray-500 hover:text-gray-300"
+                        >
+                          Clear filters
+                        </button>
+                      )}
+                    </div>,
+                    document.body,
+                  )}
+                </div>
                 <div className="space-y-1 overflow-y-auto max-h-60">
-                  {availableSongs.map((song) => {
+                  {filteredSongs.map((song) => {
                     const meta = songMeta[song.id];
                     return (
                       <div
@@ -253,9 +529,15 @@ export function SetlistModal({ setlistId, onClose }: Props) {
                         {meta?.durationSeconds ? (
                           <span className="text-xs text-gray-500 shrink-0">{formatDuration(meta.durationSeconds)}</span>
                         ) : null}
-                        {meta?.key ? (
-                          <span className="px-1.5 py-0.5 bg-gray-700 rounded text-xs text-gray-400 shrink-0">{meta.key}</span>
-                        ) : null}
+                        {meta?.key ? (() => {
+                          const cs = getCamelotStyle(meta.key);
+                          return (
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-xs shrink-0 ${cs ? '' : 'bg-gray-700 text-gray-400'}`}
+                              style={cs ? { backgroundColor: cs.bg, color: cs.color } : undefined}
+                            >{meta.key}</span>
+                          );
+                        })() : null}
                         <button
                           onClick={() => addSong(song.id)}
                           disabled={saving}
@@ -266,8 +548,10 @@ export function SetlistModal({ setlistId, onClose }: Props) {
                       </div>
                     );
                   })}
-                  {availableSongs.length === 0 && (
-                    <div className="text-sm text-gray-500">No songs in this band</div>
+                  {filteredSongs.length === 0 && (
+                    <div className="text-sm text-gray-500">
+                      {hasActiveFilters ? 'No songs match filters' : 'No songs in this band'}
+                    </div>
                   )}
                 </div>
                 <button
@@ -342,9 +626,15 @@ export function SetlistModal({ setlistId, onClose }: Props) {
                             {songMeta[entry.songId]?.durationSeconds ? (
                               <span className="text-xs text-gray-500 shrink-0">{formatDuration(songMeta[entry.songId].durationSeconds)}</span>
                             ) : null}
-                            {songMeta[entry.songId]?.key ? (
-                              <span className="px-1.5 py-0.5 bg-gray-700 rounded text-xs text-gray-400 shrink-0">{songMeta[entry.songId].key}</span>
-                            ) : null}
+                            {songMeta[entry.songId]?.key ? (() => {
+                              const cs = getCamelotStyle(songMeta[entry.songId].key);
+                              return (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-xs shrink-0 ${cs ? '' : 'bg-gray-700 text-gray-400'}`}
+                                  style={cs ? { backgroundColor: cs.bg, color: cs.color } : undefined}
+                                >{songMeta[entry.songId].key}</span>
+                              );
+                            })() : null}
                           </>
                         )}
 

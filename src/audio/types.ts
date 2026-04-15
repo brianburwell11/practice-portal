@@ -108,6 +108,7 @@ export interface SetlistConfig {
   name: string;
   entries: SetlistEntry[];
   navLinks?: NavLinkConfig[];
+  desiredLengthSeconds?: number;
 }
 
 export interface SetlistIndex {
