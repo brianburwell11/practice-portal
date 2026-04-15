@@ -15,6 +15,7 @@ interface Props {
   onDeleteSong?: () => void;
   onAddSetlist?: () => void;
   onEditSetlist?: () => void;
+  onCopySetlist?: () => void;
   onDeleteSetlist?: () => void;
 }
 
@@ -57,6 +58,7 @@ export function AdminRibbon({
   onDeleteSong,
   onAddSetlist,
   onEditSetlist,
+  onCopySetlist,
   onDeleteSetlist,
 }: Props) {
   const [open, setOpen] = useState<DropdownId>(null);
@@ -117,6 +119,7 @@ export function AdminRibbon({
               <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
                 <MenuItem label="Add Setlist" enabled onClick={() => { close(); onAddSetlist?.(); }} />
                 <MenuItem label="Edit Setlist" enabled={!!hasSetlist} onClick={() => { close(); onEditSetlist?.(); }} />
+                <MenuItem label="Copy Setlist" enabled={!!hasSetlist} onClick={() => { close(); onCopySetlist?.(); }} />
                 <MenuItem label="Delete Setlist" enabled={!!hasSetlist} danger onClick={() => { close(); onDeleteSetlist?.(); }} />
               </div>
             )}

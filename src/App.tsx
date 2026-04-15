@@ -38,6 +38,7 @@ export default function App() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSetlistModal, setShowSetlistModal] = useState(false);
   const [editSetlistId, setEditSetlistId] = useState<string | undefined>(undefined);
+  const [copySetlistId, setCopySetlistId] = useState<string | undefined>(undefined);
   const [showDeleteSetlistModal, setShowDeleteSetlistModal] = useState(false);
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
 
@@ -92,8 +93,9 @@ export default function App() {
                 .catch(() => openLyricsEditor([]));
             }}
             onDeleteSong={() => setShowDeleteModal(true)}
-            onAddSetlist={() => { setEditSetlistId(undefined); setShowSetlistModal(true); }}
-            onEditSetlist={() => { activeSetlist && setEditSetlistId(activeSetlist.id); setShowSetlistModal(true); }}
+            onAddSetlist={() => { setEditSetlistId(undefined); setCopySetlistId(undefined); setShowSetlistModal(true); }}
+            onEditSetlist={() => { if (activeSetlist) { setEditSetlistId(activeSetlist.id); setCopySetlistId(undefined); setShowSetlistModal(true); } }}
+            onCopySetlist={() => { if (activeSetlist) { setEditSetlistId(undefined); setCopySetlistId(activeSetlist.id); setShowSetlistModal(true); } }}
             onDeleteSetlist={() => setShowDeleteSetlistModal(true)}
           />
         ) : (
@@ -125,7 +127,11 @@ export default function App() {
       )}
       {showSetlistModal && SetlistModal && (
         <Suspense fallback={null}>
-          <SetlistModal setlistId={editSetlistId} onClose={() => setShowSetlistModal(false)} />
+          <SetlistModal
+            setlistId={editSetlistId}
+            copyFromSetlistId={copySetlistId}
+            onClose={() => { setShowSetlistModal(false); setEditSetlistId(undefined); setCopySetlistId(undefined); }}
+          />
         </Suspense>
       )}
       {showDeleteSetlistModal && DeleteSetlistModal && activeSetlist && (

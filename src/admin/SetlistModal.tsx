@@ -49,10 +49,11 @@ function parseDuration(input: string): number | null {
 
 interface Props {
   setlistId?: string;
+  copyFromSetlistId?: string;
   onClose: () => void;
 }
 
-export function SetlistModal({ setlistId, onClose }: Props) {
+export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   const currentBand = useBandStore((s) => s.currentBand);
   const manifest = useSongStore((s) => s.manifest);
   const setIndex = useSetlistStore((s) => s.setIndex);
@@ -112,26 +113,34 @@ export function SetlistModal({ setlistId, onClose }: Props) {
     url && !/^https?:\/\//i.test(url) ? `http://${url}` : url;
 
   const isEdit = !!setlistId;
+  const isCopy = !setlistId && !!copyFromSetlistId;
+  const [copySourceId, setCopySourceId] = useState<string | null>(null);
+  const [copySourceName, setCopySourceName] = useState<string>('');
 
-  // Load existing setlist in edit mode
+  // Load existing setlist (edit mode) or source setlist (copy mode)
   useEffect(() => {
-    if (!setlistId || !currentBand) return;
+    const sourceId = setlistId ?? copyFromSetlistId;
+    if (!sourceId || !currentBand) return;
     setLoading(true);
     const r2Base = import.meta.env.VITE_R2_PUBLIC_URL;
-    fetch(`${r2Base}/${currentBand.id}/setlists/${setlistId}.json`)
+    fetch(`${r2Base}/${currentBand.id}/setlists/${sourceId}.json`)
       .then((r) => r.json())
       .then((data: SetlistConfig) => {
-        setName(data.name);
+        if (!isCopy) setName(data.name);
         setEntries(data.entries);
         setNavLinks(data.navLinks ?? []);
         if (data.desiredLengthSeconds) {
           setDesiredLengthSeconds(data.desiredLengthSeconds);
           setDesiredLengthText(formatDuration(data.desiredLengthSeconds));
         }
+        if (isCopy) {
+          setCopySourceId(data.id);
+          setCopySourceName(data.name);
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [setlistId, currentBand]);
+  }, [setlistId, copyFromSetlistId, currentBand, isCopy]);
 
   // Available songs for the picker
   const availableSongs = useMemo(() => {
@@ -326,7 +335,8 @@ export function SetlistModal({ setlistId, onClose }: Props) {
     setEntries((prev) => prev.map((e, i) => (i === idx && e.type === 'heading' ? { ...e, label } : e)));
 
   const songCount = entries.filter((e) => e.type === 'song').length;
-  const canSave = name.trim().length > 0 && songCount > 0 && !saving;
+  const nameCollidesWithSource = isCopy && copySourceId !== null && deriveSetlistId(name) === copySourceId;
+  const canSave = name.trim().length > 0 && songCount > 0 && !saving && !nameCollidesWithSource;
 
   // Song numbering: count only songs, not headings
   let songNumber = 0;
@@ -352,15 +362,30 @@ export function SetlistModal({ setlistId, onClose }: Props) {
             {/* Name input */}
             <div>
               <label className="block text-sm text-gray-400 mb-1">Setlist Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
-                placeholder="e.g. Friday Night Gig"
-                autoFocus
-                disabled={saving}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onDoubleClick={() => {
+                    if (isCopy && !name && copySourceName) setName(`${copySourceName} (copy)`);
+                  }}
+                  className={`w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 ${
+                    isCopy && !name && copySourceName ? 'pr-32' : ''
+                  }`}
+                  placeholder={isCopy && copySourceName ? `${copySourceName} (copy)` : 'e.g. Friday Night Gig'}
+                  autoFocus
+                  disabled={saving}
+                />
+                {isCopy && !name && copySourceName && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-gray-500 pointer-events-none select-none">
+                    double click to use
+                  </span>
+                )}
+              </div>
+              {nameCollidesWithSource && (
+                <p className="mt-1 text-xs text-red-400">Pick a name different from the original setlist.</p>
+              )}
             </div>
 
             {/* Set length + time remaining */}
