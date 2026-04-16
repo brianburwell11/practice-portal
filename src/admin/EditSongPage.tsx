@@ -230,11 +230,12 @@ export default function EditSongPage() {
         state.original &&
         (config.title !== state.original.title || config.artist !== state.original.artist)
       ) {
-        // Title/artist text changed but ID stayed the same — update discography
+        // Title/artist text changed but ID stayed the same — update discography.
+        // overwrite:true because we're intentionally replacing the existing entry.
         await fetch(`/api/bands/${currentBand.id}/songs/discography`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${config.id}` }),
+          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${config.id}`, overwrite: true }),
         });
       }
 

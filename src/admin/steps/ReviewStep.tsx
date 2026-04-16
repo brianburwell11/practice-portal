@@ -24,6 +24,33 @@ export function ReviewStep({ state, dispatch }: Props) {
     dispatch({ type: 'SET_ERROR', error: null });
 
     try {
+      // Resolve band first so we can use bandId in all subsequent calls
+      const bandsRes = await fetch(r2Url('registry.json'));
+      const bandsData = await bandsRes.json();
+      const band = bandsData.bands.find((b: any) => b.route === bandSlug);
+      const bandId = band?.id ?? '';
+
+      // Pre-flight collision check: refuse if a song already exists at this
+      // derived id. Without this, transcode-upload + config POST would
+      // silently overwrite that song's R2 files. (The server returns 409 as
+      // a backstop, but by then the stems are already on R2.)
+      let collision = false;
+      try {
+        const discRes = await fetch(r2Url(`${bandId}/songs/discography.json`));
+        if (discRes.ok) {
+          const disc = await discRes.json();
+          collision = Array.isArray(disc?.songs) && disc.songs.some((s: any) => s.id === state.id);
+        }
+        // Non-OK (e.g. 404 on a fresh bucket) → no collision possible.
+      } catch {
+        // Network/parse failure — fall through and let the server 409 guard it.
+      }
+      if (collision) {
+        throw new Error(
+          `A song with id "${state.id}" already exists. Delete it first or change the title/artist.`,
+        );
+      }
+
       // 1. Upload stems to server for transcoding + R2 upload.
       // Alignment offsets are NOT baked in — they live in config.json's
       // offsetSec fields and are applied at playback time by StemPlayer.
@@ -35,12 +62,6 @@ export function ReviewStep({ state, dispatch }: Props) {
       dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
         fileIndex: 0, fileCount: state.stems.length, bytesSent: 0, bytesTotal: 1,
       }});
-
-      // Resolve band first so we can use bandId in all subsequent calls
-      const bandsRes = await fetch(r2Url('registry.json'));
-      const bandsData = await bandsRes.json();
-      const band = bandsData.bands.find((b: any) => b.route === bandSlug);
-      const bandId = band?.id ?? '';
 
       const uploadResult = await uploadFormWithProgress(
         `/api/r2/transcode-upload/${bandId}/${state.id}`,

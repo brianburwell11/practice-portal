@@ -273,6 +273,16 @@ export function configApiPlugin(): Plugin {
               return jsonResponse(res, 409, { error: `Song ID "${newId}" already exists` });
             }
 
+            // Also check R2 directory — discography may be clean but orphaned
+            // files under the target prefix would be silently overwritten by
+            // the copy step below.
+            const existingAtTarget = await r2ListKeys(`${bandId}/songs/${newId}/`);
+            if (existingAtTarget.length > 0) {
+              return jsonResponse(res, 409, {
+                error: `R2 directory for "${newId}" is not empty (${existingAtTarget.length} file(s)). Clean it up before renaming.`,
+              });
+            }
+
             // 1. Copy song config to new key on R2
             const r2 = getR2Client();
             const bucket = process.env.R2_BUCKET;
@@ -533,13 +543,26 @@ export function configApiPlugin(): Plugin {
 
           try {
             const raw = await readBody(req);
-            const entry = JSON.parse(raw);
+            const { overwrite, ...entry } = JSON.parse(raw) as { overwrite?: boolean; id: string; [k: string]: any };
 
             let discography: { songs: any[] };
             try {
               discography = await r2ReadJson(`${bandId}/songs/discography.json`);
-            } catch {
-              discography = { songs: [] };
+            } catch (err: any) {
+              // Only treat missing-object as empty discography. Re-throw
+              // transient/network errors so we never wipe an existing file.
+              if (err?.name === 'NoSuchKey' || err?.Code === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404) {
+                discography = { songs: [] };
+              } else {
+                throw err;
+              }
+            }
+
+            const exists = discography.songs.some((s: any) => s.id === entry.id);
+            if (exists && !overwrite) {
+              return jsonResponse(res, 409, {
+                error: `Song id "${entry.id}" already exists. Delete it first or pick a different title/artist.`,
+              });
             }
 
             // Upsert entry
