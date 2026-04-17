@@ -17,8 +17,8 @@ const HIT_PX = isCoarse ? 20 : 6;
 const MIN_VIEW = 5;
 /** Default zoom level in seconds for mobile */
 const DEFAULT_MOBILE_VIEW = 30;
-/** Default zoom level in seconds for desktop (songs > 4 min start zoomed) */
-const DEFAULT_DESKTOP_VIEW = 240;
+/** Default zoom level in seconds for desktop (songs > 2.5 min start zoomed) */
+const DEFAULT_DESKTOP_VIEW = 150;
 
 export function WaveformTimeline() {
   const engine = useAudioEngine();
