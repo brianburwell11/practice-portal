@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema } from '../config/schema';
 import { detectStem, isAudioFile } from './utils/stemDetection';
+import { getAudioInfo } from './utils/audioConvert';
 import { uploadFormWithProgress } from './utils/uploadWithProgress';
 import { r2Url } from '../utils/url';
 import { useBandStore } from '../store/bandStore';
@@ -17,6 +18,15 @@ const groupColors = [
   '#8b5cf6', '#ec4899', '#14b8a6',
 ];
 
+function extOf(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i > 0 ? name.slice(i) : '';
+}
+
+function toKebab(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 export default function EditSongPage() {
   const { songId = '', bandSlug = '' } = useParams();
   const navigate = useNavigate();
@@ -30,7 +40,10 @@ export default function EditSongPage() {
   const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
   const [state, dispatch] = useReducer(editSongReducer, initialEditState);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [newStemFiles] = useState(() => new Map<string, File>());
+  // Tracks stems added in this edit session. `channels` is captured at
+  // add-time so the UI can offer a mono/stereo choice (matching the wizard)
+  // without re-decoding the file on every render.
+  const [newStemFiles] = useState(() => new Map<string, { file: File; channels: number }>());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drag-to-reorder state
@@ -109,8 +122,9 @@ export default function EditSongPage() {
 
   // Add stem via file input
   const handleAddStemFile = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
+      e.target.value = '';
       if (!file || !isAudioFile(file.name)) return;
       const detected = detectStem(file.name);
       // Deduplicate ID against existing stems
@@ -118,6 +132,15 @@ export default function EditSongPage() {
       let id = detected.id;
       let suffix = 2;
       while (existingIds.has(id)) { id = `${detected.id}-${suffix++}`; }
+
+      let channels = 1;
+      try {
+        const info = await getAudioInfo(file);
+        channels = info.channels;
+      } catch {
+        // Decoding failed (unsupported codec / corrupt file). Fall back to mono;
+        // the stereo toggle just won't render.
+      }
 
       const stem: StemConfig = {
         id,
@@ -127,9 +150,35 @@ export default function EditSongPage() {
         defaultPan: detected.defaultPan,
         color: detected.color,
       };
-      newStemFiles.set(id, file);
+      newStemFiles.set(id, { file, channels });
       dispatch({ type: 'ADD_STEM', stem });
-      e.target.value = '';
+    },
+    [state.config, newStemFiles],
+  );
+
+  // Finalize a newly-added stem's id from its label on blur. Doing this on
+  // every keystroke churns the row's React key (`stem.id + i`) and the
+  // label input loses focus; blur is the natural finalize point. Existing
+  // stems keep their id — renaming one would orphan the R2 audio.
+  const finalizeStemIdFromLabel = useCallback(
+    (index: number, stem: StemConfig) => {
+      if (!newStemFiles.has(stem.id)) return;
+      const base = toKebab(stem.label);
+      if (!base) return;
+      const otherIds = new Set(
+        (state.config?.stems ?? []).filter((_, i) => i !== index).map((s) => s.id),
+      );
+      let newId = base;
+      let n = 2;
+      while (otherIds.has(newId)) newId = `${base}-${n++}`;
+      if (newId === stem.id) return;
+
+      const entry = newStemFiles.get(stem.id);
+      if (entry) {
+        newStemFiles.delete(stem.id);
+        newStemFiles.set(newId, entry);
+      }
+      dispatch({ type: 'UPDATE_STEM', index, updates: { id: newId } });
     },
     [state.config, newStemFiles],
   );
@@ -175,11 +224,19 @@ export default function EditSongPage() {
       const newId = config.id;
       const idChanged = oldId !== newId;
 
-      // Upload new stem files using OLD id (files still at old location)
+      // Start from the current config; rebind if transcode rewrites filenames
+      // so the POST below doesn't send stale extensions (e.g. .wav when R2
+      // actually stores .opus, which 404s the player on reload).
+      let configToSave = config;
+
+      // Upload new stem files using OLD id (files still at old location).
+      // Send each under `${stemId}${origExt}` so server transcodes to the
+      // canonical `${stemId}.opus` — config.stems[].file then matches with no
+      // fileMap round-trip.
       if (newStemFiles.size > 0) {
         const formData = new FormData();
-        for (const [, file] of newStemFiles) {
-          formData.append('stems', file, file.name);
+        for (const [id, { file }] of newStemFiles) {
+          formData.append('stems', file, `${id}${extOf(file.name)}`);
         }
 
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
@@ -198,12 +255,14 @@ export default function EditSongPage() {
 
         if (!uploadResult.ok) throw new Error(uploadResult.error ?? 'Upload failed');
 
-        // Update stem filenames to transcoded versions
+        // Update new-stem filenames to the canonical opus; existing stems
+        // keep whatever the saved config already had.
         const updatedStems = config.stems.map((stem) => ({
           ...stem,
-          file: uploadResult.fileMap[stem.file] ?? stem.file,
+          file: newStemFiles.has(stem.id) ? `${stem.id}.opus` : stem.file,
         }));
-        dispatch({ type: 'INIT', config: { ...config, stems: updatedStems } });
+        configToSave = { ...config, stems: updatedStems };
+        dispatch({ type: 'INIT', config: configToSave });
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
       }
 
@@ -211,7 +270,7 @@ export default function EditSongPage() {
       const res = await fetch(`/api/bands/${currentBand.id}/songs/${oldId}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...config, id: oldId }),
+        body: JSON.stringify({ ...configToSave, id: oldId }),
       });
       if (!res.ok) throw new Error('Failed to save config');
 
@@ -230,11 +289,12 @@ export default function EditSongPage() {
         state.original &&
         (config.title !== state.original.title || config.artist !== state.original.artist)
       ) {
-        // Title/artist text changed but ID stayed the same — update discography
+        // Title/artist text changed but ID stayed the same — update discography.
+        // overwrite:true because we're intentionally replacing the existing entry.
         await fetch(`/api/bands/${currentBand.id}/songs/discography`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${config.id}` }),
+          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${config.id}`, overwrite: true }),
         });
       }
 
@@ -408,16 +468,48 @@ export default function EditSongPage() {
                   <span className="text-gray-600 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder">
                     &#x2630;
                   </span>
-                  <input
-                    type="color"
-                    value={stem.color}
-                    onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })}
-                    className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
-                  />
+                  {newStemFiles.has(stem.id) ? (
+                    // New stem — match the wizard's circular color + stereo
+                    // toggle style so the pair reads as one group.
+                    <div className="shrink-0 flex items-center">
+                      <label className="cursor-pointer" title="Click to change color">
+                        <div className="w-6 h-6 rounded-full border-2 border-gray-600" style={{ backgroundColor: stem.color }} />
+                        <input
+                          type="color"
+                          value={stem.color}
+                          onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })}
+                          className="sr-only"
+                        />
+                      </label>
+                      {(newStemFiles.get(stem.id)?.channels ?? 0) >= 2 && (
+                        <button
+                          onClick={() => dispatch({ type: 'UPDATE_STEM', index: i, updates: { stereo: !stem.stereo } })}
+                          className="-ml-2"
+                          title={stem.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
+                        >
+                          <div
+                            className="w-6 h-6 rounded-full border-2 border-gray-600"
+                            style={{
+                              backgroundColor: stem.stereo ? stem.color : 'transparent',
+                              borderColor: stem.stereo ? stem.color : undefined,
+                            }}
+                          />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <input
+                      type="color"
+                      value={stem.color}
+                      onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })}
+                      className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
+                    />
+                  )}
                   <input
                     type="text"
                     value={stem.label}
                     onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { label: e.target.value } })}
+                    onBlur={() => finalizeStemIdFromLabel(i, stem)}
                     className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
                   />
                   <span className="text-xs text-gray-500 truncate max-w-48">{stem.file}</span>
@@ -429,39 +521,7 @@ export default function EditSongPage() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs text-gray-400 pl-8">
-                  <label className="flex items-center gap-2">
-                    Vol
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={stem.defaultVolume}
-                      onChange={(e) =>
-                        dispatch({ type: 'UPDATE_STEM', index: i, updates: { defaultVolume: parseFloat(e.target.value) } })
-                      }
-                      className="w-24"
-                    />
-                    <span className="w-8 text-right">{Math.round(stem.defaultVolume * 100)}%</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    Pan
-                    <input
-                      type="range"
-                      min={-1}
-                      max={1}
-                      step={0.1}
-                      value={stem.defaultPan}
-                      onChange={(e) =>
-                        dispatch({ type: 'UPDATE_STEM', index: i, updates: { defaultPan: parseFloat(e.target.value) } })
-                      }
-                      className="w-24"
-                    />
-                    <span className="w-8 text-right">
-                      {stem.defaultPan === 0 ? 'C' : stem.defaultPan < 0 ? `L${Math.round(Math.abs(stem.defaultPan) * 100)}` : `R${Math.round(stem.defaultPan * 100)}`}
-                    </span>
-                  </label>
+                <div className="flex items-center text-xs text-gray-400 pl-8">
                   <span className="text-gray-600 ml-auto font-mono">{stem.id}</span>
                 </div>
               </div>

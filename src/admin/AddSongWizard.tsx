@@ -4,10 +4,9 @@ import { wizardReducer, initialState } from './wizardReducer';
 import { MetadataStep } from './steps/MetadataStep';
 import { StemsStep } from './steps/StemsStep';
 import { AlignmentStep } from './steps/AlignmentStep';
-import { TimingStep } from './steps/TimingStep';
 import { ReviewStep } from './steps/ReviewStep';
 
-const stepLabels = ['Metadata', 'Stems & Groups', 'Align', 'Timing', 'Review'];
+const stepLabels = ['Metadata', 'Stems & Groups', 'Align', 'Review'];
 
 export default function AddSongWizard() {
   const [state, dispatch] = useReducer(wizardReducer, initialState);
@@ -30,7 +29,7 @@ export default function AddSongWizard() {
       {/* Step indicator */}
       <div className="flex items-center justify-center gap-1 py-4 px-4">
         {stepLabels.map((label, i) => {
-          const stepNum = (i + 1) as 1 | 2 | 3 | 4 | 5;
+          const stepNum = (i + 1) as 1 | 2 | 3 | 4;
           const isCurrent = state.step === stepNum;
           const isCompleted = state.step > stepNum;
 
@@ -71,8 +70,7 @@ export default function AddSongWizard() {
         {state.step === 1 && <MetadataStep state={state} dispatch={dispatch} />}
         {state.step === 2 && <StemsStep state={state} dispatch={dispatch} />}
         {state.step === 3 && <AlignmentStep state={state} dispatch={dispatch} />}
-        {state.step === 4 && <TimingStep state={state} dispatch={dispatch} />}
-        {state.step === 5 && <ReviewStep state={state} dispatch={dispatch} />}
+        {state.step === 4 && <ReviewStep state={state} dispatch={dispatch} />}
       </main>
     </div>
   );

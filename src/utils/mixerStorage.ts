@@ -16,6 +16,11 @@ export interface SavedMixerState {
   masterVolume: number;
   stems: Record<string, SavedStemState>;
   groups: Record<string, SavedGroupState>;
+  /** Whether the mute/solo groups were firing when the state was saved.
+   *  Optional for backward compatibility with entries written before this
+   *  field existed. */
+  globalMuteActive?: boolean;
+  globalSoloActive?: boolean;
 }
 
 function storageKey(songId: string): string {

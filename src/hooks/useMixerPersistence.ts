@@ -22,6 +22,8 @@ export function useMixerPersistence() {
           masterVolume: state.masterVolume,
           stems: state.stems,
           groups,
+          globalMuteActive: state.globalMuteActive,
+          globalSoloActive: state.globalSoloActive,
         });
       }, 500);
     });

@@ -17,7 +17,7 @@ export interface StemEntry {
 }
 
 export interface WizardState {
-  step: 1 | 2 | 3 | 4 | 5;
+  step: 1 | 2 | 3 | 4;
   // Step 1: Metadata
   title: string;
   artist: string;
@@ -130,7 +130,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case 'REMOVE_GROUP':
       return { ...state, groups: state.groups.filter((_, i) => i !== action.index) };
     case 'NEXT_STEP':
-      return { ...state, step: Math.min(state.step + 1, 5) as WizardState['step'] };
+      return { ...state, step: Math.min(state.step + 1, 4) as WizardState['step'] };
     case 'PREV_STEP':
       return { ...state, step: Math.max(state.step - 1, 1) as WizardState['step'] };
     case 'SET_SAVING':

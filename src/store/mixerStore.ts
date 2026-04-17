@@ -22,7 +22,10 @@ interface MixerState {
   globalSoloActive: boolean;
   globalMuteActive: boolean;
   setMasterVolume: (v: number) => void;
-  initStems: (stems: Record<string, StemMixState>) => void;
+  initStems: (
+    stems: Record<string, StemMixState>,
+    globals?: { muteActive?: boolean; soloActive?: boolean },
+  ) => void;
   initGroups: (groups: Record<string, GroupMixState>) => void;
   setStemVolume: (id: string, v: number) => void;
   setStemPan: (id: string, v: number) => void;
@@ -46,7 +49,15 @@ export const useMixerStore = create<MixerState>((set) => ({
   globalSoloActive: false,
   globalMuteActive: false,
   setMasterVolume: (masterVolume) => set({ masterVolume }),
-  initStems: (stems) => set({ stems }),
+  // Restore global mute/solo "active" flags if the caller supplies them
+  // (e.g. from persisted state). Otherwise derive from whether any stem is
+  // muted/soloed so a freshly-loaded session with saved mute/solo still
+  // reads as active.
+  initStems: (stems, globals) => set({
+    stems,
+    globalMuteActive: globals?.muteActive ?? Object.values(stems).some((s) => s.muted),
+    globalSoloActive: globals?.soloActive ?? Object.values(stems).some((s) => s.soloed),
+  }),
   initGroups: (groups) => set({ groups }),
   setStemVolume: (id, volume) =>
     set((state) => ({

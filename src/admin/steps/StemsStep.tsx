@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { WizardState, WizardAction, StemEntry } from '../wizardReducer';
-import { detectStem, deduplicateIds, isAudioFile, sortStems } from '../utils/stemDetection';
+import { detectStem, deduplicateLabels, isAudioFile, sortStems } from '../utils/stemDetection';
 import { getAudioInfo } from '../utils/audioConvert';
 import { previewStem } from '../utils/stemPreview';
 
@@ -54,12 +54,7 @@ function buildStems(files: File[]): StemEntry[] {
     stereo: false,
     offsetSec: 0,
   }));
-  const sorted = sortStems(detected);
-  const deduped = deduplicateIds(sorted);
-  return sorted.map((stem, i) => ({
-    ...stem,
-    id: deduped[i].id,
-  }));
+  return deduplicateLabels(sortStems(detected));
 }
 
 export function StemsStep({ state, dispatch }: Props) {
