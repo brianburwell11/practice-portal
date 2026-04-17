@@ -89,3 +89,29 @@ export function deduplicateIds(stems: StemDefaults[]): StemDefaults[] {
     return { ...stem, id: `${stem.id}-${count + 1}` };
   });
 }
+
+/**
+ * When two or more stems slug to the same id, suffix every member of the
+ * collision set with "-1", "-2", … (keeping solo labels untouched). Both
+ * `label` and `id` are updated so the UI and saved config agree.
+ */
+export function deduplicateLabels<T extends { label: string; id: string }>(stems: T[]): T[] {
+  const groupIndices = new Map<string, number[]>();
+  stems.forEach((s, i) => {
+    const key = toKebab(s.label) || s.id;
+    const arr = groupIndices.get(key);
+    if (arr) arr.push(i);
+    else groupIndices.set(key, [i]);
+  });
+
+  const result = stems.slice();
+  for (const indices of groupIndices.values()) {
+    if (indices.length < 2) continue;
+    indices.forEach((idx, n) => {
+      const suffix = n + 1;
+      const label = `${result[idx].label}-${suffix}`;
+      result[idx] = { ...result[idx], label, id: toKebab(label) || result[idx].id };
+    });
+  }
+  return result;
+}

@@ -1,5 +1,6 @@
 import type { SongConfig, MarkerConfig } from '../../audio/types';
 import type { WizardState } from '../wizardReducer';
+import { deduplicateLabels } from './stemDetection';
 
 const markerColors = [
   '#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ef4444',
@@ -7,7 +8,10 @@ const markerColors = [
 ];
 
 export function buildConfig(state: WizardState, fallbackArtist?: string): SongConfig {
-  const stems = state.stems.map((s) => ({
+  // Dedupe collisions before deriving ids so two stems sharing a label don't
+  // slug to the same id in the saved config.
+  const dedupedStems = deduplicateLabels(state.stems);
+  const stems = dedupedStems.map((s) => ({
     id: s.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || s.id,
     label: s.label,
     file: s.file.name,
