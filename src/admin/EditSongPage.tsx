@@ -23,6 +23,10 @@ function extOf(name: string): string {
   return i > 0 ? name.slice(i) : '';
 }
 
+function toKebab(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 export default function EditSongPage() {
   const { songId = '', bandSlug = '' } = useParams();
   const navigate = useNavigate();
@@ -148,6 +152,33 @@ export default function EditSongPage() {
       };
       newStemFiles.set(id, { file, channels });
       dispatch({ type: 'ADD_STEM', stem });
+    },
+    [state.config, newStemFiles],
+  );
+
+  // Finalize a newly-added stem's id from its label on blur. Doing this on
+  // every keystroke churns the row's React key (`stem.id + i`) and the
+  // label input loses focus; blur is the natural finalize point. Existing
+  // stems keep their id — renaming one would orphan the R2 audio.
+  const finalizeStemIdFromLabel = useCallback(
+    (index: number, stem: StemConfig) => {
+      if (!newStemFiles.has(stem.id)) return;
+      const base = toKebab(stem.label);
+      if (!base) return;
+      const otherIds = new Set(
+        (state.config?.stems ?? []).filter((_, i) => i !== index).map((s) => s.id),
+      );
+      let newId = base;
+      let n = 2;
+      while (otherIds.has(newId)) newId = `${base}-${n++}`;
+      if (newId === stem.id) return;
+
+      const entry = newStemFiles.get(stem.id);
+      if (entry) {
+        newStemFiles.delete(stem.id);
+        newStemFiles.set(newId, entry);
+      }
+      dispatch({ type: 'UPDATE_STEM', index, updates: { id: newId } });
     },
     [state.config, newStemFiles],
   );
@@ -437,33 +468,48 @@ export default function EditSongPage() {
                   <span className="text-gray-600 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder">
                     &#x2630;
                   </span>
-                  <div className="shrink-0 flex items-center">
+                  {newStemFiles.has(stem.id) ? (
+                    // New stem — match the wizard's circular color + stereo
+                    // toggle style so the pair reads as one group.
+                    <div className="shrink-0 flex items-center">
+                      <label className="cursor-pointer" title="Click to change color">
+                        <div className="w-6 h-6 rounded-full border-2 border-gray-600" style={{ backgroundColor: stem.color }} />
+                        <input
+                          type="color"
+                          value={stem.color}
+                          onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })}
+                          className="sr-only"
+                        />
+                      </label>
+                      {(newStemFiles.get(stem.id)?.channels ?? 0) >= 2 && (
+                        <button
+                          onClick={() => dispatch({ type: 'UPDATE_STEM', index: i, updates: { stereo: !stem.stereo } })}
+                          className="-ml-2"
+                          title={stem.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
+                        >
+                          <div
+                            className="w-6 h-6 rounded-full border-2 border-gray-600"
+                            style={{
+                              backgroundColor: stem.stereo ? stem.color : 'transparent',
+                              borderColor: stem.stereo ? stem.color : undefined,
+                            }}
+                          />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
                     <input
                       type="color"
                       value={stem.color}
                       onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })}
                       className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
                     />
-                    {(newStemFiles.get(stem.id)?.channels ?? 0) >= 2 && (
-                      <button
-                        onClick={() => dispatch({ type: 'UPDATE_STEM', index: i, updates: { stereo: !stem.stereo } })}
-                        className="-ml-1"
-                        title={stem.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
-                      >
-                        <div
-                          className="w-6 h-6 rounded-full border-2"
-                          style={{
-                            backgroundColor: stem.stereo ? stem.color : 'transparent',
-                            borderColor: stem.color,
-                          }}
-                        />
-                      </button>
-                    )}
-                  </div>
+                  )}
                   <input
                     type="text"
                     value={stem.label}
                     onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { label: e.target.value } })}
+                    onBlur={() => finalizeStemIdFromLabel(i, stem)}
                     className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
                   />
                   <span className="text-xs text-gray-500 truncate max-w-48">{stem.file}</span>

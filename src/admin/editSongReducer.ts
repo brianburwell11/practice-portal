@@ -77,10 +77,21 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
 
     case 'UPDATE_STEM': {
       if (!state.config) return state;
+      const prev = state.config.stems[action.index];
       const stems = state.config.stems.map((s, i) =>
         i === action.index ? { ...s, ...action.updates } : s,
       );
-      return updateConfig(state, { stems });
+      // If the id changed, rename it in any group that references it so the
+      // group doesn't hold a stale pointer to the old id.
+      const nextId = action.updates.id;
+      const renamed = prev && nextId && prev.id !== nextId;
+      const groups = renamed
+        ? (state.config.groups ?? []).map((g) => ({
+            ...g,
+            stemIds: g.stemIds.map((id) => (id === prev.id ? nextId : id)),
+          }))
+        : state.config.groups;
+      return updateConfig(state, { stems, groups });
     }
 
     case 'REMOVE_STEM': {
