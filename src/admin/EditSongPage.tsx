@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema } from '../config/schema';
 import { detectStem, isAudioFile } from './utils/stemDetection';
+import { getAudioInfo } from './utils/audioConvert';
 import { uploadFormWithProgress } from './utils/uploadWithProgress';
 import { r2Url } from '../utils/url';
 import { useBandStore } from '../store/bandStore';
@@ -35,7 +36,10 @@ export default function EditSongPage() {
   const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
   const [state, dispatch] = useReducer(editSongReducer, initialEditState);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [newStemFiles] = useState(() => new Map<string, File>());
+  // Tracks stems added in this edit session. `channels` is captured at
+  // add-time so the UI can offer a mono/stereo choice (matching the wizard)
+  // without re-decoding the file on every render.
+  const [newStemFiles] = useState(() => new Map<string, { file: File; channels: number }>());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drag-to-reorder state
@@ -114,8 +118,9 @@ export default function EditSongPage() {
 
   // Add stem via file input
   const handleAddStemFile = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
+      e.target.value = '';
       if (!file || !isAudioFile(file.name)) return;
       const detected = detectStem(file.name);
       // Deduplicate ID against existing stems
@@ -123,6 +128,15 @@ export default function EditSongPage() {
       let id = detected.id;
       let suffix = 2;
       while (existingIds.has(id)) { id = `${detected.id}-${suffix++}`; }
+
+      let channels = 1;
+      try {
+        const info = await getAudioInfo(file);
+        channels = info.channels;
+      } catch {
+        // Decoding failed (unsupported codec / corrupt file). Fall back to mono;
+        // the stereo toggle just won't render.
+      }
 
       const stem: StemConfig = {
         id,
@@ -132,9 +146,8 @@ export default function EditSongPage() {
         defaultPan: detected.defaultPan,
         color: detected.color,
       };
-      newStemFiles.set(id, file);
+      newStemFiles.set(id, { file, channels });
       dispatch({ type: 'ADD_STEM', stem });
-      e.target.value = '';
     },
     [state.config, newStemFiles],
   );
@@ -191,7 +204,7 @@ export default function EditSongPage() {
       // fileMap round-trip.
       if (newStemFiles.size > 0) {
         const formData = new FormData();
-        for (const [id, file] of newStemFiles) {
+        for (const [id, { file }] of newStemFiles) {
           formData.append('stems', file, `${id}${extOf(file.name)}`);
         }
 
@@ -424,12 +437,29 @@ export default function EditSongPage() {
                   <span className="text-gray-600 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder">
                     &#x2630;
                   </span>
-                  <input
-                    type="color"
-                    value={stem.color}
-                    onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })}
-                    className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
-                  />
+                  <div className="shrink-0 flex items-center">
+                    <input
+                      type="color"
+                      value={stem.color}
+                      onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })}
+                      className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
+                    />
+                    {(newStemFiles.get(stem.id)?.channels ?? 0) >= 2 && (
+                      <button
+                        onClick={() => dispatch({ type: 'UPDATE_STEM', index: i, updates: { stereo: !stem.stereo } })}
+                        className="-ml-1"
+                        title={stem.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
+                      >
+                        <div
+                          className="w-6 h-6 rounded-full border-2"
+                          style={{
+                            backgroundColor: stem.stereo ? stem.color : 'transparent',
+                            borderColor: stem.color,
+                          }}
+                        />
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={stem.label}
