@@ -56,6 +56,66 @@ export function MixerPanel() {
   const soloHandlers = useLongPress(handleToggleSolo, handleClearSolo);
   const muteHandlers = useLongPress(handleToggleMute, handleClearMute);
 
+  // Global reset: restore every stem, group, and master volume to the
+  // config defaults. Pushes to the audio engine in addition to the store so
+  // audio reflects the change immediately.
+  const setMasterVolume = useMixerStore((s) => s.setMasterVolume);
+  const setStemVolume = useMixerStore((s) => s.setStemVolume);
+  const setStemPan = useMixerStore((s) => s.setStemPan);
+  const setGroupVolume = useMixerStore((s) => s.setGroupVolume);
+  const setGroupMuted = useMixerStore((s) => s.setGroupMuted);
+  const setGroupSoloed = useMixerStore((s) => s.setGroupSoloed);
+
+  const handleResetAll = useCallback(() => {
+    if (!selectedSong) return;
+
+    setMasterVolume(1);
+    engine.setMasterVolume(1);
+
+    for (const stem of selectedSong.stems) {
+      setStemVolume(stem.id, stem.defaultVolume);
+      engine.setStemVolume(stem.id, stem.defaultVolume);
+      setStemPan(stem.id, stem.defaultPan);
+      engine.setStemPan(stem.id, stem.defaultPan);
+      engine.setStemMuted(stem.id, false);
+      engine.setStemSoloed(stem.id, false);
+    }
+    // Single-pass store updates + global flag reset.
+    clearMuteGroup();
+    clearSoloGroup();
+
+    for (const group of selectedSong.groups ?? []) {
+      setGroupVolume(group.id, 1);
+      engine.setGroupVolume(group.id, 1);
+      setGroupMuted(group.id, false);
+      engine.setGroupMuted(group.id, false);
+      setGroupSoloed(group.id, false);
+      engine.setGroupSoloed(group.id, false);
+    }
+  }, [selectedSong, engine, setMasterVolume, setStemVolume, setStemPan, setGroupVolume, setGroupMuted, setGroupSoloed, clearMuteGroup, clearSoloGroup]);
+
+  const masterVolume = useMixerStore((s) => s.masterVolume);
+  const groups = useMixerStore((s) => s.groups);
+
+  const mixerIsAtDefaults = useMemo(() => {
+    if (!selectedSong) return true;
+    if (Math.abs(masterVolume - 1) >= 0.001) return false;
+    for (const stem of selectedSong.stems) {
+      const s = stems[stem.id];
+      if (!s) continue;
+      if (Math.abs(s.volume - stem.defaultVolume) >= 0.001) return false;
+      if (Math.abs(s.pan - stem.defaultPan) >= 0.001) return false;
+      if (s.muted || s.soloed) return false;
+    }
+    for (const group of selectedSong.groups ?? []) {
+      const g = groups[group.id];
+      if (!g) continue;
+      if (Math.abs(g.volume - 1) >= 0.001) return false;
+      if (g.muted || g.soloed) return false;
+    }
+    return true;
+  }, [selectedSong, masterVolume, stems, groups]);
+
   // Save default mixer state
   const bandId = useBandStore((s) => s.currentBand?.id);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -135,6 +195,22 @@ export function MixerPanel() {
     <div className="flex-1 p-4 overflow-auto">
       {/* Global mute/solo + save defaults */}
       <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3">
+        {/* Mobile-only full-width reset bar, above the M/S buttons */}
+        <button
+          onClick={handleResetAll}
+          disabled={mixerIsAtDefaults}
+          className={`md:hidden flex items-center justify-center gap-2 w-full py-2 rounded text-xs font-medium transition-colors ${
+            mixerIsAtDefaults
+              ? 'bg-gray-900 text-gray-600 cursor-default'
+              : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+          }`}
+          title="Reset mixer to defaults"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+            <path d="M12 2a10 10 0 0 1 8.5 4.7l-2.3-.4a1.2 1.2 0 1 0-.4 2.4l4.6.8a1.2 1.2 0 0 0 1.4-1l.8-4.6a1.2 1.2 0 0 0-2.4-.4l-.3 1.8A12 12 0 0 0 0 12a1.2 1.2 0 0 0 2.4 0A9.6 9.6 0 0 1 12 2ZM12 22a10 10 0 0 1-8.5-4.7l2.3.4a1.2 1.2 0 1 0 .4-2.4l-4.6-.8a1.2 1.2 0 0 0-1.4 1l-.8 4.6a1.2 1.2 0 0 0 2.4.4l.3-1.8A12 12 0 0 0 24 12a1.2 1.2 0 0 0-2.4 0A9.6 9.6 0 0 1 12 22Z" />
+          </svg>
+          RESET MIXER TO DEFAULT SETTINGS
+        </button>
         <div className="flex gap-2 w-full md:w-[230px]">
           <button
             {...muteHandlers}
@@ -161,6 +237,19 @@ export function MixerPanel() {
             S
           </button>
         </div>
+        {/* Desktop-only reset icon — sits left of the save button */}
+        <button
+          onClick={handleResetAll}
+          disabled={mixerIsAtDefaults}
+          className={`hidden md:inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded font-medium transition-colors ${
+            mixerIsAtDefaults ? 'text-gray-700 cursor-default' : 'text-gray-500 hover:text-gray-300'
+          }`}
+          title="Reset mixer to defaults"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+            <path d="M12 2a10 10 0 0 1 8.5 4.7l-2.3-.4a1.2 1.2 0 1 0-.4 2.4l4.6.8a1.2 1.2 0 0 0 1.4-1l.8-4.6a1.2 1.2 0 0 0-2.4-.4l-.3 1.8A12 12 0 0 0 0 12a1.2 1.2 0 0 0 2.4 0A9.6 9.6 0 0 1 12 2ZM12 22a10 10 0 0 1-8.5-4.7l2.3.4a1.2 1.2 0 1 0 .4-2.4l-4.6-.8a1.2 1.2 0 0 0-1.4 1l-.8 4.6a1.2 1.2 0 0 0 2.4.4l.3-1.8A12 12 0 0 0 24 12a1.2 1.2 0 0 0-2.4 0A9.6 9.6 0 0 1 12 22Z" />
+          </svg>
+        </button>
         {import.meta.env.DEV && (
           <button
             onClick={handleSaveClick}
