@@ -61,7 +61,7 @@ export function AlignmentStep({ state, dispatch }: Props) {
           onClick={() => dispatch({ type: 'NEXT_STEP' })}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
         >
-          Next: Timing
+          Next: Review
         </button>
       </div>
     </div>
