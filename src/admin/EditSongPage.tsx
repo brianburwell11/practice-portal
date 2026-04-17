@@ -17,6 +17,11 @@ const groupColors = [
   '#8b5cf6', '#ec4899', '#14b8a6',
 ];
 
+function extOf(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i > 0 ? name.slice(i) : '';
+}
+
 export default function EditSongPage() {
   const { songId = '', bandSlug = '' } = useParams();
   const navigate = useNavigate();
@@ -175,11 +180,19 @@ export default function EditSongPage() {
       const newId = config.id;
       const idChanged = oldId !== newId;
 
-      // Upload new stem files using OLD id (files still at old location)
+      // Start from the current config; rebind if transcode rewrites filenames
+      // so the POST below doesn't send stale extensions (e.g. .wav when R2
+      // actually stores .opus, which 404s the player on reload).
+      let configToSave = config;
+
+      // Upload new stem files using OLD id (files still at old location).
+      // Send each under `${stemId}${origExt}` so server transcodes to the
+      // canonical `${stemId}.opus` — config.stems[].file then matches with no
+      // fileMap round-trip.
       if (newStemFiles.size > 0) {
         const formData = new FormData();
-        for (const [, file] of newStemFiles) {
-          formData.append('stems', file, file.name);
+        for (const [id, file] of newStemFiles) {
+          formData.append('stems', file, `${id}${extOf(file.name)}`);
         }
 
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
@@ -198,12 +211,14 @@ export default function EditSongPage() {
 
         if (!uploadResult.ok) throw new Error(uploadResult.error ?? 'Upload failed');
 
-        // Update stem filenames to transcoded versions
+        // Update new-stem filenames to the canonical opus; existing stems
+        // keep whatever the saved config already had.
         const updatedStems = config.stems.map((stem) => ({
           ...stem,
-          file: uploadResult.fileMap[stem.file] ?? stem.file,
+          file: newStemFiles.has(stem.id) ? `${stem.id}.opus` : stem.file,
         }));
-        dispatch({ type: 'INIT', config: { ...config, stems: updatedStems } });
+        configToSave = { ...config, stems: updatedStems };
+        dispatch({ type: 'INIT', config: configToSave });
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
       }
 
@@ -211,7 +226,7 @@ export default function EditSongPage() {
       const res = await fetch(`/api/bands/${currentBand.id}/songs/${oldId}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...config, id: oldId }),
+        body: JSON.stringify({ ...configToSave, id: oldId }),
       });
       if (!res.ok) throw new Error('Failed to save config');
 

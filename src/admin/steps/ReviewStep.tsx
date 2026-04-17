@@ -12,6 +12,11 @@ interface Props {
   dispatch: React.Dispatch<WizardAction>;
 }
 
+function extOf(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i > 0 ? name.slice(i) : '';
+}
+
 export function ReviewStep({ state, dispatch }: Props) {
   const [result, setResult] = useState<'success' | null>(null);
   const { bandSlug = '' } = useParams();
@@ -54,10 +59,13 @@ export function ReviewStep({ state, dispatch }: Props) {
       // 1. Upload stems to server for transcoding + R2 upload.
       // Alignment offsets are NOT baked in — they live in config.json's
       // offsetSec fields and are applied at playback time by StemPlayer.
+      // Upload each stem as `${stemId}${origExt}` so the server transcodes to
+      // the canonical `${stemId}.opus` on R2 — config.json then just references
+      // `${stemId}.opus` with no round-trip through the original filename.
       const formData = new FormData();
-      for (const stem of state.stems) {
-        formData.append('stems', stem.file, stem.file.name);
-      }
+      state.stems.forEach((entry, i) => {
+        formData.append('stems', entry.file, `${config.stems[i].id}${extOf(entry.file.name)}`);
+      });
 
       dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
         fileIndex: 0, fileCount: state.stems.length, bytesSent: 0, bytesTotal: 1,
@@ -74,15 +82,15 @@ export function ReviewStep({ state, dispatch }: Props) {
       );
 
       if (!uploadResult.ok) throw new Error(uploadResult.error ?? 'Upload failed');
-      const { fileMap, publicBase } = uploadResult;
+      const { publicBase } = uploadResult;
       dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
 
-      // 2. Update config stem filenames to match transcoded files, then save locally
+      // 2. Update config stem filenames to match the canonical opus names
       const transcodedConfig = {
         ...config,
         stems: config.stems.map((stem) => ({
           ...stem,
-          file: fileMap[stem.file] ?? stem.file,
+          file: `${stem.id}.opus`,
         })),
       };
 
