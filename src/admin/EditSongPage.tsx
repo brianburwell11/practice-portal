@@ -475,39 +475,7 @@ export default function EditSongPage() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs text-gray-400 pl-8">
-                  <label className="flex items-center gap-2">
-                    Vol
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={stem.defaultVolume}
-                      onChange={(e) =>
-                        dispatch({ type: 'UPDATE_STEM', index: i, updates: { defaultVolume: parseFloat(e.target.value) } })
-                      }
-                      className="w-24"
-                    />
-                    <span className="w-8 text-right">{Math.round(stem.defaultVolume * 100)}%</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    Pan
-                    <input
-                      type="range"
-                      min={-1}
-                      max={1}
-                      step={0.1}
-                      value={stem.defaultPan}
-                      onChange={(e) =>
-                        dispatch({ type: 'UPDATE_STEM', index: i, updates: { defaultPan: parseFloat(e.target.value) } })
-                      }
-                      className="w-24"
-                    />
-                    <span className="w-8 text-right">
-                      {stem.defaultPan === 0 ? 'C' : stem.defaultPan < 0 ? `L${Math.round(Math.abs(stem.defaultPan) * 100)}` : `R${Math.round(stem.defaultPan * 100)}`}
-                    </span>
-                  </label>
+                <div className="flex items-center text-xs text-gray-400 pl-8">
                   <span className="text-gray-600 ml-auto font-mono">{stem.id}</span>
                 </div>
               </div>

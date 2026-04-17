@@ -80,26 +80,13 @@ export function MixerPanel() {
 
       setSaveState('saving');
       try {
+        // Spread the whole song config and only override stem defaults so we
+        // don't drop tags, offsetSec, or anything else the song happens to
+        // carry.
         const updatedConfig = {
-          id: selectedSong.id,
-          title: selectedSong.title,
-          artist: selectedSong.artist,
-          key: selectedSong.key,
-          durationSeconds: selectedSong.durationSeconds,
-          beatOffset: selectedSong.beatOffset,
-          tempoMap: selectedSong.tempoMap,
-          timeSignatureMap: selectedSong.timeSignatureMap,
-          metronome: selectedSong.metronome,
-          markers: selectedSong.markers,
-          ...(selectedSong.groups !== undefined && { groups: selectedSong.groups }),
-          ...(selectedSong.tapMap !== undefined && { tapMap: selectedSong.tapMap }),
-          ...(selectedSong.navLinks !== undefined && { navLinks: selectedSong.navLinks }),
+          ...selectedSong,
           stems: selectedSong.stems.map((stem) => ({
-            id: stem.id,
-            label: stem.label,
-            file: stem.file,
-            color: stem.color,
-            ...(stem.stereo !== undefined && { stereo: stem.stereo }),
+            ...stem,
             defaultVolume: Math.min(1.5, stems[stem.id]?.volume ?? stem.defaultVolume),
             defaultPan: Math.max(-1, Math.min(1, stems[stem.id]?.pan ?? stem.defaultPan)),
           })),
@@ -110,6 +97,10 @@ export function MixerPanel() {
           body: JSON.stringify(updatedConfig),
         });
         if (!res.ok) throw new Error('Save failed');
+        // Reflect the new defaults on the in-memory selectedSong too, so any
+        // downstream code reading selectedSong (e.g. the mixer reset) now
+        // agrees with what's on R2.
+        useSongStore.getState().setSelectedSong(updatedConfig);
         setSaveState('saved');
         setTimeout(() => setSaveState('idle'), 1500);
       } catch {
