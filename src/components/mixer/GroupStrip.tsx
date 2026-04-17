@@ -12,25 +12,43 @@ interface GroupStripProps {
 export function GroupStrip({ groupConfig, stemConfigs }: GroupStripProps) {
   const engine = useAudioEngine();
   const groupState = useMixerStore((s) => s.groups[groupConfig.id]);
-  const { setGroupVolume, setGroupMuted, setGroupSoloed, toggleGroupExpanded } = useMixerStore();
+  const stems = useMixerStore((s) => s.stems);
+  const globalMuteActive = useMixerStore((s) => s.globalMuteActive);
+  const globalSoloActive = useMixerStore((s) => s.globalSoloActive);
+  const { setGroupVolume, setStemMuted, setStemSoloed, toggleGroupExpanded } = useMixerStore();
 
   if (!groupState) return null;
+
+  const mutedCount = stemConfigs.reduce((n, s) => n + (stems[s.id]?.muted ? 1 : 0), 0);
+  const soloedCount = stemConfigs.reduce((n, s) => n + (stems[s.id]?.soloed ? 1 : 0), 0);
+  const total = stemConfigs.length;
+  const allMuted = total > 0 && mutedCount === total;
+  const allSoloed = total > 0 && soloedCount === total;
 
   const handleVolume = (v: number) => {
     setGroupVolume(groupConfig.id, v);
     engine.setGroupVolume(groupConfig.id, v);
   };
 
+  // Group M/S now fan out to the member stems instead of toggling a group
+  // flag: the user can flip individual tracks and the card button reflects
+  // membership. Clicking only *adds* to the set when every member is
+  // currently inactive; any partial or full active state releases the
+  // whole stack.
   const handleMute = () => {
-    const newMuted = !groupState.muted;
-    setGroupMuted(groupConfig.id, newMuted);
-    engine.setGroupMuted(groupConfig.id, newMuted);
+    const target = mutedCount === 0;
+    for (const stem of stemConfigs) {
+      setStemMuted(stem.id, target);
+      engine.setStemMuted(stem.id, target);
+    }
   };
 
   const handleSolo = () => {
-    const newSoloed = !groupState.soloed;
-    setGroupSoloed(groupConfig.id, newSoloed);
-    engine.setGroupSoloed(groupConfig.id, newSoloed);
+    const target = soloedCount === 0;
+    for (const stem of stemConfigs) {
+      setStemSoloed(stem.id, target);
+      engine.setStemSoloed(stem.id, target);
+    }
   };
 
   return (
@@ -59,25 +77,42 @@ export function GroupStrip({ groupConfig, stemConfigs }: GroupStripProps) {
           </span>
         </div>
 
-        {/* Mute / Solo buttons */}
+        {/* Mute / Solo buttons — neutral body with a colored outline when
+            members are in the mute/solo set, plus a diagonal half-fill
+            (bottom-left → top-right, top half colored) when the set is
+            actively suppressing audio. */}
         <div className="flex gap-2">
           <button
             onClick={handleMute}
-            className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors ${
-              groupState.muted
+            className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
+              mutedCount > 0 ? 'border-red-600' : 'border-transparent'
+            } ${
+              globalMuteActive && allMuted
                 ? 'bg-red-600 text-white'
-                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                : 'bg-gray-700 hover:bg-gray-600 ' + (mutedCount > 0 && globalMuteActive ? 'text-white' : 'text-gray-300')
             }`}
+            style={
+              mutedCount > 0 && globalMuteActive && !allMuted
+                ? { backgroundImage: 'linear-gradient(to bottom right, #dc2626 50%, transparent 50%)' }
+                : undefined
+            }
           >
             M
           </button>
           <button
             onClick={handleSolo}
-            className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors ${
-              groupState.soloed
+            className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
+              soloedCount > 0 ? 'border-yellow-500' : 'border-transparent'
+            } ${
+              globalSoloActive && allSoloed
                 ? 'bg-yellow-500 text-gray-900'
-                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                : 'bg-gray-700 hover:bg-gray-600 ' + (soloedCount > 0 && globalSoloActive ? 'text-white' : 'text-gray-300')
             }`}
+            style={
+              soloedCount > 0 && globalSoloActive && !allSoloed
+                ? { backgroundImage: 'linear-gradient(to bottom right, #eab308 50%, transparent 50%)' }
+                : undefined
+            }
           >
             S
           </button>

@@ -213,28 +213,38 @@ export function MixerPanel() {
         </button>
         <div className="flex gap-2 w-full md:w-[230px]">
           <button
-            {...muteHandlers}
-            className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
-              globalMuteActive && anyMuted
-                ? 'bg-red-600 text-white border-red-600'
-                : anyMuted
-                  ? 'bg-gray-700 text-gray-400 border-red-600'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600 border-transparent'
+            {...(anyMuted ? muteHandlers : {})}
+            disabled={!anyMuted}
+            className={`flex-1 flex items-center justify-center gap-0.5 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
+              !anyMuted
+                ? 'bg-gray-800 text-gray-600 border-transparent cursor-default'
+                : globalMuteActive
+                  ? 'bg-red-600 text-white border-red-600'
+                  : 'bg-gray-700 text-gray-400 border-red-600'
             }`}
           >
-            M
+            <span className="text-xs leading-none">M</span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.71" />
+            </svg>
           </button>
           <button
-            {...soloHandlers}
-            className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
-              globalSoloActive && anySoloed
-                ? 'bg-yellow-500 text-gray-900 border-yellow-500'
-                : anySoloed
-                  ? 'bg-gray-700 text-gray-400 border-yellow-500'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600 border-transparent'
+            {...(anySoloed ? soloHandlers : {})}
+            disabled={!anySoloed}
+            className={`flex-1 flex items-center justify-center gap-0.5 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
+              !anySoloed
+                ? 'bg-gray-800 text-gray-600 border-transparent cursor-default'
+                : globalSoloActive
+                  ? 'bg-yellow-500 text-gray-900 border-yellow-500'
+                  : 'bg-gray-700 text-gray-400 border-yellow-500'
             }`}
           >
-            S
+            <span className="text-xs leading-none">S</span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.71" />
+            </svg>
           </button>
         </div>
         {/* Desktop-only reset icon — sits left of the save button */}
