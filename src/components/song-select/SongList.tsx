@@ -78,7 +78,13 @@ export function useSongLoader() {
           stereo: s?.stereo ?? (stem.stereo ?? false),
         };
       }
-      initStems(stemStates);
+      // Preserve whether the mute/solo groups were active at save time.
+      // Older saved entries (before this field existed) fall back to
+      // "active when any stem is muted/soloed" so saved mute/solo audibly
+      // kicks in on reload, matching prior behavior.
+      const savedMuteActive = saved?.globalMuteActive ?? Object.values(stemStates).some((s) => s.muted);
+      const savedSoloActive = saved?.globalSoloActive ?? Object.values(stemStates).some((s) => s.soloed);
+      initStems(stemStates, { muteActive: savedMuteActive, soloActive: savedSoloActive });
 
       const groupStates: Record<string, { volume: number; muted: boolean; soloed: boolean; expanded: boolean }> = {};
       for (const group of config.groups ?? []) {
@@ -100,8 +106,10 @@ export function useSongLoader() {
           const ss = stemStates[stem.id];
           engine.setStemVolume(stem.id, ss.volume);
           engine.setStemPan(stem.id, ss.pan);
-          engine.setStemMuted(stem.id, ss.muted);
-          engine.setStemSoloed(stem.id, ss.soloed);
+          // Engine mute/solo only fires when the respective group is active;
+          // otherwise the stem is "armed but not suppressing audio".
+          engine.setStemMuted(stem.id, ss.muted && savedMuteActive);
+          engine.setStemSoloed(stem.id, ss.soloed && savedSoloActive);
           engine.setStemStereo(stem.id, ss.stereo);
         }
         for (const group of config.groups ?? []) {
