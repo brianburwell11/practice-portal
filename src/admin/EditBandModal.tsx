@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useBandStore } from '../store/bandStore';
 import type { BandColors, BandConfig } from '../audio/types';
 
@@ -22,6 +22,29 @@ export function EditBandModal({ band, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [logoCacheBust, setLogoCacheBust] = useState(0);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // Live-preview draft colors on the page's CSS variables.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--band-primary', draft.colors.primary);
+    root.style.setProperty('--band-accent', draft.colors.accent);
+    root.style.setProperty('--band-bg', draft.colors.background);
+    root.style.setProperty('--band-text', draft.colors.text);
+  }, [draft.colors.primary, draft.colors.accent, draft.colors.background, draft.colors.text]);
+
+  // On unmount, reapply colors from the (possibly updated) current band so a
+  // cancelled edit reverts and a saved edit keeps the new colors.
+  useEffect(() => {
+    return () => {
+      const current = useBandStore.getState().currentBand;
+      if (!current) return;
+      const root = document.documentElement;
+      root.style.setProperty('--band-primary', current.colors.primary);
+      root.style.setProperty('--band-accent', current.colors.accent);
+      root.style.setProperty('--band-bg', current.colors.background);
+      root.style.setProperty('--band-text', current.colors.text);
+    };
+  }, []);
 
   const updateDraft = (updates: Partial<BandConfig>) => {
     setDraft((d) => ({ ...d, ...updates }));
