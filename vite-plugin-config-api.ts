@@ -536,6 +536,42 @@ export function configApiPlugin(): Plugin {
           return;
         }
 
+        // --- DELETE /api/bands/{bandId} ---
+        const bandDeleteMatch = req.url?.match(/^\/api\/bands\/([^/]+)$/);
+        if (bandDeleteMatch && req.method === 'DELETE') {
+          const bandId = bandDeleteMatch[1];
+
+          try {
+            // 1. Delete all R2 keys under the band's prefix (songs, setlists, assets, etc.)
+            try {
+              const keys = await r2ListKeys(`${bandId}/`);
+              for (const key of keys) {
+                try {
+                  await r2DeleteKey(key);
+                } catch {
+                  // individual key failure shouldn't abort the cascade
+                }
+              }
+            } catch {
+              // prefix may be empty
+            }
+
+            // 2. Remove band from registry.json
+            try {
+              const registry = await r2ReadJson('registry.json');
+              registry.bands = (registry.bands ?? []).filter((b: any) => b.id !== bandId);
+              await r2WriteJson('registry.json', registry);
+            } catch {
+              // registry may not exist
+            }
+
+            jsonResponse(res, 200, { ok: true });
+          } catch (err: any) {
+            jsonResponse(res, 500, { error: err.message ?? 'Delete band failed' });
+          }
+          return;
+        }
+
         // --- POST /api/bands/{bandId}/songs/discography ---
         const discographyMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/songs\/discography$/);
         if (discographyMatch && req.method === 'POST') {

@@ -24,6 +24,12 @@ const SetlistModal = import.meta.env.DEV
 const DeleteSetlistModal = import.meta.env.DEV
   ? lazy(() => import('./admin/DeleteSetlistModal').then((m) => ({ default: m.DeleteSetlistModal })))
   : null;
+const EditBandModal = import.meta.env.DEV
+  ? lazy(() => import('./admin/EditBandModal').then((m) => ({ default: m.EditBandModal })))
+  : null;
+const DeleteBandModal = import.meta.env.DEV
+  ? lazy(() => import('./admin/DeleteBandModal').then((m) => ({ default: m.DeleteBandModal })))
+  : null;
 
 export default function App() {
   const engine = useCreateEngine();
@@ -31,6 +37,7 @@ export default function App() {
   const selectedSong = useSongStore((s) => s.selectedSong);
   const openMarkerEditor = useMarkerEditorStore((s) => s.open);
   const openLyricsEditor = useLyricsEditorStore((s) => s.open);
+  const closeLyricsEditor = useLyricsEditorStore((s) => s.close);
   const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
   const editorLines = useLyricsEditorStore((s) => s.lines);
   const currentBand = useBandStore((s) => s.currentBand);
@@ -40,6 +47,8 @@ export default function App() {
   const [editSetlistId, setEditSetlistId] = useState<string | undefined>(undefined);
   const [copySetlistId, setCopySetlistId] = useState<string | undefined>(undefined);
   const [showDeleteSetlistModal, setShowDeleteSetlistModal] = useState(false);
+  const [showEditBandModal, setShowEditBandModal] = useState(false);
+  const [showDeleteBandModal, setShowDeleteBandModal] = useState(false);
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
 
   const bandRoute = currentBand?.route ?? '';
@@ -80,13 +89,24 @@ export default function App() {
           <AdminRibbon
             setlistNavLinks={activeSetlist?.navLinks}
             songNavLinks={selectedSong?.navLinks}
+            hasBand={!!currentBand}
             hasSong={!!selectedSong}
             hasSetlist={!!activeSetlist}
+            onEditBand={() => {
+              if (lyricsEditorOpen) {
+                const dirty = useLyricsEditorStore.getState().dirty;
+                if (dirty && !window.confirm('You have unsaved lyrics changes. Discard them?')) return;
+                closeLyricsEditor();
+              }
+              setShowEditBandModal(true);
+            }}
+            onDeleteBand={() => setShowDeleteBandModal(true)}
             onAddSong={() => navigate(`/${bandRoute}/admin/add-song`)}
             onEditSong={() => selectedSong && navigate(`/${bandRoute}/admin/edit-song/${selectedSong.id}`)}
             onTapMapEditor={() => selectedSong && openMarkerEditor(selectedSong.tapMap ?? [])}
             onLyricsEditor={() => {
               if (!selectedSong || !currentBand) return;
+              setShowEditBandModal(false);
               fetch(r2Url(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`))
                 .then((r) => (r.ok ? r.json() : { lines: [] }))
                 .then((data) => openLyricsEditor(data.lines ?? []))
@@ -114,7 +134,15 @@ export default function App() {
         <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
 
         {/* Editor replaces mixer when open */}
-        {lyricsEditorOpen ? <LyricsEditorModal /> : <MixerPanel />}
+        {lyricsEditorOpen ? (
+          <LyricsEditorModal />
+        ) : showEditBandModal && EditBandModal && currentBand ? (
+          <Suspense fallback={null}>
+            <EditBandModal band={currentBand} onClose={() => setShowEditBandModal(false)} />
+          </Suspense>
+        ) : (
+          <MixerPanel />
+        )}
       </div>
 
       <MarkerEditorModal />
@@ -141,6 +169,11 @@ export default function App() {
             setlistName={activeSetlist.name}
             onClose={() => setShowDeleteSetlistModal(false)}
           />
+        </Suspense>
+      )}
+      {showDeleteBandModal && DeleteBandModal && currentBand && (
+        <Suspense fallback={null}>
+          <DeleteBandModal band={currentBand} onClose={() => setShowDeleteBandModal(false)} />
         </Suspense>
       )}
     </AudioEngineContext.Provider>

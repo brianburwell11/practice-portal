@@ -1,13 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { HelpModal } from '../components/HelpModal';
 
-type DropdownId = 'songs' | 'setlists' | null;
+type DropdownId = 'bands' | 'songs' | 'setlists' | null;
 
 interface Props {
   setlistNavLinks?: { title: string; url: string }[];
   songNavLinks?: { title: string; url: string }[];
+  hasBand?: boolean;
   hasSong?: boolean;
   hasSetlist?: boolean;
+  onEditBand?: () => void;
+  onDeleteBand?: () => void;
   onAddSong?: () => void;
   onEditSong?: () => void;
   onTapMapEditor?: () => void;
@@ -49,8 +52,11 @@ function MenuItem({
 export function AdminRibbon({
   setlistNavLinks,
   songNavLinks,
+  hasBand,
   hasSong,
   hasSetlist,
+  onEditBand,
+  onDeleteBand,
   onAddSong,
   onEditSong,
   onTapMapEditor,
@@ -88,6 +94,22 @@ export function AdminRibbon({
     >
       {import.meta.env.DEV && (
         <>
+          {/* Band dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => toggle('bands')}
+              className="text-xs text-gray-500 hover:text-gray-300"
+            >
+              Band <span className="text-base">▾</span>
+            </button>
+            {open === 'bands' && (
+              <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+                <MenuItem label="Edit Band" enabled={!!hasBand} onClick={() => { close(); onEditBand?.(); }} />
+                <MenuItem label="Delete Band" enabled={!!hasBand} danger onClick={() => { close(); onDeleteBand?.(); }} />
+              </div>
+            )}
+          </div>
+
           {/* Songs dropdown */}
           <div className="relative">
             <button
