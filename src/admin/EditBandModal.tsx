@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useBandStore } from '../store/bandStore';
 import type { BandColors, BandConfig } from '../audio/types';
 
@@ -11,6 +12,7 @@ export function EditBandModal({ band, onClose }: Props) {
   const bandsManifest = useBandStore((s) => s.bandsManifest);
   const setBandsManifest = useBandStore((s) => s.setBandsManifest);
   const setCurrentBand = useBandStore((s) => s.setCurrentBand);
+  const navigate = useNavigate();
 
   const [draft, setDraft] = useState<BandConfig>({
     ...band,
@@ -120,6 +122,9 @@ export function EditBandModal({ band, onClose }: Props) {
       setBandsManifest({ bands: updated });
       setCurrentBand(draft);
       onClose();
+      if (draft.route !== band.route) {
+        navigate(`/${draft.route}`, { replace: true });
+      }
     } catch (err: any) {
       setError(err.message ?? 'Save failed');
       setSaving(false);

@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Outlet } from 'react-router-dom';
 import { useBandStore } from '../../store/bandStore';
+import { useSongStore } from '../../store/songStore';
+import { useSetlistStore } from '../../store/setlistStore';
 import { bandsManifestSchema } from '../../config/schema';
 import { r2Url } from '../../utils/url';
 
@@ -19,12 +21,22 @@ export function BandApp() {
   }, [bandsManifest, setBandsManifest]);
 
   // Resolve current band from slug
+  const prevBandIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!bandsManifest || !bandSlug) return;
     const band = bandsManifest.bands.find((b) => b.route === bandSlug);
     if (band) {
+      // When switching to a different band, clear per-band state so stale
+      // selections (song, setlist) from the previous band don't linger.
+      if (prevBandIdRef.current && prevBandIdRef.current !== band.id) {
+        useSongStore.getState().setSelectedSong(null);
+        useSetlistStore.getState().setActiveSetlist(null);
+      }
+      prevBandIdRef.current = band.id;
       setCurrentBand(band);
+      setError(null);
     } else {
+      setCurrentBand(null);
       setError(`Band not found: ${bandSlug}`);
     }
   }, [bandsManifest, bandSlug, setCurrentBand]);
