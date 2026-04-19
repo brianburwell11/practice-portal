@@ -9,11 +9,12 @@ export interface StemDefaults {
   defaultPan: number;
 }
 
-const audioExtensions = new Set(['.wav', '.mp3', '.ogg', '.opus', '.flac', '.aiff', '.aif', '.m4a']);
+export const audioExtensions = ['.wav', '.mp3', '.ogg', '.opus', '.flac', '.aiff', '.aif', '.m4a'] as const;
+const audioExtensionsSet = new Set<string>(audioExtensions);
 
 export function isAudioFile(filename: string): boolean {
   const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase();
-  return audioExtensions.has(ext);
+  return audioExtensionsSet.has(ext);
 }
 
 function toKebab(str: string): string {

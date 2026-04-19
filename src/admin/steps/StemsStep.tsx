@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { WizardState, WizardAction, StemEntry } from '../wizardReducer';
-import { detectStem, deduplicateLabels, isAudioFile, sortStems } from '../utils/stemDetection';
+import { audioExtensions, detectStem, deduplicateLabels, isAudioFile, sortStems } from '../utils/stemDetection';
 import { getAudioInfo } from '../utils/audioConvert';
 import { previewStem } from '../utils/stemPreview';
 import { StemColorPicker } from '../StemColorPicker';
@@ -59,7 +59,7 @@ function buildStems(files: File[]): StemEntry[] {
 }
 
 export function StemsStep({ state, dispatch }: Props) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const filesInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -199,19 +199,18 @@ export function StemsStep({ state, dispatch }: Props) {
           <p className="text-gray-400">Processing stems...</p>
         ) : (
           <>
-            <p className="text-gray-300 mb-2">Drag a folder of stems here</p>
+            <p className="text-gray-300 mb-2">Drag a folder or audio files here</p>
             <p className="text-gray-500 text-sm mb-3">or</p>
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => filesInputRef.current?.click()}
               className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
             >
-              Browse folder
+              Browse files
             </button>
             <input
-              ref={fileInputRef}
+              ref={filesInputRef}
               type="file"
-              // @ts-expect-error webkitdirectory is not in the type definitions
-              webkitdirectory=""
+              accept={audioExtensions.join(',')}
               multiple
               onChange={onFileInput}
               className="hidden"
