@@ -12,6 +12,8 @@ interface InspectorState {
   error: string | null;
   entries: FileEntry[];
   zip: JSZip | null;
+  /** Populated when the fetched resource is not a zip — a raw XML document. */
+  rawText: string | null;
 }
 
 interface Props {
@@ -31,6 +33,7 @@ export function MsczInspector({ url, label, defaultPath, previewBytes = 4000 }: 
     error: null,
     entries: [],
     zip: null,
+    rawText: null,
   });
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<string>('');
@@ -45,26 +48,39 @@ export function MsczInspector({ url, label, defaultPath, previewBytes = 4000 }: 
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Fetch ${res.status}`);
         const buf = await res.arrayBuffer();
-        const zip = await JSZip.loadAsync(buf);
-        const entries: FileEntry[] = [];
-        zip.forEach((path, file) => {
-          entries.push({
-            name: path,
-            // @ts-expect-error JSZip's typings hide _data
-            size: file._data?.uncompressedSize ?? 0,
-            isDir: file.dir,
+        const bytes = new Uint8Array(buf);
+        // Zip local file header magic: 0x50 0x4B ("PK").
+        const isZip = bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4B;
+
+        if (isZip) {
+          const zip = await JSZip.loadAsync(buf);
+          const entries: FileEntry[] = [];
+          zip.forEach((path, file) => {
+            entries.push({
+              name: path,
+              // @ts-expect-error JSZip's typings hide _data
+              size: file._data?.uncompressedSize ?? 0,
+              isDir: file.dir,
+            });
           });
-        });
-        entries.sort((a, b) => a.name.localeCompare(b.name));
-        if (cancelled) return;
-        setState({ loading: false, error: null, entries, zip });
-        const initial = defaultPath && entries.some((e) => e.name === defaultPath)
-          ? defaultPath
-          : entries.find((e) => e.name.endsWith('.xml') || e.name.endsWith('.mscx'))?.name ?? null;
-        setSelected(initial);
+          entries.sort((a, b) => a.name.localeCompare(b.name));
+          if (cancelled) return;
+          setState({ loading: false, error: null, entries, zip, rawText: null });
+          const initial = defaultPath && entries.some((e) => e.name === defaultPath)
+            ? defaultPath
+            : entries.find((e) => e.name.endsWith('.xml') || e.name.endsWith('.mscx'))?.name ?? null;
+          setSelected(initial);
+        } else {
+          const text = new TextDecoder('utf-8').decode(bytes);
+          const basename = defaultPath ?? url.split('/').pop() ?? 'file';
+          const entry: FileEntry = { name: basename, size: bytes.length, isDir: false };
+          if (cancelled) return;
+          setState({ loading: false, error: null, entries: [entry], zip: null, rawText: text });
+          setSelected(basename);
+        }
       } catch (err) {
         if (cancelled) return;
-        setState({ loading: false, error: String(err), entries: [], zip: null });
+        setState({ loading: false, error: String(err), entries: [], zip: null, rawText: null });
       }
     })();
     return () => {
@@ -76,7 +92,16 @@ export function MsczInspector({ url, label, defaultPath, previewBytes = 4000 }: 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!state.zip || !selected) {
+      if (!selected) {
+        setPreview('');
+        return;
+      }
+      if (state.rawText !== null) {
+        setPreview(state.rawText);
+        setPreviewLoading(false);
+        return;
+      }
+      if (!state.zip) {
         setPreview('');
         return;
       }
@@ -107,7 +132,7 @@ export function MsczInspector({ url, label, defaultPath, previewBytes = 4000 }: 
     return () => {
       cancelled = true;
     };
-  }, [selected, state.zip]);
+  }, [selected, state.zip, state.rawText]);
 
   const totalBytes = useMemo(
     () => state.entries.reduce((sum, e) => sum + e.size, 0),
