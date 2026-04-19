@@ -29,23 +29,23 @@ export function BandPicker() {
               key={band.id}
               to={`/${band.route}`}
               className="flex items-center gap-4 p-4 min-h-[56px] rounded-lg border border-gray-700 hover:border-gray-500 transition-colors"
-              style={{ backgroundColor: band.colors.background }}
+              style={{ backgroundColor: band.background }}
             >
               {band.logo ? (
                 <img src={band.logo} alt="" className="w-10 h-10 rounded object-contain" />
               ) : (
                 <div
                   className="w-10 h-10 rounded flex items-center justify-center text-lg font-bold"
-                  style={{ backgroundColor: band.colors.primary, color: band.colors.text }}
+                  style={{ backgroundColor: band.text, color: band.background }}
                 >
                   {band.name[0]}
                 </div>
               )}
               <div>
-                <div className="font-semibold" style={{ color: band.colors.text }}>
+                <div className="font-semibold" style={{ color: band.text }}>
                   {band.name}
                 </div>
-                <div className="text-sm font-mono text-gray-400">
+                <div className="text-sm font-mono" style={{ color: band.text, opacity: 0.6 }}>
                   /{band.route}
                 </div>
               </div>

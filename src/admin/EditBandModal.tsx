@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBandStore } from '../store/bandStore';
-import type { BandColors, BandConfig } from '../audio/types';
+import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
 
 interface Props {
   band: BandConfig;
@@ -106,19 +106,28 @@ export function EditBandModal({ band, onClose }: Props) {
     setSaving(true);
     setError(null);
 
-    const updated = bandsManifest.bands.map((b) => (b.id === draft.id ? draft : b));
-
     try {
-      const res = await fetch('/api/bands', {
-        method: 'POST',
+      const res = await fetch(`/api/bands/${draft.id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bands: updated }),
+        body: JSON.stringify(draft),
       });
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.error ?? 'Save failed');
       }
-      setBandsManifest({ bands: updated });
+
+      const indexEntry: BandIndexEntry = {
+        id: draft.id,
+        name: draft.name,
+        route: draft.route,
+        background: draft.colors.background,
+        text: draft.colors.text,
+        ...(draft.logo ? { logo: draft.logo } : {}),
+      };
+      setBandsManifest({
+        bands: bandsManifest.bands.map((b) => (b.id === draft.id ? indexEntry : b)),
+      });
       setCurrentBand(draft);
       onClose();
       if (draft.route !== band.route) {

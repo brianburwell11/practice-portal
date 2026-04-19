@@ -495,32 +495,111 @@ export function configApiPlugin(): Plugin {
           return;
         }
 
-        // --- POST /api/bands ---
-        if (req.url === '/api/bands' && req.method === 'POST') {
+        // --- POST /api/registry/rebuild --- (re)build slim registry from band.json files
+        if (req.url === '/api/registry/rebuild' && req.method === 'POST') {
           try {
-            const raw = await readBody(req);
-            const body = JSON.parse(raw);
-            const { bandsManifestSchema } = await server.ssrLoadModule('/src/config/schema.ts');
-            const validated = (bandsManifestSchema as any).parse(body);
-
-            // Detect newly added bands so we can seed their indexes
-            let oldBandIds: Set<string> = new Set();
+            let oldRegistry: any = { bands: [] };
             try {
-              const old = await r2ReadJson('registry.json');
-              oldBandIds = new Set((old.bands ?? []).map((b: any) => b.id));
+              oldRegistry = await r2ReadJson('registry.json');
             } catch {
               // registry may not exist yet
             }
 
-            await r2WriteJson('registry.json', validated);
-
-            // Create blank setlists/index.json for each new band
-            const newBands = validated.bands.filter((b: any) => !oldBandIds.has(b.id));
-            await Promise.all(
-              newBands.map((b: any) =>
-                r2WriteJson(`${b.id}/setlists/index.json`, { setlists: [] }),
-              ),
+            const bandIds: string[] = Array.from(
+              new Set((oldRegistry.bands ?? []).map((b: any) => b.id)),
             );
+            const slim: any[] = [];
+
+            for (const id of bandIds) {
+              let full: any;
+              try {
+                full = await r2ReadJson(`${id}/band.json`);
+              } catch {
+                // Seed band.json from the old (pre-split) registry entry if it
+                // still has full color data. After this runs once, subsequent
+                // rebuilds read straight from band.json.
+                const old = (oldRegistry.bands ?? []).find((b: any) => b.id === id);
+                if (!old?.colors) continue;
+                full = {
+                  id: old.id,
+                  name: old.name,
+                  route: old.route,
+                  colors: old.colors,
+                };
+                if (old.logo) full.logo = old.logo;
+                await r2WriteJson(`${id}/band.json`, full);
+              }
+
+              const entry: any = {
+                id: full.id,
+                name: full.name,
+                route: full.route,
+                background: full.colors.background,
+                text: full.colors.text,
+              };
+              if (full.logo) entry.logo = full.logo;
+              slim.push(entry);
+            }
+
+            await r2WriteJson('registry.json', { bands: slim });
+            jsonResponse(res, 200, { ok: true, count: slim.length });
+          } catch (err: any) {
+            jsonResponse(res, 500, { error: err.message ?? 'Rebuild failed' });
+          }
+          return;
+        }
+
+        // --- PUT /api/bands/{bandId} --- upsert a single band
+        const bandPutMatch = req.url?.match(/^\/api\/bands\/([^/]+)$/);
+        if (bandPutMatch && req.method === 'PUT') {
+          const bandId = bandPutMatch[1];
+          try {
+            const raw = await readBody(req);
+            const body = JSON.parse(raw);
+            const { bandConfigSchema } = await server.ssrLoadModule('/src/config/schema.ts');
+            const validated = (bandConfigSchema as any).parse(body);
+
+            if (validated.id !== bandId) {
+              return jsonResponse(res, 400, {
+                error: `URL band id "${bandId}" doesn't match body id "${validated.id}"`,
+              });
+            }
+
+            // 1. Write the authoritative per-band file.
+            await r2WriteJson(`${bandId}/band.json`, validated);
+
+            // 2. Upsert the slim entry in registry.json.
+            let registry: any = { bands: [] };
+            let isNewBand = true;
+            try {
+              registry = await r2ReadJson('registry.json');
+              isNewBand = !(registry.bands ?? []).some((b: any) => b.id === bandId);
+            } catch {
+              // registry may not exist yet
+            }
+            const entry: any = {
+              id: validated.id,
+              name: validated.name,
+              route: validated.route,
+              background: validated.colors.background,
+              text: validated.colors.text,
+            };
+            if (validated.logo) entry.logo = validated.logo;
+
+            registry.bands = (registry.bands ?? [])
+              .filter((b: any) => b.id !== bandId)
+              .map(({ songIds: _omit, ...rest }: any) => rest);
+            registry.bands.push(entry);
+            await r2WriteJson('registry.json', registry);
+
+            // 3. Seed blank setlists index for a new band.
+            if (isNewBand) {
+              try {
+                await r2ReadJson(`${bandId}/setlists/index.json`);
+              } catch {
+                await r2WriteJson(`${bandId}/setlists/index.json`, { setlists: [] });
+              }
+            }
 
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {

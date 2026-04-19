@@ -3,7 +3,7 @@ import { useParams, Outlet } from 'react-router-dom';
 import { useBandStore } from '../../store/bandStore';
 import { useSongStore } from '../../store/songStore';
 import { useSetlistStore } from '../../store/setlistStore';
-import { bandsManifestSchema } from '../../config/schema';
+import { bandConfigSchema, bandsManifestSchema } from '../../config/schema';
 import { r2Url } from '../../utils/url';
 
 export function BandApp() {
@@ -20,25 +20,46 @@ export function BandApp() {
       .catch((err) => setError(String(err)));
   }, [bandsManifest, setBandsManifest]);
 
-  // Resolve current band from slug
+  // Resolve the slim index entry, then fetch the full band.json.
   const prevBandIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!bandsManifest || !bandSlug) return;
-    const band = bandsManifest.bands.find((b) => b.route === bandSlug);
-    if (band) {
-      // When switching to a different band, clear per-band state so stale
-      // selections (song, setlist) from the previous band don't linger.
-      if (prevBandIdRef.current && prevBandIdRef.current !== band.id) {
-        useSongStore.getState().setSelectedSong(null);
-        useSetlistStore.getState().setActiveSetlist(null);
-      }
-      prevBandIdRef.current = band.id;
-      setCurrentBand(band);
-      setError(null);
-    } else {
+    const indexEntry = bandsManifest.bands.find((b) => b.route === bandSlug);
+    if (!indexEntry) {
       setCurrentBand(null);
       setError(`Band not found: ${bandSlug}`);
+      return;
     }
+
+    // When switching to a different band, clear per-band state so stale
+    // selections (song, setlist) from the previous band don't linger.
+    if (prevBandIdRef.current && prevBandIdRef.current !== indexEntry.id) {
+      useSongStore.getState().setSelectedSong(null);
+      useSetlistStore.getState().setActiveSetlist(null);
+    }
+    prevBandIdRef.current = indexEntry.id;
+
+    let cancelled = false;
+    fetch(r2Url(`${indexEntry.id}/band.json`))
+      .then((r) => {
+        if (!r.ok) throw new Error(`band.json fetch failed (${r.status})`);
+        return r.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const fullBand = bandConfigSchema.parse(data);
+        setCurrentBand(fullBand);
+        setError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setCurrentBand(null);
+        setError(`Failed to load band: ${err.message}`);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [bandsManifest, bandSlug, setCurrentBand]);
 
   const currentBand = useBandStore((s) => s.currentBand);

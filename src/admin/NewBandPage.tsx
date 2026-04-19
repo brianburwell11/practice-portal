@@ -4,7 +4,7 @@ import { useBandStore } from '../store/bandStore';
 import { bandsManifestSchema } from '../config/schema';
 import { r2Url } from '../utils/url';
 import { generateUniqueBandId } from '../utils/bandId';
-import type { BandColors, BandConfig } from '../audio/types';
+import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
 
 const defaultColors: BandColors = {
   primary: '#3b82f6',
@@ -22,7 +22,7 @@ export default function NewBandPage() {
   const bandsManifest = useBandStore((s) => s.bandsManifest);
   const setBandsManifest = useBandStore((s) => s.setBandsManifest);
 
-  const [bands, setBands] = useState<BandConfig[]>(bandsManifest?.bands ?? []);
+  const [bands, setBands] = useState<BandIndexEntry[]>(bandsManifest?.bands ?? []);
   const [draft, setDraft] = useState<BandConfig>(() => ({
     id: generateUniqueBandId(new Set((bandsManifest?.bands ?? []).map((b) => b.id))),
     name: '',
@@ -39,7 +39,7 @@ export default function NewBandPage() {
   // Load the manifest if we don't have it yet (direct navigation to /admin/new-band).
   // If the draft's id happens to collide with a late-loaded existing id, regenerate.
   useEffect(() => {
-    const applyBands = (list: BandConfig[]) => {
+    const applyBands = (list: BandIndexEntry[]) => {
       setBands(list);
       setDraft((d) => {
         if (!list.some((b) => b.id === d.id)) return d;
@@ -139,17 +139,25 @@ export default function NewBandPage() {
         finalDraft = { ...finalDraft, logo: logoPath };
       }
 
-      const updated = [...bands, finalDraft];
-      const res = await fetch('/api/bands', {
-        method: 'POST',
+      const res = await fetch(`/api/bands/${finalDraft.id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bands: updated }),
+        body: JSON.stringify(finalDraft),
       });
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.error ?? 'Save failed');
       }
-      setBandsManifest({ bands: updated });
+
+      const indexEntry: BandIndexEntry = {
+        id: finalDraft.id,
+        name: finalDraft.name,
+        route: finalDraft.route,
+        background: finalDraft.colors.background,
+        text: finalDraft.colors.text,
+        ...(finalDraft.logo ? { logo: finalDraft.logo } : {}),
+      };
+      setBandsManifest({ bands: [...bands, indexEntry] });
       navigate(`/${finalDraft.route}`);
     } catch (err: any) {
       setError(err.message ?? 'Save failed');

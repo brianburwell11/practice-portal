@@ -107,8 +107,17 @@ export const bandConfigSchema = z.object({
   logo: z.string().optional(),
 });
 
+export const bandIndexEntrySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  route: z.string(),
+  logo: z.string().optional(),
+  background: z.string(),
+  text: z.string(),
+});
+
 export const bandsManifestSchema = z.object({
-  bands: z.array(bandConfigSchema),
+  bands: z.array(bandIndexEntrySchema),
 });
 
 export const setlistEntrySchema = z.discriminatedUnion('type', [

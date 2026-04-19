@@ -95,8 +95,17 @@ export interface BandConfig {
   logo?: string;
 }
 
+export interface BandIndexEntry {
+  id: string;
+  name: string;
+  route: string;
+  logo?: string;
+  background: string;
+  text: string;
+}
+
 export interface BandsManifest {
-  bands: BandConfig[];
+  bands: BandIndexEntry[];
 }
 
 export type SetlistEntry =
