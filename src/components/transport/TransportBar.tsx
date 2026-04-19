@@ -6,8 +6,7 @@ import { useMixerStore } from '../../store/mixerStore';
 import { useLyricsStore } from '../../store/lyricsStore';
 import { useLongPress } from '../../hooks/useLongPress';
 import { WaveformTimeline } from './WaveformTimeline';
-import { TempoControl } from './TempoControl';
-import { TouchSlider } from '../ui/TouchSlider';
+import { MasterSliders } from './MasterSliders';
 
 import type { TapMapEntry } from '../../audio/types';
 
@@ -82,13 +81,17 @@ const isIOS = typeof navigator !== 'undefined' && (
 
 const MUTE_BANNER_KEY = 'pp-mute-banner-dismissed';
 
-export function TransportBar() {
+interface TransportBarProps {
+  showSliders: boolean;
+  onToggleSliders: () => void;
+}
+
+export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps) {
   const engine = useAudioEngine();
   const { playing, position, duration, loopA, loopB, loopEnabled, toggleFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const stemLoading = useSongStore((s) => s.loading);
   const loadProgress = useSongStore((s) => s.loadProgress);
-  const { masterVolume, setMasterVolume } = useMixerStore();
   const mixerStems = useMixerStore((s) => s.stems);
   const globalSoloActive = useMixerStore((s) => s.globalSoloActive);
   const globalMuteActive = useMixerStore((s) => s.globalMuteActive);
@@ -98,9 +101,6 @@ export function TransportBar() {
   const clearMuteGroup = useMixerStore((s) => s.clearMuteGroup);
 
   const disabled = !selectedSong;
-  const [volEditing, setVolEditing] = useState(false);
-  const [volEditValue, setVolEditValue] = useState('');
-  const [showSliders, setShowSliders] = useState(false);
   const [showBookmark, setShowBookmark] = useState(false);
   const lyricsMobileVisible = useLyricsStore((s) => s.mobileVisible);
   const toggleLyricsMobileVisible = useLyricsStore((s) => s.toggleMobileVisible);
@@ -127,20 +127,6 @@ export function TransportBar() {
     setShowMuteBanner(false);
     setMuteBannerDismissed(true);
     try { localStorage.setItem(MUTE_BANNER_KEY, '1'); } catch {}
-  };
-
-  const handleMasterVolume = (v: number) => {
-    const clamped = Math.max(0, Math.min(1.5, v));
-    setMasterVolume(clamped);
-    engine.setMasterVolume(clamped);
-  };
-
-  const commitVolEdit = () => {
-    const parsed = parseInt(volEditValue, 10);
-    if (!isNaN(parsed)) {
-      handleMasterVolume(parsed / 100);
-    }
-    setVolEditing(false);
   };
 
   const handleLoopTap = useCallback(() => {
@@ -231,47 +217,6 @@ export function TransportBar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [engine, playing, disabled, loopA, loopB, loopEnabled, position, toggleFollowPlayhead, mixerStems, globalSoloActive, globalMuteActive, toggleGlobalSolo, toggleGlobalMute, clearSoloGroup, clearMuteGroup]);
 
-  const slidersGrid = (
-    <div className="grid grid-cols-[2rem_1fr_2.5rem] md:grid-cols-[2rem_6rem_2.5rem] gap-x-2 gap-y-0.5 items-center">
-      <label className="text-xs text-gray-400 text-right">Vol</label>
-      <TouchSlider
-        min={0}
-        max={1.5}
-        step={0.01}
-        value={masterVolume}
-        onChange={handleMasterVolume}
-        onDoubleClick={() => handleMasterVolume(1.0)}
-        label="Master Volume"
-      />
-      {volEditing ? (
-        <input
-          type="text"
-          autoFocus
-          value={volEditValue}
-          onChange={(e) => setVolEditValue(e.target.value)}
-          onBlur={commitVolEdit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commitVolEdit();
-            if (e.key === 'Escape') setVolEditing(false);
-          }}
-          className="w-full text-xs text-gray-300 font-mono text-right bg-gray-700 border border-gray-500 rounded px-1 py-0.5 outline-none focus:border-blue-500"
-        />
-      ) : (
-        <button
-          onClick={() => {
-            setVolEditValue(String(Math.round(masterVolume * 100)));
-            setVolEditing(true);
-          }}
-          className="text-xs text-gray-300 font-mono text-right hover:text-white cursor-text"
-        >
-          {Math.round(masterVolume * 100)}%
-        </button>
-      )}
-
-      <TempoControl />
-    </div>
-  );
-
   return (
     <div className="flex flex-col md:flex-row md:items-center md:gap-4 px-4 py-3 border-b border-gray-700">
       {showMuteBanner && (
@@ -341,7 +286,7 @@ export function TransportBar() {
         </div>
 
         {/* Volume + Speed sliders */}
-        {slidersGrid}
+        <MasterSliders />
       </div>
 
       {/* Waveform + timestamp — full width on mobile (row 1), flex-1 on desktop */}
@@ -519,13 +464,13 @@ export function TransportBar() {
         >
           &#x21BB;
         </button>
-        {/* Mobile slider toggle */}
+        {/* Mobile controls toggle — shows/hides mixer + volume/speed sliders below lyrics */}
         <button
           className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
             showSliders ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
-          onClick={() => setShowSliders(!showSliders)}
-          title="Volume & Speed"
+          onClick={onToggleSliders}
+          title="Mixer & Sliders"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="2" y1="14" x2="6" y2="14" />
@@ -567,9 +512,7 @@ export function TransportBar() {
 
       {/* Mobile: collapsible volume + speed sliders */}
       {showSliders && (
-        <div className="mt-2 md:hidden">
-          {slidersGrid}
-        </div>
+        <MasterSliders className="mt-2 md:hidden" />
       )}
 
       {/* Mobile: bookmark panel (position, measure/beat, section jump) */}

@@ -49,6 +49,8 @@ export default function App() {
   const [showDeleteSetlistModal, setShowDeleteSetlistModal] = useState(false);
   const [showEditBandModal, setShowEditBandModal] = useState(false);
   const [showDeleteBandModal, setShowDeleteBandModal] = useState(false);
+  // Mobile-only toggle: shows the master volume/speed sliders + mixer panel below the lyrics.
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
 
   const bandRoute = currentBand?.route ?? '';
@@ -143,7 +145,10 @@ export default function App() {
         <SongList />
 
         {/* Transport controls */}
-        <TransportBar />
+        <TransportBar
+          showSliders={mobileControlsOpen}
+          onToggleSliders={() => setMobileControlsOpen((v) => !v)}
+        />
 
         {/* Lyrics display — uses editor lines as live preview when editor is open */}
         <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
@@ -156,7 +161,9 @@ export default function App() {
             <EditBandModal band={currentBand} onClose={() => setShowEditBandModal(false)} />
           </Suspense>
         ) : (
-          <MixerPanel />
+          <div className={mobileControlsOpen ? 'contents' : 'hidden md:contents'}>
+            <MixerPanel />
+          </div>
         )}
       </div>
 
