@@ -251,7 +251,7 @@ export function EditBandModal({ band, onClose }: Props) {
               placeholder="https://example.com"
               className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
             />
-            <span className="block text-xs text-gray-500">Opens in a new tab when the user clicks the band logo.</span>
+            <span className="block text-xs text-gray-500">Opens in a new tab when the user clicks the band logo (or name, if no logo is set).</span>
           </label>
         </div>
 

@@ -67,31 +67,32 @@ export default function App() {
           className="px-4 py-3 border-b border-gray-700 flex flex-wrap items-center gap-y-2 md:relative"
           style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
         >
-          {!currentBand?.logo ? (
-            <h1 className="text-lg font-semibold tracking-tight">
-              {currentBand?.name ?? 'Practice Portal'}
-            </h1>
-          ) : currentBand.website ? (
-            <a
-              href={currentBand.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={currentBand.website}
-              className="inline-block origin-left transition-transform hover:scale-105"
-            >
+          {(() => {
+            const heading = currentBand?.logo ? (
               <img
                 src={currentBand.logo}
                 alt={currentBand.name}
                 className="h-10 object-contain"
               />
-            </a>
-          ) : (
-            <img
-              src={currentBand.logo}
-              alt={currentBand.name}
-              className="h-10 object-contain"
-            />
-          )}
+            ) : (
+              <h1 className="text-lg font-semibold tracking-tight">
+                {currentBand?.name ?? 'Practice Portal'}
+              </h1>
+            );
+            return currentBand?.website ? (
+              <a
+                href={currentBand.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={currentBand.website}
+                className="inline-block origin-left transition-transform hover:scale-105"
+              >
+                {heading}
+              </a>
+            ) : (
+              heading
+            );
+          })()}
           <SetlistDropdown />
           <div className="w-full order-last flex justify-center md:w-auto md:order-none md:absolute md:left-1/2 md:-translate-x-1/2">
             <SetlistNav />
