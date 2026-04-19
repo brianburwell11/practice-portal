@@ -88,6 +88,28 @@ export async function r2ListKeys(prefix: string): Promise<string[]> {
   return keys;
 }
 
+export async function r2StorageBytes(prefix: string): Promise<{ totalBytes: number; objectCount: number }> {
+  const r2 = getR2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!r2 || !bucket) throw new Error('R2 not configured');
+  let totalBytes = 0;
+  let objectCount = 0;
+  let continuationToken: string | undefined;
+  do {
+    const list = await r2.send(new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    }));
+    for (const obj of list.Contents ?? []) {
+      totalBytes += obj.Size ?? 0;
+      objectCount += 1;
+    }
+    continuationToken = list.NextContinuationToken;
+  } while (continuationToken);
+  return { totalBytes, objectCount };
+}
+
 // --- Setlist cascading update helper ---
 
 type SetlistEntryTransform = (entry: { type: string; songId?: string; label?: string }) =>
@@ -545,6 +567,19 @@ export function configApiPlugin(): Plugin {
             jsonResponse(res, 200, { ok: true, count: slim.length });
           } catch (err: any) {
             jsonResponse(res, 500, { error: err.message ?? 'Rebuild failed' });
+          }
+          return;
+        }
+
+        // --- GET /api/bands/{bandId}/storage ---
+        const storageMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/storage$/);
+        if (storageMatch && req.method === 'GET') {
+          const bandId = storageMatch[1];
+          try {
+            const { totalBytes, objectCount } = await r2StorageBytes(`${bandId}/`);
+            jsonResponse(res, 200, { totalBytes, objectCount });
+          } catch (err: any) {
+            jsonResponse(res, 500, { error: err.message ?? 'Storage lookup failed' });
           }
           return;
         }

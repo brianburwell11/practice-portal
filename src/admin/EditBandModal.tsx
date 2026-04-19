@@ -8,6 +8,13 @@ interface Props {
   onClose: () => void;
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  return `${(n / 1024 ** 3).toFixed(2)} GB`;
+}
+
 export function EditBandModal({ band, onClose }: Props) {
   const bandsManifest = useBandStore((s) => s.bandsManifest);
   const setBandsManifest = useBandStore((s) => s.setBandsManifest);
@@ -22,7 +29,23 @@ export function EditBandModal({ band, onClose }: Props) {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logoCacheBust, setLogoCacheBust] = useState(0);
+  const [storage, setStorage] = useState<{ totalBytes: number; objectCount: number } | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/bands/${band.id}/storage`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && typeof data.totalBytes === 'number') {
+          setStorage(data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [band.id]);
 
   // Live-preview draft colors on the page's CSS variables.
   useEffect(() => {
@@ -172,6 +195,11 @@ export function EditBandModal({ band, onClose }: Props) {
         </h2>
         <div className="flex items-center gap-4">
           {error && <span className="text-xs text-red-400">{error}</span>}
+          {storage && (
+            <span className="text-xs text-gray-500">
+              {formatBytes(storage.totalBytes)} · {storage.objectCount} files
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
