@@ -106,6 +106,7 @@ export const bandConfigSchema = z.object({
   colors: bandColorsSchema,
   logo: z.string().optional(),
   website: z.string().optional(),
+  palette: z.array(z.string()).optional(),
 });
 
 export const bandIndexEntrySchema = z.object({

@@ -55,6 +55,24 @@ export function EditBandModal({ band, onClose }: Props) {
     setDraft((d) => ({ ...d, colors: { ...d.colors, [key]: value } }));
   };
 
+  const addPaletteColor = (color: string) => {
+    setDraft((d) => ({ ...d, palette: [...(d.palette ?? []), color] }));
+  };
+
+  const updatePaletteColor = (index: number, color: string) => {
+    setDraft((d) => ({
+      ...d,
+      palette: (d.palette ?? []).map((c, i) => (i === index ? color : c)),
+    }));
+  };
+
+  const removePaletteColor = (index: number) => {
+    setDraft((d) => ({
+      ...d,
+      palette: (d.palette ?? []).filter((_, i) => i !== index),
+    }));
+  };
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -277,6 +295,49 @@ export function EditBandModal({ band, onClose }: Props) {
                 </div>
               </label>
             ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-xs font-medium text-gray-300">Saved Colors</span>
+          <div className="flex flex-wrap gap-3 items-start">
+            {(draft.palette ?? []).map((color, i) => (
+              <div key={i} className="relative group">
+                <label className="flex flex-col items-center gap-1 cursor-pointer">
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={(e) => updatePaletteColor(i, e.target.value)}
+                    className="w-10 h-10 rounded cursor-pointer bg-transparent border-0 block"
+                  />
+                  <span className="text-[10px] font-mono text-gray-500 leading-none">
+                    {color}
+                  </span>
+                </label>
+                <button
+                  onClick={() => removePaletteColor(i)}
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 hover:bg-red-500 rounded-full text-xs text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Remove color"
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+            <div className="flex flex-col items-center gap-1">
+              <label className="relative w-10 h-10 rounded border-2 border-dashed border-gray-600 text-gray-500 hover:border-gray-400 hover:text-gray-300 flex items-center justify-center transition-colors cursor-pointer">
+                <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <input
+                  key={(draft.palette ?? []).length}
+                  type="color"
+                  onChange={(e) => addPaletteColor(e.target.value)}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  aria-label="Add color"
+                />
+              </label>
+              <span className="text-[10px] font-mono invisible leading-none">#000000</span>
+            </div>
           </div>
         </div>
       </div>

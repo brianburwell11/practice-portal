@@ -94,6 +94,7 @@ export interface BandConfig {
   colors: BandColors;
   logo?: string;
   website?: string;
+  palette?: string[];
 }
 
 export interface BandIndexEntry {

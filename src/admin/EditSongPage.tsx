@@ -12,6 +12,7 @@ import { useSetlistStore } from '../store/setlistStore';
 import type { StemConfig, StemGroupConfig } from '../audio/types';
 import { TagInput } from './TagInput';
 import { SongKeyInput } from './SongKeyInput';
+import { StemColorPicker } from './StemColorPicker';
 
 const groupColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
@@ -457,15 +458,12 @@ export default function EditSongPage() {
                     // New stem — match the wizard's circular color + stereo
                     // toggle style so the pair reads as one group.
                     <div className="shrink-0 flex items-center">
-                      <label className="cursor-pointer" title="Click to change color">
+                      <StemColorPicker
+                        value={stem.color}
+                        onChange={(color) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color } })}
+                      >
                         <div className="w-6 h-6 rounded-full border-2 border-gray-600" style={{ backgroundColor: stem.color }} />
-                        <input
-                          type="color"
-                          value={stem.color}
-                          onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })}
-                          className="sr-only"
-                        />
-                      </label>
+                      </StemColorPicker>
                       {(newStemFiles.get(stem.id)?.channels ?? 0) >= 2 && (
                         <button
                           onClick={() => dispatch({ type: 'UPDATE_STEM', index: i, updates: { stereo: !stem.stereo } })}
@@ -483,12 +481,12 @@ export default function EditSongPage() {
                       )}
                     </div>
                   ) : (
-                    <input
-                      type="color"
+                    <StemColorPicker
                       value={stem.color}
-                      onChange={(e) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })}
-                      className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
-                    />
+                      onChange={(color) => dispatch({ type: 'UPDATE_STEM', index: i, updates: { color } })}
+                    >
+                      <div className="w-8 h-8 rounded border border-gray-600" style={{ backgroundColor: stem.color }} />
+                    </StemColorPicker>
                   )}
                   <input
                     type="text"
@@ -556,12 +554,9 @@ export default function EditSongPage() {
           {availableStems.length > 0 && (
             <div className="bg-gray-800 rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={groupColor}
-                  onChange={(e) => setGroupColor(e.target.value)}
-                  className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
-                />
+                <StemColorPicker value={groupColor} onChange={setGroupColor}>
+                  <div className="w-8 h-8 rounded border border-gray-600" style={{ backgroundColor: groupColor }} />
+                </StemColorPicker>
                 <input
                   type="text"
                   value={groupLabel}

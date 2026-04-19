@@ -3,6 +3,7 @@ import type { WizardState, WizardAction, StemEntry } from '../wizardReducer';
 import { detectStem, deduplicateLabels, isAudioFile, sortStems } from '../utils/stemDetection';
 import { getAudioInfo } from '../utils/audioConvert';
 import { previewStem } from '../utils/stemPreview';
+import { StemColorPicker } from '../StemColorPicker';
 
 interface Props {
   state: WizardState;
@@ -246,17 +247,14 @@ export function StemsStep({ state, dispatch }: Props) {
 
                 {/* Color circle (click to pick color) + stereo toggle */}
                 <div className="shrink-0 flex items-center">
-                  <label className="cursor-pointer" title="Click to change color">
+                  <StemColorPicker
+                    value={stem.color}
+                    onChange={(color) =>
+                      dispatch({ type: 'UPDATE_STEM', index: i, updates: { color } })
+                    }
+                  >
                     <div className="w-6 h-6 rounded-full border-2 border-gray-600" style={{ backgroundColor: stem.color }} />
-                    <input
-                      type="color"
-                      value={stem.color}
-                      onChange={(e) =>
-                        dispatch({ type: 'UPDATE_STEM', index: i, updates: { color: e.target.value } })
-                      }
-                      className="sr-only"
-                    />
-                  </label>
+                  </StemColorPicker>
                   {stem.channels >= 2 && (
                     <button
                       onClick={() =>
@@ -351,12 +349,9 @@ export function StemsStep({ state, dispatch }: Props) {
           {availableStems.length > 0 && (
             <div className="bg-gray-800 rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={groupColor}
-                  onChange={(e) => setGroupColor(e.target.value)}
-                  className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
-                />
+                <StemColorPicker value={groupColor} onChange={setGroupColor}>
+                  <div className="w-8 h-8 rounded border border-gray-600" style={{ backgroundColor: groupColor }} />
+                </StemColorPicker>
                 <input
                   type="text"
                   value={groupLabel}
