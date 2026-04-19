@@ -17,8 +17,6 @@ export function DeleteSongModal({ songId, songTitle, onClose }: Props) {
   const setSelectedSong = useSongStore((s) => s.setSelectedSong);
   const manifest = useSongStore((s) => s.manifest);
   const currentBand = useBandStore((s) => s.currentBand);
-  const setBandsManifest = useBandStore((s) => s.setBandsManifest);
-  const bandsManifest = useBandStore((s) => s.bandsManifest);
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
   const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
 
@@ -41,16 +39,6 @@ export function DeleteSongModal({ songId, songTitle, onClose }: Props) {
         setManifest({ songs: manifest.songs.filter((s) => s.id !== songId) });
       }
       setSelectedSong(null);
-
-      if (bandsManifest && currentBand) {
-        setBandsManifest({
-          bands: bandsManifest.bands.map((b) =>
-            b.id === currentBand.id
-              ? { ...b, songIds: b.songIds.filter((id) => id !== songId) }
-              : b,
-          ),
-        });
-      }
 
       if (activeSetlist) {
         setActiveSetlist({

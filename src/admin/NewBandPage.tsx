@@ -28,7 +28,6 @@ export default function NewBandPage() {
     name: '',
     route: '',
     colors: { ...defaultColors },
-    songIds: [],
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

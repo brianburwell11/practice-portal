@@ -104,17 +104,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         throw new Error(err.error || 'Config save failed');
       }
 
-      // 4. Auto-add song to band registry
-      if (band && !band.songIds.includes(state.id)) {
-        band.songIds.push(state.id);
-        await fetch('/api/bands', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(bandsData),
-        });
-      }
-
-      // 5. Update discography with R2 audio path
+      // 4. Update discography with R2 audio path
       const discographyRes = await fetch(`/api/bands/${bandId}/songs/discography`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

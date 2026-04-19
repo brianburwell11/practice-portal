@@ -17,7 +17,6 @@ export function EditBandModal({ band, onClose }: Props) {
   const [draft, setDraft] = useState<BandConfig>({
     ...band,
     colors: { ...band.colors },
-    songIds: [...band.songIds],
   });
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);

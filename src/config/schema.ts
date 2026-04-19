@@ -105,7 +105,6 @@ export const bandConfigSchema = z.object({
   route: z.string(),
   colors: bandColorsSchema,
   logo: z.string().optional(),
-  songIds: z.array(z.string()),
 });
 
 export const bandsManifestSchema = z.object({

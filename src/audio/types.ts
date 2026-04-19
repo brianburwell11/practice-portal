@@ -93,7 +93,6 @@ export interface BandConfig {
   route: string;
   colors: BandColors;
   logo?: string;
-  songIds: string[];
 }
 
 export interface BandsManifest {

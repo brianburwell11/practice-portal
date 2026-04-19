@@ -325,14 +325,7 @@ export function configApiPlugin(): Plugin {
             }
             await r2WriteJson(`${bandId}/songs/discography.json`, discography);
 
-            // 4. Update registry.json
-            const registry = await r2ReadJson('registry.json');
-            for (const band of registry.bands) {
-              band.songIds = band.songIds.map((id: string) => id === oldId ? newId : id);
-            }
-            await r2WriteJson('registry.json', registry);
-
-            // 5. Update songId in any setlists
+            // 4. Update songId in any setlists
             await updateSetlistEntries(bandId, (entry) =>
               entry.type === 'song' && entry.songId === oldId
                 ? { ...entry, songId: newId }
@@ -556,10 +549,12 @@ export function configApiPlugin(): Plugin {
               // prefix may be empty
             }
 
-            // 2. Remove band from registry.json
+            // 2. Remove band from registry.json (and strip any legacy songIds fields)
             try {
               const registry = await r2ReadJson('registry.json');
-              registry.bands = (registry.bands ?? []).filter((b: any) => b.id !== bandId);
+              registry.bands = (registry.bands ?? [])
+                .filter((b: any) => b.id !== bandId)
+                .map(({ songIds: _omit, ...rest }: any) => rest);
               await r2WriteJson('registry.json', registry);
             } catch {
               // registry may not exist
@@ -642,18 +637,7 @@ export function configApiPlugin(): Plugin {
               // discography may not exist
             }
 
-            // 4. Remove from registry.json
-            try {
-              const registry = await r2ReadJson('registry.json');
-              for (const band of registry.bands) {
-                band.songIds = band.songIds.filter((id: string) => id !== songId);
-              }
-              await r2WriteJson('registry.json', registry);
-            } catch {
-              // registry may not exist
-            }
-
-            // 5. Remove song from any setlists
+            // 4. Remove song from any setlists
             await updateSetlistEntries(bandId, (entry) =>
               entry.type === 'song' && entry.songId === songId ? null : entry,
             );

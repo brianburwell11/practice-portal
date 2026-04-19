@@ -142,10 +142,10 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
       .finally(() => setLoading(false));
   }, [setlistId, copyFromSetlistId, currentBand, isCopy]);
 
-  // Available songs for the picker
+  // Available songs for the picker — the manifest is already scoped to the current band.
   const availableSongs = useMemo(() => {
     if (!manifest || !currentBand) return [];
-    return manifest.songs.filter((s) => currentBand.songIds.includes(s.id));
+    return manifest.songs;
   }, [manifest, currentBand]);
 
   // Fetch song metadata (key, duration) from config files

@@ -45,8 +45,8 @@ export function BandPicker() {
                 <div className="font-semibold" style={{ color: band.colors.text }}>
                   {band.name}
                 </div>
-                <div className="text-sm text-gray-400">
-                  {band.songIds.length} {band.songIds.length === 1 ? 'song' : 'songs'}
+                <div className="text-sm font-mono text-gray-400">
+                  /{band.route}
                 </div>
               </div>
             </Link>

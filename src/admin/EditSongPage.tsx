@@ -31,9 +31,6 @@ export default function EditSongPage() {
   const { songId = '', bandSlug = '' } = useParams();
   const navigate = useNavigate();
   const currentBand = useBandStore((s) => s.currentBand);
-  const bandsManifest = useBandStore((s) => s.bandsManifest);
-  const setBandsManifest = useBandStore((s) => s.setBandsManifest);
-  const setCurrentBand = useBandStore((s) => s.setCurrentBand);
   const manifest = useSongStore((s) => s.manifest);
   const setManifest = useSongStore((s) => s.setManifest);
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
@@ -312,18 +309,6 @@ export default function EditSongPage() {
                 : s,
             ),
           });
-        }
-
-        // Update band songIds: replace old id with new id
-        if (bandsManifest && currentBand) {
-          const updatedBands = bandsManifest.bands.map((b) =>
-            b.id === currentBand.id
-              ? { ...b, songIds: b.songIds.map((id) => (id === oldId ? newId : id)) }
-              : b,
-          );
-          setBandsManifest({ bands: updatedBands });
-          const updatedBand = updatedBands.find((b) => b.id === currentBand.id);
-          if (updatedBand) setCurrentBand(updatedBand);
         }
 
         // Update active setlist if it references the renamed song
