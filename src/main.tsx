@@ -18,6 +18,9 @@ const AlignSongPage = import.meta.env.DEV
 const ManageBandsPage = import.meta.env.DEV
   ? lazy(() => import('./admin/ManageBandsPage.tsx'))
   : null;
+const NewBandPage = import.meta.env.DEV
+  ? lazy(() => import('./admin/NewBandPage.tsx'))
+  : null;
 
 const adminFallback = (
   <div className="min-h-screen bg-gray-900 text-gray-400 p-8">Loading admin...</div>
@@ -36,6 +39,16 @@ createRoot(document.getElementById('root')!).render(
             element={
               <Suspense fallback={adminFallback}>
                 <ManageBandsPage />
+              </Suspense>
+            }
+          />
+        )}
+        {NewBandPage && (
+          <Route
+            path="/admin/new-band"
+            element={
+              <Suspense fallback={adminFallback}>
+                <NewBandPage />
               </Suspense>
             }
           />

@@ -57,13 +57,7 @@ export function BandPicker() {
       {import.meta.env.DEV && (
         <div className="mt-8 flex items-center gap-4">
           <Link
-            to="/admin/bands"
-            className="text-sm text-gray-500 hover:text-gray-300"
-          >
-            Manage Bands
-          </Link>
-          <Link
-            to="/admin/bands?new=true"
+            to="/admin/new-band"
             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium text-white"
           >
             + New Band
