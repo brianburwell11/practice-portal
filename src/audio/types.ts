@@ -93,6 +93,7 @@ export interface BandConfig {
   route: string;
   colors: BandColors;
   logo?: string;
+  website?: string;
 }
 
 export interface BandIndexEntry {

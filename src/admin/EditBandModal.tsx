@@ -106,11 +106,15 @@ export function EditBandModal({ band, onClose }: Props) {
     setSaving(true);
     setError(null);
 
+    // Normalize empty website to undefined so we don't persist "" in band.json.
+    const trimmedWebsite = draft.website?.trim();
+    const toSave: BandConfig = { ...draft, website: trimmedWebsite ? trimmedWebsite : undefined };
+
     try {
-      const res = await fetch(`/api/bands/${draft.id}`, {
+      const res = await fetch(`/api/bands/${toSave.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
+        body: JSON.stringify(toSave),
       });
       if (!res.ok) {
         const body = await res.json();
@@ -118,20 +122,20 @@ export function EditBandModal({ band, onClose }: Props) {
       }
 
       const indexEntry: BandIndexEntry = {
-        id: draft.id,
-        name: draft.name,
-        route: draft.route,
-        background: draft.colors.background,
-        text: draft.colors.text,
-        ...(draft.logo ? { logo: draft.logo } : {}),
+        id: toSave.id,
+        name: toSave.name,
+        route: toSave.route,
+        background: toSave.colors.background,
+        text: toSave.colors.text,
+        ...(toSave.logo ? { logo: toSave.logo } : {}),
       };
       setBandsManifest({
-        bands: bandsManifest.bands.map((b) => (b.id === draft.id ? indexEntry : b)),
+        bands: bandsManifest.bands.map((b) => (b.id === toSave.id ? indexEntry : b)),
       });
-      setCurrentBand(draft);
+      setCurrentBand(toSave);
       onClose();
-      if (draft.route !== band.route) {
-        navigate(`/${draft.route}`, { replace: true });
+      if (toSave.route !== band.route) {
+        navigate(`/${toSave.route}`, { replace: true });
       }
     } catch (err: any) {
       setError(err.message ?? 'Save failed');
@@ -195,46 +199,60 @@ export function EditBandModal({ band, onClose }: Props) {
           </label>
         </div>
 
-        <div className="space-y-2">
-          <span className="text-xs text-gray-400">Logo</span>
-          <div className="flex items-center gap-4">
-            {draft.logo ? (
-              <div className="relative group">
-                <img
-                  src={draft.logo + (logoCacheBust ? `?v=${logoCacheBust}` : '')}
-                  alt="Band logo"
-                  className="w-16 h-16 rounded object-contain bg-gray-800 border border-gray-600"
-                />
+        <div className="flex items-start gap-6">
+          <div className="space-y-2 shrink-0">
+            <span className="text-xs text-gray-400">Logo</span>
+            <div className="flex items-center gap-4">
+              {draft.logo ? (
+                <div className="relative group">
+                  <img
+                    src={draft.logo + (logoCacheBust ? `?v=${logoCacheBust}` : '')}
+                    alt="Band logo"
+                    className="w-16 h-16 rounded object-contain bg-gray-800 border border-gray-600"
+                  />
+                  <button
+                    onClick={removeLogo}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 hover:bg-red-500 rounded-full text-xs text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded bg-gray-800 border border-dashed border-gray-600 flex items-center justify-center text-gray-500 text-xs">
+                  No logo
+                </div>
+              )}
+              <div className="flex flex-col gap-1">
                 <button
-                  onClick={removeLogo}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 hover:bg-red-500 rounded-full text-xs text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={uploadingLogo}
+                  className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 rounded text-sm"
                 >
-                  &times;
+                  {uploadingLogo ? 'Uploading...' : draft.logo ? 'Replace Logo' : 'Upload Logo'}
                 </button>
+                <span className="text-xs text-gray-500">PNG, JPEG, or SVG</span>
               </div>
-            ) : (
-              <div className="w-16 h-16 rounded bg-gray-800 border border-dashed border-gray-600 flex items-center justify-center text-gray-500 text-xs">
-                No logo
-              </div>
-            )}
-            <div className="flex flex-col gap-1">
-              <button
-                onClick={() => logoInputRef.current?.click()}
-                disabled={uploadingLogo}
-                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 rounded text-sm"
-              >
-                {uploadingLogo ? 'Uploading...' : draft.logo ? 'Replace Logo' : 'Upload Logo'}
-              </button>
-              <span className="text-xs text-gray-500">PNG, JPEG, or SVG</span>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
             </div>
-            <input
-              ref={logoInputRef}
-              type="file"
-              accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
-              onChange={handleLogoUpload}
-              className="hidden"
-            />
           </div>
+
+          <label className="flex-1 min-w-0 space-y-1">
+            <span className="text-xs text-gray-400">Website</span>
+            <input
+              type="url"
+              value={draft.website ?? ''}
+              onChange={(e) => updateDraft({ website: e.target.value })}
+              placeholder="https://example.com"
+              className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+            />
+            <span className="block text-xs text-gray-500">Opens in a new tab when the user clicks the band logo.</span>
+          </label>
         </div>
 
         <div className="space-y-2">

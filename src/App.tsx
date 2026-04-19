@@ -71,6 +71,20 @@ export default function App() {
             <h1 className="text-lg font-semibold tracking-tight">
               {currentBand?.name ?? 'Practice Portal'}
             </h1>
+          ) : currentBand.website ? (
+            <a
+              href={currentBand.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={currentBand.website}
+              className="inline-block origin-left transition-transform hover:scale-105"
+            >
+              <img
+                src={currentBand.logo}
+                alt={currentBand.name}
+                className="h-10 object-contain"
+              />
+            </a>
           ) : (
             <img
               src={currentBand.logo}
