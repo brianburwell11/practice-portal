@@ -25,7 +25,7 @@ export function DeleteBandModal({ band, onClose }: Props) {
   const setIndex = useSetlistStore((s) => s.setIndex);
   const navigate = useNavigate();
 
-  const expected = `delete ${band.id}`;
+  const expected = `delete ${band.name}`;
   const canDelete = acknowledged && confirmation === expected && !deleting;
 
   const handleDelete = async () => {

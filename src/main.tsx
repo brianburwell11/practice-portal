@@ -15,9 +15,6 @@ const EditSongPage = import.meta.env.DEV
 const AlignSongPage = import.meta.env.DEV
   ? lazy(() => import('./admin/AlignSongPage.tsx'))
   : null;
-const ManageBandsPage = import.meta.env.DEV
-  ? lazy(() => import('./admin/ManageBandsPage.tsx'))
-  : null;
 const NewBandPage = import.meta.env.DEV
   ? lazy(() => import('./admin/NewBandPage.tsx'))
   : null;
@@ -33,16 +30,6 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter basename={basename}>
       <Routes>
         <Route path="/" element={<BandPicker />} />
-        {ManageBandsPage && (
-          <Route
-            path="/admin/bands"
-            element={
-              <Suspense fallback={adminFallback}>
-                <ManageBandsPage />
-              </Suspense>
-            }
-          />
-        )}
         {NewBandPage && (
           <Route
             path="/admin/new-band"
