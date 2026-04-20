@@ -11,6 +11,7 @@ import {
   saveSheetMusicSongState,
 } from '../../utils/sheetMusicSongStorage';
 import { InfiniteScoreRenderer, type InfiniteBeatStamp, type PartInfo } from './InfiniteScoreRenderer';
+import type { UnfoldedStep } from '../../audio/unfoldRepeats';
 
 /** Pixels to nudge the left focus point right of the waveform's left edge.
  *  Keep in sync with the same constant in `LyricsDisplay.tsx` so the
@@ -57,6 +58,12 @@ export function ScrollingScore() {
 
   const [timeline, setTimeline] = useState<InfiniteBeatStamp[]>([]);
   const [measureXs, setMeasureXs] = useState<number[]>([]);
+  /** Unfolded playback order derived from the MusicXML's repeat / jump
+   *  markers. Maps the "audio-side" unfolded index `u` → the written
+   *  measure `srcIndex` we should use to look up an x-pixel in `measureXs`.
+   *  Empty array when the score has no repeats (or the parser failed) —
+   *  in that case callers fall back to `srcIdx = u`. */
+  const [unfolded, setUnfolded] = useState<UnfoldedStep[]>([]);
   const [scrollHost, setScrollHost] = useState<HTMLDivElement | null>(null);
   const [cursorPx, setCursorPx] = useState(0);
   const [bbox, setBbox] = useState<{ leftPx: number; widthPx: number } | null>(null);
@@ -161,6 +168,7 @@ export function ScrollingScore() {
   const handleReady = useCallback((_osmd: any) => { /* reserved for future hook-ins */ }, []);
   const handleTimeline = useCallback((tl: InfiniteBeatStamp[]) => setTimeline(tl), []);
   const handleMeasureXs = useCallback((xs: number[]) => setMeasureXs(xs), []);
+  const handleUnfoldedOrder = useCallback((steps: UnfoldedStep[]) => setUnfolded(steps), []);
   const handleParts = useCallback((ps: PartInfo[]) => {
     setParts(ps);
     const saved = pendingSavedPartIdsRef.current;
@@ -306,6 +314,7 @@ export function ScrollingScore() {
     setParts([]);
     setHiddenPartIds(new Set());
     setPartsMenuOpen(false);
+    setUnfolded([]);
     const songId = song?.id;
     const saved = songId ? loadSheetMusicSongState(songId) : null;
     pendingSavedPartIdsRef.current = saved?.hiddenPartIds ?? null;
@@ -383,16 +392,38 @@ export function ScrollingScore() {
 
     const t = position - audioOffset;
 
-    // Cursor x: measure-granularity lerp between consecutive barlines
+    // `mIdx` is the UNFOLDED measure index — `measureTimes` comes from the
+    // tapMap, which is keyed to the unfolded audio (one entry per audible
+    // downbeat), so `currentMeasureIndex` returns `u` directly.
+    //
+    // For x-pixel math, resolve `u` through the unfold table to get
+    // the matching WRITTEN measure index (`srcIdx`). On scores without
+    // repeats `unfolded` is empty and `srcIdx === u`, which is the
+    // pre-existing behavior.
     let mIdx = 0;
+    let srcIdx = 0;
+    let srcIdxNext = 0;
     let cursorContentX: number;
     if (measureTimes.length >= 2) {
       mIdx = currentMeasureIndex(t + audioOffset, measureTimes);
+      const step = unfolded.length > 0 ? unfolded[mIdx] : undefined;
+      srcIdx = step?.srcIndex ?? mIdx;
+      const nextStep = unfolded.length > 0 ? unfolded[mIdx + 1] : undefined;
+      srcIdxNext = nextStep?.srcIndex ?? (mIdx + 1);
       const t0 = measureTimes[mIdx];
       const t1 = measureTimes[mIdx + 1] ?? t0 + 1;
       const frac = Math.max(0, Math.min(1, (t + audioOffset - t0) / Math.max(0.001, t1 - t0)));
-      const x0 = measureXs[mIdx] ?? 0;
-      const x1 = measureXs[mIdx + 1] ?? x0;
+      const x0 = measureXs[srcIdx] ?? 0;
+      // If the next unfolded measure is a jump target (repeat back,
+      // D.C., D.S., coda, or volta skip), don't lerp across the gap —
+      // that would slide the playhead visibly backward or forward
+      // through the current bar. Instead, lerp to the END of the
+      // current written measure; the snap to the jump destination
+      // happens discontinuously at the next measure onset.
+      const isJump = srcIdxNext !== srcIdx + 1;
+      const x1 = isJump
+        ? (measureXs[srcIdx + 1] ?? x0)
+        : (measureXs[srcIdxNext] ?? x0);
       cursorContentX = x0 + frac * (x1 - x0);
     } else {
       // No tapMap measures: fall back to the first measure's x and freeze
@@ -458,30 +489,39 @@ export function ScrollingScore() {
       //   edge (converted into scroll-host-local viewport coords). The
       //   last fully-fit measure ends at or before the waveform's right
       //   edge. Everything outside that window is grayed.
+      //
+      // Indexing: `anchor`, `bars`, and `mIdx` are all in UNFOLDED space.
+      // `measureXs` lookups convert through the unfold table so a repeat
+      // revisits the same on-screen measure when the audio loops.
       const usableWidth = Math.max(1, focusRightPx - focusLeftPx);
 
       let anchor = locked ? lockedAnchorRef.current : windowAnchor;
-      let bars = barsFittingFromAnchor(anchor, usableWidth, measureXs);
+      let bars = barsFittingFromAnchor(anchor, usableWidth, measureXs, unfolded);
 
       if (!locked) {
         if (mIdx < anchor) {
           // Seek backward — jump to a page that starts at mIdx
           anchor = mIdx;
-          bars = barsFittingFromAnchor(anchor, usableWidth, measureXs);
+          bars = barsFittingFromAnchor(anchor, usableWidth, measureXs, unfolded);
           setWindowAnchor(anchor);
         } else if (mIdx >= anchor + bars) {
           // Forward progress — walk page-by-page because each page has its
           // own bars-count (real measures vary in rendered width)
           let safety = 200;
-          while (mIdx >= anchor + bars && safety-- > 0 && anchor + bars < measureXs.length - 1) {
+          const totalLen = unfolded.length > 0 ? unfolded.length : measureXs.length - 1;
+          while (mIdx >= anchor + bars && safety-- > 0 && anchor + bars < totalLen) {
             anchor = anchor + bars;
-            bars = barsFittingFromAnchor(anchor, usableWidth, measureXs);
+            bars = barsFittingFromAnchor(anchor, usableWidth, measureXs, unfolded);
           }
           setWindowAnchor(anchor);
         }
       }
 
-      const anchorX = measureXs[anchor] ?? 0;
+      const srcAnchor = unfolded.length > 0 ? (unfolded[anchor]?.srcIndex ?? anchor) : anchor;
+      const srcAnchorEnd = unfolded.length > 0
+        ? (unfolded[anchor + bars]?.srcIndex ?? (srcAnchor + bars))
+        : (anchor + bars);
+      const anchorX = measureXs[srcAnchor] ?? 0;
       if (!locked) {
         // Scroll so the first bar's barline sits at the waveform's left edge
         const nextScrollLeft = Math.max(0, anchorX - focusLeftPx);
@@ -489,9 +529,12 @@ export function ScrollingScore() {
         scrollHost.scrollLeft = nextScrollLeft;
       }
       setCursorPx(cursorContentX - scrollHost.scrollLeft);
-      // Bbox spans the current measure (snappiness: measure, anchor: start)
-      const measureLeft = measureXs[mIdx] ?? cursorContentX;
-      const measureRight = measureXs[mIdx + 1] ?? (measureLeft + 120);
+      // Bbox spans the current written measure (snappiness: measure,
+      // anchor: start). Always uses `srcIdx + 1` for the right edge
+      // rather than `srcIdxNext` — on a jump those disagree and the
+      // bbox would collapse or invert.
+      const measureLeft = measureXs[srcIdx] ?? cursorContentX;
+      const measureRight = measureXs[srcIdx + 1] ?? (measureLeft + 120);
       const measureWidth = Math.max(20, measureRight - measureLeft);
       measureRangeRef.current = { left: measureLeft, width: measureWidth };
       setBbox({
@@ -503,7 +546,7 @@ export function ScrollingScore() {
       // Grayed right: from the right edge of the last full-fit bar to the
       // viewport's right edge — also clamped to start no earlier than the
       // waveform's right edge so it shows any content that bleeds past.
-      const rightEndX = measureXs[anchor + bars];
+      const rightEndX = measureXs[srcAnchorEnd];
       const rightEndInViewport = rightEndX != null ? rightEndX - scrollHost.scrollLeft : focusRightPx;
       setTrainGrayRightStartPx(Math.min(rightEndInViewport, focusRightPx));
     }
@@ -519,7 +562,7 @@ export function ScrollingScore() {
     setStickyPreambleLeftPx(Math.max(0, spacerPx - scrollHost.scrollLeft));
   }, [
     position, audioOffset, scrollHost, timeline, measureXs, measureTimes,
-    trackingMode, windowAnchor, resizeTick, playing,
+    trackingMode, windowAnchor, resizeTick, playing, unfolded,
   ]);
 
   // Latest-value refs so the scroll-host event handlers (attached once per
@@ -868,6 +911,7 @@ export function ScrollingScore() {
           onMeasureXs={handleMeasureXs}
           onSvgReady={handleSvgReady}
           onParts={handleParts}
+          onUnfoldedOrder={handleUnfoldedOrder}
           visiblePartIds={visiblePartIds}
         />
         {/* Overlay — sibling of the scroll host (NOT inside it) so the
@@ -917,21 +961,35 @@ function findMeasureAtX(x: number, measureXs: number[]): number {
  * The first measure that doesn't fully fit becomes the anchor of the next
  * page — it is **not** included in this page. Always returns at least 1
  * so pathologically narrow viewports still render something.
+ *
+ * `anchor` is indexed in UNFOLDED space when `unfolded` is non-empty;
+ * otherwise it's a written-measure index (back-compat). Width for each
+ * step is derived from the written-measure x-pixels by translating each
+ * unfolded step's `srcIndex` through `measureXs`.
  */
 function barsFittingFromAnchor(
   anchor: number,
   usablePx: number,
   measureXs: number[],
+  unfolded: UnfoldedStep[],
 ): number {
-  if (measureXs.length < 2 || anchor >= measureXs.length - 1) return 1;
-  const anchorX = measureXs[anchor];
+  if (measureXs.length < 2) return 1;
+  const useUnfold = unfolded.length > 0;
+  const total = useUnfold ? unfolded.length : measureXs.length - 1;
+  if (anchor >= total) return 1;
+  const srcAt = (u: number): number => useUnfold
+    ? (unfolded[u]?.srcIndex ?? u)
+    : u;
+  const anchorX = measureXs[srcAt(anchor)] ?? 0;
   const available = Math.max(1, usablePx);
   let fits = 0;
-  for (let n = 1; anchor + n < measureXs.length; n++) {
-    const rightX = measureXs[anchor + n];
+  for (let n = 1; anchor + n <= total; n++) {
+    const srcNext = srcAt(anchor + n);
+    const rightX = measureXs[srcNext];
+    if (rightX == null) break;
     if (rightX - anchorX > available) break;
     fits = n;
   }
-  const remaining = measureXs.length - 1 - anchor;
+  const remaining = total - anchor;
   return Math.max(1, Math.min(fits, remaining));
 }

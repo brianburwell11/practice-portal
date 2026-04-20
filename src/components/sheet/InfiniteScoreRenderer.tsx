@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { parseMusicXML, unfold, type UnfoldedStep } from '../../audio/unfoldRepeats';
 
 export interface PartInfo {
   /** MusicXML part id (e.g. "P1") */
@@ -46,6 +47,11 @@ interface Props {
   onSvgReady?: (svg: SVGSVGElement | null) => void;
   /** Fires once per load with the discovered instrument parts. */
   onParts?: (parts: PartInfo[]) => void;
+  /** Fires once per load with the unfolded playback order derived from the
+   *  MusicXML's repeat / volta / D.C. / D.S. / coda / Fine markers. An empty
+   *  array means "no repeats detected" — callers should fall back to
+   *  written-measure-indexed math. */
+  onUnfoldedOrder?: (steps: UnfoldedStep[]) => void;
   /** Set of part ids that should render. When undefined or empty, all
    *  parts render. Changes are applied by mutating each instrument's
    *  `Visible` flag and re-rendering without a full reload. */
@@ -79,6 +85,7 @@ export function InfiniteScoreRenderer({
   onMeasureXs,
   onSvgReady,
   onParts,
+  onUnfoldedOrder,
   visiblePartIds,
   overlay,
 }: Props) {
@@ -131,19 +138,53 @@ export function InfiniteScoreRenderer({
         er.PageRightMargin = 2;
         er.FixedMeasureWidth = !!equalBeatWidth;
 
-        // MXL files are ZIP archives (compressed MusicXML). Reading them
-        // via `r.text()` would decode the binary bytes as UTF-8 and
-        // corrupt the archive — OSMD throws "Corrupted zip: missing N
-        // bytes" on load. Route .mxl through a Blob (OSMD's load()
-        // unzips Blob inputs) and .xml/.musicxml through text as before.
+        // MXL files are ZIP archives (compressed MusicXML). We fetch as
+        // arrayBuffer, detect zip via the PK magic bytes, and — if zipped
+        // — unzip here so we can both (a) parse the inner XML ourselves
+        // for repeat-unfolding and (b) feed OSMD a plain XML string. Plain
+        // .xml / .musicxml files take the decode-as-UTF-8 path directly.
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
-        const isMxl = /\.mxl($|\?)/i.test(url)
-          || /application\/vnd\.recordare\.musicxml(?!\+xml)/i.test(res.headers.get('content-type') ?? '');
-        const payload: string | Blob = isMxl ? await res.blob() : await res.text();
+        const buf = await res.arrayBuffer();
         if (cancelled) return;
-        await osmd.load(payload);
+        const bytes = new Uint8Array(buf);
+        const isZip = bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b;
+        let xmlText: string;
+        if (isZip) {
+          // Dynamic-import JSZip so it only loads for MXL scores.
+          const JSZipMod = await import('jszip');
+          const JSZip = JSZipMod.default ?? JSZipMod;
+          const zip = await JSZip.loadAsync(buf);
+          const container = zip.file('META-INF/container.xml');
+          let rootPath: string | null = null;
+          if (container) {
+            const containerText = await container.async('string');
+            const cdoc = new DOMParser().parseFromString(containerText, 'application/xml');
+            rootPath = cdoc.querySelector('rootfile')?.getAttribute('full-path') ?? null;
+          }
+          const scoreFile = (rootPath && zip.file(rootPath))
+            || zip.file(/\.xml$/i)[0]
+            || null;
+          if (!scoreFile) throw new Error('No score XML inside MXL');
+          xmlText = await scoreFile.async('string');
+        } else {
+          xmlText = new TextDecoder('utf-8').decode(bytes);
+        }
+        if (cancelled) return;
+        await osmd.load(xmlText);
         osmd.zoom = zoom;
+
+        // Parse repeat/jump structure from the same XML text and unfold it
+        // into a linear playback order. Harmless on scores without repeats
+        // — `unfold` just returns the same measure order.
+        let unfoldedSteps: UnfoldedStep[] = [];
+        try {
+          const structure = parseMusicXML(xmlText);
+          unfoldedSteps = unfold(structure);
+        } catch (e) {
+          console.warn('Repeat unfold failed; falling back to linear order', e);
+          unfoldedSteps = [];
+        }
 
         // Discover parts and apply any pre-existing visibility selection
         // BEFORE the first render so we don't waste a render-with-all pass.
@@ -175,6 +216,7 @@ export function InfiniteScoreRenderer({
         onMeasureXs?.(measureXs);
         onSvgReady?.(containerRef.current?.querySelector('svg') ?? null);
         onParts?.(partList);
+        onUnfoldedOrder?.(unfoldedSteps);
 
         setStatus('ready');
         onReady?.(osmd);
