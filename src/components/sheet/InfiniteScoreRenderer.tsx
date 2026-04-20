@@ -131,12 +131,18 @@ export function InfiniteScoreRenderer({
         er.PageRightMargin = 2;
         er.FixedMeasureWidth = !!equalBeatWidth;
 
-        const text = await fetch(url).then((r) => {
-          if (!r.ok) throw new Error(`Fetch failed (${r.status})`);
-          return r.text();
-        });
+        // MXL files are ZIP archives (compressed MusicXML). Reading them
+        // via `r.text()` would decode the binary bytes as UTF-8 and
+        // corrupt the archive — OSMD throws "Corrupted zip: missing N
+        // bytes" on load. Route .mxl through a Blob (OSMD's load()
+        // unzips Blob inputs) and .xml/.musicxml through text as before.
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+        const isMxl = /\.mxl($|\?)/i.test(url)
+          || /application\/vnd\.recordare\.musicxml(?!\+xml)/i.test(res.headers.get('content-type') ?? '');
+        const payload: string | Blob = isMxl ? await res.blob() : await res.text();
         if (cancelled) return;
-        await osmd.load(text);
+        await osmd.load(payload);
         osmd.zoom = zoom;
 
         // Discover parts and apply any pre-existing visibility selection
