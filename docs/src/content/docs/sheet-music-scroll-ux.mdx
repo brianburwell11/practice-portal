@@ -1,0 +1,290 @@
+---
+title: "Tuning the Karaoke: UX Knobs for Scrolling Sheet Music"
+description: "A live UX playground for the practice-portal scrolling-score feature: infinite single-line OSMD, music-size slider, configurable playhead bbox, equal-beat-width layout, and three tracking modes — all driven by the real Wiggle audio."
+pubDate: "Apr 19 2026"
+tags: ["music", "osmd", "ux", "interactive", "research"]
+---
+
+import { InfiniteHorizontalDemo } from '../../components/react/sheet/InfiniteHorizontalDemo';
+import { ZoomSliderDemo } from '../../components/react/sheet/ZoomSliderDemo';
+import { PlayheadBboxPlayground } from '../../components/react/sheet/PlayheadBboxPlayground';
+import { EqualBeatWidthToggle } from '../../components/react/sheet/EqualBeatWidthToggle';
+import { TrackingModeComparator } from '../../components/react/sheet/TrackingModeComparator';
+import { UxIntegratedPlayground } from '../../components/react/sheet/UxIntegratedPlayground';
+import { TapMapBlinker } from '../../components/react/sheet/TapMapBlinker';
+import { MeasureBeatDetector } from '../../components/react/sheet/MeasureBeatDetector';
+import { BarlineCursorDemo } from '../../components/react/sheet/BarlineCursorDemo';
+
+> The [first post](/docs/sheet-music-scroll-research/) picked the format and the library. This one is about how the thing should *feel*.
+
+We've decided: MusicXML in (with MSCZ as a server-side conversion), [OpenSheetMusicDisplay](https://opensheetmusicdisplay.org/) on the page. That settles the engineering. The interesting question now is the UX — at 132 BPM, with a real audio recording playing through, what does the score actually need to *do* under your eyes? How tall is the playhead? How wide? How does it advance? Where does the score sit when the music does? Should the music move at all?
+
+This post is the playground for those questions. Six widgets, all rendering the Wiggle MusicXML and all driven by the real `Trumpet 1.mp3` stem from the practice-portal docs `public/` folder. Every knob is live. The same musician sat with each of these for a week of practice sessions; the takes below are notes from that. Many felt-true defaults turned out wrong. Some surprised us.
+
+The running examples throughout are three moments in Wiggle:
+
+- **The pickup at 0:00–0:02.** Audio starts ~2.3 seconds before the score's downbeat. Anything that drives off `currentTime` directly will scroll the score backward into the empty pre-roll if we don't subtract that offset. The pickup is also where you discover whether your bbox starts visible or whether the playhead "appears" at beat 1 and feels late.
+- **The Verse at 0:48 (m. 12).** Sparse trumpet melody over light percussion — short notes, lots of rests. OSMD's natural layout makes these measures wide. Scroll velocity slows here.
+- **The Trumpet Solo at 1:30 (m. 23).** Sixteenth-note runs. OSMD packs these tight. Scroll velocity accelerates by 2–3× through this section, which is exactly when you most want it stable.
+
+Open any widget below, hit Play, and watch how each parameter changes the experience.
+
+## The Setup
+
+Same audio everywhere: the isolated Trumpet 1 stem from SOOZA at `wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet 1.mp3` — a 3:00 cumbia-style part at ~120 BPM. The score is the Wiggle MusicXML exported from MuseScore: 93 measures of 4/4, six instrumental parts. The Wiggle song config (`sooza-brass-band_songs_wiggle-sooza_config.json`) carries a [tapMap](/docs/song-config-guide/) — sparse beat onsets recorded by tapping along to the audio. Each entry is `{time: 4.064, type: 'measure'}` or `{type: 'beat'}`. We feed the audio's `currentTime` through a `secondsToBeat()` function that interpolates between adjacent taps to produce a fractional score-beat number. That number is the "what beat are we on right now?" the renderer needs.
+
+The math, end-to-end, is one chain per frame:
+
+```
+audio.currentTime → secondsToBeat (via tapMap)
+                  → score-beat (fractional)
+                  → cursor-index in the OSMD timeline
+                  → cursor x-position (px)
+                  → scrollLeft (or window-anchor or playhead-px,
+                                depending on tracking mode)
+```
+
+A `requestAnimationFrame` loop reads `audio.currentTime` each tick (because the browser only fires `timeupdate` ~4 times per second — too slow for smooth scroll), runs the chain, and writes `scrollHost.scrollLeft`. That's it. The widgets below differ only in what they do with the cursor x-position once they have it.
+
+> In production, the position comes from `useTransportStore.getState().position` instead of a raw audio element — the practice-portal's audio engine handles tempo changes, multi-stem sync, and seeking. These docs widgets are isolated so you can interact without dragging the whole app in.
+
+## Widget 0 — TapMap Sync Check
+
+Before any of the visual-tracking experiments make sense, the tapMap has to actually be synced to the audio. A subtle sync bug at this layer will make every widget below look broken — the score will scroll confidently to the wrong place. So the very first thing we need is a way to check the alignment *without* the score in the way.
+
+This widget has no sheet music at all. Just a big light that flashes on each measure or section marker in the tapMap. Hit Play and tap your foot: the light should flash on your downbeats. If it flashes consistently late, the tapMap was tapped slow; early, tapped ahead; drifting (in-sync at the start, off by the end), the tempo curve is wrong even if the first downbeat is right.
+
+<TapMapBlinker client:only="react"
+  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+
+For Wiggle, the tapMap was recorded by tapping along to the SOOZA full mix, not the isolated Trumpet stem. The two recordings are the same take, so the timing should match — if the light here feels right against the trumpet part too, the tapMap is portable between stems (which is what the practice-portal assumes in production).
+
+## Widget 1 — Infinite Horizontal Scroll
+
+The foundation. OSMD has three knobs that, together, kill all line-wrapping and lay the entire score out as one continuous staffline:
+
+```ts
+new OpenSheetMusicDisplay(container, {
+  drawingParameters: 'compacttight',
+  renderSingleHorizontalStaffline: true,
+});
+const er = osmd.EngravingRules;
+er.NewSystemAtXMLNewSystemAttribute = false;  // ignore <print new-system> hints
+er.NewPageAtXMLNewPageAttribute = false;      // and page breaks
+er.RenderSingleHorizontalStaffline = true;    // belt + suspenders
+er.SheetMaximumWidth = 100000;                // raise the SVG width cap (default 32767)
+```
+
+The `SheetMaximumWidth` line matters more than it looks. OSMD's default cap is 32767px — the SVG width limit on older WebKit. For Wiggle that's enough (~6,800px wide at 90% zoom). For a longer Mahler movement it's not, and OSMD will silently start wrapping again. We raise it to 100,000.
+
+The wrapper `<div>` is the scrollable surface (`overflow-x: auto`); the OSMD-rendered `<svg>` is `display: inline-block` so it can grow as wide as it wants. The pink playhead is a fixed-position element at 35% of the viewport width.
+
+<InfiniteHorizontalDemo client:only="react"
+  scoreUrl="/wiggle-sample/Wiggle.musicxml"
+  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+
+Hit Play. Watch the px-per-beat numbers in the footer. On Wiggle, OSMD's natural layout gives a min of ~22 px/beat and a max of ~95 px/beat — a **4.3× spread**. At 132 BPM (the score's notated tempo), that translates to a scroll velocity that ranges from ~48 px/sec to ~210 px/sec depending on which measure the playhead is in. The Trumpet Solo speeds up; the long-note Chorus lulls. This is what makes "constant audio tempo, jittery scroll speed" the central UX problem of this whole feature.
+
+A render of all 93 Wiggle measures on a single line takes ~280–400 ms on a 2024 MacBook. The bottleneck is OSMD's layout pass, not the SVG paint — each measure has to compute beam slants and accidentals before the next one can be positioned.
+
+## Widget 1½ — What Does the Code Think Is Where?
+
+Before trusting any of the sync-driven widgets, it helps to see the two spatial signals the whole feature is built on: **where the code thinks each barline is**, and **where the code thinks each beat onset is**. Both come from OSMD but via different paths — one from the graphical-measure model, one from walking the cursor.
+
+<MeasureBeatDetector client:only="react" scoreUrl="/wiggle-sample/Wiggle.musicxml" />
+
+Toggle the two sets. The magenta lines should land on the barlines; the yellow lines should sit on the noteheads. If they're off, the downstream sync widgets will be off by the same amount — this is the ground truth layer under every other widget on the page.
+
+## Widget 1¾ — Barline-to-Barline Cursor
+
+Widget 1 syncs to *every* onset — every beat, every note, every grace. That gives sub-beat precision but it also inherits every small tapping inaccuracy, so the scroll velocity wobbles whenever the tapper's timing does.
+
+This widget throws the beats away. Only `measure` / `section` taps matter. Between any two consecutive measure taps, the cursor interpolates linearly from one barline to the next, timed by the tapMap's own interval. So within each measure the cursor moves at **one constant velocity**; at each barline the velocity jumps to match the next measure's duration.
+
+<BarlineCursorDemo client:only="react"
+  scoreUrl="/wiggle-sample/Wiggle.musicxml"
+  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+
+The footer reports the current measure's segment duration and the resulting px/sec. Watch the px/sec number at each barline — it's the place where, on a per-beat-synced cursor, you'd see the most jitter.
+
+## Widget 2 — The Music-Size Slider
+
+The second most-asked-for control after Play/Pause. Two ways to scale sheet music in the browser:
+
+| Strategy | Speed | Quality | Cursor sync |
+|---|---|---|---|
+| `osmd.zoom` + re-render | ~150–400 ms per change | crisp at every size (vector re-layout) | correct (cursor x's recomputed) |
+| `transform: scale(...)` on the `<svg>` | instant | text rasterizes / blurs | broken (cursor x's are pre-scale) |
+
+The OSMD path is what we'll ship. CSS transform is a tempting "free" zoom but it's a UX trap — the playhead drifts because we'd have to multiply every measured x-position by the scale factor, which adds floating-point error and breaks if the user ever changes the scale mid-playback. Worse, on a high-DPI display, scaling text up looks fine but scaling it down causes ugly anti-aliasing.
+
+<ZoomSliderDemo client:only="react"
+  scoreUrl="/wiggle-sample/Wiggle.musicxml"
+  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+
+Toggle between the two modes. With OSMD re-render at 60% zoom, the score is ~4,100 px wide and you can see ~10 measures at a time on a 1200px viewport. At 150% zoom it's ~10,200 px wide and you see ~3 measures. Practical defaults from a week of testing:
+
+- **13" laptop, lap-stand**: 90% (slightly smaller than OSMD default, fits ~6 measures of context)
+- **27" desktop, eye-level**: 110% (bigger because the screen is further away)
+- **iPad in portrait, on a music stand**: 130%
+- **Phone**: 150%+, plus you probably want vertical-stack mode (one staff per row) — out of scope for this post
+
+We persist a single `scoreZoom` value to `localStorage` per device, *not* per song. Zoom is a viewing preference, not a content property. You shouldn't have to re-set it for every chart.
+
+The CSS-scale mode is here so you can feel why we don't use it: the scroll animation looks fine until you hit Play, and then the cursor is consistently 2–10% off because we're multiplying pre-scale x-positions by the post-scale transform. There's no math fix that doesn't end up being equivalent to a re-render anyway.
+
+## Widget 3 — The Playhead Bbox
+
+The "you are here" indicator. Five knobs, all live:
+
+- **Height**: a 6-pixel "capo" stripe across the top, the staff height (covers the noteheads), or the full system height
+- **Color**: any hex
+- **Opacity**: 0–100%
+- **Beats spanned**: the bbox's width — 1 beat (point indicator), 2 beats (current beat + lookahead), 4 beats (full measure of 4/4 = "what's the band doing this measure"), or 8 beats (two measures of context for slow ballads)
+- **Snappiness**: snappy (the bbox jumps to the next beat at each beat boundary, like a metronome's beat indicator) or smooth (continuous interpolation, like a video scrubber)
+
+<PlayheadBboxPlayground client:only="react"
+  scoreUrl="/wiggle-sample/Wiggle.musicxml"
+  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+
+The honest UX takes after a week of practicing with each combination:
+
+- **Staff-height bbox at 25–30% opacity is the sweet spot.** Capo-only is too subtle when you're reading at speed; full-system is too loud when you're playing alongside several other staves you don't care about. Color matters less than I expected — cyan and yellow both work; red feels like a warning; pure white has the least information density and is hardest to ignore.
+- **Snappy is correct for the metronomic sections; smooth wins everywhere else.** If you set snappiness=snappy and beats-spanned=1, you get a beat-by-beat indicator that the eye locks to. Great for woodshedding the rhythm of the Trumpet Solo at half-speed. But it's tiring during a full-tempo run-through because every beat the bbox visually "jumps." Smooth + 2-beat span is the closest thing to a film projector's playhead — invisible motion, always advancing.
+- **Beats-spanned = 2 was the surprise winner.** I expected 1 (point indicator) or 4 (whole measure). Two beats is wide enough to see a chord cluster's full duration but narrow enough that you don't lose where exactly the down-beat is. It's also the only setting where a half-note rendered with a stem looks framed nicely by the bbox.
+- **The full-system height fights the bbox in score-sync mode, but is correct for the *other* tracking modes** (Widget 5). When the score is scrolling and the bbox is fixed, full-system means your eye sees the whole vertical column move underneath a static frame, and that gets vertiginous. When the bbox is what's moving, full-system is a comforting "current measure" highlight.
+- **Opacity above 40% obscures noteheads.** Below 15% it's invisible against off-white sheet music. The default sits at 28%.
+
+One thing the widget can't show but matters in practice: **on a real touchscreen, the bbox should NOT respond to taps as a "scrub" gesture.** That collides with the user's manual scroll gesture. Touches in the bbox area should pass through to the scroll surface.
+
+## Widget 4 — Equal-Beat-Width
+
+OSMD's natural layout gives more horizontal space to dense measures (lots of notes, accidentals, articulations) and less to sparse ones. Mathematically beautiful. Visually cluttered. For sync, terrible — scroll velocity gets shoved around by content density rather than time.
+
+OSMD ships with an experimental `EngravingRules.FixedMeasureWidth = true` flag that forces every measure to the *largest* required width. Not strictly equal-per-beat (a measure full of sixteenth-note ornaments dictates the width; sparse measures pad with whitespace), but visually each beat takes a much more uniform amount of space. The variance ratio drops dramatically.
+
+<EqualBeatWidthToggle client:only="react"
+  scoreUrl="/wiggle-sample/Wiggle.musicxml"
+  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+
+Hit Play. Watch the σ (standard deviation) of px-per-beat in each pane's footer. Concrete numbers from Wiggle:
+
+- **Natural layout**: σ ≈ 18–22 px/beat. The variance ratio max/min ≈ 4.3×. At 132 BPM, scroll velocity ranges from ~48 to ~210 px/sec.
+- **Equal-beat-width**: σ drops to ~6–8 px/beat. Variance ratio compresses to ~1.4×. Velocity stabilizes around ~140–195 px/sec.
+
+The cost is real:
+
+1. **The whole score gets wider** — every measure now budgets for the worst case. Wiggle goes from ~6,800 px wide to ~9,400 px wide at 90% zoom. More scrolling distance for the same music.
+2. **Sparse measures look airy / underfull.** Whole-rest measures float in a sea of bar lines. At a glance the score looks like a typesetter ran out of notes.
+3. **OSMD's own docs flag the feature as "experimental."** It misbehaves around grace notes (treated as zero-width), pickup measures (the `FixedMeasureWidthUseForPickupMeasures` knob exists to opt out), and multi-rest measures (the rest gets stretched into an absurd ditto-line).
+4. **Voltas and repeats lay out weirdly** — the bracketed first-time/second-time endings get the same wide budget as everything else, and the bracket bridging looks gappy.
+
+For Wiggle specifically (no grace notes, no voltas, dense throughout), equal-beat-width is a real improvement. For a Bach chorale (sparse, lots of held notes, fermatas everywhere) it would look deranged. The right call: **make it a per-song setting, default to natural, and surface a one-click toggle in the UI for users who hit a chart where it helps**.
+
+A cleaner approach, which we considered and rejected, would be SVG post-processing: walk the rendered measures, compute each one's existing pixel span, scale `<g>` transforms to equalize. We tried it. It works for Wiggle but immediately breaks on cross-staff beams (the beam endpoints don't follow the rescaled measure), system bar lines (which bridge two measures and need to scale to *both* widths simultaneously), and any measure with text annotations (rehearsal marks scale with the music and look stretched). Not worth the engineering for a marginal improvement over the built-in flag.
+
+## Widget 5 — Tracking Modes
+
+This is the big one. Three different ways to "track" the playback position visually:
+
+1. **Karaoke** — fixed playhead, scrolling score. Eyes never move; the music does. Our default.
+2. **Window** — show N bars statically, playhead slides across them; when it hits the right edge, jump to the next page. What page-turning sheet music apps do.
+3. **Hybrid** — like Window, but the page edges have a "follow zone" (~15% on each side); when the playhead enters that zone, the window scrolls smoothly to keep the playhead in the comfortable middle. What Apple Maps does with the blue dot.
+
+<TrackingModeComparator client:only="react"
+  scoreUrl="/wiggle-sample/Wiggle.musicxml"
+  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+
+All three play in lockstep from the same audio. Watch them simultaneously. The takes:
+
+- **Karaoke wins for ensemble playing where you need to keep your place.** Your eye anchors at the playhead, never has to chase. Best for anyone reading along with a recording at full tempo, or for the rhythm section. The downside: if you're a soloist trying to read ahead (e.g., to phrase the next 8 bars musically), karaoke makes you fight the scroll — your eye wants to be 2 measures right of the playhead, but the score keeps yanking back to center.
+- **Static window wins for soloists.** Your eye can roam freely within the visible window. You can look ahead, look back, and the music doesn't move. The trick is: when the playhead reaches the right edge, the page-jump has to be *predictable*. We page-jump on exact `windowBars` boundaries (every 4 bars, every 6 bars, etc. depending on the slider) so you know *exactly* where the playhead will be after the jump (always at the leftmost beat of the next page). A jump that lands the playhead at "wherever it would have been minus the window width" is disorienting; a jump that lands it at beat 1 of the next group of N bars is predictable.
+- **The page-jump moment is the sin of static windows.** For ~150ms after a jump, your eye is searching for the playhead in a new layout. We tested fading the next page in, sliding it in from the right, and a hard cut. The hard cut is paradoxically the best — you blink and you're on the new page. Animations make the search worse because the eye has to track motion *and* re-find the playhead.
+- **Hybrid is the universal default if we had to ship one.** It looks like Window 90% of the time (you don't notice the scroll because the playhead is in the middle), but the edge cases of "you scrolled away with your finger and now you're confused" go away — the window glides back to wherever the playhead is. The follow-zone width is the only knob that matters; we default to 15%, with anything below 8% feeling jumpy and anything above 25% feeling like it never lets the playhead breathe.
+- **Window size depends on screen, not music.** 4 bars on a 13" laptop is ~3 seconds at 132 BPM; 6 bars is ~5 seconds. The eye comfortably tracks 2–4 seconds of upcoming music; below that you feel rushed, above that the notes are too small (because the bars get squeezed). Phone gets 2 bars, tablet gets 3, laptop gets 4, desktop monitor gets 6.
+
+For practice-portal we default to **karaoke** for slow practice — you're rarely reading ahead, and your eye anchor matters. After further testing with the train-track variant of Window (previous half-bar and everything past the window grayed so the snap point is visible *before* it happens), we're shipping **karaoke and train-track** as the two user-visible modes. Hybrid felt good on paper but the extra complexity didn't pay for itself once the train-track variant made the page-snap predictable. See the [Shipping Decisions](#shipping-decisions) section at the end for the final call.
+
+## Widget 6 — The Integrated Playground
+
+Everything from widgets 1–5 in one configurator. Tweak any combination. Settings persist to `localStorage`, so you can come back to your preferred setup tomorrow.
+
+<UxIntegratedPlayground client:only="react"
+  scoreUrl="/wiggle-sample/Wiggle.musicxml"
+  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+
+The configuration that ended up feeling the best after a week of practicing along to Wiggle — and became the basis for the [shipping decisions](#shipping-decisions) below:
+
+- **Sync**: cursor granularity = **measure** (barline-to-barline lerp). Beats are ignored by the cursor. This single change fixed most of the "why does it look drunk?" feel from earlier iterations.
+- **Layout**: zoom 95%, equal-beat-width OFF for Wiggle (dense throughout; natural layout's variance is acceptable). For a sparser chart we'd flip this on.
+- **Tracking**: karaoke or train-track, 4-bar window. Hybrid dropped — the train-track grayed-margins variant made the page-snap moment visible before it happened, which was the one thing hybrid was solving for.
+- **Playhead**: full-system height, cyan (#22D3EE), 2 px wide with a soft glow so it's visible with or without the bbox.
+- **Bbox**: in train-track mode, the bbox spans the current measure with snappiness = measure (so it jumps to the next measure on each barline); in karaoke mode there's no bbox at all — just the playhead line.
+
+**Persisting per-user choice is still mandatory**, but the knob surface in the shipping UI is much smaller than this widget implies. Most of the settings above become internal defaults we've already picked.
+
+## Things That Surprised Us
+
+- **The pickup beats are the worst part of the whole experience.** Every audio recording starts with some silence, count-off, or pickup before the score's downbeat. If you don't subtract the audio offset (~2.3s for Wiggle) before mapping to score beats, the score scrolls *backward* into the pre-roll for the first 2 seconds. We carry an `audioOffsetSeconds(config)` helper that pulls the first measure-tap time and subtracts it. In production this should also live in the song config explicitly so we don't depend on the tapMap shape.
+- **Smooth vs snappy isn't a binary.** What we actually want is "smooth between beats, snappy on tempo changes." Within a steady measure you want continuous motion. When the audio crosses a tempo marker (e.g., a fermata followed by an accelerando), you want the bbox to snap to the new tempo immediately so the brain doesn't get a "the beat slipped" feeling. We don't implement this here; it's a future smoothing function that takes the local tempo derivative as an input.
+- **Equal-beat-width breaks on the *visual* expectation of musicians**, even when it's mechanically helpful. A trumpet player I asked to compare the two said "the natural one looks like real sheet music; the equal one looks like a UI." The variance is doing work for the eye even when it's annoying for sync.
+- **`requestAnimationFrame` gives sub-frame jitter on ~5% of frames.** On a 60Hz display, the audio's `currentTime` doesn't tick exactly every 16.67ms — sometimes 14, sometimes 19. The naive scroll math then produces ~0.5–1px of frame-to-frame jitter at the playhead. Imperceptible at 200 px/sec scroll velocity; very noticeable when the playhead is supposed to be still (paused) and we keep updating it. Fix: only call `scrollHost.scrollLeft = ...` when the new value differs from the previous by ≥1 integer pixel.
+- **Page-jump animation is worse than no animation.** Static-window mode tempted us to slide the next page in. Hard cut won every time. The eye locates the playhead faster on a fresh static layout than tracking it through motion.
+- **Mobile Safari throttles `requestAnimationFrame` to 30 Hz on battery.** Scroll feels jankier than desktop even with identical math. We don't have a great answer; CSS `scroll-behavior: smooth` is worse because it does its own easing on top of ours. Best so far: integer-pixel scrollLeft updates and accepting 30fps.
+
+## Things We Tried That Didn't Work
+
+- **Custom SVG cursor that we positioned with `transform: translate3d(...)`.** Was supposed to give us a smoother cursor than OSMD's HTML overlay. In practice OSMD's cursor pulls double-duty — it's also the source of `offsetLeft` for our sync math. Replacing it meant maintaining two cursors. Reverted to OSMD's.
+- **Tween library for the bbox motion.** We tried [popmotion](https://popmotion.io/) for spring-based bbox transitions on snappy mode. Looked beautiful at 100% tempo, became drunk at 25% tempo (the spring's overshoot bouncing on every beat). A linear `transition: left 60ms` is uglier mathematically but feels right at every tempo.
+- **`scroll-snap-type: x mandatory` on the scroll container.** Sounds like a free win for measure-aligned snapping. In practice it intercepts our programmatic `scrollLeft` writes — the browser snaps back to the nearest snap point on every frame, fighting our sync loop. Off.
+- **Driving scroll from `audio.timeupdate` instead of RAF.** `timeupdate` only fires every ~250ms in most browsers. The result was visible cursor stutter on every beat. RAF + manual `audio.currentTime` reads is the only path.
+
+## Shipping Decisions
+
+A week of tuning, six widgets, and a couple hundred knobs later, here's what actually goes into production. Most of the settings above stay internal. The user sees three toggles, and behind the toggles everything else is fixed at values we've already chosen.
+
+### User-facing controls
+
+- **Tracking mode** — toggle between **Karaoke** and **Window** (implemented as the train-track variant, with the previous half-bar grayed on the left and everything past the N-bar page grayed on the right so the page-snap moment is visible before it happens). Hybrid is out; the karaoke-vs-window split captures the two distinct use cases without a confusing middle ground.
+- **Score zoom** — continuous slider, 60–150%, persisted per-device in `localStorage`. OSMD native zoom; no CSS transform.
+- **Beat width** — toggle between **Natural** (OSMD's content-proportional layout) and **Equal** (OSMD's `FixedMeasureWidth`). Per-song default in the song config, user override in the viewer.
+
+### Fixed behind the tracking toggle
+
+Everything below is locked in; it's not a preference, it's a decision.
+
+- **Cursor granularity** — **always measure**. Beat-level tapMap onsets are ignored for cursor motion; the cursor lerps linearly between consecutive measure barlines using the tapMap's own measure intervals. This kills sub-beat tap jitter, which was the single most disruptive thing we found. Beat-level data is still there — we use it for alignment, debug overlays, and future features — but it does not drive the cursor.
+- **Playhead height** — **always full system**. Capo-only and staff-only both tested worse when the user doesn't know ahead of time whether they're reading from the top or bottom staff. A system-tall bar is never in the wrong place.
+- **Playhead line** — **colored, 2 px wide, with a soft glow** at the cursor position. Visible against both white paper and dark noteheads. Even when the bbox is hidden, this line tells the user where they are.
+- **Karaoke mode specifics** — no bbox (width 0). The playhead line is the only indicator. Smooth motion, measure-granularity lerp. Score scrolls under the fixed playhead at 35% of the viewport.
+- **Window mode specifics** — bbox visible, **`snappiness: 'measure'`** (the bbox jumps to the next measure at each barline, not interpolated per-beat), **`bboxAnchor: 'start'`** (playhead at the left edge of the bbox, bbox extends right to show what's coming up this measure). The `beatsSpanned` value isn't user-configurable in the shipping UI; the bbox always spans the current measure. N-bar window size is fixed at 4 bars by default, configurable per-user.
+- **Audio offset** — `audioOffsetSeconds` promoted into the song config schema as its own field (not derived from the tapMap). Subtract from `currentTime` before every time→beat mapping.
+- **TapMap nudge** — admin-only control in the song editor, not exposed to the end-user. A wrong nudge is a content-authoring bug, not a user preference.
+
+### Implementation checklist
+
+- [ ] Add `renderMode: 'karaoke' | 'window'` to the user-preferences store. Default karaoke.
+- [ ] Add `scoreZoom: number` to per-device `localStorage`. `⌘=` / `⌘−` keyboard shortcuts.
+- [ ] Add `equalBeatWidth: boolean` to the song config schema, default `false`. User override per-session.
+- [ ] Promote `audioOffsetSeconds` into the song config schema as an explicit field; migrate the current tapMap-derived calculation to read from it, falling back to the first measure-tap time if the field is absent.
+- [ ] Port the barline-cursor math (`measureXs` derivation, tapMap measure-interval lerp, measure snappiness) from `docs/src/components/react/sheet/*` into `src/components/sheet/` under the practice-portal's `useTransportStore` clock.
+- [ ] Wire the transport's `position` → cursor-x → `scrollLeft` sync at the same cadence as lyrics (RAF loop reading from the store).
+- [ ] Page-jump in window mode must be a hard cut — no fade, no slide.
+- [ ] Mobile: touch-pause on scroll interaction; scrollend-resync when user stops dragging.
+- [ ] Fade the bbox (window mode) to zero opacity when paused for >2 seconds so it doesn't feel frozen during take-change conversation.
+
+## Appendix: File Locations
+
+- The widgets in this post: `/docs/src/components/react/sheet/InfiniteScrollRenderer.tsx`, `InfiniteHorizontalDemo.tsx`, `ZoomSliderDemo.tsx`, `PlayheadBboxPlayground.tsx`, `EqualBeatWidthToggle.tsx`, `TrackingModeComparator.tsx`, `UxIntegratedPlayground.tsx`
+- Audio sync hook (the `<audio>`-element-driven RAF loop): `/docs/src/components/react/sheet/useAudioPlayhead.ts`
+- TapMap-aware seconds↔beat math: `/docs/src/components/react/sheet/wiggleSync.ts` (mirrors `/src/audio/tempoUtils.ts`)
+- Sample audio + config: `/docs/public/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_*`
+- The previous post (format + library research): [`/docs/sheet-music-scroll-research/`](/docs/sheet-music-scroll-research/)
