@@ -156,12 +156,15 @@ export function InfiniteScoreRenderer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom]);
 
+  // `height` is a minimum — the host auto-sizes to the rendered score so
+  // tall multi-staff charts always display all their instruments. We still
+  // use a minimum so the loading / error placeholder has something to fill.
   return (
     <div
       ref={scrollHostRef}
       style={{
         position: 'relative',
-        height,
+        minHeight: height,
         overflowX: 'auto',
         overflowY: 'hidden',
         background: '#fff',
@@ -170,10 +173,10 @@ export function InfiniteScoreRenderer({
       }}
     >
       <div style={{ display: 'inline-block', width: `${leadingPadFraction * 100}%`, height: 1, verticalAlign: 'top' }} aria-hidden />
-      <div ref={containerRef} style={{ minHeight: height, display: 'inline-block', verticalAlign: 'top' }} />
+      <div ref={containerRef} style={{ display: 'inline-block', verticalAlign: 'top' }} />
       <div style={{ display: 'inline-block', width: `${(1 - leadingPadFraction) * 100}%`, height: 1, verticalAlign: 'top' }} aria-hidden />
       {overlay && (
-        <div style={{ position: 'absolute', top: 0, left: 0, height, pointerEvents: 'none', zIndex: 3 }}>
+        <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, pointerEvents: 'none', zIndex: 3 }}>
           {overlay}
         </div>
       )}

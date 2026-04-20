@@ -225,14 +225,19 @@ export function ScrollingScore() {
 
   if (!sheetMusicUrl) return null;
 
-  const renderHeight = Math.max(180, 220 * scoreZoom);
+  // Minimum height for the renderer — the actual height auto-fits the
+  // rendered score so all instruments/staves are visible.
+  const minRenderHeight = Math.max(180, 220 * scoreZoom);
   const PLAYHEAD_COLOR = '#22D3EE';
 
+  // All overlay children use `top: 0; bottom: 0` so they stretch to the
+  // wrapper's auto-sized height — the playhead line and bbox span the
+  // full rendered score, however tall it ends up.
   const overlay = (
     <>
-      {/* Playhead line — always visible, full-system height */}
+      {/* Playhead line — full-system height, always visible */}
       <div style={{
-        position: 'absolute', top: 0, height: renderHeight,
+        position: 'absolute', top: 0, bottom: 0,
         left: cursorPx - 1, width: 2,
         background: PLAYHEAD_COLOR, opacity: 0.9,
         boxShadow: `0 0 6px rgba(34,211,238,0.6)`,
@@ -241,7 +246,7 @@ export function ScrollingScore() {
       {/* Window-mode bbox — spans the current measure */}
       {bbox && (
         <div style={{
-          position: 'absolute', top: 4, height: renderHeight - 8,
+          position: 'absolute', top: 4, bottom: 4,
           left: bbox.leftPx, width: bbox.widthPx,
           background: 'rgba(34,211,238,0.15)',
           borderRadius: 2, pointerEvents: 'none', zIndex: 4,
@@ -250,7 +255,7 @@ export function ScrollingScore() {
       {/* Window-mode grayed prev-bar tail on the left */}
       {trainGrayLeftPx > 0 && (
         <div style={{
-          position: 'absolute', top: 0, height: renderHeight,
+          position: 'absolute', top: 0, bottom: 0,
           left: 0, width: trainGrayLeftPx,
           background: 'rgba(255,255,255,0.5)',
           borderRight: '1px dashed rgba(107,159,214,0.5)',
@@ -260,7 +265,7 @@ export function ScrollingScore() {
       {/* Window-mode grayed next-page region on the right */}
       {trainGrayRightStartPx != null && (
         <div style={{
-          position: 'absolute', top: 0, height: renderHeight,
+          position: 'absolute', top: 0, bottom: 0,
           left: Math.max(0, trainGrayRightStartPx), right: 0,
           background: 'rgba(255,255,255,0.5)',
           borderLeft: '1px dashed rgba(107,159,214,0.5)',
@@ -303,7 +308,7 @@ export function ScrollingScore() {
       <div ref={rendererWrapperRef} style={{ position: 'relative' }}>
         <InfiniteScoreRenderer
           url={sheetMusicUrl}
-          height={renderHeight}
+          height={minRenderHeight}
           zoom={scoreZoom}
           equalBeatWidth={effectiveEqualBeatWidth}
           leadingPadFraction={0.22}
@@ -313,10 +318,12 @@ export function ScrollingScore() {
         />
         {/* Overlay — sibling of the scroll host (NOT inside it) so the
             playhead stays fixed to the viewport instead of scrolling with
-            the score content. All positions below are viewport-relative. */}
+            the score content. `inset: 0` stretches it to the wrapper's
+            auto-sized height so the playhead line + bbox span the full
+            rendered score, no matter how many staves it has. */}
         <div style={{
           position: 'absolute',
-          top: 0, left: 0, right: 0, height: renderHeight,
+          inset: 0,
           pointerEvents: 'none',
         }}>
           {overlay}
