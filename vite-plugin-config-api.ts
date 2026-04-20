@@ -763,6 +763,29 @@ export function configApiPlugin(): Plugin {
           return;
         }
 
+        // --- DELETE /api/bands/{bandId}/songs/{songId}/file/{filename} ---
+        // Removes a single file within a song's folder. Used by the Edit
+        // Song save handler to clean up orphaned sheet-music files when
+        // the user removes or replaces the score.
+        const fileDeleteMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/songs\/([^/]+)\/file\/([^/]+)$/);
+        if (fileDeleteMatch && req.method === 'DELETE') {
+          const bandId = fileDeleteMatch[1];
+          const songId = fileDeleteMatch[2];
+          const filename = decodeURIComponent(fileDeleteMatch[3]);
+          // Reject anything that looks like a path — we only delete
+          // direct children of the song's R2 folder.
+          if (!filename || filename.includes('/') || filename.includes('..')) {
+            return jsonResponse(res, 400, { error: 'Invalid filename' });
+          }
+          try {
+            await r2DeleteKey(`${bandId}/songs/${songId}/${filename}`);
+            jsonResponse(res, 200, { ok: true });
+          } catch (err: any) {
+            jsonResponse(res, 500, { error: err.message ?? 'Delete failed' });
+          }
+          return;
+        }
+
         // --- POST /api/bands/{bandId}/setlists/{setlistId} ---
         const setlistSaveMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/setlists\/([^/]+)$/);
         if (setlistSaveMatch && req.method === 'POST') {

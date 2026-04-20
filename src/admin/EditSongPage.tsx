@@ -339,6 +339,24 @@ export default function EditSongPage() {
         });
       }
 
+      // Clean up orphaned sheet-music file. If the user removed or
+      // replaced the score with a file of a different name, the old
+      // one is now unreferenced in config.json but still sitting on R2.
+      // Runs AFTER the rename (if any) so it targets the song's current
+      // folder — the rename copies the whole folder, so the orphan
+      // follows the song to its new location.
+      const oldSheetMusicUrl = state.original?.sheetMusicUrl;
+      const newSheetMusicUrl = configToSave.sheetMusicUrl;
+      if (oldSheetMusicUrl && oldSheetMusicUrl !== newSheetMusicUrl) {
+        const finalId = idChanged ? newId : oldId;
+        // Fire-and-forget — don't fail the save if cleanup fails; the
+        // config is already authoritative and the orphan is harmless.
+        fetch(
+          `/api/bands/${currentBand.id}/songs/${finalId}/file/${encodeURIComponent(oldSheetMusicUrl)}`,
+          { method: 'DELETE' },
+        ).catch(() => { /* leave orphan on R2 rather than break save */ });
+      }
+
       newStemFiles.clear();
       setNewSheetMusicFile(null);
       dispatch({ type: 'SET_SAVE_SUCCESS' });
