@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
+export interface PartInfo {
+  /** MusicXML part id (e.g. "P1") */
+  id: string;
+  /** Human-readable instrument name */
+  name: string;
+  /** 0-based index in the score's instrument list */
+  index: number;
+}
+
 export interface InfiniteBeatStamp {
   /** Sequential cursor position from the osmd.cursor.next() walk */
   index: number;
@@ -35,6 +44,12 @@ interface Props {
   /** Fires after each (re)render with the live SVG element, or `null` on
    *  unmount / failure. Callers can clone it for sticky-preamble overlays. */
   onSvgReady?: (svg: SVGSVGElement | null) => void;
+  /** Fires once per load with the discovered instrument parts. */
+  onParts?: (parts: PartInfo[]) => void;
+  /** Set of part ids that should render. When undefined or empty, all
+   *  parts render. Changes are applied by mutating each instrument's
+   *  `Visible` flag and re-rendering without a full reload. */
+  visiblePartIds?: Set<string>;
   /** Children rendered absolutely-positioned inside the scroll host so they
    *  scroll natively with the score. Use for playhead / bbox / overlays. */
   overlay?: React.ReactNode;
@@ -63,11 +78,18 @@ export function InfiniteScoreRenderer({
   onTimeline,
   onMeasureXs,
   onSvgReady,
+  onParts,
+  visiblePartIds,
   overlay,
 }: Props) {
   const scrollHostRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const osmdRef = useRef<any>(null);
+  const partsRef = useRef<PartInfo[]>([]);
+  /** Sorted join of the last-applied visible-part ids. Used to skip the
+   *  visibility effect when the Set content is unchanged (a fresh Set
+   *  instance from the parent wouldn't otherwise be detected as equal). */
+  const lastVisibilityKeyRef = useRef<string>('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'rendering' | 'ready' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -117,6 +139,24 @@ export function InfiniteScoreRenderer({
         await osmd.load(text);
         osmd.zoom = zoom;
 
+        // Discover parts and apply any pre-existing visibility selection
+        // BEFORE the first render so we don't waste a render-with-all pass.
+        const instruments: any[] = osmd.Sheet?.Instruments ?? [];
+        const partList: PartInfo[] = instruments.map((inst, i) => ({
+          id: inst.IdString ?? `P${i + 1}`,
+          name: inst.Name ?? inst.NameLabel?.text ?? `Part ${i + 1}`,
+          index: i,
+        }));
+        partsRef.current = partList;
+        if (visiblePartIds && visiblePartIds.size > 0) {
+          instruments.forEach((inst, i) => {
+            inst.Visible = visiblePartIds.has(partList[i].id);
+          });
+          lastVisibilityKeyRef.current = Array.from(visiblePartIds).sort().join('|');
+        } else {
+          lastVisibilityKeyRef.current = partList.map((p) => p.id).sort().join('|');
+        }
+
         setStatus('rendering');
         osmd.render();
         if (cancelled) return;
@@ -128,6 +168,7 @@ export function InfiniteScoreRenderer({
         const measureXs = buildMeasureStartXs(timeline);
         onMeasureXs?.(measureXs);
         onSvgReady?.(containerRef.current?.querySelector('svg') ?? null);
+        onParts?.(partList);
 
         setStatus('ready');
         onReady?.(osmd);
@@ -162,15 +203,52 @@ export function InfiniteScoreRenderer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom]);
 
-  // `height` is a minimum — the host auto-sizes to the rendered score so
-  // tall multi-staff charts always display all their instruments. We still
-  // use a minimum so the loading / error placeholder has something to fill.
+  // Live part-visibility updates without a full reload. Mutating
+  // `inst.Visible` and re-rendering is an OSMD-supported fast path — it
+  // re-runs layout on the already-parsed score instead of re-fetching
+  // XML. The measureXs/timeline are rebuilt so the playhead / window /
+  // bbox math stays in sync with the new layout width.
+  useEffect(() => {
+    const osmd = osmdRef.current;
+    if (!osmd || status !== 'ready') return;
+    const parts = partsRef.current;
+    if (parts.length === 0) return;
+    const effective = visiblePartIds && visiblePartIds.size > 0
+      ? visiblePartIds
+      : new Set(parts.map((p) => p.id));
+    const key = Array.from(effective).sort().join('|');
+    if (key === lastVisibilityKeyRef.current) return;
+    const instruments: any[] = osmd.Sheet?.Instruments ?? [];
+    instruments.forEach((inst, i) => {
+      const id = parts[i]?.id;
+      inst.Visible = id ? effective.has(id) : true;
+    });
+    try {
+      osmd.render();
+      osmd.cursor.show();
+      const tl = buildBeatTimeline(osmd, scrollHostRef.current);
+      onTimeline?.(tl);
+      const mxs = buildMeasureStartXs(tl);
+      onMeasureXs?.(mxs);
+      onSvgReady?.(containerRef.current?.querySelector('svg') ?? null);
+      lastVisibilityKeyRef.current = key;
+    } catch (e) {
+      console.warn('visibility re-render failed', e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visiblePartIds, status]);
+
+  // `height` is a minimum only during loading/error so the placeholder
+  // has something to fill. Once the score is rendered, the host
+  // auto-sizes to the SVG so a single-staff score takes up a single
+  // staff's worth of vertical space (rather than the fixed 180px floor
+  // that was visible even when only one part was shown).
   return (
     <div
       ref={scrollHostRef}
       style={{
         position: 'relative',
-        minHeight: height,
+        minHeight: status === 'ready' ? undefined : height,
         overflowX: 'auto',
         overflowY: 'hidden',
         background: '#fff',

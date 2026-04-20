@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
 import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { measureStartTimes, currentMeasureIndex } from '../../audio/tempoUtils';
 import { r2Url } from '../../utils/url';
-import { InfiniteScoreRenderer, type InfiniteBeatStamp } from './InfiniteScoreRenderer';
+import { InfiniteScoreRenderer, type InfiniteBeatStamp, type PartInfo } from './InfiniteScoreRenderer';
 
 /** Pixels to nudge the left focus point right of the waveform's left edge.
  *  Keep in sync with the same constant in `LyricsDisplay.tsx` so the
@@ -76,6 +76,12 @@ export function ScrollingScore() {
    *  dependency so window-mode re-derives how many bars fit when the
    *  viewport changes (browser resize, mobile rotate, etc.). */
   const [resizeTick, setResizeTick] = useState(0);
+  /** Instrument parts discovered from the MusicXML. */
+  const [parts, setParts] = useState<PartInfo[]>([]);
+  /** Subset of part ids the user has hidden. Empty = show all. */
+  const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(new Set());
+  const [partsMenuOpen, setPartsMenuOpen] = useState(false);
+  const partsMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Resolve the score URL. Following the rest of the codebase's R2 convention:
   // the field in the song config is a *filename* (e.g. "score.musicxml") that
@@ -104,10 +110,36 @@ export function ScrollingScore() {
   const handleReady = useCallback((_osmd: any) => { /* reserved for future hook-ins */ }, []);
   const handleTimeline = useCallback((tl: InfiniteBeatStamp[]) => setTimeline(tl), []);
   const handleMeasureXs = useCallback((xs: number[]) => setMeasureXs(xs), []);
+  const handleParts = useCallback((ps: PartInfo[]) => setParts(ps), []);
 
   const handleSvgReady = useCallback((svg: SVGSVGElement | null) => {
     setLiveSvg(svg);
   }, []);
+
+  // Compute the visible-part set that drives the renderer. Memoized so
+  // the renderer's visibility effect only re-fires when selection
+  // genuinely changes, not on every parent re-render.
+  const visiblePartIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of parts) if (!hiddenPartIds.has(p.id)) s.add(p.id);
+    return s;
+  }, [parts, hiddenPartIds]);
+
+  const togglePart = useCallback((id: string) => {
+    setHiddenPartIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        return next;
+      }
+      // OSMD needs at least one visible instrument — refuse to hide the
+      // last one instead of silently keeping it visible.
+      const remainingVisible = parts.length - next.size - 1;
+      if (remainingVisible < 1) return prev;
+      next.add(id);
+      return next;
+    });
+  }, [parts.length]);
 
   // Bootstrap + refine the sticky preamble.
   //
@@ -177,6 +209,25 @@ export function ScrollingScore() {
 
   // Reset the window anchor whenever the song changes
   useEffect(() => { setWindowAnchor(0); }, [sheetMusicUrl]);
+
+  // Reset the parts list + selection on song change so stale part ids
+  // from the previous score don't leak into the new one's visibility.
+  useEffect(() => {
+    setParts([]);
+    setHiddenPartIds(new Set());
+    setPartsMenuOpen(false);
+  }, [sheetMusicUrl]);
+
+  // Close the parts dropdown when clicking outside it
+  useEffect(() => {
+    if (!partsMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const el = partsMenuRef.current;
+      if (el && !el.contains(e.target as Node)) setPartsMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [partsMenuOpen]);
 
   // Track scroll-host + waveform sizes so the window-bars-per-page
   // calculation updates on browser resize / device rotation / layout shift.
@@ -313,9 +364,10 @@ export function ScrollingScore() {
 
   if (!sheetMusicUrl) return null;
 
-  // Minimum height for the renderer — the actual height auto-fits the
-  // rendered score so all instruments/staves are visible.
-  const minRenderHeight = Math.max(180, 220 * scoreZoom);
+  // Loading-only placeholder height. Once the score is rendered the
+  // scroll host auto-sizes to the SVG, so this only controls the
+  // height of the "loading…" spinner area, not the final layout.
+  const minRenderHeight = Math.max(80, 100 * scoreZoom);
   const PLAYHEAD_COLOR = '#22D3EE';
 
   // All overlay children use `top: 0; bottom: 0` so they stretch to the
@@ -416,6 +468,43 @@ export function ScrollingScore() {
           className={`px-2 py-0.5 rounded ${showPlayhead ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-300'}`}
           title="Show or hide the playhead line"
         >playhead</button>
+        {parts.length > 0 && (
+          <div ref={partsMenuRef} className="relative">
+            <button
+              onClick={() => setPartsMenuOpen((v) => !v)}
+              className={`px-2 py-0.5 rounded ${hiddenPartIds.size > 0 ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-300'}`}
+              title="Pick which instrument parts to display"
+            >
+              parts ({parts.length - hiddenPartIds.size}/{parts.length})
+            </button>
+            {partsMenuOpen && (
+              <div
+                className="absolute left-0 top-full mt-1 z-50 min-w-[160px] rounded border border-gray-700 bg-gray-900 p-1 shadow-lg"
+                role="menu"
+              >
+                {parts.map((p) => {
+                  const on = !hiddenPartIds.has(p.id);
+                  const isLastVisible = on && parts.length - hiddenPartIds.size <= 1;
+                  return (
+                    <label
+                      key={p.id}
+                      className={`flex items-center gap-2 rounded px-2 py-1 text-gray-200 ${isLastVisible ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-800'}`}
+                      title={isLastVisible ? 'At least one part must stay visible' : undefined}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={isLastVisible}
+                        onChange={() => togglePart(p.id)}
+                      />
+                      <span className="truncate">{p.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div ref={rendererWrapperRef} style={{ position: 'relative' }}>
         <InfiniteScoreRenderer
@@ -428,6 +517,8 @@ export function ScrollingScore() {
           onTimeline={handleTimeline}
           onMeasureXs={handleMeasureXs}
           onSvgReady={handleSvgReady}
+          onParts={handleParts}
+          visiblePartIds={visiblePartIds}
         />
         {/* Overlay — sibling of the scroll host (NOT inside it) so the
             playhead stays fixed to the viewport instead of scrolling with
