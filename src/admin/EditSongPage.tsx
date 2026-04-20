@@ -98,16 +98,17 @@ export default function EditSongPage() {
 
   // Dirty-state warning
   useEffect(() => {
-    if (!isDirty(state)) return;
+    if (!isDirty(state) && !newSheetMusicFile) return;
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [state]);
+  }, [state, newSheetMusicFile]);
 
   const handleBack = useCallback(() => {
-    if (isDirty(state) && !window.confirm('You have unsaved changes. Leave anyway?')) return;
+    const dirty = isDirty(state) || !!newSheetMusicFile;
+    if (dirty && !window.confirm('You have unsaved changes. Leave anyway?')) return;
     navigate(`/${bandSlug}`);
-  }, [state, navigate, bandSlug]);
+  }, [state, newSheetMusicFile, navigate, bandSlug]);
 
   // Stem reorder handlers
   const onStemDragStart = (idx: number) => setDragIdx(idx);
@@ -215,9 +216,13 @@ export default function EditSongPage() {
     });
   };
 
-  // Save
+  // Save. A staged sheet-music file lives outside the reducer's config
+  // (it's held in local useState until upload), so picking one wouldn't
+  // flip `isDirty` on its own — include it explicitly or the Save button
+  // stays disabled on add/replace. Remove clears config.sheetMusicUrl
+  // via dispatch and flips dirty the normal way.
   const validation = config ? songConfigSchema.safeParse(config) : null;
-  const canSave = isDirty(state) && validation?.success && !state.saving;
+  const canSave = (isDirty(state) || !!newSheetMusicFile) && validation?.success && !state.saving;
 
   const handleSave = async () => {
     if (!config || !currentBand) return;
@@ -408,7 +413,7 @@ export default function EditSongPage() {
         <span className="text-sm text-gray-500 font-mono">{config.id}</span>
         <button
           onClick={() => {
-            if (isDirty(state) && !window.confirm('You have unsaved edits. Leave anyway?')) return;
+            if ((isDirty(state) || newSheetMusicFile) && !window.confirm('You have unsaved edits. Leave anyway?')) return;
             navigate(`/${bandSlug}/admin/align/${config.id}`);
           }}
           className="ml-auto text-sm px-3 py-1 bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded text-gray-200"
@@ -755,7 +760,7 @@ export default function EditSongPage() {
 
           <div className="flex items-center justify-between">
             <span className={`text-sm ${state.saveSuccess ? 'text-green-400' : 'text-gray-500'}`}>
-              {state.saveSuccess ? 'Saved successfully' : isDirty(state) ? 'Unsaved changes' : 'No changes'}
+              {state.saveSuccess ? 'Saved successfully' : (isDirty(state) || newSheetMusicFile) ? 'Unsaved changes' : 'No changes'}
             </span>
             <button
               disabled={!canSave}
