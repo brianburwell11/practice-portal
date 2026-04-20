@@ -5,7 +5,7 @@ import { songConfigSchema } from '../config/schema';
 import { detectStem, isAudioFile } from './utils/stemDetection';
 import { getAudioInfo } from './utils/audioConvert';
 import { uploadFileWithProgress, uploadFormWithProgress } from './utils/uploadWithProgress';
-import { canonicalSheetMusicName } from './utils/sheetMusic';
+import { prepareSheetMusicUpload } from './utils/sheetMusic';
 import { SheetMusicUploader } from './SheetMusicUploader';
 import { r2Url } from '../utils/url';
 import { useBandStore } from '../store/bandStore';
@@ -271,32 +271,35 @@ export default function EditSongPage() {
 
       // Upload new sheet music, if any. Uses the same oldId path as stems
       // so a concurrent id-rename picks up the file via the /rename copy.
+      // Plain-XML `.musicxml` / `.xml` inputs are zipped to MXL
+      // client-side (20–50× smaller); `.mxl` passes through.
       if (newSheetMusicFile) {
-        const canonical = canonicalSheetMusicName(newSheetMusicFile);
-        if (!canonical) throw new Error('Unsupported sheet music file type');
+        const prepared = await prepareSheetMusicUpload(newSheetMusicFile);
+        if (!prepared) throw new Error('Unsupported sheet music file type');
+        const { blob, filename } = prepared;
         const presignRes = await fetch('/api/r2/presign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bandId: currentBand.id, songId: oldId, files: [canonical] }),
+          body: JSON.stringify({ bandId: currentBand.id, songId: oldId, files: [filename] }),
         });
         if (!presignRes.ok) {
           const err = await presignRes.json().catch(() => ({}));
           throw new Error(err.error ?? 'Sheet music presign failed');
         }
         const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
-        const putUrl = urls[canonical];
+        const putUrl = urls[filename];
         if (!putUrl) throw new Error('Sheet music presign returned no URL');
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-          fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: newSheetMusicFile.size,
+          fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: blob.size,
         }});
-        await uploadFileWithProgress(putUrl, newSheetMusicFile, (bytesSent, bytesTotal) => {
+        await uploadFileWithProgress(putUrl, blob, (bytesSent, bytesTotal) => {
           dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
             fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
           }});
         });
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
-        configToSave = { ...configToSave, sheetMusicUrl: canonical };
-        dispatch({ type: 'SET_SHEET_MUSIC_URL', url: canonical });
+        configToSave = { ...configToSave, sheetMusicUrl: filename };
+        dispatch({ type: 'SET_SHEET_MUSIC_URL', url: filename });
       }
 
       // Save config to R2 (persisted before rename)

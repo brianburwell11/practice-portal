@@ -4,7 +4,7 @@ import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
 import { uploadFileWithProgress, uploadFormWithProgress } from '../utils/uploadWithProgress';
-import { canonicalSheetMusicName } from '../utils/sheetMusic';
+import { prepareSheetMusicUpload } from '../utils/sheetMusic';
 import { r2Url } from '../../utils/url';
 import { useBandStore } from '../../store/bandStore';
 
@@ -96,32 +96,35 @@ export function ReviewStep({ state, dispatch }: Props) {
       };
 
       // 2b. Upload sheet music (optional). Presigned PUT straight to R2;
-      // `sheetMusicUrl` gets the canonical name (`score.mxl` etc).
+      // `sheetMusicUrl` gets the canonical name `score.mxl`. Plain-XML
+      // inputs are zipped to MXL client-side to slash storage/transfer
+      // (MusicXML → MXL is typically 20–50× smaller).
       if (state.sheetMusicFile) {
-        const canonical = canonicalSheetMusicName(state.sheetMusicFile);
-        if (!canonical) throw new Error('Unsupported sheet music file type');
+        const prepared = await prepareSheetMusicUpload(state.sheetMusicFile);
+        if (!prepared) throw new Error('Unsupported sheet music file type');
+        const { blob, filename } = prepared;
         const presignRes = await fetch('/api/r2/presign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bandId, songId: state.id, files: [canonical] }),
+          body: JSON.stringify({ bandId, songId: state.id, files: [filename] }),
         });
         if (!presignRes.ok) {
           const err = await presignRes.json().catch(() => ({}));
           throw new Error(err.error ?? 'Sheet music presign failed');
         }
         const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
-        const putUrl = urls[canonical];
+        const putUrl = urls[filename];
         if (!putUrl) throw new Error('Sheet music presign returned no URL');
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-          fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: state.sheetMusicFile.size,
+          fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: blob.size,
         }});
-        await uploadFileWithProgress(putUrl, state.sheetMusicFile, (bytesSent, bytesTotal) => {
+        await uploadFileWithProgress(putUrl, blob, (bytesSent, bytesTotal) => {
           dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
             fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
           }});
         });
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
-        transcodedConfig = { ...transcodedConfig, sheetMusicUrl: canonical };
+        transcodedConfig = { ...transcodedConfig, sheetMusicUrl: filename };
       }
 
       const configRes = await fetch(`/api/bands/${bandId}/songs/${state.id}/config`, {
