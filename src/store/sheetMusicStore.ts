@@ -16,6 +16,7 @@ interface Persisted {
   scoreZoom: number;
   windowBars: number;
   equalBeatWidthOverride: boolean | null; // null = follow song config
+  showPlayhead: boolean;
 }
 
 interface SheetMusicState extends Persisted {
@@ -23,6 +24,7 @@ interface SheetMusicState extends Persisted {
   setScoreZoom: (z: number) => void;
   setWindowBars: (n: number) => void;
   setEqualBeatWidthOverride: (v: boolean | null) => void;
+  setShowPlayhead: (v: boolean) => void;
 }
 
 const DEFAULTS: Persisted = {
@@ -30,6 +32,7 @@ const DEFAULTS: Persisted = {
   scoreZoom: 0.95,
   windowBars: 4,
   equalBeatWidthOverride: null,
+  showPlayhead: true,
 };
 
 function loadInitial(): Persisted {
@@ -57,6 +60,7 @@ export const useSheetMusicStore = create<SheetMusicState>((set, get) => ({
   setScoreZoom: (z) => { set({ scoreZoom: z }); persist(getPersisted(get())); },
   setWindowBars: (n) => { set({ windowBars: n }); persist(getPersisted(get())); },
   setEqualBeatWidthOverride: (v) => { set({ equalBeatWidthOverride: v }); persist(getPersisted(get())); },
+  setShowPlayhead: (v) => { set({ showPlayhead: v }); persist(getPersisted(get())); },
 }));
 
 function getPersisted(s: SheetMusicState): Persisted {
@@ -65,5 +69,6 @@ function getPersisted(s: SheetMusicState): Persisted {
     scoreZoom: s.scoreZoom,
     windowBars: s.windowBars,
     equalBeatWidthOverride: s.equalBeatWidthOverride,
+    showPlayhead: s.showPlayhead,
   };
 }

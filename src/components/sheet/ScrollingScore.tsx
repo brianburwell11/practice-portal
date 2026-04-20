@@ -42,9 +42,11 @@ export function ScrollingScore() {
   const trackingMode = useSheetMusicStore((s) => s.trackingMode);
   const scoreZoom = useSheetMusicStore((s) => s.scoreZoom);
   const equalBeatWidthOverride = useSheetMusicStore((s) => s.equalBeatWidthOverride);
+  const showPlayhead = useSheetMusicStore((s) => s.showPlayhead);
   const setTrackingMode = useSheetMusicStore((s) => s.setTrackingMode);
   const setScoreZoom = useSheetMusicStore((s) => s.setScoreZoom);
   const setEqualBeatWidthOverride = useSheetMusicStore((s) => s.setEqualBeatWidthOverride);
+  const setShowPlayhead = useSheetMusicStore((s) => s.setShowPlayhead);
 
   const [timeline, setTimeline] = useState<InfiniteBeatStamp[]>([]);
   const [measureXs, setMeasureXs] = useState<number[]>([]);
@@ -321,14 +323,16 @@ export function ScrollingScore() {
   // full rendered score, however tall it ends up.
   const overlay = (
     <>
-      {/* Playhead line — full-system height, always visible */}
-      <div style={{
-        position: 'absolute', top: 0, bottom: 0,
-        left: cursorPx - 1, width: 2,
-        background: PLAYHEAD_COLOR, opacity: 0.9,
-        boxShadow: `0 0 6px rgba(34,211,238,0.6)`,
-        pointerEvents: 'none', zIndex: 5,
-      }} />
+      {/* Playhead line — full-system height, toggleable */}
+      {showPlayhead && (
+        <div style={{
+          position: 'absolute', top: 0, bottom: 0,
+          left: cursorPx - 1, width: 2,
+          background: PLAYHEAD_COLOR, opacity: 0.9,
+          boxShadow: `0 0 6px rgba(34,211,238,0.6)`,
+          pointerEvents: 'none', zIndex: 5,
+        }} />
+      )}
       {/* Window-mode bbox — spans the current measure */}
       {bbox && (
         <div style={{
@@ -407,6 +411,11 @@ export function ScrollingScore() {
           className={`px-2 py-0.5 rounded ${effectiveEqualBeatWidth ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-300'}`}
           title="Toggle between OSMD's natural beat-width layout and equal-beat-width"
         >{effectiveEqualBeatWidth ? 'equal-beat' : 'natural'}</button>
+        <button
+          onClick={() => setShowPlayhead(!showPlayhead)}
+          className={`px-2 py-0.5 rounded ${showPlayhead ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-300'}`}
+          title="Show or hide the playhead line"
+        >playhead</button>
       </div>
       <div ref={rendererWrapperRef} style={{ position: 'relative' }}>
         <InfiniteScoreRenderer
