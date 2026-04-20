@@ -54,6 +54,22 @@ export function ScrollingScore() {
   const [trainGrayLeftPx, setTrainGrayLeftPx] = useState(0);
   const [trainGrayRightStartPx, setTrainGrayRightStartPx] = useState<number | null>(null);
   const [windowAnchor, setWindowAnchor] = useState(0);
+  /** Viewport-x where the sticky preamble (clef/key/time) sits. Slides
+   *  left with the scroll in karaoke mode until it hits 0, then pins. */
+  const [stickyPreambleLeftPx, setStickyPreambleLeftPx] = useState(0);
+  /** Width of the preamble (clef+key sig), in SVG-local px. Derived from
+   *  the first measure's barline position minus the leading-pad spacer,
+   *  minus an estimate of the time signature width (which lives after the
+   *  key signature but is excluded from the sticky region). */
+  const [preambleWidth, setPreambleWidth] = useState(0);
+  /** Live SVG ref — stored in state so a useEffect can re-mount the clone
+   *  whenever either the SVG OR the host div changes. */
+  const [liveSvg, setLiveSvg] = useState<SVGSVGElement | null>(null);
+  /** Host div for the cloned preamble SVG. Stored via a ref callback so
+   *  we get a re-render when it mounts/unmounts (the overlay is
+   *  conditionally rendered, so this can appear after the SVG-ready
+   *  callback already fired). */
+  const [preambleHost, setPreambleHost] = useState<HTMLDivElement | null>(null);
   /** Incremented on window resize / scroll-host resize. Used as a sync-effect
    *  dependency so window-mode re-derives how many bars fit when the
    *  viewport changes (browser resize, mobile rotate, etc.). */
@@ -86,6 +102,66 @@ export function ScrollingScore() {
   const handleReady = useCallback((_osmd: any) => { /* reserved for future hook-ins */ }, []);
   const handleTimeline = useCallback((tl: InfiniteBeatStamp[]) => setTimeline(tl), []);
   const handleMeasureXs = useCallback((xs: number[]) => setMeasureXs(xs), []);
+
+  const handleSvgReady = useCallback((svg: SVGSVGElement | null) => {
+    setLiveSvg(svg);
+  }, []);
+
+  // Bootstrap + refine the sticky preamble.
+  //
+  // This has to handle a chicken-and-egg: the sticky-preamble wrapper
+  // only renders when `preambleWidth > 0`, and `preambleHost` only
+  // populates once the wrapper is in the DOM. So we first compute a
+  // `fallback` width (first-note-x minus a small gap) and set that,
+  // which lets the wrapper render. On the next effect run, both
+  // `liveSvg` and `preambleHost` are available and we refine the width
+  // via DOM measurement — walk every <text>/<path> in the clone and
+  // find the rightmost glyph whose right edge lies in the preamble
+  // region (before the first note). That gives a pixel-accurate cutoff
+  // at any zoom or time-signature width.
+  useEffect(() => {
+    if (!scrollHost || timeline.length === 0) {
+      preambleHost?.replaceChildren();
+      setPreambleWidth(0);
+      return;
+    }
+    const spacerPx = scrollHost.clientWidth * 0.22;
+    const firstNoteLocalX = timeline[0].xPx - spacerPx;
+    const PADDING_PX = 6;
+    const fallback = Math.max(40, firstNoteLocalX - PADDING_PX);
+
+    // Step 1: bootstrap. If the host or SVG isn't ready, set the
+    // fallback width so the wrapper renders and the host ref populates.
+    if (!preambleHost || !liveSvg) {
+      preambleHost?.replaceChildren();
+      setPreambleWidth(fallback);
+      return;
+    }
+
+    // Step 2: mount the clone and refine via DOM measurement.
+    const clone = liveSvg.cloneNode(true) as SVGSVGElement;
+    clone.querySelectorAll('[id*="cursor"], [id*="Cursor"]').forEach((el) => el.remove());
+    clone.style.display = 'block';
+    preambleHost.replaceChildren(clone);
+
+    let rightmostEdge = 0;
+    const glyphs = clone.querySelectorAll('text, path');
+    for (const el of Array.from(glyphs)) {
+      let bbox: DOMRect | null = null;
+      try { bbox = (el as SVGGraphicsElement).getBBox(); } catch { /* detached */ }
+      if (!bbox) continue;
+      const right = bbox.x + bbox.width;
+      // Exclude staff-line paths and anything past the first note. Staff
+      // lines span the full score width so the `right < firstNoteLocalX`
+      // filter keeps them out automatically.
+      if (right > rightmostEdge && right < firstNoteLocalX - 3) {
+        rightmostEdge = right;
+      }
+    }
+
+    const measured = rightmostEdge > 0 ? rightmostEdge + PADDING_PX : fallback;
+    setPreambleWidth(Math.max(40, Math.min(measured, firstNoteLocalX - 2)));
+  }, [liveSvg, preambleHost, scrollHost, timeline, resizeTick]);
 
   // Grab a handle to the renderer's scroll host the first time we render.
   // InfiniteScoreRenderer's root element *is* the scroll host, so we just
@@ -171,6 +247,14 @@ export function ScrollingScore() {
       setBbox(null); // karaoke: no bbox, just the playhead line
       setTrainGrayLeftPx(0);
       setTrainGrayRightStartPx(null);
+      // Sticky preamble: slides left with the scroll until it hits 0,
+      // then pins. `spacerPx` is the leading blank region before the SVG
+      // starts (matches InfiniteScoreRenderer's leadingPadFraction).
+      // `preambleWidth` itself is computed by the clone-mount effect via
+      // DOM measurement of the actual glyph positions — no heuristic here.
+      const spacerPx = viewport * 0.22;
+      const scrolled = scrollHost.scrollLeft;
+      setStickyPreambleLeftPx(Math.max(0, spacerPx - scrolled));
     } else {
       // Window mode:
       // - The first bar's left barline is anchored at the waveform's left
@@ -217,6 +301,9 @@ export function ScrollingScore() {
       const rightEndX = measureXs[anchor + bars];
       const rightEndInViewport = rightEndX != null ? rightEndX - scrollHost.scrollLeft : focusRightPx;
       setTrainGrayRightStartPx(Math.min(rightEndInViewport, focusRightPx));
+      // preambleWidth is left at its measured value — the sticky preamble
+      // overlay is gated on `trackingMode === 'karaoke'` at render time,
+      // so it stays hidden in window mode without us touching state here.
     }
   }, [
     position, audioOffset, scrollHost, timeline, measureXs, measureTimes,
@@ -272,6 +359,21 @@ export function ScrollingScore() {
           pointerEvents: 'none', zIndex: 3,
         }} />
       )}
+      {/* Karaoke-mode sticky preamble — a clipped clone of the rendered
+          SVG's first `preambleWidth` pixels (clef + key signature; the
+          time signature is excluded). Slides left with the scroll until
+          it pins at left=0. Opaque so it covers the original score when
+          the two overlap. */}
+      {trackingMode === 'karaoke' && preambleWidth > 0 && (
+        <div style={{
+          position: 'absolute', top: 0, bottom: 0,
+          left: stickyPreambleLeftPx, width: preambleWidth,
+          overflow: 'hidden', pointerEvents: 'none', zIndex: 6,
+          background: '#fff',
+        }}>
+          <div ref={setPreambleHost} style={{ position: 'absolute', top: 0, left: 0 }} />
+        </div>
+      )}
     </>
   );
 
@@ -315,6 +417,7 @@ export function ScrollingScore() {
           onReady={handleReady}
           onTimeline={handleTimeline}
           onMeasureXs={handleMeasureXs}
+          onSvgReady={handleSvgReady}
         />
         {/* Overlay — sibling of the scroll host (NOT inside it) so the
             playhead stays fixed to the viewport instead of scrolling with

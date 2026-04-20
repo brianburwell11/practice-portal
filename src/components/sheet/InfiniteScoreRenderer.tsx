@@ -32,6 +32,9 @@ interface Props {
   onReady?: (osmd: any) => void;
   onTimeline?: (timeline: InfiniteBeatStamp[]) => void;
   onMeasureXs?: (xs: number[]) => void;
+  /** Fires after each (re)render with the live SVG element, or `null` on
+   *  unmount / failure. Callers can clone it for sticky-preamble overlays. */
+  onSvgReady?: (svg: SVGSVGElement | null) => void;
   /** Children rendered absolutely-positioned inside the scroll host so they
    *  scroll natively with the score. Use for playhead / bbox / overlays. */
   overlay?: React.ReactNode;
@@ -59,6 +62,7 @@ export function InfiniteScoreRenderer({
   onReady,
   onTimeline,
   onMeasureXs,
+  onSvgReady,
   overlay,
 }: Props) {
   const scrollHostRef = useRef<HTMLDivElement | null>(null);
@@ -123,6 +127,7 @@ export function InfiniteScoreRenderer({
         onTimeline?.(timeline);
         const measureXs = buildMeasureStartXs(timeline);
         onMeasureXs?.(measureXs);
+        onSvgReady?.(containerRef.current?.querySelector('svg') ?? null);
 
         setStatus('ready');
         onReady?.(osmd);
@@ -150,6 +155,7 @@ export function InfiniteScoreRenderer({
       onTimeline?.(tl);
       const mxs = buildMeasureStartXs(tl);
       onMeasureXs?.(mxs);
+      onSvgReady?.(containerRef.current?.querySelector('svg') ?? null);
     } catch (e) {
       console.warn('zoom re-render failed', e);
     }
