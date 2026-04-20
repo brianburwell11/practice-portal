@@ -4,7 +4,9 @@ import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema } from '../config/schema';
 import { detectStem, isAudioFile } from './utils/stemDetection';
 import { getAudioInfo } from './utils/audioConvert';
-import { uploadFormWithProgress } from './utils/uploadWithProgress';
+import { uploadFileWithProgress, uploadFormWithProgress } from './utils/uploadWithProgress';
+import { canonicalSheetMusicName } from './utils/sheetMusic';
+import { SheetMusicUploader } from './SheetMusicUploader';
 import { r2Url } from '../utils/url';
 import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
@@ -42,6 +44,9 @@ export default function EditSongPage() {
   // add-time so the UI can offer a mono/stereo choice (matching the wizard)
   // without re-decoding the file on every render.
   const [newStemFiles] = useState(() => new Map<string, { file: File; channels: number }>());
+  // Sheet music file staged this session but not yet uploaded. Saved
+  // during handleSave via /api/r2/presign + PUT; cleared on success.
+  const [newSheetMusicFile, setNewSheetMusicFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drag-to-reorder state
@@ -264,6 +269,36 @@ export default function EditSongPage() {
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
       }
 
+      // Upload new sheet music, if any. Uses the same oldId path as stems
+      // so a concurrent id-rename picks up the file via the /rename copy.
+      if (newSheetMusicFile) {
+        const canonical = canonicalSheetMusicName(newSheetMusicFile);
+        if (!canonical) throw new Error('Unsupported sheet music file type');
+        const presignRes = await fetch('/api/r2/presign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bandId: currentBand.id, songId: oldId, files: [canonical] }),
+        });
+        if (!presignRes.ok) {
+          const err = await presignRes.json().catch(() => ({}));
+          throw new Error(err.error ?? 'Sheet music presign failed');
+        }
+        const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
+        const putUrl = urls[canonical];
+        if (!putUrl) throw new Error('Sheet music presign returned no URL');
+        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+          fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: newSheetMusicFile.size,
+        }});
+        await uploadFileWithProgress(putUrl, newSheetMusicFile, (bytesSent, bytesTotal) => {
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+            fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+          }});
+        });
+        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+        configToSave = { ...configToSave, sheetMusicUrl: canonical };
+        dispatch({ type: 'SET_SHEET_MUSIC_URL', url: canonical });
+      }
+
       // Save config to R2 (persisted before rename)
       const res = await fetch(`/api/bands/${currentBand.id}/songs/${oldId}/config`, {
         method: 'POST',
@@ -297,6 +332,7 @@ export default function EditSongPage() {
       }
 
       newStemFiles.clear();
+      setNewSheetMusicFile(null);
       dispatch({ type: 'SET_SAVE_SUCCESS' });
       dispatch({ type: 'RESET_DIRTY' });
 
@@ -421,6 +457,15 @@ export default function EditSongPage() {
               onChange={(tags) => dispatch({ type: 'SET_TAGS', tags })}
             />
           </div>
+
+          <SheetMusicUploader
+            currentUrl={config.sheetMusicUrl}
+            pendingFile={newSheetMusicFile}
+            onSelect={(file) => setNewSheetMusicFile(file)}
+            onDiscardPending={() => setNewSheetMusicFile(null)}
+            onRemoveExisting={() => dispatch({ type: 'SET_SHEET_MUSIC_URL', url: undefined })}
+            disabled={state.saving}
+          />
 
           {state.original && config.id !== state.original.id && (
             <div className="bg-yellow-900/30 border border-yellow-700 rounded p-3 text-sm text-yellow-300">

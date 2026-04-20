@@ -31,7 +31,8 @@ export type EditSongAction =
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_SAVE_SUCCESS' }
   | { type: 'RESET_DIRTY' }
-  | { type: 'SET_UPLOAD_PROGRESS'; progress: UploadProgress | null };
+  | { type: 'SET_UPLOAD_PROGRESS'; progress: UploadProgress | null }
+  | { type: 'SET_SHEET_MUSIC_URL'; url: string | undefined };
 
 export const initialEditState: EditSongState = {
   config: null,
@@ -165,5 +166,8 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
       return { ...state, original: state.config ? structuredClone(state.config) : null };
     case 'SET_UPLOAD_PROGRESS':
       return { ...state, uploadProgress: action.progress };
+
+    case 'SET_SHEET_MUSIC_URL':
+      return updateConfig(state, { sheetMusicUrl: action.url });
   }
 }

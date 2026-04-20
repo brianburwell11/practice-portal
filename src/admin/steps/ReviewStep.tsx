@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom';
 import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
-import { uploadFormWithProgress } from '../utils/uploadWithProgress';
+import { uploadFileWithProgress, uploadFormWithProgress } from '../utils/uploadWithProgress';
+import { canonicalSheetMusicName } from '../utils/sheetMusic';
 import { r2Url } from '../../utils/url';
 import { useBandStore } from '../../store/bandStore';
 
@@ -86,13 +87,42 @@ export function ReviewStep({ state, dispatch }: Props) {
       dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
 
       // 2. Update config stem filenames to match the canonical opus names
-      const transcodedConfig = {
+      let transcodedConfig: typeof config = {
         ...config,
         stems: config.stems.map((stem) => ({
           ...stem,
           file: `${stem.id}.opus`,
         })),
       };
+
+      // 2b. Upload sheet music (optional). Presigned PUT straight to R2;
+      // `sheetMusicUrl` gets the canonical name (`score.mxl` etc).
+      if (state.sheetMusicFile) {
+        const canonical = canonicalSheetMusicName(state.sheetMusicFile);
+        if (!canonical) throw new Error('Unsupported sheet music file type');
+        const presignRes = await fetch('/api/r2/presign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bandId, songId: state.id, files: [canonical] }),
+        });
+        if (!presignRes.ok) {
+          const err = await presignRes.json().catch(() => ({}));
+          throw new Error(err.error ?? 'Sheet music presign failed');
+        }
+        const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
+        const putUrl = urls[canonical];
+        if (!putUrl) throw new Error('Sheet music presign returned no URL');
+        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+          fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: state.sheetMusicFile.size,
+        }});
+        await uploadFileWithProgress(putUrl, state.sheetMusicFile, (bytesSent, bytesTotal) => {
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+            fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+          }});
+        });
+        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+        transcodedConfig = { ...transcodedConfig, sheetMusicUrl: canonical };
+      }
 
       const configRes = await fetch(`/api/bands/${bandId}/songs/${state.id}/config`, {
         method: 'POST',

@@ -4,6 +4,7 @@ import { audioExtensions, detectStem, deduplicateLabels, isAudioFile, sortStems 
 import { getAudioInfo } from '../utils/audioConvert';
 import { previewStem } from '../utils/stemPreview';
 import { StemColorPicker } from '../StemColorPicker';
+import { SheetMusicUploader } from '../SheetMusicUploader';
 
 interface Props {
   state: WizardState;
@@ -218,6 +219,14 @@ export function StemsStep({ state, dispatch }: Props) {
           </>
         )}
       </div>
+
+      {/* Optional sheet music */}
+      <SheetMusicUploader
+        pendingFile={state.sheetMusicFile}
+        onSelect={(file) => dispatch({ type: 'SET_SHEET_MUSIC_FILE', file })}
+        onDiscardPending={() => dispatch({ type: 'SET_SHEET_MUSIC_FILE', file: null })}
+        onRemoveExisting={() => dispatch({ type: 'SET_SHEET_MUSIC_FILE', file: null })}
+      />
 
       {/* Stem list */}
       {state.stems.length > 0 && (
