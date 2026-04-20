@@ -151,11 +151,11 @@ export default function App() {
           onToggleSliders={() => setMobileControlsOpen((v) => !v)}
         />
 
-        {/* Scrolling sheet music — renders only when the song config has a sheetMusicUrl */}
-        <ScrollingScore />
-
         {/* Lyrics display — uses editor lines as live preview when editor is open */}
         <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
+
+        {/* Scrolling sheet music — renders only when the song config has a sheetMusicUrl */}
+        <ScrollingScore />
 
         {/* Editor replaces mixer when open */}
         {lyricsEditorOpen ? (
