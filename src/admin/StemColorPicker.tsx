@@ -10,7 +10,13 @@ interface Props {
 }
 
 export function StemColorPicker({ value, onChange, children, className, title }: Props) {
-  const palette = useBandStore((s) => s.currentBand?.palette ?? []);
+  // Select the band object (stable reference from the store), then derive
+  // the palette in render code. Returning `s.currentBand?.palette ?? []`
+  // directly from the selector allocates a fresh `[]` every call, which
+  // makes useSyncExternalStore think the snapshot changed on every render
+  // and loops forever ("The result of getSnapshot should be cached").
+  const currentBand = useBandStore((s) => s.currentBand);
+  const palette = currentBand?.palette ?? [];
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
