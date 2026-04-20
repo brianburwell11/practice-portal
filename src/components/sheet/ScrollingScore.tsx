@@ -4,6 +4,7 @@ import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
 import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { measureStartTimes, currentMeasureIndex } from '../../audio/tempoUtils';
+import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { r2Url } from '../../utils/url';
 import {
   loadSheetMusicSongState,
@@ -43,6 +44,8 @@ export function ScrollingScore() {
   const song = useSongStore((s) => s.selectedSong);
   const currentBand = useBandStore((s) => s.currentBand);
   const position = useTransportStore((s) => s.position);
+  const playing = useTransportStore((s) => s.playing);
+  const engine = useAudioEngine();
   const trackingMode = useSheetMusicStore((s) => s.trackingMode);
   const scoreZoom = useSheetMusicStore((s) => s.scoreZoom);
   const equalBeatWidthOverride = useSheetMusicStore((s) => s.equalBeatWidthOverride);
@@ -85,12 +88,48 @@ export function ScrollingScore() {
   /** Subset of part ids the user has hidden. Empty = show all. */
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(new Set());
   const [partsMenuOpen, setPartsMenuOpen] = useState(false);
+  /** Pending checkbox state inside the open dropdown. Changes don't apply
+   *  until the user hits the apply button — closing the menu any other way
+   *  discards them. Synced from `hiddenPartIds` on each open. */
+  const [draftHiddenPartIds, setDraftHiddenPartIds] = useState<Set<string>>(new Set());
   const partsMenuRef = useRef<HTMLDivElement | null>(null);
   /** Hidden-part ids loaded from localStorage for the current song, waiting
    *  to be filtered against the discovered parts inside `handleParts`. Null
    *  when nothing is pending. While non-null, the save effect is paused so
    *  the initial empty-Set reset can't overwrite stored state. */
   const pendingSavedPartIdsRef = useRef<string[] | null>(null);
+
+  // --- Scroll-ahead + click-to-jump refs (mirrors LyricsDisplay's pattern) ---
+  /** Last `scrollLeft` we wrote programmatically. The scroll listener
+   *  compares actual-vs-expected to tell our own writes from user input. */
+  const expectedScrollLeftRef = useRef(0);
+  /** True while the user has scrolled ahead/behind and auto-scroll is frozen. */
+  const scrollLockedRef = useRef(false);
+  /** Release the lock once live playback reaches this measure index. */
+  const resumeAtMeasureRef = useRef(-1);
+  /** Window-mode only: frozen anchor during the lock so the page doesn't
+   *  auto-advance while the user is looking ahead. */
+  const lockedAnchorRef = useRef(0);
+  /** Latest `focusLeftPx` computed inside the sync effect, mirrored so the
+   *  scroll listener can derive the reading-point content-x without
+   *  re-querying the waveform rect. */
+  const focusLeftPxRef = useRef(0);
+  /** Latest `cursorContentX` (playhead in scroll-host content coords) and
+   *  current-measure range, mirrored so the scroll listener can refresh
+   *  viewport-local state (playhead, bbox) when the user scrolls while
+   *  paused — the sync effect is keyed on `position` and doesn't re-run
+   *  on pause-scrolls. */
+  const cursorContentXRef = useRef(0);
+  const measureRangeRef = useRef<{ left: number; width: number } | null>(null);
+  /** Mirror of `playing` so listeners read the latest value without
+   *  re-subscribing on every flip. */
+  const playingRef = useRef(false);
+  useEffect(() => { playingRef.current = playing; }, [playing]);
+
+  // Click-vs-drag bookkeeping for click-to-jump.
+  const pointerDownXRef = useRef<number | null>(null);
+  const draggingRef = useRef(false);
+  const suppressClickRef = useRef(false);
 
   // Resolve the score URL. Following the rest of the codebase's R2 convention:
   // the field in the song config is a *filename* (e.g. "score.musicxml") that
@@ -126,7 +165,7 @@ export function ScrollingScore() {
     pendingSavedPartIdsRef.current = null;
     const available = new Set(ps.map((p) => p.id));
     const filtered = saved.filter((id) => available.has(id));
-    // Invariant from `togglePart`: at least one part must stay visible.
+    // OSMD needs at least one visible instrument.
     if (filtered.length >= ps.length) return;
     setHiddenPartIds(new Set(filtered));
   }, []);
@@ -144,8 +183,8 @@ export function ScrollingScore() {
     return s;
   }, [parts, hiddenPartIds]);
 
-  const togglePart = useCallback((id: string) => {
-    setHiddenPartIds((prev) => {
+  const toggleDraftPart = useCallback((id: string) => {
+    setDraftHiddenPartIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -159,6 +198,19 @@ export function ScrollingScore() {
       return next;
     });
   }, [parts.length]);
+
+  const applyPartsDraft = useCallback(() => {
+    setHiddenPartIds(new Set(draftHiddenPartIds));
+    setPartsMenuOpen(false);
+  }, [draftHiddenPartIds]);
+
+  // True when the draft and committed selections diverge. Drives the
+  // apply button's enabled + highlighted state.
+  const draftDiffers = useMemo(() => {
+    if (draftHiddenPartIds.size !== hiddenPartIds.size) return true;
+    for (const id of draftHiddenPartIds) if (!hiddenPartIds.has(id)) return true;
+    return false;
+  }, [draftHiddenPartIds, hiddenPartIds]);
 
   // Bootstrap + refine the sticky preamble.
   //
@@ -229,6 +281,19 @@ export function ScrollingScore() {
   // Reset the window anchor whenever the song changes
   useEffect(() => { setWindowAnchor(0); }, [sheetMusicUrl]);
 
+  // On pause or mode-switch, drop any scroll lock so the next sync tick
+  // snaps the viewport back to the live playback position. Mirrors
+  // LyricsDisplay's pause-clear behavior.
+  useEffect(() => {
+    if (playing) return;
+    scrollLockedRef.current = false;
+    resumeAtMeasureRef.current = -1;
+  }, [playing]);
+  useEffect(() => {
+    scrollLockedRef.current = false;
+    resumeAtMeasureRef.current = -1;
+  }, [trackingMode]);
+
   // Reset the parts list + selection on song change so stale part ids
   // from the previous score don't leak into the new one's visibility.
   // Also seed `pendingSavedPartIdsRef` from localStorage so `handleParts`
@@ -272,6 +337,12 @@ export function ScrollingScore() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [partsMenuOpen]);
 
+  // Sync the dropdown's draft checkboxes from the committed selection
+  // whenever the menu opens, so a prior unapplied draft can't leak in.
+  useEffect(() => {
+    if (partsMenuOpen) setDraftHiddenPartIds(new Set(hiddenPartIds));
+  }, [partsMenuOpen, hiddenPartIds]);
+
   // Track scroll-host + waveform sizes so the window-bars-per-page
   // calculation updates on browser resize / device rotation / layout shift.
   // The waveform is the source of truth for the window's left/right edges —
@@ -312,6 +383,16 @@ export function ScrollingScore() {
       cursorContentX = measureXs[0] ?? 0;
     }
 
+    cursorContentXRef.current = cursorContentX;
+
+    // Release scroll lock once live playback reaches the scrolled-to measure.
+    // Backward scroll releases immediately (live mIdx already >= resume).
+    if (scrollLockedRef.current && mIdx >= resumeAtMeasureRef.current) {
+      scrollLockedRef.current = false;
+      resumeAtMeasureRef.current = -1;
+    }
+    const locked = scrollLockedRef.current;
+
     const viewport = scrollHost.clientWidth;
 
     // The waveform's bounding rect is the source of truth for the focus
@@ -335,12 +416,24 @@ export function ScrollingScore() {
       focusRightPx = Math.min(viewport, wfRect.right - hostRect.left + FOCUS_RIGHT_NUDGE_PX);
     }
     focusLeftPx = Math.min(focusLeftPx + FOCUS_LEFT_NUDGE_PX, focusRightPx - 40);
+    // Mirror focusLeftPx into the ref so the scroll listener can derive the
+    // reading-point content-x without re-querying the waveform rect.
+    focusLeftPxRef.current = focusLeftPx;
 
     if (trackingMode === 'karaoke') {
       // Fixed playhead at the waveform's left edge; score scrolls under it.
-      scrollHost.scrollLeft = Math.max(0, cursorContentX - focusLeftPx);
-      setCursorPx(focusLeftPx);
+      // When the user has scrolled ahead, freeze the viewport and let the
+      // playhead drift across it (same formula window mode uses below).
+      if (!locked) {
+        const nextScrollLeft = Math.max(0, cursorContentX - focusLeftPx);
+        expectedScrollLeftRef.current = nextScrollLeft;
+        scrollHost.scrollLeft = nextScrollLeft;
+        setCursorPx(focusLeftPx);
+      } else {
+        setCursorPx(cursorContentX - scrollHost.scrollLeft);
+      }
       setBbox(null); // karaoke: no bbox, just the playhead line
+      measureRangeRef.current = null;
       setTrainGrayLeftPx(0);
       setTrainGrayRightStartPx(null);
     } else {
@@ -351,35 +444,43 @@ export function ScrollingScore() {
       //   edge. Everything outside that window is grayed.
       const usableWidth = Math.max(1, focusRightPx - focusLeftPx);
 
-      let anchor = windowAnchor;
+      let anchor = locked ? lockedAnchorRef.current : windowAnchor;
       let bars = barsFittingFromAnchor(anchor, usableWidth, measureXs);
 
-      if (mIdx < anchor) {
-        // Seek backward — jump to a page that starts at mIdx
-        anchor = mIdx;
-        bars = barsFittingFromAnchor(anchor, usableWidth, measureXs);
-        setWindowAnchor(anchor);
-      } else if (mIdx >= anchor + bars) {
-        // Forward progress — walk page-by-page because each page has its
-        // own bars-count (real measures vary in rendered width)
-        let safety = 200;
-        while (mIdx >= anchor + bars && safety-- > 0 && anchor + bars < measureXs.length - 1) {
-          anchor = anchor + bars;
+      if (!locked) {
+        if (mIdx < anchor) {
+          // Seek backward — jump to a page that starts at mIdx
+          anchor = mIdx;
           bars = barsFittingFromAnchor(anchor, usableWidth, measureXs);
+          setWindowAnchor(anchor);
+        } else if (mIdx >= anchor + bars) {
+          // Forward progress — walk page-by-page because each page has its
+          // own bars-count (real measures vary in rendered width)
+          let safety = 200;
+          while (mIdx >= anchor + bars && safety-- > 0 && anchor + bars < measureXs.length - 1) {
+            anchor = anchor + bars;
+            bars = barsFittingFromAnchor(anchor, usableWidth, measureXs);
+          }
+          setWindowAnchor(anchor);
         }
-        setWindowAnchor(anchor);
       }
 
       const anchorX = measureXs[anchor] ?? 0;
-      // Scroll so the first bar's barline sits at the waveform's left edge
-      scrollHost.scrollLeft = Math.max(0, anchorX - focusLeftPx);
+      if (!locked) {
+        // Scroll so the first bar's barline sits at the waveform's left edge
+        const nextScrollLeft = Math.max(0, anchorX - focusLeftPx);
+        expectedScrollLeftRef.current = nextScrollLeft;
+        scrollHost.scrollLeft = nextScrollLeft;
+      }
       setCursorPx(cursorContentX - scrollHost.scrollLeft);
       // Bbox spans the current measure (snappiness: measure, anchor: start)
       const measureLeft = measureXs[mIdx] ?? cursorContentX;
       const measureRight = measureXs[mIdx + 1] ?? (measureLeft + 120);
+      const measureWidth = Math.max(20, measureRight - measureLeft);
+      measureRangeRef.current = { left: measureLeft, width: measureWidth };
       setBbox({
         leftPx: measureLeft - scrollHost.scrollLeft,
-        widthPx: Math.max(20, measureRight - measureLeft),
+        widthPx: measureWidth,
       });
       // Grayed left: 0 → waveform's left edge
       setTrainGrayLeftPx(focusLeftPx);
@@ -402,8 +503,116 @@ export function ScrollingScore() {
     setStickyPreambleLeftPx(Math.max(0, spacerPx - scrollHost.scrollLeft));
   }, [
     position, audioOffset, scrollHost, timeline, measureXs, measureTimes,
-    trackingMode, windowAnchor, resizeTick,
+    trackingMode, windowAnchor, resizeTick, playing,
   ]);
+
+  // Latest-value refs so the scroll-host event handlers (attached once per
+  // scrollHost) always see fresh `measureXs`, `measureTimes`, `trackingMode`,
+  // and `engine` without needing to re-subscribe on every render.
+  const measureXsRef = useRef(measureXs);
+  const measureTimesRef = useRef(measureTimes);
+  const trackingModeRef = useRef(trackingMode);
+  const engineRef = useRef(engine);
+  useEffect(() => { measureXsRef.current = measureXs; }, [measureXs]);
+  useEffect(() => { measureTimesRef.current = measureTimes; }, [measureTimes]);
+  useEffect(() => { trackingModeRef.current = trackingMode; }, [trackingMode]);
+  useEffect(() => { engineRef.current = engine; }, [engine]);
+
+  // Detect user scroll (wheel, trackpad, scrollbar drag, keyboard, touch).
+  // We can't distinguish source, so we compare actual scrollLeft against
+  // the last value we wrote programmatically. A mismatch > 1 px means the
+  // user scrolled.
+  //
+  // While playing: enter the lock and record the "resume at" measure from
+  // the current reading point so auto-scroll resumes once playback catches
+  // up. The sync effect's locked branch handles viewport updates.
+  //
+  // While paused: the sync effect is keyed on `position` and won't re-run
+  // for a scroll, so imperatively refresh the sticky preamble, playhead,
+  // and bbox from `scrollLeft` + the mirrored content-space refs. No lock —
+  // pause → play re-runs the sync effect and snaps back to the live position.
+  useEffect(() => {
+    if (!scrollHost) return;
+    const onScroll = () => {
+      const delta = Math.abs(scrollHost.scrollLeft - expectedScrollLeftRef.current);
+      const isUserScroll = delta >= 1;
+      if (isUserScroll && playingRef.current) {
+        scrollLockedRef.current = true;
+        const xs = measureXsRef.current;
+        if (xs.length >= 2) {
+          const contentX = scrollHost.scrollLeft + focusLeftPxRef.current;
+          const m = findMeasureAtX(contentX, xs);
+          resumeAtMeasureRef.current = m;
+          if (trackingModeRef.current === 'window') lockedAnchorRef.current = m;
+        }
+      }
+      if (!playingRef.current) {
+        const viewport = scrollHost.clientWidth;
+        const spacerPx = viewport * 0.22;
+        setStickyPreambleLeftPx(Math.max(0, spacerPx - scrollHost.scrollLeft));
+        setCursorPx(cursorContentXRef.current - scrollHost.scrollLeft);
+        const range = measureRangeRef.current;
+        if (range) {
+          setBbox({
+            leftPx: range.left - scrollHost.scrollLeft,
+            widthPx: range.width,
+          });
+        }
+      }
+    };
+    scrollHost.addEventListener('scroll', onScroll, { passive: true });
+    return () => scrollHost.removeEventListener('scroll', onScroll);
+  }, [scrollHost]);
+
+  // Click-to-jump: click anywhere inside the scroll host → seek to the
+  // start (downbeat) of the clicked measure. Distinguishes click from drag
+  // with a 4-px move threshold, mirroring LyricsDisplay's VerticalTrack so
+  // a user-initiated scroll that ends with a release doesn't fire a seek.
+  const CLICK_DRAG_THRESHOLD_PX = 4;
+  useEffect(() => {
+    if (!scrollHost) return;
+    const onPointerDown = (e: PointerEvent) => {
+      pointerDownXRef.current = e.clientX;
+      draggingRef.current = false;
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (pointerDownXRef.current === null) return;
+      if (Math.abs(e.clientX - pointerDownXRef.current) > CLICK_DRAG_THRESHOLD_PX) {
+        draggingRef.current = true;
+      }
+    };
+    const onPointerUp = () => {
+      if (draggingRef.current) {
+        suppressClickRef.current = true;
+        setTimeout(() => { suppressClickRef.current = false; }, 0);
+      }
+      pointerDownXRef.current = null;
+      draggingRef.current = false;
+    };
+    const onClick = (e: MouseEvent) => {
+      if (suppressClickRef.current) return;
+      const xs = measureXsRef.current;
+      const times = measureTimesRef.current;
+      if (xs.length < 2 || times.length === 0) return;
+      const hostRect = scrollHost.getBoundingClientRect();
+      const contentX = (e.clientX - hostRect.left) + scrollHost.scrollLeft;
+      const rawMIdx = findMeasureAtX(contentX, xs);
+      const mIdx = Math.max(0, Math.min(rawMIdx, times.length - 1));
+      engineRef.current?.seek(times[mIdx]);
+    };
+    scrollHost.addEventListener('pointerdown', onPointerDown);
+    scrollHost.addEventListener('pointermove', onPointerMove);
+    scrollHost.addEventListener('pointerup', onPointerUp);
+    scrollHost.addEventListener('pointercancel', onPointerUp);
+    scrollHost.addEventListener('click', onClick);
+    return () => {
+      scrollHost.removeEventListener('pointerdown', onPointerDown);
+      scrollHost.removeEventListener('pointermove', onPointerMove);
+      scrollHost.removeEventListener('pointerup', onPointerUp);
+      scrollHost.removeEventListener('pointercancel', onPointerUp);
+      scrollHost.removeEventListener('click', onClick);
+    };
+  }, [scrollHost]);
 
   if (!sheetMusicUrl) return null;
 
@@ -522,12 +731,12 @@ export function ScrollingScore() {
             </button>
             {partsMenuOpen && (
               <div
-                className="absolute left-0 top-full mt-1 z-50 min-w-[160px] rounded border border-gray-700 bg-gray-900 p-1 shadow-lg"
+                className="absolute left-0 top-full mt-1 z-50 min-w-[180px] rounded border border-gray-700 bg-gray-900 p-1 shadow-lg"
                 role="menu"
               >
                 {parts.map((p) => {
-                  const on = !hiddenPartIds.has(p.id);
-                  const isLastVisible = on && parts.length - hiddenPartIds.size <= 1;
+                  const on = !draftHiddenPartIds.has(p.id);
+                  const isLastVisible = on && parts.length - draftHiddenPartIds.size <= 1;
                   return (
                     <label
                       key={p.id}
@@ -538,12 +747,21 @@ export function ScrollingScore() {
                         type="checkbox"
                         checked={on}
                         disabled={isLastVisible}
-                        onChange={() => togglePart(p.id)}
+                        onChange={() => toggleDraftPart(p.id)}
                       />
                       <span className="truncate">{p.name}</span>
                     </label>
                   );
                 })}
+                <div className="mt-1 border-t border-gray-700 pt-1">
+                  <button
+                    onClick={applyPartsDraft}
+                    disabled={!draftDiffers}
+                    className={`w-full rounded px-2 py-1 text-xs ${draftDiffers ? 'bg-cyan-700 text-white hover:bg-cyan-600' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                  >
+                    apply
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -578,6 +796,30 @@ export function ScrollingScore() {
       </div>
     </div>
   );
+}
+
+/**
+ * Binary search `measureXs` for the measure that contains content-x `x`:
+ * the largest index `i` where `measureXs[i] <= x`. Clamped to valid measure
+ * indices — preamble clicks (x before the first barline) map to 0; trailing
+ * clicks (x past the last barline) map to the last measure.
+ *
+ * `measureXs` has length `numMeasures + 1` — the final entry is the
+ * end-of-last-measure, so valid start-indices are `[0, length - 2]`.
+ */
+function findMeasureAtX(x: number, measureXs: number[]): number {
+  if (measureXs.length < 2) return 0;
+  const lastStart = measureXs.length - 2;
+  if (x <= measureXs[0]) return 0;
+  if (x >= measureXs[lastStart]) return lastStart;
+  let lo = 0;
+  let hi = lastStart;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >>> 1;
+    if (measureXs[mid] <= x) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
 }
 
 /**
