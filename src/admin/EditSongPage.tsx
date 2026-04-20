@@ -292,7 +292,7 @@ export default function EditSongPage() {
             fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: file.size,
           }});
           const convertResult = await uploadFormWithProgress(
-            `/api/r2/mscz-convert-upload/${currentBand.id}/${oldId}`,
+            `/api/r2/mscz-convert-upload/${currentBand.id}/${oldId}?filename=${encodeURIComponent(filename)}`,
             sheetForm,
             (bytesSent, bytesTotal) => {
               dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {

@@ -112,7 +112,7 @@ export function ReviewStep({ state, dispatch }: Props) {
             fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: file.size,
           }});
           const convertResult = await uploadFormWithProgress(
-            `/api/r2/mscz-convert-upload/${bandId}/${state.id}`,
+            `/api/r2/mscz-convert-upload/${bandId}/${state.id}?filename=${encodeURIComponent(filename)}`,
             sheetForm,
             (bytesSent, bytesTotal) => {
               dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {

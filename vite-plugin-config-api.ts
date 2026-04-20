@@ -515,10 +515,23 @@ export function configApiPlugin(): Plugin {
         // R2 — same canonical filename as the presign+PUT path for
         // `.musicxml` / `.xml` / `.mxl`, so InfiniteScoreRenderer picks
         // it up with no changes.
-        const msczMatch = req.url?.match(/^\/api\/r2\/mscz-convert-upload\/([^/]+)\/([^/]+)$/);
+        const msczMatch = req.url?.match(/^\/api\/r2\/mscz-convert-upload\/([^/]+)\/([^/]+)(\?.*)?$/);
         if (msczMatch && req.method === 'POST') {
           const bandId = msczMatch[1];
           const songId = msczMatch[2];
+          // Target filename for the R2 key. Client sends it as a
+          // `?filename=<kebab>.mxl` query param; we re-validate here
+          // to refuse anything bad (path traversal, wrong extension,
+          // oversized). Falls back to `score.mxl` if the param is
+          // absent, matching the pre-sanitization callers.
+          const queryStr = msczMatch[3] ?? '';
+          const params = new URLSearchParams(queryStr.replace(/^\?/, ''));
+          const rawFilename = params.get('filename') ?? 'score.mxl';
+          if (!/^[a-z0-9-]{1,40}\.mxl$/.test(rawFilename)) {
+            return jsonResponse(res, 400, {
+              error: `Invalid filename "${rawFilename}" — expected [a-z0-9-]{1,40}.mxl`,
+            });
+          }
           const r2 = getR2Client();
           const bucket = process.env.R2_BUCKET;
           if (!r2 || !bucket) {
@@ -588,7 +601,7 @@ export function configApiPlugin(): Plugin {
             }
 
             // 3. Run mscore -o <out>.mxl <in>.mscz.
-            const outPath = path.join(tmpDir, 'score.mxl');
+            const outPath = path.join(tmpDir, rawFilename);
             try {
               execFileSync(mscoreBin, ['-o', outPath, received.tmpPath], {
                 stdio: 'ignore',
@@ -605,8 +618,8 @@ export function configApiPlugin(): Plugin {
               throw new Error('MuseScore ran but produced no output file');
             }
 
-            // 4. Upload the MXL to R2 under the canonical name.
-            const filename = 'score.mxl';
+            // 4. Upload the MXL to R2 under the target filename.
+            const filename = rawFilename;
             const key = `${r2Prefix}/${filename}`;
             const body = fs.readFileSync(outPath);
             await r2.send(new PutObjectCommand({
