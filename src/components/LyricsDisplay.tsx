@@ -6,6 +6,12 @@ import type { LyricsLine } from '../audio/lyricsTypes';
 
 const PRE_SHIFT_MS = 500;
 
+/** Pixels to nudge the lyric reading point right of the waveform's left
+ *  edge. Keep in sync with the same constant in
+ *  `src/components/sheet/ScrollingScore.tsx` so the lyric reading point,
+ *  karaoke playhead, and window-mode first bar all line up vertically. */
+const FOCUS_LEFT_NUDGE_PX = 24;
+
 interface LyricsDisplayProps {
   overrideLines?: LyricsLine[];
 }
@@ -78,17 +84,44 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
   const manualOffsetRef = useRef(0);
   const scrollLockedRef = useRef(false);
   const resumeAtIndexRef = useRef(-1);
+  const [resizeTick, setResizeTick] = useState(0);
+
+  // Re-measure the reading point when the waveform / container resizes
+  // (browser resize, orientation change, layout shift). Cheap: just bumps
+  // a tick that invalidates the `getAutoTranslateX` callback.
+  useEffect(() => {
+    const bump = () => setResizeTick((n) => n + 1);
+    const ro = new ResizeObserver(bump);
+    if (containerRef.current) ro.observe(containerRef.current);
+    const waveformEl = document.querySelector('[data-waveform-timeline]');
+    if (waveformEl) ro.observe(waveformEl);
+    return () => ro.disconnect();
+  }, []);
+
+  /**
+   * Reading point in the container's local px: matches the waveform's left
+   * edge so the current lyric sits directly above where the waveform and
+   * the sheet-music playhead also focus. Falls back to 22% of the
+   * container width if the waveform isn't in the DOM yet.
+   */
+  const computeReadingX = useCallback((): number => {
+    const container = containerRef.current;
+    if (!container) return 0;
+    const waveformEl = document.querySelector('[data-waveform-timeline]') as HTMLElement | null;
+    if (!waveformEl) return container.offsetWidth * 0.22 + FOCUS_LEFT_NUDGE_PX;
+    const containerRect = container.getBoundingClientRect();
+    const wfRect = waveformEl.getBoundingClientRect();
+    return Math.max(0, wfRect.left - containerRect.left) + FOCUS_LEFT_NUDGE_PX;
+  }, []);
 
   // Compute autoscroll translateX for a given index
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const getAutoTranslateX = useCallback((idx: number) => {
-    const container = containerRef.current;
     const elIdx = idx >= 0 ? idx : 0;
     const el = itemRefs.current[elIdx];
-    if (!container || !el) return 0;
-    const containerWidth = container.offsetWidth;
-    const readingX = containerWidth * 0.18;
-    return readingX - el.offsetLeft;
-  }, []);
+    if (!el) return 0;
+    return computeReadingX() - el.offsetLeft;
+  }, [computeReadingX, resizeTick]);
 
   // Check if scroll lock should be released
   useEffect(() => {
@@ -121,7 +154,7 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
   const findIndexAtReadingPoint = useCallback((tx: number) => {
     const container = containerRef.current;
     if (!container) return -1;
-    const readingX = container.offsetWidth * 0.18;
+    const readingX = computeReadingX();
     let closest = 0;
     let closestDist = Infinity;
     for (let i = 0; i < lines.length; i++) {

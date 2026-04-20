@@ -772,6 +772,7 @@ export function WaveformTimeline() {
       {/* Main waveform */}
       <div
         ref={containerRef}
+        data-waveform-timeline
         className="h-[80px] md:h-[108px] relative rounded overflow-hidden"
         style={{ cursor: cursorStyle, touchAction: 'none' }}
       >

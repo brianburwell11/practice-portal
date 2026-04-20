@@ -3,6 +3,7 @@ import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
 import { LyricsDisplay } from './components/LyricsDisplay';
+import { ScrollingScore } from './components/sheet/ScrollingScore';
 import { MixerPanel } from './components/mixer/MixerPanel';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
 import { LyricsEditorModal } from './components/lyrics-editor/LyricsEditorModal';
@@ -149,6 +150,9 @@ export default function App() {
           showSliders={mobileControlsOpen}
           onToggleSliders={() => setMobileControlsOpen((v) => !v)}
         />
+
+        {/* Scrolling sheet music — renders only when the song config has a sheetMusicUrl */}
+        <ScrollingScore />
 
         {/* Lyrics display — uses editor lines as live preview when editor is open */}
         <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />

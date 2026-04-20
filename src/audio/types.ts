@@ -67,6 +67,9 @@ export interface SongConfig {
   tapMap?: TapMapEntry[];
   navLinks?: NavLinkConfig[];
   tags?: string[];
+  sheetMusicUrl?: string;
+  audioOffsetSeconds?: number;
+  equalBeatWidth?: boolean;
 }
 
 export interface SongManifestEntry {

@@ -1,4 +1,4 @@
-import type { TempoMapEntry, MarkerConfig, TimeSignatureEntry } from './types';
+import type { TempoMapEntry, MarkerConfig, TimeSignatureEntry, TapMapEntry } from './types';
 
 /** Convert a beat position to seconds using the tempo map. */
 export function beatToSeconds(beat: number, tempoMap: TempoMapEntry[], beatOffset = 0): number {
@@ -66,6 +66,38 @@ export interface BeatGridLine {
   beat: number;
   seconds: number;
   isBarLine: boolean;
+}
+
+/**
+ * Extract the audio-time of every measure/section onset from a tapMap.
+ * The scrolling-score feature uses this as the canonical "barline time"
+ * sequence — beat-level tap jitter is deliberately ignored.
+ */
+export function measureStartTimes(tapMap: TapMapEntry[] | undefined): number[] {
+  if (!tapMap) return [];
+  return tapMap
+    .filter((t) => t.type === 'measure' || t.type === 'section')
+    .map((t) => t.time);
+}
+
+/**
+ * Given audio time, return the 0-based index of the current measure by
+ * finding the largest `measureStartTime <= seconds`. Clamps to 0 during
+ * pre-roll / count-in before the first measure tap, and to the last
+ * measure after the final one.
+ */
+export function currentMeasureIndex(seconds: number, measureTimes: number[]): number {
+  if (measureTimes.length === 0) return 0;
+  if (seconds < measureTimes[0]) return 0;
+  if (seconds >= measureTimes[measureTimes.length - 1]) return measureTimes.length - 1;
+  let lo = 0;
+  let hi = measureTimes.length - 1;
+  while (lo + 1 < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (measureTimes[mid] <= seconds) lo = mid;
+    else hi = mid;
+  }
+  return lo;
 }
 
 /** Generate a grid of beat lines with bar line indicators. */
