@@ -24,6 +24,13 @@ const FOCUS_LEFT_NUDGE_PX = 24;
  *  boundary. Clamped to the scroll-host viewport. */
 const FOCUS_RIGHT_NUDGE_PX = 32;
 
+/** Fixed leading pad (px) reserved inside the scroll host before the
+ *  first note. Must match the `leadingPadPx` prop passed to
+ *  `InfiniteScoreRenderer`. Using a viewport fraction would shrink on
+ *  resize and shift every cached `measureXs` value — so every measure
+ *  in the score is a fixed px constant. */
+const LEADING_PAD_PX = 180;
+
 /**
  * Scrolling-sheet-music panel. Renders the current song's MusicXML if the
  * song config carries a `sheetMusicUrl`; otherwise renders nothing.
@@ -90,6 +97,13 @@ export function ScrollingScore() {
    *  dependency so window-mode re-derives how many bars fit when the
    *  viewport changes (browser resize, mobile rotate, etc.). */
   const [resizeTick, setResizeTick] = useState(0);
+  /** Last `resizeTick` value the sync effect acted on. Used to detect a
+   *  viewport reflow and release the scroll lock — the user's "intentional
+   *  scroll position" is measured in pixels on a specific layout, so it
+   *  no longer applies after a resize. Without this, a manual scroll
+   *  mid-playback freezes the playhead / bbox in their pre-resize
+   *  viewport coordinates even after the window changes size. */
+  const lastResizeTickRef = useRef(0);
   /** Instrument parts discovered from the MusicXML. */
   const [parts, setParts] = useState<PartInfo[]>([]);
   /** Subset of part ids the user has hidden. Empty = show all. */
@@ -241,7 +255,7 @@ export function ScrollingScore() {
       setPreambleWidth(0);
       return;
     }
-    const spacerPx = scrollHost.clientWidth * 0.22;
+    const spacerPx = LEADING_PAD_PX;
     const firstNoteLocalX = timeline[0].xPx - spacerPx;
     const PADDING_PX = 6;
     const fallback = Math.max(40, firstNoteLocalX - PADDING_PX);
@@ -373,15 +387,38 @@ export function ScrollingScore() {
   // The waveform is the source of truth for the window's left/right edges —
   // we align the sheet-music window to it so bars sit directly above their
   // corresponding region in the waveform.
+  //
+  // Three triggers: a ResizeObserver on scrollHost + the waveform (catches
+  // element-level reflows), a window `resize` listener (catches viewport
+  // reflows that don't change the observed elements' box sizes — some
+  // browsers don't re-fire RO on those), and an `orientationchange` for
+  // mobile rotation. Without the window listener, paused playback after
+  // a resize leaves the playhead and bbox stuck at their old viewport
+  // coords because the sync effect is keyed on `resizeTick`.
   useEffect(() => {
     if (!scrollHost) return;
-    const bump = () => setResizeTick((n) => n + 1);
-    bump();
+    let waveformEl: Element | null = null;
+    const bump = () => {
+      // Re-query the waveform on every bump so if it re-mounts we pick
+      // up the new element (and re-observe it below).
+      const fresh = document.querySelector('[data-waveform-timeline]');
+      if (fresh && fresh !== waveformEl) {
+        if (waveformEl) ro.unobserve(waveformEl);
+        ro.observe(fresh);
+        waveformEl = fresh;
+      }
+      setResizeTick((n) => n + 1);
+    };
     const ro = new ResizeObserver(bump);
     ro.observe(scrollHost);
-    const waveformEl = document.querySelector('[data-waveform-timeline]');
-    if (waveformEl) ro.observe(waveformEl);
-    return () => ro.disconnect();
+    bump();
+    window.addEventListener('resize', bump);
+    window.addEventListener('orientationchange', bump);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', bump);
+      window.removeEventListener('orientationchange', bump);
+    };
   }, [scrollHost]);
 
   // Sync effect — runs on every transport position update via the Zustand
@@ -432,6 +469,17 @@ export function ScrollingScore() {
 
     cursorContentXRef.current = cursorContentX;
 
+    // A viewport reflow (browser resize / rotate / layout shift) breaks
+    // the user's "intentional scroll position" — whatever pixel offset
+    // they scrolled to no longer anchors the same measure. Clear the
+    // lock so the non-locked branch below re-centers on the live
+    // playhead against the new waveform edges.
+    if (lastResizeTickRef.current !== resizeTick) {
+      lastResizeTickRef.current = resizeTick;
+      scrollLockedRef.current = false;
+      resumeAtMeasureRef.current = -1;
+    }
+
     // Release scroll lock once live playback reaches the scrolled-to measure.
     // Backward scroll releases immediately (live mIdx already >= resume).
     if (scrollLockedRef.current && mIdx >= resumeAtMeasureRef.current) {
@@ -455,7 +503,7 @@ export function ScrollingScore() {
     // nudge so the two focus points still line up vertically.
     const waveformEl = document.querySelector('[data-waveform-timeline]') as HTMLElement | null;
     const hostRect = scrollHost.getBoundingClientRect();
-    let focusLeftPx = viewport * 0.22;
+    let focusLeftPx = LEADING_PAD_PX;
     let focusRightPx = viewport;
     if (waveformEl) {
       const wfRect = waveformEl.getBoundingClientRect();
@@ -558,8 +606,7 @@ export function ScrollingScore() {
     // clamp pins it at 0; on page 1 (anchor === 0) scrollLeft is 0, so
     // this evaluates to spacerPx — but page 1 doesn't render the sticky
     // anyway (the natural preamble is already visible).
-    const spacerPx = viewport * 0.22;
-    setStickyPreambleLeftPx(Math.max(0, spacerPx - scrollHost.scrollLeft));
+    setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX - scrollHost.scrollLeft));
   }, [
     position, audioOffset, scrollHost, timeline, measureXs, measureTimes,
     trackingMode, windowAnchor, resizeTick, playing, unfolded,
@@ -606,9 +653,7 @@ export function ScrollingScore() {
         }
       }
       if (!playingRef.current) {
-        const viewport = scrollHost.clientWidth;
-        const spacerPx = viewport * 0.22;
-        setStickyPreambleLeftPx(Math.max(0, spacerPx - scrollHost.scrollLeft));
+        setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX - scrollHost.scrollLeft));
         setCursorPx(cursorContentXRef.current - scrollHost.scrollLeft);
         const range = measureRangeRef.current;
         if (range) {
@@ -905,7 +950,7 @@ export function ScrollingScore() {
           height={minRenderHeight}
           zoom={scoreZoom}
           equalBeatWidth={effectiveEqualBeatWidth}
-          leadingPadFraction={0.22}
+          leadingPadPx={LEADING_PAD_PX}
           onReady={handleReady}
           onTimeline={handleTimeline}
           onMeasureXs={handleMeasureXs}

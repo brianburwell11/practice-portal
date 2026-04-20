@@ -35,10 +35,13 @@ interface Props {
   /** Force every measure to the widest measure's required width */
   equalBeatWidth?: boolean;
   /**
-   * Fraction of viewport reserved as blank leading space before the first
-   * note. Matches the playhead position so beat 0 can sit under it at t=0.
+   * Fixed pixel width of the blank leading space before the first note,
+   * matching the playhead position so beat 0 can sit under it at t=0.
+   * Must be fixed (not a viewport fraction) — a percent-width spacer
+   * shrinks on resize and shifts every `measureXs` value, leaving the
+   * playhead / bbox snapped to the wrong measure.
    */
-  leadingPadFraction?: number;
+  leadingPadPx?: number;
   onReady?: (osmd: any) => void;
   onTimeline?: (timeline: InfiniteBeatStamp[]) => void;
   onMeasureXs?: (xs: number[]) => void;
@@ -79,7 +82,7 @@ export function InfiniteScoreRenderer({
   height = 220,
   zoom = 1.0,
   equalBeatWidth = false,
-  leadingPadFraction = 0.35,
+  leadingPadPx = 180,
   onReady,
   onTimeline,
   onMeasureXs,
@@ -304,9 +307,11 @@ export function InfiniteScoreRenderer({
         whiteSpace: 'nowrap',
       }}
     >
-      <div style={{ display: 'inline-block', width: `${leadingPadFraction * 100}%`, height: 1, verticalAlign: 'top' }} aria-hidden />
+      <div style={{ display: 'inline-block', width: leadingPadPx, height: 1, verticalAlign: 'top' }} aria-hidden />
       <div ref={containerRef} style={{ display: 'inline-block', verticalAlign: 'top' }} />
-      <div style={{ display: 'inline-block', width: `${(1 - leadingPadFraction) * 100}%`, height: 1, verticalAlign: 'top' }} aria-hidden />
+      {/* Trailing pad — fixed pixel width so the last measure can always
+          scroll to the focus point regardless of viewport. */}
+      <div style={{ display: 'inline-block', width: 800, height: 1, verticalAlign: 'top' }} aria-hidden />
       {overlay && (
         <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, pointerEvents: 'none', zIndex: 3 }}>
           {overlay}
