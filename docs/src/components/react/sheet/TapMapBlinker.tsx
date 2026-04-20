@@ -19,9 +19,9 @@ interface StemOption {
 }
 
 const DEFAULT_STEMS: StemOption[] = [
-  { label: 'SOOZA mix', url: '/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Sooza.mp3' },
-  { label: 'DRM', url: '/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_DRM.mp3' },
-  { label: 'Trumpet 1', url: '/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3' },
+  { label: 'SOOZA mix', url: '/xml-sample/sooza-brass-band_songs_wiggle-sooza_Sooza.mp3' },
+  { label: 'DRM', url: '/xml-sample/sooza-brass-band_songs_wiggle-sooza_DRM.mp3' },
+  { label: 'Trumpet 1', url: '/xml-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3' },
 ];
 
 /**

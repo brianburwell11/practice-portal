@@ -31,7 +31,7 @@ Open any widget below, hit Play, and watch how each parameter changes the experi
 
 ## The Setup
 
-Same audio everywhere: the isolated Trumpet 1 stem from SOOZA at `wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet 1.mp3` — a 3:00 cumbia-style part at ~120 BPM. The score is the Wiggle MusicXML exported from MuseScore: 93 measures of 4/4, six instrumental parts. The Wiggle song config (`sooza-brass-band_songs_wiggle-sooza_config.json`) carries a [tapMap](/docs/song-config-guide/) — sparse beat onsets recorded by tapping along to the audio. Each entry is `{time: 4.064, type: 'measure'}` or `{type: 'beat'}`. We feed the audio's `currentTime` through a `secondsToBeat()` function that interpolates between adjacent taps to produce a fractional score-beat number. That number is the "what beat are we on right now?" the renderer needs.
+Same audio everywhere: the isolated Trumpet 1 stem from SOOZA at `xml-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet 1.mp3` — a 3:00 cumbia-style part at ~120 BPM. The score is the Wiggle MusicXML exported from MuseScore: 93 measures of 4/4, six instrumental parts. The Wiggle song config (`sooza-brass-band_songs_wiggle-sooza_config.json`) carries a [tapMap](/docs/song-config-guide/) — sparse beat onsets recorded by tapping along to the audio. Each entry is `{time: 4.064, type: 'measure'}` or `{type: 'beat'}`. We feed the audio's `currentTime` through a `secondsToBeat()` function that interpolates between adjacent taps to produce a fractional score-beat number. That number is the "what beat are we on right now?" the renderer needs.
 
 The math, end-to-end, is one chain per frame:
 
@@ -55,8 +55,8 @@ Before any of the visual-tracking experiments make sense, the tapMap has to actu
 This widget has no sheet music at all. Just a big light that flashes on each measure or section marker in the tapMap. Hit Play and tap your foot: the light should flash on your downbeats. If it flashes consistently late, the tapMap was tapped slow; early, tapped ahead; drifting (in-sync at the start, off by the end), the tempo curve is wrong even if the first downbeat is right.
 
 <TapMapBlinker client:only="react"
-  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
-  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+  audioUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
 
 For Wiggle, the tapMap was recorded by tapping along to the SOOZA full mix, not the isolated Trumpet stem. The two recordings are the same take, so the timing should match — if the light here feels right against the trumpet part too, the tapMap is portable between stems (which is what the practice-portal assumes in production).
 
@@ -81,9 +81,9 @@ The `SheetMaximumWidth` line matters more than it looks. OSMD's default cap is 3
 The wrapper `<div>` is the scrollable surface (`overflow-x: auto`); the OSMD-rendered `<svg>` is `display: inline-block` so it can grow as wide as it wants. The pink playhead is a fixed-position element at 35% of the viewport width.
 
 <InfiniteHorizontalDemo client:only="react"
-  scoreUrl="/wiggle-sample/Wiggle.musicxml"
-  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
-  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+  scoreUrl="/xml-sample/Wiggle.musicxml"
+  audioUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
 
 Hit Play. Watch the px-per-beat numbers in the footer. On Wiggle, OSMD's natural layout gives a min of ~22 px/beat and a max of ~95 px/beat — a **4.3× spread**. At 132 BPM (the score's notated tempo), that translates to a scroll velocity that ranges from ~48 px/sec to ~210 px/sec depending on which measure the playhead is in. The Trumpet Solo speeds up; the long-note Chorus lulls. This is what makes "constant audio tempo, jittery scroll speed" the central UX problem of this whole feature.
 
@@ -93,7 +93,7 @@ A render of all 93 Wiggle measures on a single line takes ~280–400 ms on a 202
 
 Before trusting any of the sync-driven widgets, it helps to see the two spatial signals the whole feature is built on: **where the code thinks each barline is**, and **where the code thinks each beat onset is**. Both come from OSMD but via different paths — one from the graphical-measure model, one from walking the cursor.
 
-<MeasureBeatDetector client:only="react" scoreUrl="/wiggle-sample/Wiggle.musicxml" />
+<MeasureBeatDetector client:only="react" scoreUrl="/xml-sample/Wiggle.musicxml" />
 
 Toggle the two sets. The magenta lines should land on the barlines; the yellow lines should sit on the noteheads. If they're off, the downstream sync widgets will be off by the same amount — this is the ground truth layer under every other widget on the page.
 
@@ -104,9 +104,9 @@ Widget 1 syncs to *every* onset — every beat, every note, every grace. That gi
 This widget throws the beats away. Only `measure` / `section` taps matter. Between any two consecutive measure taps, the cursor interpolates linearly from one barline to the next, timed by the tapMap's own interval. So within each measure the cursor moves at **one constant velocity**; at each barline the velocity jumps to match the next measure's duration.
 
 <BarlineCursorDemo client:only="react"
-  scoreUrl="/wiggle-sample/Wiggle.musicxml"
-  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
-  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+  scoreUrl="/xml-sample/Wiggle.musicxml"
+  audioUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
 
 The footer reports the current measure's segment duration and the resulting px/sec. Watch the px/sec number at each barline — it's the place where, on a per-beat-synced cursor, you'd see the most jitter.
 
@@ -122,9 +122,9 @@ The second most-asked-for control after Play/Pause. Two ways to scale sheet musi
 The OSMD path is what we'll ship. CSS transform is a tempting "free" zoom but it's a UX trap — the playhead drifts because we'd have to multiply every measured x-position by the scale factor, which adds floating-point error and breaks if the user ever changes the scale mid-playback. Worse, on a high-DPI display, scaling text up looks fine but scaling it down causes ugly anti-aliasing.
 
 <ZoomSliderDemo client:only="react"
-  scoreUrl="/wiggle-sample/Wiggle.musicxml"
-  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
-  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+  scoreUrl="/xml-sample/Wiggle.musicxml"
+  audioUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
 
 Toggle between the two modes. With OSMD re-render at 60% zoom, the score is ~4,100 px wide and you can see ~10 measures at a time on a 1200px viewport. At 150% zoom it's ~10,200 px wide and you see ~3 measures. Practical defaults from a week of testing:
 
@@ -148,9 +148,9 @@ The "you are here" indicator. Five knobs, all live:
 - **Snappiness**: snappy (the bbox jumps to the next beat at each beat boundary, like a metronome's beat indicator) or smooth (continuous interpolation, like a video scrubber)
 
 <PlayheadBboxPlayground client:only="react"
-  scoreUrl="/wiggle-sample/Wiggle.musicxml"
-  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
-  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+  scoreUrl="/xml-sample/Wiggle.musicxml"
+  audioUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
 
 The honest UX takes after a week of practicing with each combination:
 
@@ -169,9 +169,9 @@ OSMD's natural layout gives more horizontal space to dense measures (lots of not
 OSMD ships with an experimental `EngravingRules.FixedMeasureWidth = true` flag that forces every measure to the *largest* required width. Not strictly equal-per-beat (a measure full of sixteenth-note ornaments dictates the width; sparse measures pad with whitespace), but visually each beat takes a much more uniform amount of space. The variance ratio drops dramatically.
 
 <EqualBeatWidthToggle client:only="react"
-  scoreUrl="/wiggle-sample/Wiggle.musicxml"
-  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
-  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+  scoreUrl="/xml-sample/Wiggle.musicxml"
+  audioUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
 
 Hit Play. Watch the σ (standard deviation) of px-per-beat in each pane's footer. Concrete numbers from Wiggle:
 
@@ -198,9 +198,9 @@ This is the big one. Three different ways to "track" the playback position visua
 3. **Hybrid** — like Window, but the page edges have a "follow zone" (~15% on each side); when the playhead enters that zone, the window scrolls smoothly to keep the playhead in the comfortable middle. What Apple Maps does with the blue dot.
 
 <TrackingModeComparator client:only="react"
-  scoreUrl="/wiggle-sample/Wiggle.musicxml"
-  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
-  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+  scoreUrl="/xml-sample/Wiggle.musicxml"
+  audioUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
 
 All three play in lockstep from the same audio. Watch them simultaneously. The takes:
 
@@ -217,9 +217,9 @@ For practice-portal we default to **karaoke** for slow practice — you're rarel
 Everything from widgets 1–5 in one configurator. Tweak any combination. Settings persist to `localStorage`, so you can come back to your preferred setup tomorrow.
 
 <UxIntegratedPlayground client:only="react"
-  scoreUrl="/wiggle-sample/Wiggle.musicxml"
-  audioUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
-  configUrl="/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
+  scoreUrl="/xml-sample/Wiggle.musicxml"
+  audioUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_Trumpet%201.mp3"
+  configUrl="/xml-sample/sooza-brass-band_songs_wiggle-sooza_config.json" />
 
 The configuration that ended up feeling the best after a week of practicing along to Wiggle — and became the basis for the [shipping decisions](#shipping-decisions) below:
 
@@ -286,5 +286,5 @@ Everything below is locked in; it's not a preference, it's a decision.
 - The widgets in this post: `/docs/src/components/react/sheet/InfiniteScrollRenderer.tsx`, `InfiniteHorizontalDemo.tsx`, `ZoomSliderDemo.tsx`, `PlayheadBboxPlayground.tsx`, `EqualBeatWidthToggle.tsx`, `TrackingModeComparator.tsx`, `UxIntegratedPlayground.tsx`
 - Audio sync hook (the `<audio>`-element-driven RAF loop): `/docs/src/components/react/sheet/useAudioPlayhead.ts`
 - TapMap-aware seconds↔beat math: `/docs/src/components/react/sheet/wiggleSync.ts` (mirrors `/src/audio/tempoUtils.ts`)
-- Sample audio + config: `/docs/public/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_*`
+- Sample audio + config: `/docs/public/xml-sample/sooza-brass-band_songs_wiggle-sooza_*`
 - The previous post (format + library research): [`/docs/sheet-music-scroll-research/`](/docs/sheet-music-scroll-research/)

@@ -13,7 +13,7 @@ import { RepeatJumpVisualizer } from '../../components/react/sheet/RepeatJumpVis
 
 We want admins to upload sheet music — `.musicxml`, `.mxl`, or `.mscz` — pick which instruments to display, and watch the score slide right-to-left under a fixed playhead while the audio plays. Karaoke for sheet music. This post is the research substrate behind the production feature: format dissection, three rendering libraries side-by-side on the same sample, a working scroll-sync playground with a virtual playhead, and the gnarly parts (repeats, voltas, mobile touch conflicts) we'll have to handle when this graduates from docs widgets to a real component.
 
-The running example throughout: **Wiggle by SOOZA Brass Band** — six parts (2 trumpets, tenor sax, trombone, sousaphone, drum kit), 93 measures of 4/4 at 132 BPM, exported from MuseScore Studio 4.6.5. The MSCZ source lives at `/wiggle-sample/Wiggle - SOOZA.mscz` in the docs `public/` folder. We'll convert it to MusicXML and MXL on the fly to compare.
+The running example throughout: **Wiggle by SOOZA Brass Band** — six parts (2 trumpets, tenor sax, trombone, sousaphone, drum kit), 93 measures of 4/4 at 132 BPM, exported from MuseScore Studio 4.6.5. The MSCZ source lives at `/xml-sample/Wiggle - SOOZA.mscz` in the docs `public/` folder. We'll convert it to MusicXML and MXL on the fly to compare.
 
 ## The Three Formats, Drilled Open
 
@@ -22,17 +22,17 @@ All three relevant formats are XML-based, but only one is truly standard. **Musi
 Drill into all three of them on the Wiggle sample below. The MSCZ container holds the master score plus a parallel MSCX for each excerpt (one per part); the MXL is just the MusicXML wrapped:
 
 <MsczInspector client:only="react"
-  url="/wiggle-sample/Wiggle - SOOZA.mscz"
+  url="/xml-sample/Wiggle - SOOZA.mscz"
   label="Wiggle - SOOZA.mscz (MuseScore native)"
   defaultPath="META-INF/container.xml" />
 
 <MsczInspector client:only="react"
-  url="/wiggle-sample/Wiggle.mxl"
+  url="/xml-sample/Wiggle.mxl"
   label="Wiggle.mxl (compressed MusicXML)"
   defaultPath="META-INF/container.xml" />
 
 <MsczInspector client:only="react"
-  url="/wiggle-sample/Wiggle.musicxml"
+  url="/xml-sample/Wiggle.musicxml"
   label="Wiggle.musicxml (uncompressed)"
   defaultPath="Wiggle.musicxml"
   previewBytes={6000} />
@@ -85,13 +85,13 @@ For this research blog, we pre-converted Wiggle once on disk:
   -o "Wiggle.musicxml" "Wiggle - SOOZA.mscz"
 ```
 
-The MXL output uses `-o Wiggle.mxl` instead. Both go into `docs/public/wiggle-sample/`.
+The MXL output uses `-o Wiggle.mxl` instead. Both go into `docs/public/xml-sample/`.
 
 ## Three Libraries on the Same File
 
 Given a MusicXML file, three libraries dominate the JavaScript landscape. Each represents a different point on the "ease of use vs. control" axis. Run all three on the same Wiggle MusicXML below:
 
-<LibraryAB client:only="react" url="/wiggle-sample/Wiggle.musicxml" height={420} />
+<LibraryAB client:only="react" url="/xml-sample/Wiggle.musicxml" height={420} />
 
 Quick observations from the live demos:
 
@@ -120,7 +120,7 @@ Walking from outside in:
 
 Try it live on Wiggle. The play button starts a virtual clock — no audio attached, so there's nothing to drift against, just a clean view of how the sync math behaves under different parameters. Slide tempo, lookahead, and highlight style:
 
-<ScrollSyncPlayground client:only="react" url="/wiggle-sample/Wiggle.musicxml" baseBpm={132} />
+<ScrollSyncPlayground client:only="react" url="/xml-sample/Wiggle.musicxml" baseBpm={132} />
 
 Things you can feel from playing with this:
 
@@ -141,7 +141,7 @@ A few things tripped us up while building this:
 
 In production, the user picks one or more parts and only those staves appear. OSMD has first-class support for this: each `Sheet.Instruments[i]` has a `Visible` flag. Toggling it and calling `osmd.render()` re-lays-out without re-parsing the MusicXML. Our timing is in the 80–250 ms range for Wiggle — slow enough to notice, fast enough to feel responsive:
 
-<InstrumentSelector client:only="react" url="/wiggle-sample/Wiggle.musicxml" height={460} />
+<InstrumentSelector client:only="react" url="/xml-sample/Wiggle.musicxml" height={460} />
 
 Click instruments off and on. The score recomputes line breaks each time. Notice that when only one part is visible the layout uses many more measures per system because there's vertical room — OSMD's `compact` drawing mode auto-paginates based on what fits.
 
@@ -227,7 +227,7 @@ A few decisions that have nothing to do with code:
 
 ## Appendix: Useful File Locations
 
-- Sample MSCZ / generated MusicXML and MXL: `/docs/public/wiggle-sample/`
+- Sample MSCZ / generated MusicXML and MXL: `/docs/public/xml-sample/`
 - React widgets used in this post: `/docs/src/components/react/sheet/`
 - Existing sheet-music research doc (data model, integration plan): `/docs/src/content/docs/musicxml-sheet-music.md`
 - Audio engine entry points: `/src/store/transportStore.ts`, `/src/hooks/useAudioEngine.ts`

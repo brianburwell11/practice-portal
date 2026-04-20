@@ -545,7 +545,7 @@ function estimateLocalPxPerMeasure(measureXs: number[], measureIdx: number): num
 // two stems are derived by substituting their file name — Wiggle-specific but
 // fine since this widget is scoped to the Wiggle sample anyway.
 function buildStemOptions(fallbackUrl: string): StemOption[] {
-  const base = '/wiggle-sample/sooza-brass-band_songs_wiggle-sooza_';
+  const base = '/xml-sample/sooza-brass-band_songs_wiggle-sooza_';
   return [
     { label: 'Trumpet 1', url: `${base}Trumpet%201.mp3` },
     { label: 'SOOZA mix', url: `${base}Sooza.mp3` },
