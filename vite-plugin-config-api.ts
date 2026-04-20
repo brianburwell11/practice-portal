@@ -515,7 +515,11 @@ export function configApiPlugin(): Plugin {
         // R2 — same canonical filename as the presign+PUT path for
         // `.musicxml` / `.xml` / `.mxl`, so InfiniteScoreRenderer picks
         // it up with no changes.
-        const msczMatch = req.url?.match(/^\/api\/r2\/mscz-convert-upload\/([^/]+)\/([^/]+)(\?.*)?$/);
+        // Split path from query before matching — `[^/]+` in the path
+        // regex would otherwise swallow `?filename=...` into the songId
+        // capture (the `?` character isn't a path separator).
+        const [msczPathname, msczQuery = ''] = (req.url ?? '').split('?');
+        const msczMatch = msczPathname.match(/^\/api\/r2\/mscz-convert-upload\/([^/]+)\/([^/]+)$/);
         if (msczMatch && req.method === 'POST') {
           const bandId = msczMatch[1];
           const songId = msczMatch[2];
@@ -524,8 +528,7 @@ export function configApiPlugin(): Plugin {
           // to refuse anything bad (path traversal, wrong extension,
           // oversized). Falls back to `score.mxl` if the param is
           // absent, matching the pre-sanitization callers.
-          const queryStr = msczMatch[3] ?? '';
-          const params = new URLSearchParams(queryStr.replace(/^\?/, ''));
+          const params = new URLSearchParams(msczQuery);
           const rawFilename = params.get('filename') ?? 'score.mxl';
           if (!/^[a-z0-9-]{1,40}\.mxl$/.test(rawFilename)) {
             return jsonResponse(res, 400, {
