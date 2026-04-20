@@ -93,6 +93,9 @@ export function ScrollingScore() {
    *  discards them. Synced from `hiddenPartIds` on each open. */
   const [draftHiddenPartIds, setDraftHiddenPartIds] = useState<Set<string>>(new Set());
   const partsMenuRef = useRef<HTMLDivElement | null>(null);
+  /** Gear-panel open state + click-outside container ref. */
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const settingsMenuRef = useRef<HTMLDivElement | null>(null);
   /** Hidden-part ids loaded from localStorage for the current song, waiting
    *  to be filtered against the discovered parts inside `handleParts`. Null
    *  when nothing is pending. While non-null, the save effect is paused so
@@ -336,6 +339,19 @@ export function ScrollingScore() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [partsMenuOpen]);
+
+  // Close the settings (gear) dropdown when clicking outside it.
+  // Same pattern as the parts menu — independent state + ref so both can
+  // close on their own outside-click without interfering with each other.
+  useEffect(() => {
+    if (!settingsMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const el = settingsMenuRef.current;
+      if (el && !el.contains(e.target as Node)) setSettingsMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [settingsMenuOpen]);
 
   // Sync the dropdown's draft checkboxes from the committed selection
   // whenever the menu opens, so a prior unapplied draft can't leak in.
@@ -687,86 +703,159 @@ export function ScrollingScore() {
   );
 
   return (
-    <div className="px-2 py-1 border-b border-gray-800">
-      <div className="flex items-center gap-2 mb-1 text-xs">
-        <div className="flex gap-1">
-          <button
-            onClick={() => setTrackingMode('karaoke')}
-            className={`px-2 py-0.5 rounded ${trackingMode === 'karaoke' ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-300'}`}
-          >karaoke</button>
-          <button
-            onClick={() => setTrackingMode('window')}
-            className={`px-2 py-0.5 rounded ${trackingMode === 'window' ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-300'}`}
-          >window</button>
-        </div>
-        <label className="flex items-center gap-1 text-gray-400">
-          zoom
-          <input
-            type="range"
-            min={0.6} max={1.5} step={0.05}
-            value={scoreZoom}
-            onChange={(e) => setScoreZoom(parseFloat(e.target.value))}
-            className="w-24"
-          />
-          <span className="tabular-nums w-10 text-right">{(scoreZoom * 100).toFixed(0)}%</span>
-        </label>
-        <button
-          onClick={() => setEqualBeatWidthOverride(effectiveEqualBeatWidth ? false : true)}
-          className={`px-2 py-0.5 rounded ${effectiveEqualBeatWidth ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-300'}`}
-          title="Toggle between OSMD's natural beat-width layout and equal-beat-width"
-        >{effectiveEqualBeatWidth ? 'equal-beat' : 'natural'}</button>
-        <button
-          onClick={() => setShowPlayhead(!showPlayhead)}
-          className={`px-2 py-0.5 rounded ${showPlayhead ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-300'}`}
-          title="Show or hide the playhead line"
-        >playhead</button>
-        {parts.length > 0 && (
-          <div ref={partsMenuRef} className="relative">
+    <div className="relative border-b border-gray-800">
+      {/* Gear + parts triggers — absolutely positioned in the top-right so
+          the score renders flush with the top of the panel. Both triggers
+          live in the same row-flex wrapper, anchored together. The
+          wrapper itself sits above the score (z-index) and does NOT
+          scroll with it — it's a sibling of the scroll host, not a
+          child. */}
+        <div className="absolute top-1 right-1 z-20 flex items-center gap-1 text-xs">
+          {parts.length > 0 && (
+            <div ref={partsMenuRef} className="relative">
+              <button
+                onClick={() => setPartsMenuOpen((v) => !v)}
+                className={`px-2 py-0.5 rounded ${hiddenPartIds.size > 0 ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                title="Pick which instrument parts to display"
+              >
+                parts ({parts.length - hiddenPartIds.size}/{parts.length})
+              </button>
+              {partsMenuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded border border-gray-700 bg-gray-900 p-1 shadow-lg"
+                  role="menu"
+                >
+                  {parts.map((p) => {
+                    const on = !draftHiddenPartIds.has(p.id);
+                    const isLastVisible = on && parts.length - draftHiddenPartIds.size <= 1;
+                    return (
+                      <label
+                        key={p.id}
+                        className={`flex items-center gap-2 rounded px-2 py-1 text-gray-200 ${isLastVisible ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-800'}`}
+                        title={isLastVisible ? 'At least one part must stay visible' : undefined}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          disabled={isLastVisible}
+                          onChange={() => toggleDraftPart(p.id)}
+                        />
+                        <span className="truncate">{p.name}</span>
+                      </label>
+                    );
+                  })}
+                  <div className="mt-1 border-t border-gray-700 pt-1">
+                    <button
+                      onClick={applyPartsDraft}
+                      disabled={!draftDiffers}
+                      className={`w-full rounded px-2 py-1 text-xs ${draftDiffers ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                      title="Apply the part selection and redraw the score"
+                    >
+                      apply
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <div ref={settingsMenuRef} className="relative">
             <button
-              onClick={() => setPartsMenuOpen((v) => !v)}
-              className={`px-2 py-0.5 rounded ${hiddenPartIds.size > 0 ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-300'}`}
-              title="Pick which instrument parts to display"
+              onClick={() => setSettingsMenuOpen((v) => !v)}
+              className="flex items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+              title="Sheet music settings"
+              aria-label="Sheet music settings"
             >
-              parts ({parts.length - hiddenPartIds.size}/{parts.length})
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
             </button>
-            {partsMenuOpen && (
+            {settingsMenuOpen && (
               <div
-                className="absolute left-0 top-full mt-1 z-50 min-w-[180px] rounded border border-gray-700 bg-gray-900 p-1 shadow-lg"
+                className="absolute right-0 top-full mt-1 z-50 w-56 rounded border border-gray-700 bg-gray-900 p-2 shadow-lg text-gray-200"
                 role="menu"
               >
-                {parts.map((p) => {
-                  const on = !draftHiddenPartIds.has(p.id);
-                  const isLastVisible = on && parts.length - draftHiddenPartIds.size <= 1;
-                  return (
-                    <label
-                      key={p.id}
-                      className={`flex items-center gap-2 rounded px-2 py-1 text-gray-200 ${isLastVisible ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-800'}`}
-                      title={isLastVisible ? 'At least one part must stay visible' : undefined}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        disabled={isLastVisible}
-                        onChange={() => toggleDraftPart(p.id)}
-                      />
-                      <span className="truncate">{p.name}</span>
-                    </label>
-                  );
-                })}
-                <div className="mt-1 border-t border-gray-700 pt-1">
-                  <button
-                    onClick={applyPartsDraft}
-                    disabled={!draftDiffers}
-                    className={`w-full rounded px-2 py-1 text-xs ${draftDiffers ? 'bg-cyan-700 text-white hover:bg-cyan-600' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
-                  >
-                    apply
-                  </button>
+                {/* Tracking mode */}
+                <div className="mb-2">
+                  <div className="mb-1 text-[10px] uppercase tracking-wide text-gray-500">Tracking mode</div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setTrackingMode('karaoke')}
+                      className={`flex-1 px-2 py-0.5 rounded ${trackingMode === 'karaoke' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                      title="Score scrolls smoothly under a fixed playback cursor"
+                    >continuous</button>
+                    <button
+                      onClick={() => setTrackingMode('window')}
+                      className={`flex-1 px-2 py-0.5 rounded ${trackingMode === 'window' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                      title="Show a page of measures at a time; advance when filled"
+                    >windowed</button>
+                  </div>
+                </div>
+
+                {/* Spacing */}
+                <div className="mb-2">
+                  <div className="mb-1 text-[10px] uppercase tracking-wide text-gray-500">Spacing</div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setEqualBeatWidthOverride(false)}
+                      className={`flex-1 px-2 py-0.5 rounded ${!effectiveEqualBeatWidth ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                      title="Space measures based on how many notes they contain"
+                    >natural</button>
+                    <button
+                      onClick={() => setEqualBeatWidthOverride(true)}
+                      className={`flex-1 px-2 py-0.5 rounded ${effectiveEqualBeatWidth ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                      title="Make every measure the same width"
+                    >equal-beat</button>
+                  </div>
+                </div>
+
+                {/* Playhead */}
+                <div className="mb-2">
+                  <div className="mb-1 text-[10px] uppercase tracking-wide text-gray-500">Playhead</div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setShowPlayhead(true)}
+                      className={`flex-1 px-2 py-0.5 rounded ${showPlayhead ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                      title="Show the vertical line marking current playback"
+                    >show</button>
+                    <button
+                      onClick={() => setShowPlayhead(false)}
+                      className={`flex-1 px-2 py-0.5 rounded ${!showPlayhead ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                      title="Hide the vertical line marking current playback"
+                    >hide</button>
+                  </div>
+                </div>
+
+                {/* Zoom */}
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wide text-gray-500">
+                    <span>Zoom</span>
+                    <span className="tabular-nums text-gray-300">{(scoreZoom * 100).toFixed(0)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.6}
+                    max={1.5}
+                    step={0.05}
+                    value={scoreZoom}
+                    onChange={(e) => setScoreZoom(parseFloat(e.target.value))}
+                    className="w-full"
+                    title="Scale the score"
+                  />
                 </div>
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
       <div ref={rendererWrapperRef} style={{ position: 'relative' }}>
         <InfiniteScoreRenderer
           url={sheetMusicUrl}
