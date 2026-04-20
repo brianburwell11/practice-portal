@@ -4,14 +4,20 @@
  * canonicalize to `${id}.opus`). Plain-XML `.musicxml` / `.xml` inputs
  * are zipped client-side into MXL before upload — MusicXML compresses
  * 20–50× when zipped, which saves a lot of R2 storage and download time.
+ *
+ * `.mscz` (MuseScore native) can't be converted in the browser — the
+ * inner `.mscx` XML is MuseScore's proprietary dialect, not MusicXML.
+ * Those files are sent raw to the server, which shells out to the
+ * `mscore` CLI to produce `score.mxl` (see `mscz-convert-upload`
+ * endpoint in `vite-plugin-config-api.ts`).
  */
 import JSZip from 'jszip';
 
-export const SHEET_MUSIC_EXTS = ['musicxml', 'xml', 'mxl'] as const;
+export const SHEET_MUSIC_EXTS = ['musicxml', 'xml', 'mxl', 'mscz'] as const;
 export type SheetMusicExt = (typeof SHEET_MUSIC_EXTS)[number];
 
 /** Value for the `<input type="file" accept>` attribute. */
-export const SHEET_MUSIC_ACCEPT = '.musicxml,.xml,.mxl';
+export const SHEET_MUSIC_ACCEPT = '.musicxml,.xml,.mxl,.mscz';
 
 /** Canonical R2 filename for any supported sheet-music upload. */
 export const CANONICAL_SHEET_MUSIC_NAME = 'score.mxl';
@@ -27,10 +33,10 @@ function isSheetMusicExt(ext: string): ext is SheetMusicExt {
 
 /**
  * Returns the canonical R2 filename (`score.mxl`) for a picked file, or
- * `null` if the extension isn't a supported MusicXML format. Every
- * supported input — `.musicxml`, `.xml`, `.mxl` — lands at `score.mxl`
- * on R2; plain-XML inputs are zipped before upload (see
- * `prepareSheetMusicUpload`).
+ * `null` if the extension isn't a supported sheet-music format. Every
+ * supported input — `.musicxml`, `.xml`, `.mxl`, `.mscz` — ultimately
+ * lands at `score.mxl` on R2. Plain-XML inputs are zipped client-side,
+ * `.mscz` is converted server-side via the `mscore` CLI.
  */
 export function canonicalSheetMusicName(file: File): string | null {
   const ext = extOf(file.name);
@@ -51,24 +57,46 @@ const MXL_CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 `;
 
 /**
- * Prepares a picked sheet-music file for upload to R2:
- * - `.mxl` → passed through untouched.
- * - `.musicxml` / `.xml` → zipped into a valid MXL archive on the fly
- *   (META-INF/container.xml + score.xml), dramatically reducing size.
- * - Unsupported extension → `null` (caller falls back the same way as
- *   before).
+ * Result of preparing a picked sheet-music file for upload. The
+ * caller uses `mode` to branch between the two upload paths:
  *
- * Returns the upload blob and the canonical filename
- * (`score.mxl`) the caller should presign + PUT under.
+ * - `direct`: PUT the `blob` straight to R2 via a presigned URL
+ *   (MusicXML/MXL — either passed through or zipped on the fly).
+ * - `server-convert`: POST the raw `file` as multipart form-data to
+ *   the `/api/r2/mscz-convert-upload/...` endpoint, which shells out
+ *   to the `mscore` CLI and uploads the resulting `score.mxl` to R2.
+ *
+ * In both cases, `filename` is the canonical R2 filename the config's
+ * `sheetMusicUrl` should point at (`score.mxl`).
+ */
+export type PreparedUpload =
+  | { mode: 'direct'; blob: Blob; filename: string }
+  | { mode: 'server-convert'; file: File; filename: string };
+
+/**
+ * Prepares a picked sheet-music file for upload to R2:
+ * - `.mxl` → passed through untouched (direct PUT).
+ * - `.musicxml` / `.xml` → zipped into a valid MXL archive on the fly
+ *   (META-INF/container.xml + score.xml), dramatically reducing size
+ *   (direct PUT).
+ * - `.mscz` → raw File passed through; caller POSTs it to the
+ *   server-side MuseScore-CLI conversion endpoint.
+ * - Unsupported extension → `null`.
  */
 export async function prepareSheetMusicUpload(
   file: File,
-): Promise<{ blob: Blob; filename: string } | null> {
+): Promise<PreparedUpload | null> {
   const ext = extOf(file.name);
   if (!isSheetMusicExt(ext)) return null;
 
+  if (ext === 'mscz') {
+    // Server-side conversion: the browser can't parse MSCX, so we
+    // hand the raw file off to the `mscore` CLI endpoint.
+    return { mode: 'server-convert', file, filename: CANONICAL_SHEET_MUSIC_NAME };
+  }
+
   if (ext === 'mxl') {
-    return { blob: file, filename: CANONICAL_SHEET_MUSIC_NAME };
+    return { mode: 'direct', blob: file, filename: CANONICAL_SHEET_MUSIC_NAME };
   }
 
   // Plain-XML MusicXML — zip it. JSZip default deflate is fine; OSMD reads
@@ -84,5 +112,5 @@ export async function prepareSheetMusicUpload(
     compression: 'DEFLATE',
     compressionOptions: { level: 6 },
   });
-  return { blob, filename: CANONICAL_SHEET_MUSIC_NAME };
+  return { mode: 'direct', blob, filename: CANONICAL_SHEET_MUSIC_NAME };
 }

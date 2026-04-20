@@ -47,7 +47,7 @@ export function SheetMusicUploader({
     if (!file) return;
     const canonical = canonicalSheetMusicName(file);
     if (!canonical) {
-      setPickError(`Unsupported file type — pick a .musicxml, .xml, or .mxl file.`);
+      setPickError(`Unsupported file type — pick a .musicxml, .xml, .mxl, or .mscz file.`);
       return;
     }
     setPickError(null);
@@ -92,7 +92,7 @@ export function SheetMusicUploader({
           >
             + Sheet music
           </button>
-          <span className="text-xs text-gray-500">.musicxml, .xml, .mxl</span>
+          <span className="text-xs text-gray-500">.musicxml, .xml, .mxl, .mscz</span>
         </div>
       )}
 

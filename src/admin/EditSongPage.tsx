@@ -276,35 +276,60 @@ export default function EditSongPage() {
 
       // Upload new sheet music, if any. Uses the same oldId path as stems
       // so a concurrent id-rename picks up the file via the /rename copy.
-      // Plain-XML `.musicxml` / `.xml` inputs are zipped to MXL
-      // client-side (20–50× smaller); `.mxl` passes through.
+      // Two paths depending on format:
+      // - `.mxl` / `.musicxml` / `.xml` → presigned PUT straight to R2;
+      //   plain XML gets zipped to MXL client-side (20–50× smaller).
+      // - `.mscz` → POSTed to the server-side conversion endpoint, which
+      //   shells out to the `mscore` CLI and writes `score.mxl` on R2.
       if (newSheetMusicFile) {
         const prepared = await prepareSheetMusicUpload(newSheetMusicFile);
         if (!prepared) throw new Error('Unsupported sheet music file type');
-        const { blob, filename } = prepared;
-        const presignRes = await fetch('/api/r2/presign', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bandId: currentBand.id, songId: oldId, files: [filename] }),
-        });
-        if (!presignRes.ok) {
-          const err = await presignRes.json().catch(() => ({}));
-          throw new Error(err.error ?? 'Sheet music presign failed');
-        }
-        const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
-        const putUrl = urls[filename];
-        if (!putUrl) throw new Error('Sheet music presign returned no URL');
-        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-          fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: blob.size,
-        }});
-        await uploadFileWithProgress(putUrl, blob, (bytesSent, bytesTotal) => {
+        if (prepared.mode === 'server-convert') {
+          const { file, filename } = prepared;
+          const sheetForm = new FormData();
+          sheetForm.append('sheetMusic', file, file.name);
           dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-            fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+            fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: file.size,
           }});
-        });
-        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
-        configToSave = { ...configToSave, sheetMusicUrl: filename };
-        dispatch({ type: 'SET_SHEET_MUSIC_URL', url: filename });
+          const convertResult = await uploadFormWithProgress(
+            `/api/r2/mscz-convert-upload/${currentBand.id}/${oldId}`,
+            sheetForm,
+            (bytesSent, bytesTotal) => {
+              dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+                fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+              }});
+            },
+          );
+          if (!convertResult.ok) throw new Error(convertResult.error ?? 'MSCZ conversion failed');
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+          configToSave = { ...configToSave, sheetMusicUrl: filename };
+          dispatch({ type: 'SET_SHEET_MUSIC_URL', url: filename });
+        } else {
+          const { blob, filename } = prepared;
+          const presignRes = await fetch('/api/r2/presign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bandId: currentBand.id, songId: oldId, files: [filename] }),
+          });
+          if (!presignRes.ok) {
+            const err = await presignRes.json().catch(() => ({}));
+            throw new Error(err.error ?? 'Sheet music presign failed');
+          }
+          const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
+          const putUrl = urls[filename];
+          if (!putUrl) throw new Error('Sheet music presign returned no URL');
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+            fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: blob.size,
+          }});
+          await uploadFileWithProgress(putUrl, blob, (bytesSent, bytesTotal) => {
+            dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+              fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+            }});
+          });
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+          configToSave = { ...configToSave, sheetMusicUrl: filename };
+          dispatch({ type: 'SET_SHEET_MUSIC_URL', url: filename });
+        }
       }
 
       // Save config to R2 (persisted before rename)
