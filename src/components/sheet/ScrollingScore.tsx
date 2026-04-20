@@ -247,14 +247,6 @@ export function ScrollingScore() {
       setBbox(null); // karaoke: no bbox, just the playhead line
       setTrainGrayLeftPx(0);
       setTrainGrayRightStartPx(null);
-      // Sticky preamble: slides left with the scroll until it hits 0,
-      // then pins. `spacerPx` is the leading blank region before the SVG
-      // starts (matches InfiniteScoreRenderer's leadingPadFraction).
-      // `preambleWidth` itself is computed by the clone-mount effect via
-      // DOM measurement of the actual glyph positions — no heuristic here.
-      const spacerPx = viewport * 0.22;
-      const scrolled = scrollHost.scrollLeft;
-      setStickyPreambleLeftPx(Math.max(0, spacerPx - scrolled));
     } else {
       // Window mode:
       // - The first bar's left barline is anchored at the waveform's left
@@ -301,10 +293,17 @@ export function ScrollingScore() {
       const rightEndX = measureXs[anchor + bars];
       const rightEndInViewport = rightEndX != null ? rightEndX - scrollHost.scrollLeft : focusRightPx;
       setTrainGrayRightStartPx(Math.min(rightEndInViewport, focusRightPx));
-      // preambleWidth is left at its measured value — the sticky preamble
-      // overlay is gated on `trackingMode === 'karaoke'` at render time,
-      // so it stays hidden in window mode without us touching state here.
     }
+
+    // Sticky preamble position — same math for both modes.
+    // Karaoke: `spacerPx - scrollLeft` slides the preamble left until it
+    // pins at 0 once the original preamble would have scrolled off.
+    // Window: `scrollLeft` is large on pages 2+ (anchor > 0), so the max
+    // clamp pins it at 0; on page 1 (anchor === 0) scrollLeft is 0, so
+    // this evaluates to spacerPx — but page 1 doesn't render the sticky
+    // anyway (the natural preamble is already visible).
+    const spacerPx = viewport * 0.22;
+    setStickyPreambleLeftPx(Math.max(0, spacerPx - scrollHost.scrollLeft));
   }, [
     position, audioOffset, scrollHost, timeline, measureXs, measureTimes,
     trackingMode, windowAnchor, resizeTick,
@@ -359,12 +358,14 @@ export function ScrollingScore() {
           pointerEvents: 'none', zIndex: 3,
         }} />
       )}
-      {/* Karaoke-mode sticky preamble — a clipped clone of the rendered
-          SVG's first `preambleWidth` pixels (clef + key signature; the
-          time signature is excluded). Slides left with the scroll until
-          it pins at left=0. Opaque so it covers the original score when
-          the two overlap. */}
-      {trackingMode === 'karaoke' && preambleWidth > 0 && (
+      {/* Sticky preamble — a clipped clone of the rendered SVG's first
+          `preambleWidth` pixels (clef + key sig + time sig). Opaque so
+          it covers the original score when the two overlap.
+          Karaoke: slides left with the scroll until it pins at left=0.
+          Window: hidden on page 1 (the natural preamble is visible) and
+          always pinned at left=0 on pages 2+ (same visual as karaoke
+          when pinned). */}
+      {preambleWidth > 0 && (trackingMode === 'karaoke' || (trackingMode === 'window' && windowAnchor > 0)) && (
         <div style={{
           position: 'absolute', top: 0, bottom: 0,
           left: stickyPreambleLeftPx, width: preambleWidth,
