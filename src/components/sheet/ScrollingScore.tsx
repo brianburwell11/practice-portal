@@ -5,6 +5,10 @@ import { useBandStore } from '../../store/bandStore';
 import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { measureStartTimes, currentMeasureIndex } from '../../audio/tempoUtils';
 import { r2Url } from '../../utils/url';
+import {
+  loadSheetMusicSongState,
+  saveSheetMusicSongState,
+} from '../../utils/sheetMusicSongStorage';
 import { InfiniteScoreRenderer, type InfiniteBeatStamp, type PartInfo } from './InfiniteScoreRenderer';
 
 /** Pixels to nudge the left focus point right of the waveform's left edge.
@@ -82,6 +86,11 @@ export function ScrollingScore() {
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(new Set());
   const [partsMenuOpen, setPartsMenuOpen] = useState(false);
   const partsMenuRef = useRef<HTMLDivElement | null>(null);
+  /** Hidden-part ids loaded from localStorage for the current song, waiting
+   *  to be filtered against the discovered parts inside `handleParts`. Null
+   *  when nothing is pending. While non-null, the save effect is paused so
+   *  the initial empty-Set reset can't overwrite stored state. */
+  const pendingSavedPartIdsRef = useRef<string[] | null>(null);
 
   // Resolve the score URL. Following the rest of the codebase's R2 convention:
   // the field in the song config is a *filename* (e.g. "score.musicxml") that
@@ -110,7 +119,17 @@ export function ScrollingScore() {
   const handleReady = useCallback((_osmd: any) => { /* reserved for future hook-ins */ }, []);
   const handleTimeline = useCallback((tl: InfiniteBeatStamp[]) => setTimeline(tl), []);
   const handleMeasureXs = useCallback((xs: number[]) => setMeasureXs(xs), []);
-  const handleParts = useCallback((ps: PartInfo[]) => setParts(ps), []);
+  const handleParts = useCallback((ps: PartInfo[]) => {
+    setParts(ps);
+    const saved = pendingSavedPartIdsRef.current;
+    if (!saved || ps.length === 0) return;
+    pendingSavedPartIdsRef.current = null;
+    const available = new Set(ps.map((p) => p.id));
+    const filtered = saved.filter((id) => available.has(id));
+    // Invariant from `togglePart`: at least one part must stay visible.
+    if (filtered.length >= ps.length) return;
+    setHiddenPartIds(new Set(filtered));
+  }, []);
 
   const handleSvgReady = useCallback((svg: SVGSVGElement | null) => {
     setLiveSvg(svg);
@@ -212,11 +231,35 @@ export function ScrollingScore() {
 
   // Reset the parts list + selection on song change so stale part ids
   // from the previous score don't leak into the new one's visibility.
+  // Also seed `pendingSavedPartIdsRef` from localStorage so `handleParts`
+  // can re-apply the user's last selection for this song once OSMD
+  // finishes discovering the parts.
   useEffect(() => {
     setParts([]);
     setHiddenPartIds(new Set());
     setPartsMenuOpen(false);
-  }, [sheetMusicUrl]);
+    const songId = song?.id;
+    const saved = songId ? loadSheetMusicSongState(songId) : null;
+    pendingSavedPartIdsRef.current = saved?.hiddenPartIds ?? null;
+  }, [sheetMusicUrl, song?.id]);
+
+  // Debounced save of the per-song parts selection. Skipped while a
+  // load is pending (ref non-null) so the transient empty-Set state
+  // from the reset doesn't overwrite the stored value, and skipped
+  // before parts are discovered so we don't persist a meaningless
+  // empty state on first mount.
+  useEffect(() => {
+    const songId = song?.id;
+    if (!songId) return;
+    if (pendingSavedPartIdsRef.current) return;
+    if (parts.length === 0) return;
+    const handle = setTimeout(() => {
+      saveSheetMusicSongState(songId, {
+        hiddenPartIds: Array.from(hiddenPartIds),
+      });
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [song?.id, hiddenPartIds, parts.length]);
 
   // Close the parts dropdown when clicking outside it
   useEffect(() => {
