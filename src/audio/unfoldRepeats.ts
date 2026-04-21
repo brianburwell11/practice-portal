@@ -30,6 +30,10 @@ export interface MeasureStructure {
   forwardRepeat: boolean;
   /** `:|` at the right barline. */
   backwardRepeat: boolean;
+  /** Total play count for the backward repeat — i.e. 2 means "play twice"
+   *  (one extra pass through the section). Comes from the `times` attribute
+   *  on `<repeat direction="backward" times="N"/>`; defaults to 2. */
+  backwardRepeatTimes: number;
   /** Volta numbers that apply to this measure. Empty = no volta. */
   voltaNumbers: number[];
   /** Volta boundary flags on this measure. */
@@ -96,6 +100,7 @@ export function parseMusicXML(xmlText: string): MusicXMLStructure {
       number: m.getAttribute('number') ?? String(index + 1),
       forwardRepeat: false,
       backwardRepeat: false,
+      backwardRepeatTimes: 2,
       voltaNumbers: [],
       voltaStart: false,
       voltaStop: false,
@@ -119,7 +124,14 @@ export function parseMusicXML(xmlText: string): MusicXMLStructure {
       if (repeat) {
         const dir = repeat.getAttribute('direction');
         if (dir === 'forward') info.forwardRepeat = true;
-        if (dir === 'backward') info.backwardRepeat = true;
+        if (dir === 'backward') {
+          info.backwardRepeat = true;
+          const timesAttr = repeat.getAttribute('times');
+          if (timesAttr) {
+            const n = parseInt(timesAttr, 10);
+            if (Number.isFinite(n) && n >= 2) info.backwardRepeatTimes = n;
+          }
+        }
       }
       const ending = bl.querySelector('ending');
       if (ending) {
@@ -238,13 +250,16 @@ export function unfold(
 
   const passCount = new Map<number, number>();
   const backwardTaken = new Map<number, number>();
-  const repeatPlays = 2;
 
   let dcTaken = false;
   let dsTaken = false;
 
   let i = 0;
-  let safety = measures.length * 16;
+  const maxRepeatTimes = measures.reduce(
+    (max, mm) => (mm.backwardRepeat ? Math.max(max, mm.backwardRepeatTimes) : max),
+    2,
+  );
+  let safety = measures.length * Math.max(16, maxRepeatTimes * 2);
 
   while (i < measures.length && safety-- > 0) {
     const m = measures[i];
@@ -308,7 +323,7 @@ export function unfold(
     if (m.backwardRepeat) {
       const target = findBackwardRepeatTarget(measures, i);
       const prev = backwardTaken.get(i) ?? 0;
-      if (prev + 1 < repeatPlays) {
+      if (prev + 1 < m.backwardRepeatTimes) {
         backwardTaken.set(i, prev + 1);
         passCount.set(target, (passCount.get(target) ?? 1) + 1);
         steps[steps.length - 1].cause = `repeat → m.${measures[target].number}`;

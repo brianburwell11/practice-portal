@@ -43,6 +43,8 @@ interface MeasureInfo {
   forwardRepeat: boolean;
   /** Backward repeat at the right barline — end of a `:|` block. */
   backwardRepeat: boolean;
+  /** Total play count for the backward repeat (from `times` attribute). Defaults to 2. */
+  backwardRepeatTimes: number;
   /** Volta numbers that apply to this measure. */
   voltaNumbers: number[];
   /** Volta boundary flags. */
@@ -96,6 +98,7 @@ function parseMusicXML(xmlText: string): MeasureInfo[] {
       number: m.getAttribute('number') ?? String(index + 1),
       forwardRepeat: false,
       backwardRepeat: false,
+      backwardRepeatTimes: 2,
       voltaNumbers: [],
       voltaStart: false,
       voltaStop: false,
@@ -119,7 +122,14 @@ function parseMusicXML(xmlText: string): MeasureInfo[] {
       if (repeat) {
         const dir = repeat.getAttribute('direction');
         if (dir === 'forward') info.forwardRepeat = true;
-        if (dir === 'backward') info.backwardRepeat = true;
+        if (dir === 'backward') {
+          info.backwardRepeat = true;
+          const timesAttr = repeat.getAttribute('times');
+          if (timesAttr) {
+            const n = parseInt(timesAttr, 10);
+            if (Number.isFinite(n) && n >= 2) info.backwardRepeatTimes = n;
+          }
+        }
       }
       const ending = bl.querySelector('ending');
       if (ending) {
@@ -206,10 +216,10 @@ function unfold(measures: MeasureInfo[]): { steps: UnfoldStep[]; warnings: strin
 
   // Track pass count per forward-repeat start index.
   const passCount = new Map<number, number>();
-  // Track which backward-repeat endpoints we've already taken — once per
-  // forward-repeat-start we loop at most `repeatPlays` times.
+  // Track which backward-repeat endpoints we've already taken — each backward
+  // repeat loops at most `m.backwardRepeatTimes` total passes (default 2,
+  // overridable via the MusicXML `times` attribute).
   const backwardTaken = new Map<number, number>();
-  const repeatPlays = 2; // standard |: :| plays section twice total
 
   // Jump-state flags — once D.C./D.S. fires we don't re-take it.
   let dcTaken = false;
@@ -219,7 +229,11 @@ function unfold(measures: MeasureInfo[]): { steps: UnfoldStep[]; warnings: strin
   const fineVisits = new Map<number, number>();
 
   let i = 0;
-  let safety = measures.length * 16; // guardrail
+  const maxRepeatTimes = measures.reduce(
+    (max, mm) => (mm.backwardRepeat ? Math.max(max, mm.backwardRepeatTimes) : max),
+    2,
+  );
+  let safety = measures.length * Math.max(16, maxRepeatTimes * 2); // guardrail
 
   while (i < measures.length && safety-- > 0) {
     const m = measures[i];
@@ -288,7 +302,7 @@ function unfold(measures: MeasureInfo[]): { steps: UnfoldStep[]; warnings: strin
     if (m.backwardRepeat) {
       const target = findBackwardRepeatTarget(measures, i);
       const prev = backwardTaken.get(i) ?? 0;
-      if (prev + 1 < repeatPlays) {
+      if (prev + 1 < m.backwardRepeatTimes) {
         backwardTaken.set(i, prev + 1);
         passCount.set(target, (passCount.get(target) ?? 1) + 1);
         steps[steps.length - 1].cause = `repeat → m.${measures[target].number}`;
