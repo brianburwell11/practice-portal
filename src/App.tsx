@@ -154,8 +154,12 @@ export default function App() {
         {/* Lyrics display — uses editor lines as live preview when editor is open */}
         <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
 
-        {/* Scrolling sheet music — renders only when the song config has a sheetMusicUrl */}
-        <ScrollingScore />
+        {/* Scrolling sheet music — desktop only for now (md+). The current
+            viewport/scroll math isn't usable on narrow screens and needs
+            a dedicated mobile pass before we expose it there. */}
+        <div className="hidden md:contents">
+          <ScrollingScore />
+        </div>
 
         {/* Editor replaces mixer when open */}
         {lyricsEditorOpen ? (
