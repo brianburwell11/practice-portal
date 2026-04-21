@@ -199,14 +199,20 @@ export function parseMusicXML(xmlText: string): MusicXMLStructure {
  * Run the state-machine unfolder on a parsed `MusicXMLStructure`, returning
  * the unfolded playback order as `{ srcIndex, pass }[]`.
  *
- * End-of-measure priority (matches the research post and widget):
- *   1. Fine — but only active after a D.C./D.S. has fired.
- *   2. To Coda — only active after a D.S./D.C. al Coda has fired.
- *   3. D.C. / D.S. — each fires at most once.
- *   4. Backward repeat — loop to matching forward repeat.
+ * End-of-measure priority:
+ *   1. To Coda — only active after a D.S./D.C. al Coda has fired.
+ *   2. D.C. / D.S. — each fires at most once.
+ *   3. Backward repeat — loop to matching forward repeat.
  *
  * Volta gate runs before the measure is visited (skip forward to a matching
  * volta if the current pass number isn't in the current measure's list).
+ *
+ * Fine is intentionally NOT honored. Per the MusicXML spec, Fine would
+ * terminate the unfold after a D.C./D.S. jump, but in practice authors
+ * often trim the score past the intended endpoint and leave the Fine
+ * marker as decoration. Ignoring Fine and walking to the actual last
+ * written measure gives a predictable result without requiring the
+ * author to be exact about the interaction.
  */
 export function unfold(structure: MusicXMLStructure): UnfoldedStep[] {
   const measures = structure.measures;
@@ -247,20 +253,14 @@ export function unfold(structure: MusicXMLStructure): UnfoldedStep[] {
 
     if (m.forwardRepeat && !passCount.has(i)) passCount.set(i, 1);
 
-    // 1. Fine — only after D.C./D.S.
-    if (m.hasFine && (dcTaken || dsTaken)) {
-      steps[steps.length - 1].cause = 'Fine';
-      break;
-    }
-
-    // 2. To Coda — only after D.S./D.C. al Coda
+    // 1. To Coda — only after D.S./D.C. al Coda
     if (m.toCodaTarget && (dsTaken || dcTaken) && codaIdx >= 0) {
       steps[steps.length - 1].cause = 'to coda';
       i = codaIdx;
       continue;
     }
 
-    // 3. D.C. / D.S. — fire at most once each
+    // 2. D.C. / D.S. — fire at most once each
     if (m.dacapo && !dcTaken) {
       dcTaken = true;
       steps[steps.length - 1].cause = m.dacapoAlFine
@@ -278,7 +278,7 @@ export function unfold(structure: MusicXMLStructure): UnfoldedStep[] {
       continue;
     }
 
-    // 4. Backward repeat
+    // 3. Backward repeat
     if (m.backwardRepeat) {
       const target = findBackwardRepeatTarget(measures, i);
       const prev = backwardTaken.get(i) ?? 0;

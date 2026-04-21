@@ -416,8 +416,16 @@ export function buildMeasureStartXs(timeline: InfiniteBeatStamp[]): number[] {
     }
     out.push(0.3 * prevLast + 0.7 * curFirst);
   }
-  const last = timeline[timeline.length - 1];
-  out.push(last.xPx + Math.max(last.widthPx, 20));
+  // Right barline of the final written measure. `timeline[timeline.length - 1]`
+  // isn't reliable here: OSMD's cursor walks in UNFOLDED order, so a score
+  // with D.C. al Fine / al Coda terminates the cursor mid-score and the
+  // last timeline xPx ends up at the Fine measure — producing a final
+  // `measureXs` entry that's SMALLER than its predecessor. Instead, extend
+  // past the last bar's left-edge by the average bar width observed so far.
+  const firstBarX = out[0];
+  const lastBarX = out[out.length - 1];
+  const avgBarWidth = maxMeasure > 0 ? (lastBarX - firstBarX) / maxMeasure : 120;
+  out.push(lastBarX + Math.max(avgBarWidth, 40));
   return out;
 }
 
