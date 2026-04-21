@@ -227,6 +227,17 @@ export function StemsStep({ state, dispatch }: Props) {
         onDiscardPending={() => dispatch({ type: 'SET_SHEET_MUSIC_FILE', file: null })}
         onRemoveExisting={() => dispatch({ type: 'SET_SHEET_MUSIC_FILE', file: null })}
       />
+      {state.sheetMusicFile && (
+        <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={state.repeatAfterDcDs}
+            onChange={(e) => dispatch({ type: 'SET_REPEAT_AFTER_DC_DS', value: e.target.checked })}
+            className="accent-blue-500"
+          />
+          <span>Repeat internal sections after D.C. / D.S.</span>
+        </label>
+      )}
 
       {/* Stem list */}
       {state.stems.length > 0 && (

@@ -38,6 +38,10 @@ export interface WizardState {
   // the stem transcode-upload succeeds; `sheetMusicUrl` is injected into
   // the saved config using the file's canonical name (`score.{ext}`).
   sheetMusicFile: File | null;
+  // When true, internal repeats / voltas are re-taken on the return
+  // pass after D.C. / D.S. Only persisted when `sheetMusicFile` is
+  // set (ignored otherwise).
+  repeatAfterDcDs: boolean;
   // Step 4: Save
   saving: boolean;
   error: string | null;
@@ -64,7 +68,8 @@ export type WizardAction =
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_UPLOAD_PROGRESS'; progress: UploadProgress | null }
-  | { type: 'SET_SHEET_MUSIC_FILE'; file: File | null };
+  | { type: 'SET_SHEET_MUSIC_FILE'; file: File | null }
+  | { type: 'SET_REPEAT_AFTER_DC_DS'; value: boolean };
 
 export const initialState: WizardState = {
   step: 1,
@@ -82,6 +87,7 @@ export const initialState: WizardState = {
   timeSignatureDenominator: 4,
   groups: [],
   sheetMusicFile: null,
+  repeatAfterDcDs: false,
   saving: false,
   error: null,
   uploadProgress: null,
@@ -147,5 +153,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return { ...state, uploadProgress: action.progress };
     case 'SET_SHEET_MUSIC_FILE':
       return { ...state, sheetMusicFile: action.file };
+    case 'SET_REPEAT_AFTER_DC_DS':
+      return { ...state, repeatAfterDcDs: action.value };
   }
 }

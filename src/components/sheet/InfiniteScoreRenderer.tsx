@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { parseMusicXML, unfold, type UnfoldedStep } from '../../audio/unfoldRepeats';
+import {
+  parseMusicXML,
+  unfold,
+  type MusicXMLStructure,
+  type UnfoldedStep,
+} from '../../audio/unfoldRepeats';
 
 export interface PartInfo {
   /** MusicXML part id (e.g. "P1") */
@@ -59,6 +64,11 @@ interface Props {
    *  parts render. Changes are applied by mutating each instrument's
    *  `Visible` flag and re-rendering without a full reload. */
   visiblePartIds?: Set<string>;
+  /** Per-song unfold tweak: when true, internal repeats / voltas are
+   *  re-taken on the return pass after D.C. / D.S. Passed through to
+   *  the unfold algorithm. Flips re-run unfold on the cached structure
+   *  without re-fetching / re-rendering. */
+  repeatAfterDcDs?: boolean;
   /** Children rendered absolutely-positioned inside the scroll host so they
    *  scroll natively with the score. Use for playhead / bbox / overlays. */
   overlay?: React.ReactNode;
@@ -90,12 +100,16 @@ export function InfiniteScoreRenderer({
   onParts,
   onUnfoldedOrder,
   visiblePartIds,
+  repeatAfterDcDs = false,
   overlay,
 }: Props) {
   const scrollHostRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const osmdRef = useRef<any>(null);
   const partsRef = useRef<PartInfo[]>([]);
+  /** Cached parse of the MusicXML structure so we can re-run `unfold()`
+   *  when `repeatAfterDcDs` flips without refetching / re-rendering. */
+  const xmlStructureRef = useRef<MusicXMLStructure | null>(null);
   /** Sorted join of the last-applied visible-part ids. Used to skip the
    *  visibility effect when the Set content is unchanged (a fresh Set
    *  instance from the parent wouldn't otherwise be detected as equal). */
@@ -179,11 +193,14 @@ export function InfiniteScoreRenderer({
 
         // Parse repeat/jump structure from the same XML text and unfold it
         // into a linear playback order. Harmless on scores without repeats
-        // — `unfold` just returns the same measure order.
+        // — `unfold` just returns the same measure order. Structure is
+        // stashed so the repeatAfterDcDs effect can re-unfold without
+        // re-fetching or re-rendering.
         let unfoldedSteps: UnfoldedStep[] = [];
         try {
           const structure = parseMusicXML(xmlText);
-          unfoldedSteps = unfold(structure);
+          xmlStructureRef.current = structure;
+          unfoldedSteps = unfold(structure, { repeatAfterDcDs });
         } catch (e) {
           console.warn('Repeat unfold failed; falling back to linear order', e);
           unfoldedSteps = [];
@@ -253,6 +270,22 @@ export function InfiniteScoreRenderer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom]);
+
+  // Re-run unfold (without re-fetching or re-rendering) when the
+  // per-song `repeatAfterDcDs` flag flips. Safe to fire on mount too —
+  // first-render path already runs unfold with the initial flag value.
+  useEffect(() => {
+    if (status !== 'ready') return;
+    const structure = xmlStructureRef.current;
+    if (!structure) return;
+    try {
+      const next = unfold(structure, { repeatAfterDcDs });
+      onUnfoldedOrder?.(next);
+    } catch (e) {
+      console.warn('Repeat unfold re-run failed', e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repeatAfterDcDs, status]);
 
   // Live part-visibility updates without a full reload. Mutating
   // `inst.Visible` and re-rendering is an OSMD-supported fast path — it

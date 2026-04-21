@@ -195,6 +195,17 @@ export function parseMusicXML(xmlText: string): MusicXMLStructure {
 
 // ────────────────────────────── Unfold algorithm ────────────────────────────
 
+/** Per-song knobs that bend the unfold algorithm away from the default
+ *  spec behavior. Surfaced in the song config so admins can tune
+ *  individual scores. */
+export interface UnfoldOptions {
+  /** When true, internal repeats (`|: :|`) and voltas are re-taken on
+   *  the return pass after a D.C. / D.S. jump. Default is false —
+   *  convention is that D.C./D.S. walks straight through. Uncommon but
+   *  not unheard of in practice, so it's exposed per-song. */
+  repeatAfterDcDs?: boolean;
+}
+
 /**
  * Run the state-machine unfolder on a parsed `MusicXMLStructure`, returning
  * the unfolded playback order as `{ srcIndex, pass }[]`.
@@ -214,7 +225,10 @@ export function parseMusicXML(xmlText: string): MusicXMLStructure {
  * written measure gives a predictable result without requiring the
  * author to be exact about the interaction.
  */
-export function unfold(structure: MusicXMLStructure): UnfoldedStep[] {
+export function unfold(
+  structure: MusicXMLStructure,
+  options: UnfoldOptions = {},
+): UnfoldedStep[] {
   const measures = structure.measures;
   const steps: UnfoldedStep[] = [];
   if (measures.length === 0) return steps;
@@ -260,9 +274,17 @@ export function unfold(structure: MusicXMLStructure): UnfoldedStep[] {
       continue;
     }
 
-    // 2. D.C. / D.S. — fire at most once each
+    // 2. D.C. / D.S. — fire at most once each. When
+    // `options.repeatAfterDcDs` is set, clear the internal-repeat
+    // state so backward repeats and volta gating fire fresh on the
+    // return pass. `dcTaken` / `dsTaken` still stick so the jump
+    // itself can't re-fire (that would loop forever).
     if (m.dacapo && !dcTaken) {
       dcTaken = true;
+      if (options.repeatAfterDcDs) {
+        backwardTaken.clear();
+        passCount.clear();
+      }
       steps[steps.length - 1].cause = m.dacapoAlFine
         ? 'D.C. al Fine'
         : m.dacapoAlCoda ? 'D.C. al Coda' : 'D.C.';
@@ -271,6 +293,10 @@ export function unfold(structure: MusicXMLStructure): UnfoldedStep[] {
     }
     if (m.dalsegno && !dsTaken && segnoIdx >= 0) {
       dsTaken = true;
+      if (options.repeatAfterDcDs) {
+        backwardTaken.clear();
+        passCount.clear();
+      }
       steps[steps.length - 1].cause = m.dalsegnoAlFine
         ? 'D.S. al Fine'
         : m.dalsegnoAlCoda ? 'D.S. al Coda' : 'D.S.';

@@ -981,6 +981,7 @@ export function ScrollingScore() {
           onParts={handleParts}
           onUnfoldedOrder={handleUnfoldedOrder}
           visiblePartIds={visiblePartIds}
+          repeatAfterDcDs={song?.repeatAfterDcDs ?? false}
         />
         {/* Overlay — sibling of the scroll host (NOT inside it) so the
             playhead stays fixed to the viewport instead of scrolling with

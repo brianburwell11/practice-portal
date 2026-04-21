@@ -88,6 +88,11 @@ export const songConfigSchema = z.object({
   /** Force OSMD's FixedMeasureWidth flag for this song. Dense songs should
    *  leave this off; sparse songs benefit from turning it on. */
   equalBeatWidth: z.boolean().optional(),
+  /** When true, internal repeats (`|: :|`, voltas) are re-taken after a
+   *  D.C. / D.S. jump. Default (unset / false) matches the usual convention
+   *  where internal repeats are honored only on the first pass and the
+   *  D.C./D.S. return walks straight through. */
+  repeatAfterDcDs: z.boolean().optional(),
 });
 
 export const songManifestEntrySchema = z.object({

@@ -517,6 +517,18 @@ export default function EditSongPage() {
             onRemoveExisting={() => dispatch({ type: 'SET_SHEET_MUSIC_URL', url: undefined })}
             disabled={state.saving}
           />
+          {(config.sheetMusicUrl || newSheetMusicFile) && (
+            <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!config.repeatAfterDcDs}
+                onChange={(e) => dispatch({ type: 'SET_REPEAT_AFTER_DC_DS', value: e.target.checked })}
+                disabled={state.saving}
+                className="accent-blue-500"
+              />
+              <span>Repeat internal sections after D.C. / D.S.</span>
+            </label>
+          )}
 
           {state.original && config.id !== state.original.id && (
             <div className="bg-yellow-900/30 border border-yellow-700 rounded p-3 text-sm text-yellow-300">

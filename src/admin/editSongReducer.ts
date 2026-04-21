@@ -32,7 +32,8 @@ export type EditSongAction =
   | { type: 'SET_SAVE_SUCCESS' }
   | { type: 'RESET_DIRTY' }
   | { type: 'SET_UPLOAD_PROGRESS'; progress: UploadProgress | null }
-  | { type: 'SET_SHEET_MUSIC_URL'; url: string | undefined };
+  | { type: 'SET_SHEET_MUSIC_URL'; url: string | undefined }
+  | { type: 'SET_REPEAT_AFTER_DC_DS'; value: boolean };
 
 export const initialEditState: EditSongState = {
   config: null,
@@ -169,5 +170,10 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
 
     case 'SET_SHEET_MUSIC_URL':
       return updateConfig(state, { sheetMusicUrl: action.url });
+    case 'SET_REPEAT_AFTER_DC_DS':
+      // Drop the field when unchecked so saved configs stay clean.
+      return updateConfig(state, {
+        repeatAfterDcDs: action.value ? true : undefined,
+      });
   }
 }
