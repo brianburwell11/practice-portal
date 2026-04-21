@@ -116,6 +116,22 @@ export function InfiniteScoreRenderer({
   const lastVisibilityKeyRef = useRef<string>('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'rendering' | 'ready' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  /** Scroll host's client width, tracked via ResizeObserver. Used to size
+   *  the trailing pad so the last measure can always scroll to the focus
+   *  point — browsers clamp `scrollLeft` to `scrollWidth - clientWidth`,
+   *  so the pad must be at least the viewport width for a measure near
+   *  the end to sit at a near-left focus point. */
+  const [scrollHostWidth, setScrollHostWidth] = useState(0);
+  useEffect(() => {
+    const host = scrollHostRef.current;
+    if (!host) return;
+    setScrollHostWidth(host.clientWidth);
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) setScrollHostWidth(e.contentRect.width);
+    });
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, []);
 
   // Initial load + render
   useEffect(() => {
@@ -342,9 +358,20 @@ export function InfiniteScoreRenderer({
     >
       <div style={{ display: 'inline-block', width: leadingPadPx, height: 1, verticalAlign: 'top' }} aria-hidden />
       <div ref={containerRef} style={{ display: 'inline-block', verticalAlign: 'top' }} />
-      {/* Trailing pad — fixed pixel width so the last measure can always
-          scroll to the focus point regardless of viewport. */}
-      <div style={{ display: 'inline-block', width: 800, height: 1, verticalAlign: 'top' }} aria-hidden />
+      {/* Trailing pad — must be ≥ the scroll host's client width so the
+          last measure can scroll to a near-left focus point. `scrollLeft`
+          is clamped to `scrollWidth - clientWidth`, so a fixed 800px pad
+          was too small on wide viewports and caused the playhead to stop
+          tracking in the last few measures of long songs. */}
+      <div
+        style={{
+          display: 'inline-block',
+          width: Math.max(800, scrollHostWidth),
+          height: 1,
+          verticalAlign: 'top',
+        }}
+        aria-hidden
+      />
       {overlay && (
         <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, pointerEvents: 'none', zIndex: 3 }}>
           {overlay}
