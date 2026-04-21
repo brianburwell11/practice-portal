@@ -72,7 +72,7 @@ export function ScrollingScore() {
    *  in that case callers fall back to `srcIdx = u`. */
   const [unfolded, setUnfolded] = useState<UnfoldedStep[]>([]);
   const [scrollHost, setScrollHost] = useState<HTMLDivElement | null>(null);
-  const [cursorPx, setCursorPx] = useState(0);
+  const [cursorPx, setCursorPx] = useState<number | null>(0);
   const [bbox, setBbox] = useState<{ leftPx: number; widthPx: number } | null>(null);
   const [trainGrayLeftPx, setTrainGrayLeftPx] = useState(0);
   const [trainGrayRightStartPx, setTrainGrayRightStartPx] = useState<number | null>(null);
@@ -145,6 +145,11 @@ export function ScrollingScore() {
    *  on pause-scrolls. */
   const cursorContentXRef = useRef(0);
   const measureRangeRef = useRef<{ left: number; width: number } | null>(null);
+  /** True when the live playback position has advanced past the last
+   *  rendered measure (tapMap has more measures than the score). Read by
+   *  the scroll listener so a pause-scroll past the end doesn't restore
+   *  the playhead / bbox from their stale content-x refs. */
+  const pastEndRef = useRef(false);
   /** Mirror of `playing` so listeners read the latest value without
    *  re-subscribing on every flip. */
   const playingRef = useRef(false);
@@ -441,8 +446,30 @@ export function ScrollingScore() {
     let srcIdx = 0;
     let srcIdxNext = 0;
     let cursorContentX: number;
+    // Number of measures the rendered score actually covers. For scores
+    // with repeats this is the unfolded length; without repeats it's the
+    // written-measure count (measureXs carries a trailing sentinel, so
+    // `length - 1` is the count). A tapMap with more entries than this
+    // advances `mIdx` past the score's last measure — we detect that and
+    // hide the playhead/bbox instead of letting the cursor math wrap.
+    const scoreMeasureCount = unfolded.length > 0
+      ? unfolded.length
+      : Math.max(0, measureXs.length - 1);
     if (measureTimes.length >= 2) {
       mIdx = currentMeasureIndex(t + audioOffset, measureTimes);
+      if (mIdx >= scoreMeasureCount) {
+        // Past the end of the rendered score. Leave scroll where it is,
+        // hide the playhead, and drop the window-mode bbox. Without this
+        // guard `measureXs[srcIdx]` is undefined and the `?? 0` fallback
+        // snaps the playhead to x = 0 (i.e. the top of the song).
+        pastEndRef.current = true;
+        setCursorPx(null);
+        setBbox(null);
+        measureRangeRef.current = null;
+        setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX - scrollHost.scrollLeft));
+        return;
+      }
+      pastEndRef.current = false;
       const step = unfolded.length > 0 ? unfolded[mIdx] : undefined;
       srcIdx = step?.srcIndex ?? mIdx;
       const nextStep = unfolded.length > 0 ? unfolded[mIdx + 1] : undefined;
@@ -665,13 +692,15 @@ export function ScrollingScore() {
       }
       if (!playingRef.current) {
         setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX - scrollHost.scrollLeft));
-        setCursorPx(cursorContentXRef.current - scrollHost.scrollLeft);
-        const range = measureRangeRef.current;
-        if (range) {
-          setBbox({
-            leftPx: range.left - scrollHost.scrollLeft,
-            widthPx: range.width,
-          });
+        if (!pastEndRef.current) {
+          setCursorPx(cursorContentXRef.current - scrollHost.scrollLeft);
+          const range = measureRangeRef.current;
+          if (range) {
+            setBbox({
+              leftPx: range.left - scrollHost.scrollLeft,
+              widthPx: range.width,
+            });
+          }
         }
       }
     };
@@ -754,8 +783,9 @@ export function ScrollingScore() {
   // full rendered score, however tall it ends up.
   const overlay = (
     <>
-      {/* Playhead line — full-system height, toggleable */}
-      {showPlayhead && (
+      {/* Playhead line — full-system height, toggleable. Hidden (cursorPx
+          null) when playback has advanced past the last rendered measure. */}
+      {showPlayhead && cursorPx !== null && (
         <div style={{
           position: 'absolute', top: 0, bottom: 0,
           left: cursorPx - 1, width: 2,
