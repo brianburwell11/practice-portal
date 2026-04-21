@@ -54,6 +54,26 @@ export function LyricsEditorModal() {
     close();
   }, [dirty, close]);
 
+  // Export lyrics as a plain text file. Instrumental lines become
+  // `[instrumental]` so the export round-trips through the paste handler
+  // on line 311. Blank text lines stay blank. Timestamps are omitted —
+  // this is for human-readable reuse, not re-sync.
+  const handleExport = useCallback(() => {
+    if (!selectedSong) return;
+    const content = lines
+      .map((l) => (l.instrumental ? '[instrumental]' : l.text))
+      .join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${selectedSong.id}-lyrics.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [lines, selectedSong]);
+
   // Save
   const handleSave = async () => {
     if (!currentBand || !selectedSong) return;
@@ -186,6 +206,13 @@ export function LyricsEditorModal() {
             disabled={saving}
           >
             {saving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
+            onClick={handleExport}
+            title="Download lyrics as a .txt file (blank lines preserved; instrumental lines become [instrumental])"
+          >
+            Export .txt
           </button>
           <button className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors" onClick={handleClose}>
             Close
