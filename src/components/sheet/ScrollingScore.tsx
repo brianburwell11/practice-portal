@@ -617,8 +617,10 @@ export function ScrollingScore() {
   // and `engine` without needing to re-subscribe on every render.
   const measureXsRef = useRef(measureXs);
   const measureTimesRef = useRef(measureTimes);
+  const unfoldedRef = useRef(unfolded);
   const trackingModeRef = useRef(trackingMode);
   const engineRef = useRef(engine);
+  useEffect(() => { unfoldedRef.current = unfolded; }, [unfolded]);
   useEffect(() => { measureXsRef.current = measureXs; }, [measureXs]);
   useEffect(() => { measureTimesRef.current = measureTimes; }, [measureTimes]);
   useEffect(() => { trackingModeRef.current = trackingMode; }, [trackingMode]);
@@ -647,9 +649,18 @@ export function ScrollingScore() {
         const xs = measureXsRef.current;
         if (xs.length >= 2) {
           const contentX = scrollHost.scrollLeft + focusLeftPxRef.current;
-          const m = findMeasureAtX(contentX, xs);
-          resumeAtMeasureRef.current = m;
-          if (trackingModeRef.current === 'window') lockedAnchorRef.current = m;
+          const writtenIdx = findMeasureAtX(contentX, xs);
+          // resumeAtMeasureRef and lockedAnchorRef are compared against
+          // `mIdx` (UNFOLDED index) in the sync effect, so convert the
+          // clicked WRITTEN measure to its first unfolded occurrence.
+          const uf = unfoldedRef.current;
+          let unfoldedIdx = writtenIdx;
+          if (uf.length > 0) {
+            const first = uf.findIndex((s) => s.srcIndex === writtenIdx);
+            if (first >= 0) unfoldedIdx = first;
+          }
+          resumeAtMeasureRef.current = unfoldedIdx;
+          if (trackingModeRef.current === 'window') lockedAnchorRef.current = unfoldedIdx;
         }
       }
       if (!playingRef.current) {
@@ -697,11 +708,23 @@ export function ScrollingScore() {
       if (suppressClickRef.current) return;
       const xs = measureXsRef.current;
       const times = measureTimesRef.current;
+      const uf = unfoldedRef.current;
       if (xs.length < 2 || times.length === 0) return;
       const hostRect = scrollHost.getBoundingClientRect();
       const contentX = (e.clientX - hostRect.left) + scrollHost.scrollLeft;
-      const rawMIdx = findMeasureAtX(contentX, xs);
-      const mIdx = Math.max(0, Math.min(rawMIdx, times.length - 1));
+      const writtenIdx = findMeasureAtX(contentX, xs);
+      // `findMeasureAtX` returns a WRITTEN measure index. `times` is
+      // keyed in UNFOLDED order (one entry per audible downbeat), so we
+      // need to resolve the click to the first unfolded occurrence of
+      // that written measure — otherwise clicking m.9 on a score with
+      // repeats seeks to the 9th *unfolded* measure, which is usually
+      // not m.9 at all.
+      let unfoldedIdx = writtenIdx;
+      if (uf.length > 0) {
+        const first = uf.findIndex((s) => s.srcIndex === writtenIdx);
+        if (first >= 0) unfoldedIdx = first;
+      }
+      const mIdx = Math.max(0, Math.min(unfoldedIdx, times.length - 1));
       engineRef.current?.seek(times[mIdx]);
     };
     scrollHost.addEventListener('pointerdown', onPointerDown);
