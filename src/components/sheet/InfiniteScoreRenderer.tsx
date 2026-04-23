@@ -156,7 +156,10 @@ export function InfiniteScoreRenderer({
           drawTitle: false,
           drawSubtitle: false,
           drawComposer: false,
-          drawPartNames: false,
+          // Show instrument labels once at the start of each staff — they
+          // end up inside the preamble clip, which clones the first
+          // measure's clef/key/time region. Each staff gets its own label.
+          drawPartNames: true,
           drawingParameters: 'compacttight',
           followCursor: false,
           renderSingleHorizontalStaffline: true,
