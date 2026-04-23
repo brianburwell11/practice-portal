@@ -61,7 +61,7 @@ export function LyricsEditorModal() {
   const handleExport = useCallback(() => {
     if (!selectedSong) return;
     const content = lines
-      .map((l) => (l.instrumental ? '[instrumental]' : l.text))
+      .map((l) => (l.instrumental ? '[Instrumental]' : l.text))
       .join('\n');
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -110,12 +110,18 @@ export function LyricsEditorModal() {
         return;
       }
 
-      // Cmd/Ctrl+I — insert instrumental
+      // Cmd/Ctrl+I — insert an instrumental block: blank, [Instrumental], blank.
+      // All three lines are hidden in the song view (blanks + bracket
+      // annotation), giving the lyrics a quiet gap during the instrumental.
       if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
         e.preventDefault();
         const after = focusedIndex ?? lines.length - 1;
-        insertLineAfter(after, { text: '', time: null, instrumental: true });
-        focusRow(after + 1);
+        insertLines(after, [
+          { text: '', time: null },
+          { text: '[Instrumental]', time: null },
+          { text: '', time: null },
+        ]);
+        focusRow(after + 3);
         return;
       }
 
@@ -210,7 +216,7 @@ export function LyricsEditorModal() {
           <button
             className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
             onClick={handleExport}
-            title="Download lyrics as a .txt file (blank lines preserved; instrumental lines become [instrumental])"
+            title="Download lyrics as a .txt file (blank lines preserved; Instrumental lines become [Instrumental])"
           >
             Export .txt
           </button>
@@ -376,7 +382,7 @@ export function LyricsEditorModal() {
             {isFocused && (
               <div className="flex items-center gap-x-4 px-3 py-1 pl-9 text-[10px] text-gray-600">
                 <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">↵</kbd> new line</span>
-                <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘I</kbd> instrumental</span>
+                <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘I</kbd> Instrumental</span>
                 <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌥↑↓</kbd> move line</span>
                 <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘D</kbd> duplicate</span>
               </div>
@@ -390,7 +396,7 @@ export function LyricsEditorModal() {
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-5 py-2 text-[10px] text-gray-600 border-t border-gray-700">
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Space</kbd> play/pause</span>
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Tab</kbd> sync</span>
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘I</kbd> instrumental</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘I</kbd> Instrumental</span>
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘D</kbd> duplicate</span>
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌥↑↓</kbd> move</span>
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘A</kbd> select all</span>
