@@ -1,0 +1,350 @@
+---
+title: "Repeats, Voltas, and Jumps: Unfolding MusicXML for Linear Playback"
+description: "How MusicXML 4.0 encodes simple repeats, voltas, D.C., D.S., segno, coda, and fine — detection rules, an unfolding algorithm, OSMD specifics, and a live widget that unfolds a real MXL."
+pubDate: "Apr 20 2026"
+tags: ["music", "musicxml", "repeats", "research", "interactive"]
+---
+
+import { MsczInspector } from '../../components/react/sheet/MsczInspector';
+import { RepeatUnfolder } from '../../components/react/sheet/RepeatUnfolder';
+
+The [scrolling-score research post](/docs/sheet-music-scroll-research/#repeats-voltas-and-jumps) established that our playhead math has to run against an **unfolded** measure sequence — the linear order the audio engine actually plays — rather than the score's as-notated order. The previous post handled that with a synthetic 16-measure example and waved its hands at "write the full state machine." This post is that state machine, grounded in a real MuseScore export that exercises every jump construct MusicXML 4.0 can encode.
+
+The test fixture is `/xml-sample/roadmap-test.mxl` — 14 measures engraved in MuseScore 4.6.5, built specifically to hit each construct in isolation so we can read the XML shape unambiguously:
+
+<MsczInspector client:only="react"
+  url="/xml-sample/roadmap-test.mxl"
+  label="roadmap-test.mxl"
+  defaultPath="score.xml"
+  previewBytes={8000} />
+
+Drill into `score.xml`. The fixture's layout is:
+
+| Measure | Construct | User-visible notation |
+|---|---|---|
+| 1 | pickup / free | — |
+| 2 | `|:` forward repeat | start of repeated section |
+| 3 | `:|` backward repeat | end of repeated section |
+| 4 | free | — |
+| 5 | `|:` forward repeat | start of volta block |
+| 6 | 1st ending, ends `:|` | 1st volta + backward repeat |
+| 7 | 2nd ending | 2nd volta |
+| 8 | double bar | section boundary |
+| 9 | `𝄋` segno | D.S. destination |
+| 10 | *To Coda* | To-coda jump trigger |
+| 11 | free | — |
+| 12 | D.S. al Coda | D.S. jump firing point |
+| 13 | `𝄌` coda | coda destination |
+| 14 | final bar | end |
+
+## Detection: the XML shapes to look for
+
+Every construct below maps to a small, named XML pattern. The patterns are in *priority order* per measure — if multiple fire at the same bar, the unfold algorithm applies them in this same order.
+
+### Simple repeats — `|:` and `:|`
+
+Repeats ride on `<barline>` elements with a `<repeat>` child. `direction="forward"` on a left-barline opens a section; `direction="backward"` on a right-barline closes one. In the fixture:
+
+```xml
+<!-- m.2 start -->
+<barline location="left">
+  <bar-style>heavy-light</bar-style>
+  <repeat direction="forward"/>
+</barline>
+
+<!-- m.3 end -->
+<barline location="right">
+  <bar-style>light-heavy</bar-style>
+  <repeat direction="backward"/>
+</barline>
+```
+
+Detection: for every `<measure>`, look at `<barline>` children. Flag `forwardRepeat = true` when `<repeat direction="forward"/>` is at `location="left"`, and `backwardRepeat = true` at `location="right"`. The implicit case — a backward repeat with no prior forward repeat — means "loop back to the start of the piece", so the unfolder should treat the beginning as a virtual forward repeat.
+
+`repeat@times` (e.g. `<repeat direction="backward" times="3"/>`) overrides the default of 2 total plays. MuseScore exports it only when the author explicitly sets it; our detection should read it and default to 2 when absent.
+
+### Voltas / alternate endings
+
+Voltas also live on `<barline>` elements, as `<ending>` children. A volta has a `type` (`start` / `stop` / `discontinue`) and a `number` attribute that is a comma-separated list of pass numbers this ending applies to (`"1"`, `"1,2"`, `"3"`).
+
+```xml
+<!-- m.6 — 1st ending -->
+<barline location="left">
+  <ending number="1" type="start" default-y="33.09">1.</ending>
+</barline>
+…
+<barline location="right">
+  <bar-style>light-heavy</bar-style>
+  <ending number="1" type="stop"/>
+  <repeat direction="backward"/>
+</barline>
+
+<!-- m.7 — 2nd ending -->
+<barline location="left">
+  <ending number="2" type="start" default-y="33.09">2.</ending>
+</barline>
+…
+<barline location="right">
+  <ending number="2" type="discontinue"/>
+</barline>
+```
+
+Detection: maintain an "active volta" list of pass-numbers. Push numbers on `type="start"`, tag every subsequent measure with the current active list, clear the list on `type="stop"` or `type="discontinue"`. During unfold, if the current pass number is not in a measure's active-volta list, skip forward to a measure whose list does contain it, or past the volta block entirely if none match.
+
+The `discontinue` type marks a volta that has no closing bracket (common on a 2nd ending that runs into the next section); treat it the same as `stop` for gate-matching purposes.
+
+### Segno
+
+The segno is a *marker* (`<segno/>` in `<direction-type>`). It may also carry a `<sound segno="X"/>` payload naming the segno — that's the string a later `<sound dalsegno="X"/>` will reference.
+
+```xml
+<!-- m.9 -->
+<direction placement="above">
+  <direction-type>
+    <segno default-x="-11.64" relative-y="20"/>
+  </direction-type>
+  <sound segno="segno"/>
+</direction>
+```
+
+In practice most scores have exactly one segno, so a D.S. without a matching `sound@segno` name can just target "the segno". If multiple segnos exist, match by name.
+
+### Coda destination + "To Coda" jump
+
+Coda is two pieces: a *destination* (where you jump **to**) and a *jump trigger* (the "To Coda" text that, **once** a D.S. or D.C. al Coda has fired, redirects forward to the destination).
+
+```xml
+<!-- m.10 — "To Coda" jump trigger -->
+<direction placement="above">
+  <direction-type>
+    <words default-x="170.61" relative-y="20">To Coda</words>
+  </direction-type>
+  <sound tocoda="codab"/>
+</direction>
+
+<!-- m.13 — coda destination -->
+<direction placement="above">
+  <direction-type>
+    <coda default-x="-17.46" default-y="28.05" relative-y="20"/>
+  </direction-type>
+  <sound coda="codab"/>
+</direction>
+```
+
+Detection: `hasCoda` on any measure with a `<coda/>` marker; `toCodaTarget` on any measure with `<sound tocoda="X"/>`. The "To Coda" jump fires at the *end* of its measure, not the beginning — but **only** after a D.C./D.S. al Coda has been taken. Pre-jump, the reader plays through it as if it isn't there.
+
+### D.C., D.S., and "al Fine" / "al Coda"
+
+Da Capo and Dal Segno both combine two pieces: the jump itself (either a `<sound>` attribute or `<words>` text) and an optional "al Fine" / "al Coda" qualifier saying where to stop or redirect.
+
+```xml
+<!-- m.12 — D.S. al Coda -->
+<direction placement="above">
+  <direction-type>
+    <words relative-y="20">D.S. al Coda</words>
+  </direction-type>
+  <sound dalsegno="segno"/>
+</direction>
+```
+
+The fixture uses `<sound dalsegno="segno"/>` — the authoritative form. MuseScore always exports both the `<words>` text and the `<sound>` attribute, but hand-authored MusicXML can easily have only one or the other, so a robust parser reads both and OR's them:
+
+- `<sound dacapo="yes"/>` → D.C. jumps to measure 1
+- `<sound dalsegno="X"/>` → D.S. jumps to the segno named X
+- `<words>D.C. al Fine</words>` / `<words>D.C. al Coda</words>` / `<words>D.S. al Coda</words>` — text we regex for `\bd\.?\s*c\.?\b` / `\bd\.?\s*s\.?\b` plus `al\s*fine` / `al\s*coda`
+
+The "al Fine" / "al Coda" qualifier doesn't live in its own attribute — we detect it from the words text (case- and punctuation-insensitive).
+
+### Fine
+
+Fine marks where playback stops — **but only during the second traversal**, the one that follows a D.C. al Fine or D.S. al Fine. On the first pass through its measure the reader plays right past it.
+
+```xml
+<direction placement="above">
+  <direction-type><words>Fine</words></direction-type>
+  <sound fine="yes"/>
+</direction>
+```
+
+Detection: `hasFine = true` if either `<sound fine="yes"/>` is present anywhere in the measure or a `<words>` element equals "Fine" (case-insensitive, trimmed). Our fixture doesn't use Fine (it's a D.S. al Coda fixture), but the detection should still cover it.
+
+### Summary table
+
+| User-visible notation | XML shape | Detection |
+|---|---|---|
+| `|:` start repeat | `<barline location="left"><repeat direction="forward"/>` | `barline > repeat[direction="forward"]` |
+| `:|` end repeat | `<barline location="right"><repeat direction="backward"/>` | `barline > repeat[direction="backward"]`, optional `@times` |
+| 1., 2. volta | `<barline><ending number="N[,M]" type="start/stop/discontinue"/>` | span from `start` to `stop`/`discontinue`, parse `number` as a list |
+| 𝄋 segno | `<direction-type><segno/></direction-type>` plus optional `<sound segno="X"/>` | any direction with a `<segno/>` element |
+| 𝄌 coda destination | `<direction-type><coda/></direction-type>` plus optional `<sound coda="X"/>` | any direction with a `<coda/>` element |
+| To Coda | `<sound tocoda="X"/>` (typically alongside `<words>To Coda</words>`) | `direction > sound[tocoda]` |
+| D.C. | `<sound dacapo="yes"/>` or `<words>D.C.…</words>` | attr or regex `/\bd\.?\s*c\.?\b/i` |
+| D.S. | `<sound dalsegno="X"/>` or `<words>D.S.…</words>` | attr or regex `/\bd\.?\s*s\.?\b/i` |
+| "al Fine" / "al Coda" | suffix in `<words>` text | regex against same words node |
+| Fine | `<sound fine="yes"/>` or `<words>Fine</words>` | attr or words text equals "Fine" |
+
+## Unfolding algorithm
+
+The unfolder produces a list of `(srcIndex, pass)` tuples in playback order. `srcIndex` is the written measure; `pass` is which traversal of the enclosing repeat section we're on. One written measure can appear many times in the unfolded list.
+
+```text
+state:
+  i            = 0              # current measure index
+  passCount    = Map<fwdStart, int>   # current pass for each forward-repeat block
+  backwardTaken = Map<endIdx, int>    # how many times we've taken each :|
+  dcTaken      = false
+  dsTaken      = false
+  out          = []
+
+loop:
+  m = measures[i]
+
+  # Volta gate — if the current measure has active voltas, the current pass
+  # number must match one of them; otherwise jump forward.
+  if m.voltaNumbers not empty:
+    fwd = findEnclosingForwardRepeat(i)    # nullable
+    pass = passCount[fwd] or 1
+    if pass not in m.voltaNumbers:
+      i = nextVoltaMatching(i, pass) or exitVoltaBlock(i)
+      continue
+
+  out.push({ srcIndex: i, pass })
+  passCount.setIfAbsent(i if m.forwardRepeat, 1)
+
+  # End-of-measure effects, in spec priority:
+
+  # 1. Fine — but only active after a D.C. / D.S. has fired.
+  if m.hasFine and (dcTaken or dsTaken):
+    break
+
+  # 2. To-coda — only active after a D.S./D.C. al Coda has fired.
+  if m.toCodaTarget and (dsTaken or dcTaken):
+    i = indexOf(first measure with hasCoda)
+    continue
+
+  # 3. D.C. / D.S. fires once.
+  if m.dacapo and not dcTaken:
+    dcTaken = true
+    i = 0
+    continue
+  if m.dalsegno and not dsTaken:
+    dsTaken = true
+    i = indexOf(first measure with hasSegno)
+    continue
+
+  # 4. Backward repeat — loop if we haven't exhausted the play count.
+  if m.backwardRepeat:
+    target = findForwardRepeatTarget(i)   # or 0
+    if backwardTaken[i] + 1 < repeatPlays (default 2):
+      backwardTaken[i] += 1
+      passCount[target] = (passCount[target] or 1) + 1
+      i = target
+      continue
+
+  i += 1
+```
+
+### Subtle cases
+
+- **Nested repeats** — e.g. `|: A |: B :| C :|`. The algorithm loops the inner `|: B :|` to its own matching forward repeat before considering the outer one, because `findForwardRepeatTarget` walks backward from the endpoint and picks the closest forward barline. The `passCount` is keyed per-forward-start so inner and outer track independently.
+- **Voltas with more than two endings** — e.g. `1., 2.` ending on one volta, `3.` on another. The `number` attribute on `<ending>` is a comma-separated list of pass numbers. Our detection splits that list; the gate accepts pass 1 and pass 2 on the first ending and pass 3 on the second. Critically, the pass number reflects *how many times we've entered the enclosing forward repeat* — not how many times we've taken the backward one.
+- **D.S. al Fine vs D.S. al Coda** — both jump to the segno. The difference is what stops or redirects them: "al Fine" makes Fine active; "al Coda" makes "To Coda" active. Neither qualifier on its own changes the initial jump.
+- **D.C. / D.S. al Coda without a matching Coda** — degenerate score. The algorithm will re-traverse to the end and terminate there. Warn but don't fail.
+- **Overlapping jumps** — MusicXML allows a D.C. and a D.S. in the same piece. The one-shot flags (`dcTaken`, `dsTaken`) ensure each fires at most once, so a D.S. followed later by a D.C. executes both in order. Authors rarely do this, but it's legal.
+- **Jump at the *end* of its measure, not the start** — our state machine visits the measure first, then decides. Getting this wrong means the measure containing the D.S. text is either skipped or double-counted.
+
+### The jump pointer, restated
+
+The research doc framed it as "a state machine with a jump pointer." Concretely the pointer is `(i, passCount, backwardTaken, dcTaken, dsTaken)`. Every barline crossing is one transition; each transition either increments `i`, jumps `i`, or terminates. Because the state is finite and every non-terminating transition either advances `i` or increments a monotonically-bounded counter, the machine provably halts on any well-formed score. (On a malformed one — say, a D.S. whose segno is after the D.S. text rather than before — a safety counter catches the runaway.)
+
+## Sync-to-audio implications
+
+**The existing playhead math is wrong for any score with repeats.** `src/components/sheet/ScrollingScore.tsx` maps `measureIndex → x-pixel` one-to-one. With repeats, one `measureIndex` corresponds to *multiple* positions in the audio timeline, so "audio t = 4.2 s → measureIndex 6" is ambiguous on its own — is that the first pass or the second?
+
+The fix is to key the playhead by an **unfolded index** `u`, not by bare `measureIndex`:
+
+```ts
+// Current (broken for repeats):
+scrollLeft = xByMeasure[measureIndexAt(audio.currentTime)];
+
+// Correct:
+const u = unfoldedIndexAt(audio.currentTime);          // 0..out.length
+const { srcIndex, pass } = unfoldedSteps[u];
+scrollLeft = xByMeasure[srcIndex];                      // same SVG measure
+cursor.pass = pass;                                     // surfaced to UI
+```
+
+Two concrete consequences:
+
+1. **Time-to-index lookup.** The tapMap (or tempo map) has to generate beat/measure times *for the unfolded sequence*, not for the written sequence. If the audio recording plays 93 written measures but 116 unfolded ones, there are 116 measure-onset times, and the tapMap needs one entry per onset. For now we're tapping to the unfolded audio anyway, so this is already implicit — but the wiring from written-measure `measureIndex` into whatever sync table we build needs to resolve through the unfold table, not bypass it.
+2. **Pass tagging in the UI.** When the playhead is on the second pass of m.6, the user should see *some* indication ("pass 2 of 3", a small badge, a highlighted volta bracket). Otherwise they'll think they're hallucinating when the audio keeps playing and the cursor doesn't advance. The `pass` field from the unfold output is what feeds that badge.
+
+There's also a subtler concern for reverse-seeking. When the user scrubs the position slider backward into a repeated section, we need to pick *which pass* they meant. The reasonable default: pick the pass whose unfolded-index `u` matches the audio seconds they scrubbed to, which falls out of the forward lookup automatically. No extra logic required.
+
+## OSMD specifics
+
+Does OSMD expose jumps on its cursor API? **Yes, much more than you'd expect.** Looking at `opensheetmusicdisplay/.../MusicSource/Repetition.d.ts` and `.../MusicParts/MusicPartManager.d.ts`:
+
+```ts
+class Repetition {
+  startMarker: RepetitionInstruction;
+  endMarker: RepetitionInstruction;
+  forwardJumpInstruction: RepetitionInstruction;
+  get BackwardJumpInstructions(): RepetitionInstruction[];
+  get EndingIndexDict(): { [_: number]: RepetitionEndingPart };
+  getForwardJumpTargetForIteration(iteration: number): number;
+  getBackwardJumpTarget(): number;
+  get NumberOfEndings(): number;
+  get FirstSourceMeasureNumber(): number;
+  get LastSourceMeasureNumber(): number;
+  UserNumberOfRepetitions: number;   // setter — 1 to skip
+  SkipRepetition: boolean;
+}
+
+class MusicPartManagerIterator {
+  backJumpOccurred: boolean;
+  forwardJumpOccurred: boolean;
+  get CurrentRepetition(): Repetition;
+  get CurrentRepetitionIteration(): number;
+  get JumpOccurred(): boolean;
+  moveToNext(): void;
+}
+```
+
+This matters because **OSMD's iterator already does the unfold for us.** Walk it once with `moveToNext()`, record `(CurrentMeasureIndex, CurrentRepetitionIteration, CurrentSourceTimestamp)` at every step, and you have the unfolded sequence — no MusicXML parsing required on our side at all.
+
+The catch: OSMD's iterator treats a repeat with `UserNumberOfRepetitions = 2` as "play twice" — so the default walk gives you the unfolded playback order. Set `SkipRepetition = true` or `UserNumberOfRepetitions = 1` per-repeat and it collapses to the as-notated order instead. `osmd.EngravingRules.CursorIgnoreRepetitions` is the global toggle.
+
+There are two reasons we might still want our own parser:
+
+1. **We need the unfolded order *before* OSMD finishes loading.** OSMD's iterator requires a fully-loaded `MusicSheet`, which takes 200–400 ms on a typical score. The tapMap sync wants the unfolded measure count immediately to size the scroll canvas.
+2. **OSMD's D.C./D.S./coda handling has been historically uneven** — the official changelog mentions fixes in 1.7 (2022) and 1.8 (2023). Repeats and voltas are solid; the jump family (D.C., D.S., Fine, To Coda) is less battle-tested. On our fixture it works, but on a score with adversarial markings we may see drift.
+
+**Recommended path**: for playback, use OSMD's iterator-derived unfold. For the widget below and any "show me the structure" UI, use our own MusicXML parser — we get the full structural detail (which direction had the D.S. words, whether the coda target was named, etc.) that OSMD exposes only opaquely.
+
+## Try it
+
+The widget below fetches `roadmap-test.mxl`, unzips it, parses the MusicXML with `DOMParser`, runs the unfold algorithm above, and renders two bar-number strips:
+
+<RepeatUnfolder client:only="react" url="/xml-sample/roadmap-test.mxl" label="roadmap-test.mxl" />
+
+Hover any measure in the top strip to highlight every occurrence of it in the unfolded strip below. The second strip is the exact order the audio engine sees: m.1, m.2, m.3, m.2, m.3, m.4, m.5, m.6, m.5, m.7, m.8, m.9, m.10, m.11, m.12 (D.S.), m.9, m.10 (→ coda), m.13, m.14. Measure 6 plays once (the 1st ending, during pass 1 of the `|: 5 :|` block), measure 7 plays once (the 2nd ending, during pass 2), and measures 9–10 play twice — once before the D.S. and once on the way to the coda.
+
+The widget leans on the same parser as the production unfolder will. It does *not* tie to audio playback, render actual sheet music, or handle every pathological case (see the comment at the top of `RepeatUnfolder.tsx` for the explicit list of approximations). It's a structural view.
+
+## Next steps
+
+- [ ] Port `parseMusicXML` and `unfold` out of the widget into `src/audio/unfoldRepeats.ts` (main app), keyed off the already-loaded MusicXML text.
+- [ ] Extend `src/audio/scoreSync.ts` to take the unfolded sequence and produce `(audioSeconds → unfoldedIndex)` lookups.
+- [ ] Update `src/components/sheet/ScrollingScore.tsx` to treat its timeline as unfolded-indexed, not written-measure-indexed, and surface `pass` to any highlight UI.
+- [ ] Add a "show me the structure" UI in the admin importer that runs this widget's output on upload — catches malformed D.S./coda targets before they ship.
+- [ ] Audit OSMD's iterator against our parser on 10–20 real scores; if its unfold agrees with ours across the whole set, we can retire the custom unfolder for playback (but keep it for structural display).
+- [ ] Extend the fixture: add a D.C. al Fine example, a three-ending volta, and a nested repeat, so the algorithm gets tested against each case in isolation.
+
+## References
+
+- [MusicXML 4.0 specification — Repeats](https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/repeat/)
+- [MusicXML 4.0 — Endings (voltas)](https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/ending/)
+- [MusicXML 4.0 — `<sound>` element](https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/sound/) (hosts `dacapo`, `dalsegno`, `tocoda`, `coda`, `segno`, `fine`)
+- OSMD source: `opensheetmusicdisplay/.../MusicSource/Repetition.ts`, `.../MusicParts/MusicPartManagerIterator.ts`
+- MuseScore source: `src/engraving/dom/repeatlist.cpp` — the reference unfold algorithm

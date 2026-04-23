@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom';
 import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
-import { uploadFormWithProgress } from '../utils/uploadWithProgress';
+import { uploadFileWithProgress, uploadFormWithProgress } from '../utils/uploadWithProgress';
+import { prepareSheetMusicUpload } from '../utils/sheetMusic';
 import { r2Url } from '../../utils/url';
 import { useBandStore } from '../../store/bandStore';
 
@@ -86,13 +87,68 @@ export function ReviewStep({ state, dispatch }: Props) {
       dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
 
       // 2. Update config stem filenames to match the canonical opus names
-      const transcodedConfig = {
+      let transcodedConfig: typeof config = {
         ...config,
         stems: config.stems.map((stem) => ({
           ...stem,
           file: `${stem.id}.opus`,
         })),
       };
+
+      // 2b. Upload sheet music (optional). Two paths depending on format:
+      // - `.mxl` / `.musicxml` / `.xml` → presigned PUT straight to R2;
+      //   plain XML gets zipped to MXL client-side (20–50× smaller).
+      // - `.mscz` → POST to the server-side conversion endpoint, which
+      //   shells out to the `mscore` CLI and writes `score.mxl` on R2.
+      // In both cases `sheetMusicUrl` lands on the canonical `score.mxl`.
+      if (state.sheetMusicFile) {
+        const prepared = await prepareSheetMusicUpload(state.sheetMusicFile);
+        if (!prepared) throw new Error('Unsupported sheet music file type');
+        if (prepared.mode === 'server-convert') {
+          const { file, filename } = prepared;
+          const sheetForm = new FormData();
+          sheetForm.append('sheetMusic', file, file.name);
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+            fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: file.size,
+          }});
+          const convertResult = await uploadFormWithProgress(
+            `/api/r2/mscz-convert-upload/${bandId}/${state.id}?filename=${encodeURIComponent(filename)}`,
+            sheetForm,
+            (bytesSent, bytesTotal) => {
+              dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+                fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+              }});
+            },
+          );
+          if (!convertResult.ok) throw new Error(convertResult.error ?? 'MSCZ conversion failed');
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+          transcodedConfig = { ...transcodedConfig, sheetMusicUrl: filename };
+        } else {
+          const { blob, filename } = prepared;
+          const presignRes = await fetch('/api/r2/presign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bandId, songId: state.id, files: [filename] }),
+          });
+          if (!presignRes.ok) {
+            const err = await presignRes.json().catch(() => ({}));
+            throw new Error(err.error ?? 'Sheet music presign failed');
+          }
+          const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
+          const putUrl = urls[filename];
+          if (!putUrl) throw new Error('Sheet music presign returned no URL');
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+            fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: blob.size,
+          }});
+          await uploadFileWithProgress(putUrl, blob, (bytesSent, bytesTotal) => {
+            dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+              fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+            }});
+          });
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+          transcodedConfig = { ...transcodedConfig, sheetMusicUrl: filename };
+        }
+      }
 
       const configRes = await fetch(`/api/bands/${bandId}/songs/${state.id}/config`, {
         method: 'POST',

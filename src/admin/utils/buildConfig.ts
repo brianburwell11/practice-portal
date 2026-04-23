@@ -77,6 +77,10 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
     markers,
     tapMap: state.tapMap.length > 0 ? state.tapMap : undefined,
     ...(state.tags.length > 0 ? { tags: state.tags } : {}),
+    // Only persist the D.C./D.S. repeat toggle when both (a) sheet
+    // music was staged — the flag is meaningless otherwise — and
+    // (b) the admin actually turned it on.
+    ...(state.sheetMusicFile && state.repeatAfterDcDs ? { repeatAfterDcDs: true } : {}),
   };
 }
 

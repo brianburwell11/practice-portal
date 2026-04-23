@@ -1,0 +1,236 @@
+---
+title: "Karaoke for Sheet Music: Scrolling Scores Under a Fixed Playhead"
+description: "Research and live widgets for the practice-portal scrolling-score feature: MusicXML/MXL/MSCZ parsing, OSMD vs Verovio vs VexFlow rendering, and how to map audio seconds to a moving x-offset."
+pubDate: "Apr 18 2026"
+tags: ["music", "musicxml", "mscz", "verovio", "osmd", "vexflow", "research", "interactive"]
+---
+
+import { MsczInspector } from '../../components/react/sheet/MsczInspector';
+import { LibraryAB } from '../../components/react/sheet/LibraryAB';
+import { ScrollSyncPlayground } from '../../components/react/sheet/ScrollSyncPlayground';
+import { InstrumentSelector } from '../../components/react/sheet/InstrumentSelector';
+import { RepeatJumpVisualizer } from '../../components/react/sheet/RepeatJumpVisualizer';
+
+We want admins to upload sheet music — `.musicxml`, `.mxl`, or `.mscz` — pick which instruments to display, and watch the score slide right-to-left under a fixed playhead while the audio plays. Karaoke for sheet music. This post is the research substrate behind the production feature: format dissection, three rendering libraries side-by-side on the same sample, a working scroll-sync playground with a virtual playhead, and the gnarly parts (repeats, voltas, mobile touch conflicts) we'll have to handle when this graduates from docs widgets to a real component.
+
+The running example throughout: **Wiggle by SOOZA Brass Band** — six parts (2 trumpets, tenor sax, trombone, sousaphone, drum kit), 93 measures of 4/4 at 132 BPM, exported from MuseScore Studio 4.6.5. The MSCZ source lives at `/xml-sample/Wiggle - SOOZA.mscz` in the docs `public/` folder. We'll convert it to MusicXML and MXL on the fly to compare.
+
+## The Three Formats, Drilled Open
+
+All three relevant formats are XML-based, but only one is truly standard. **MusicXML** is the interchange format — verbose, well-documented, supported by everything. **MXL** is just a zip with a MusicXML file inside, used to keep large scores small. **MSCZ** is MuseScore's native format: also a zip, but the inner XML is MuseScore's own dialect (MSCX), with extra files for parts (excerpts), thumbnails, and audio settings.
+
+Drill into all three of them on the Wiggle sample below. The MSCZ container holds the master score plus a parallel MSCX for each excerpt (one per part); the MXL is just the MusicXML wrapped:
+
+<MsczInspector client:only="react"
+  url="/xml-sample/Wiggle - SOOZA.mscz"
+  label="Wiggle - SOOZA.mscz (MuseScore native)"
+  defaultPath="META-INF/container.xml" />
+
+<MsczInspector client:only="react"
+  url="/xml-sample/Wiggle.mxl"
+  label="Wiggle.mxl (compressed MusicXML)"
+  defaultPath="META-INF/container.xml" />
+
+<MsczInspector client:only="react"
+  url="/xml-sample/Wiggle.musicxml"
+  label="Wiggle.musicxml (uncompressed)"
+  defaultPath="Wiggle.musicxml"
+  previewBytes={6000} />
+
+A few things to notice from poking around:
+
+- **All three start with `META-INF/container.xml`** — same convention as ePub. It tells a reader which file inside the zip is the actual root document. MuseScore writes a `<rootfiles>` list with every file in the package, not just the main score. The MXL `container.xml` is much smaller and points only at `score.xml`.
+- **The MSCZ contains 30 files for Wiggle.** One per excerpt (`Excerpts/0_Trumpet_1/0_Trumpet_1.mscx`), each with its own style file, plus per-excerpt audio settings, view settings, the master score (`Wiggle - SOOZA.mscx`, 990 KB uncompressed), and the master style. MuseScore caches a thumbnail PNG too.
+- **The MusicXML is 1.36 MB** for the same data — about 2.6× larger than MSCZ's compressed zip, and about 30× larger than the MXL (which is the MusicXML zipped). For uploads this matters: we'll likely accept MXL by default and unwrap server- or client-side.
+- **MSCX is *not* MusicXML.** Same general shape, but element names differ (`<Chord>`, `<Tempo>`, `<Tuplet>`, `<Score>` rather than `<note>`, `<sound>`, `<score-partwise>`), and timing is expressed in MSC's own division grid. MuseScore's `<Division>480</Division>` says "480 ticks per quarter note"; the exported MusicXML uses `<divisions>12</divisions>` per measure. Both encode the same triplets and dotted eighths, just at different resolutions.
+
+The reason we'd ever care about MSCZ directly (vs. always going through a MusicXML conversion step) is that **the MSCZ's per-part excerpts are already pre-laid-out for the individual instrument view** — page breaks and rehearsal marks chosen to look right on a single staff, not extracted from the master score. If the user uploads a MuseScore project with named parts, we can show their hand-curated layout instead of reverse-engineering it from MusicXML.
+
+### How MuseScore reads MSCZ
+
+The relevant code in `MuseScore/src/engraving/infrastructure/mscreader.cpp` is straightforward:
+
+```cpp
+// MscReader::readScoreFile() — find the .mscx in the root of the zip
+ByteArray data = fileData(mscxFileName);
+if (data.empty() && reader()->isContainer()) {
+    StringList files = reader()->fileList();
+    for (const String& name : files) {
+        if (!name.contains(u'/') && name.endsWith(u".mscx", muse::CaseInsensitive)) {
+            mscxFileName = name;
+            break;
+        }
+    }
+}
+return fileData(mscxFileName);
+```
+
+It picks "the first `.mscx` in the root", which works because MuseScore writes exactly one. The excerpts get their own loader (`readExcerptFile`) that takes the excerpt's basename and reads `Excerpts/<name>/<name>.mscx`. This is the same dance we need to do client-side with JSZip.
+
+### Conversion options
+
+For browser-side support of MSCZ → MusicXML, the practical answer right now is:
+
+| Strategy | Where it runs | Cost |
+|---|---|---|
+| MuseScore CLI (`mscore -o out.musicxml in.mscz`) | Server / build step | Heavy — ships ~250 MB of binary |
+| Pre-convert at upload, store both | Server, once | Best UX, requires server-side conversion |
+| Direct MSCX parser | Browser | Possible but ~6 KLOC of edge cases per the MuseScore source |
+| Hybrid: server conversion of MSCZ, client parses MusicXML | Both | What we'll likely ship |
+
+For this research blog, we pre-converted Wiggle once on disk:
+
+```bash
+"/Applications/MuseScore 4.app/Contents/MacOS/mscore" \
+  -o "Wiggle.musicxml" "Wiggle - SOOZA.mscz"
+```
+
+The MXL output uses `-o Wiggle.mxl` instead. Both go into `docs/public/xml-sample/`.
+
+## Three Libraries on the Same File
+
+Given a MusicXML file, three libraries dominate the JavaScript landscape. Each represents a different point on the "ease of use vs. control" axis. Run all three on the same Wiggle MusicXML below:
+
+<LibraryAB client:only="react" url="/xml-sample/Wiggle.musicxml" height={420} />
+
+Quick observations from the live demos:
+
+**OpenSheetMusicDisplay (OSMD)** is the easiest. Three lines (`new OpenSheetMusicDisplay(el)`, `await osmd.load(text)`, `osmd.render()`) get you a usable score with measures, dynamics, articulations, key/time signatures. It owns the cursor — `osmd.cursor.show()`, `osmd.cursor.next()` — which we'll exploit for sync. Internally it uses VexFlow for note glyphs but does its own layout. Bundle size is ~1.5 MB minified, lazy-loadable. Render of full Wiggle: ~250–400 ms first time.
+
+**Verovio** is the engraving heavyweight. WASM-compiled C++ from the Music Encoding Initiative folks. Higher fidelity output — proper beam slants, ligatures, more credible spacing. The `verovio` npm package inlines the WASM as base64 in a single ~6 MB file (no side `.wasm` to host), but that means the initial download is the whole thing whether you need it or not. Renders in pages, returns SVG strings. Render of full Wiggle (capped at 4 pages here): ~1.5–3 s first time. The look is markedly better; the cost is bigger.
+
+**VexFlow** has no MusicXML parser. It expects you to programmatically build `StaveNote`, `Voice`, `Formatter` instances and call `.draw()`. For the demo we wrote a 100-line MusicXML mini-parser that takes the first `<part>`, pulls notes, and feeds them in. It cuts off at 16 measures because past that, edge cases (voices with rests, beaming groups, tuplets) start failing without more code. This is what people mean when they say VexFlow is "low-level": it's a drawing library, not a notation library. Use it when you need full control over individual note placement (custom highlight overlays, animated note transformations, microtonal accidentals); avoid it when you just want a score on a page.
+
+**The verdict for the practice-portal use case**: OSMD. It has the cursor primitive we need, parses MusicXML directly, renders fast enough, and the visual quality is acceptable. Verovio would be a quality upgrade we could revisit for "deluxe" mode. VexFlow only enters the picture if we want to build custom annotation layers later.
+
+## Time Sync: Audio Seconds → Score X-Offset
+
+The actual sync problem is a one-line equation per frame:
+
+$$
+\text{x\_offset}(t) = \text{cursorLeft}(\text{cursorIndex}(\text{beat}(t))) - \text{viewportWidth} \cdot \text{lookahead}
+$$
+
+Walking from outside in:
+
+1. **Audio time → beat.** With a constant-tempo score, this is `beat = (t / 60) * BPM`. With variable tempo (the practice-portal's `tapMap` model — a sparse list of tapped beat times), interpolate the actual beat from the closest two taps. The repo already has `secondsToBeat()` in `src/audio/tempoUtils.ts`.
+2. **Beat → cursor index.** OSMD exposes a sequential cursor; one `cursor.next()` call advances by one event (note, chord, rest start). After the initial render we walk it once and record `(index, measure, beatInMeasure, absoluteBeat)` for every position. Then it's a binary search.
+3. **Cursor index → x position.** OSMD's cursor is an HTML element overlaid on the SVG score — `osmd.cursor.cursorElement.offsetLeft` gives you a pixel position relative to the rendered score. Subtract `viewportWidth * lookahead` to put the cursor at e.g. 40% from the left edge instead of the center.
+4. **Smooth scroll.** `scrollHost.scrollTo({ left, behavior: 'smooth' })` works on every modern browser. RAF + `transform: translateX()` on the score element gives you slightly smoother sub-pixel motion at the cost of having to reimplement the scrollbar; for a first cut, native scroll is fine.
+
+Try it live on Wiggle. The play button starts a virtual clock — no audio attached, so there's nothing to drift against, just a clean view of how the sync math behaves under different parameters. Slide tempo, lookahead, and highlight style:
+
+<ScrollSyncPlayground client:only="react" url="/xml-sample/Wiggle.musicxml" baseBpm={132} />
+
+Things you can feel from playing with this:
+
+- **Lookahead** changes how far the eye gets to read ahead of where the music currently is. 40% from the left feels comfortable for sight-reading; 0% (fixed playhead at left edge) feels claustrophobic; 80% (playhead near the right) feels like the score is "behind" the music because the next phrase is hidden.
+- **Tempo as a multiplier** is fine for this virtual demo, but in production the `tempoRatio` from `transportStore.ts` actually changes the playback rate of the audio engine. The score scroll just rides on whatever `position` ends up being — we don't need to multiply tempo into our math.
+- **Highlight style**: the bbox style is the most common "you are here" cue. The underline style is more subtle and stays out of the way of dense passages. The color tint feels gentlest. None of them is a reading aid for the conductor sense — for that you want a longer marker behind several beats of context, which OSMD doesn't directly support.
+- **Cursor advance during seek**: scrub the position slider all the way to the end. The cursor jumps because we currently call `cursor.reset()` then iterate to the target index — that's `O(targetIndex)`. For a long score this is noticeable. The fix is to iterate forward from the current position when seeking forward by a small delta, and only reset for backward seeks or large forward jumps.
+
+### What didn't work the first time
+
+A few things tripped us up while building this:
+
+1. **OSMD's `iterator.currentTimeStamp` is in *whole notes*, not beats.** The first version of `buildTimeline()` produced beat values 4× too low and the cursor crawled. Fixed by multiplying by 4.
+2. **Strict-mode double-render in dev.** React 19's strict mode runs effects twice; OSMD doesn't tear itself down cleanly when you `new OpenSheetMusicDisplay()` on top of an existing instance. The second mount left two cursor elements overlapped. Solution: `osmd.clear()` and `container.innerHTML = ''` on each render path, plus null out the ref.
+3. **`osmd.cursor.cursorElement.offsetLeft` reads `0` if the cursor was never shown.** The first call to `osmd.cursor.show()` is mandatory before any positioning. We now show it inside `OsmdRenderer` whenever `showCursor` is true.
+
+## Picking Instruments to Display
+
+In production, the user picks one or more parts and only those staves appear. OSMD has first-class support for this: each `Sheet.Instruments[i]` has a `Visible` flag. Toggling it and calling `osmd.render()` re-lays-out without re-parsing the MusicXML. Our timing is in the 80–250 ms range for Wiggle — slow enough to notice, fast enough to feel responsive:
+
+<InstrumentSelector client:only="react" url="/xml-sample/Wiggle.musicxml" height={460} />
+
+Click instruments off and on. The score recomputes line breaks each time. Notice that when only one part is visible the layout uses many more measures per system because there's vertical room — OSMD's `compact` drawing mode auto-paginates based on what fits.
+
+There are three plausible UX models for instrument selection:
+
+| Model | Behavior | Tradeoff |
+|---|---|---|
+| **Hide** (what we do above) | Visible flag + re-render | Re-layout cost, but cleanest result |
+| **Collapse** | Render all, set `display: none` on hidden staves | Fast toggle, but vertical gaps where staves were |
+| **Filter at parse time** | Strip `<part>` elements before passing to OSMD | Smallest render, but full reload per change |
+
+Hide-then-render is the right default. For mobile, a fourth option exists: **vertical stacking** — render each visible part as its own scrolling row instead of as a system, so the user can scroll between parts independently. We don't implement that here; it would mean N OSMD instances and shared scroll-sync.
+
+## Repeats, Voltas, and Jumps
+
+The Wiggle sample has zero repeats — it's a 93-measure linear piece. So this section uses a synthetic 16-measure example with the works: a start/end repeat with first and second voltas, a segno + coda, and a D.S. al coda jump.
+
+Toggle between "as notated" (the score view) and "unfolded" (the linear playback order):
+
+<RepeatJumpVisualizer client:only="react" />
+
+Two strategies for handling jumps in the cursor sync logic:
+
+**Unfold ahead of time.** Walk the score once, build a flat list of `(srcMeasure, visitNumber)` tuples in playback order, and treat that list as the timeline. The cursor index always advances monotonically; on visit-2 of m.4, we point at the same SVG measure but track that we're "playing the repeat." This is what MuseScore's playback engine does internally (search `RepeatList` in `src/engraving/dom/`). Pro: simple sync math. Con: audio repeats and the score's "as-notated" view are out of correspondence — the user sees m.4 highlighted, but is on the second pass.
+
+**Track a jump pointer at runtime.** Maintain `(srcIndex, repeatPass, dsTaken, codaTaken)` in the sync loop and update on every barline crossing. Pro: the score view stays one-to-one with the source. Con: the math is fiddly (especially around overlapping voltas and multiple D.S./D.C.s) and seeking backwards into a repeated section needs to figure out which pass the user wanted.
+
+For practice-portal, **unfold is the right call**. Practitioners want their playhead to be unambiguous — "I am currently on the second pass of measure 4" — and the audio recording is itself unfolded. The MuseScore source actually exports unfolded play order on demand via `Score::repeatList()`, which Verovio's `expansion` feature also does.
+
+The expansion above mishandles one thing on purpose: it doesn't model the implicit "to coda" jump that fires only after D.S. is taken. Real engines distinguish between coda *destination markers* (`<coda/>` at m.13) and *jump triggers* (`<sound tocoda="..."/>` at m.8). Real scores have many overlapping markings; you eventually have to write the full state machine.
+
+## Constraints We Have to Live With
+
+### Mobile
+
+The hard one. Touch scroll on iOS and Android intercepts horizontal swipes by default, which means our auto-scroll fights the user's "let me look ahead manually" gesture. Three known fixes:
+
+- **`touch-action: pan-y`** on the score container — the browser only handles vertical pan, leaving horizontal events for our JS. Loses the ability to manually horizontal-scroll.
+- **Pause auto-scroll on touch** — listen for `pointerdown` inside the container and stop driving `scrollLeft` until `pointerup` + a 2 s grace period. Restart smoothly. This is what video players do.
+- **`scrollend` resync** — let the user scroll freely; on `scrollend`, re-anchor the cursor to wherever they left off. Counterintuitive but plays nicely with momentum scroll.
+
+We'll likely combine option 2 and 3.
+
+Other mobile gotchas:
+
+- **Autoplay restrictions** — audio won't start without a user gesture, but our virtual clock can start whenever. Production sync needs the audio start to fire from the real Play button.
+- **Memory pressure on long scores** — Wiggle is 93 measures; classical works hit 800+. OSMD's full-layout SVG can balloon to 50–100 MB of DOM. Strategy: render in windows of ~32 measures and re-render as the playhead approaches the window edge.
+- **Devicepixelratio thrashing** — pinch-to-zoom in Safari triggers a viewport resize that our debounce should swallow but doesn't always.
+
+### Desktop
+
+Easier. The main concerns:
+
+- **Smooth scroll at 60 Hz vs 120 Hz** — `scrollTo({ behavior: 'smooth' })` lets the browser pick. On 120 Hz displays this looks great. On 60 Hz monitors with a slightly underpowered GPU, the smooth-scroll easing feels chunky. Falling back to a linear `transform: translateX()` driven by RAF is more predictable.
+- **High-DPI rendering** — OSMD's SVG is resolution-independent so this is mostly free. VexFlow's canvas backend would need pixel-ratio scaling.
+- **Keyboard nav** — arrows for measure-by-measure step, shift-arrow for system-by-system, space for play/pause. Currently nothing does this; it should.
+
+### Human factors
+
+A few decisions that have nothing to do with code:
+
+- **Density.** A reader needs ~2–4 seconds of music visible ahead of the playhead. At 132 BPM that's ~4–8 beats, or 1–2 measures of 4/4. Less and the eye lags; more and dense passages get unreadable.
+- **Font size.** OSMD's default is fine on a 13" laptop and tiny on a phone. We'll need a `--score-zoom` setting persisted per device (not per song).
+- **Accessibility.** Screen readers don't read sheet music in any useful way; the best you can do is announce structural milestones ("Verse 2", "Chorus") via rehearsal mark text. WCAG demands a non-color way to indicate the current position — the bbox style satisfies this; pure color tint does not.
+- **Right-to-left reading languages.** Western sheet music is fundamentally left-to-right; none of the libraries support mirroring. This is a "we won't ship this for RTL UI locales" kind of thing.
+
+## Next Steps Toward Production
+
+- [ ] Add a server-side MSCZ → MusicXML conversion job (MuseScore CLI in a worker, or musescore.com's converter API)
+- [ ] Plumb `scoreFile` through `src/audio/types.ts`, `src/config/schema.ts`, `public/audio/song-test/config.json` (already designed in `musicxml-sheet-music.md`)
+- [ ] Build `src/components/score/ScoreViewer.tsx` based on the `OsmdRenderer` here, but driven by `useTransportStore.position` instead of a virtual clock
+- [ ] Write `src/audio/scoreSync.ts` with `buildTimeline()` and `findCursorIndexForBeat()` — start from the implementations in `OsmdRenderer.tsx` and `ScrollSyncPlayground.tsx`
+- [ ] Wire `secondsToBeat()` from `src/audio/tempoUtils.ts` into the position → beat step so live-recording tempo drift doesn't cause cursor drift
+- [ ] Add `useScoreStore` (visible, activeScoreFile, zoom) — pattern from `src/store/transportStore.ts`
+- [ ] Build the part-selector UI from `InstrumentSelector` — extend with mobile vertical stack mode
+- [ ] Implement `unfoldRepeats(score)` so cursor indices are linear with audio playback order
+- [ ] Mobile touch handling: `pointerdown` pause + `scrollend` resync per the Mobile section above
+- [ ] Performance: window-render long scores to 32-measure chunks
+- [ ] Persist `scoreZoom` per device in `localStorage`
+- [ ] Keyboard nav: arrow keys, space, home/end
+- [ ] Add MXL upload path: client-side JSZip → extract `score.xml` from the container → feed text to OSMD
+- [ ] Decide on the per-instrument-stem story: each stem in `StemConfig` gets an optional `scoreFile`; UI shows whichever stems are unmuted
+
+## Appendix: Useful File Locations
+
+- Sample MSCZ / generated MusicXML and MXL: `/docs/public/xml-sample/`
+- React widgets used in this post: `/docs/src/components/react/sheet/`
+- Existing sheet-music research doc (data model, integration plan): `/docs/src/content/docs/musicxml-sheet-music.md`
+- Audio engine entry points: `/src/store/transportStore.ts`, `/src/hooks/useAudioEngine.ts`
+- Tempo math the score sync will reuse: `/src/audio/tempoUtils.ts`
+- MuseScore's MSCZ reader (for reference): `MuseScore/src/engraving/infrastructure/mscreader.cpp`
+- MuseScore's MusicXML exporter (for reference on repeat/jump handling): `MuseScore/src/importexport/musicxml/internal/export/exportmusicxml.cpp`

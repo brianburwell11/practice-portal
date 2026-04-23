@@ -42,7 +42,7 @@ export function uploadFormWithProgress(
 
 export function uploadFileWithProgress(
   url: string,
-  file: File,
+  file: Blob,
   onProgress: (bytesSent: number, bytesTotal: number) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {

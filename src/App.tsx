@@ -3,6 +3,7 @@ import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
 import { LyricsDisplay } from './components/LyricsDisplay';
+import { ScrollingScore } from './components/sheet/ScrollingScore';
 import { MixerPanel } from './components/mixer/MixerPanel';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
 import { LyricsEditorModal } from './components/lyrics-editor/LyricsEditorModal';
@@ -152,6 +153,13 @@ export default function App() {
 
         {/* Lyrics display — uses editor lines as live preview when editor is open */}
         <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
+
+        {/* Scrolling sheet music — desktop only for now (md+). The current
+            viewport/scroll math isn't usable on narrow screens and needs
+            a dedicated mobile pass before we expose it there. */}
+        <div className="hidden md:contents">
+          <ScrollingScore />
+        </div>
 
         {/* Editor replaces mixer when open */}
         {lyricsEditorOpen ? (

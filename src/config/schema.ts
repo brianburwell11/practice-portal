@@ -79,6 +79,20 @@ export const songConfigSchema = z.object({
   tapMap: z.array(tapMapEntrySchema).optional(),
   navLinks: z.array(navLinkConfigSchema).optional(),
   tags: z.array(z.string().min(1).max(40)).optional(),
+  /** Path (relative to the song's audio base) of a MusicXML score to render
+   *  in the scrolling-score panel. If absent, the panel is hidden. */
+  sheetMusicUrl: z.string().optional(),
+  /** Seconds of silence / count-in before the score's first downbeat. When
+   *  absent, falls back to the first measure-tap time in tapMap. */
+  audioOffsetSeconds: z.number().optional(),
+  /** Force OSMD's FixedMeasureWidth flag for this song. Dense songs should
+   *  leave this off; sparse songs benefit from turning it on. */
+  equalBeatWidth: z.boolean().optional(),
+  /** When true, internal repeats (`|: :|`, voltas) are re-taken after a
+   *  D.C. / D.S. jump. Default (unset / false) matches the usual convention
+   *  where internal repeats are honored only on the first pass and the
+   *  D.C./D.S. return walks straight through. */
+  repeatAfterDcDs: z.boolean().optional(),
 });
 
 export const songManifestEntrySchema = z.object({

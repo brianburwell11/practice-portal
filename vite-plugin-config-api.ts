@@ -2,7 +2,7 @@ import type { Plugin, ViteDevServer } from 'vite';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execSync, spawnSync } from 'node:child_process';
+import { execSync, spawnSync, execFileSync } from 'node:child_process';
 import Busboy from 'busboy';
 import dotenv from 'dotenv';
 import { S3Client, PutObjectCommand, CopyObjectCommand, ListObjectsV2Command, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -211,6 +211,30 @@ function transcodeToOpus(
     `ffmpeg -y -i "${inputPath}" ${filterFlag} -codec:a libopus -b:a ${bitrate} ${channelFlag} -ar 48000 -vbr on "${outputPath}"`,
     { stdio: 'ignore' },
   );
+}
+
+/**
+ * Resolve the MuseScore CLI binary. Honors `MUSESCORE_BIN` env override
+ * first, then tries `mscore` on `PATH`, then the default macOS install
+ * location. Returns `null` if none of those are runnable, so callers
+ * can surface a clear error rather than spawn-failing with ENOENT.
+ */
+function resolveMscoreBin(): string | null {
+  const candidates: string[] = [];
+  if (process.env.MUSESCORE_BIN) candidates.push(process.env.MUSESCORE_BIN);
+  candidates.push('mscore');
+  candidates.push('/Applications/MuseScore 4.app/Contents/MacOS/mscore');
+  for (const bin of candidates) {
+    try {
+      // `-v` prints version and exits 0 when the binary is reachable.
+      // Suppress all output; we only care about the exit status.
+      execFileSync(bin, ['-v'], { stdio: 'ignore' });
+      return bin;
+    } catch {
+      // Try next candidate
+    }
+  }
+  return null;
 }
 
 function readBody(req: import('node:http').IncomingMessage): Promise<string> {
@@ -478,6 +502,140 @@ export function configApiPlugin(): Plugin {
             jsonResponse(res, 200, { ok: true, fileMap, publicBase });
           } catch (err: any) {
             jsonResponse(res, 500, { error: err.message ?? 'Transcode/upload failed' });
+          } finally {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+          }
+          return;
+        }
+
+        // --- POST /api/r2/mscz-convert-upload/{bandId}/{songId} ---
+        // Accepts a multipart upload with a single `.mscz` file (field
+        // name `sheetMusic`), shells out to the MuseScore CLI to
+        // convert it to MXL, and uploads the result as `score.mxl` to
+        // R2 — same canonical filename as the presign+PUT path for
+        // `.musicxml` / `.xml` / `.mxl`, so InfiniteScoreRenderer picks
+        // it up with no changes.
+        // Split path from query before matching — `[^/]+` in the path
+        // regex would otherwise swallow `?filename=...` into the songId
+        // capture (the `?` character isn't a path separator).
+        const [msczPathname, msczQuery = ''] = (req.url ?? '').split('?');
+        const msczMatch = msczPathname.match(/^\/api\/r2\/mscz-convert-upload\/([^/]+)\/([^/]+)$/);
+        if (msczMatch && req.method === 'POST') {
+          const bandId = msczMatch[1];
+          const songId = msczMatch[2];
+          // Target filename for the R2 key. Client sends it as a
+          // `?filename=<kebab>.mxl` query param; we re-validate here
+          // to refuse anything bad (path traversal, wrong extension,
+          // oversized). Falls back to `score.mxl` if the param is
+          // absent, matching the pre-sanitization callers.
+          const params = new URLSearchParams(msczQuery);
+          const rawFilename = params.get('filename') ?? 'score.mxl';
+          if (!/^[a-z0-9-]{1,40}\.mxl$/.test(rawFilename)) {
+            return jsonResponse(res, 400, {
+              error: `Invalid filename "${rawFilename}" — expected [a-z0-9-]{1,40}.mxl`,
+            });
+          }
+          const r2 = getR2Client();
+          const bucket = process.env.R2_BUCKET;
+          if (!r2 || !bucket) {
+            return jsonResponse(res, 500, { error: 'R2 not configured — check .env' });
+          }
+
+          const mscoreBin = resolveMscoreBin();
+          if (!mscoreBin) {
+            return jsonResponse(res, 500, {
+              error:
+                'MuseScore CLI not found. Install MuseScore 4 (macOS: https://musescore.org), ' +
+                'set MUSESCORE_BIN to the binary path, or symlink `mscore` onto PATH.',
+            });
+          }
+
+          const r2Prefix = `${bandId}/songs/${songId}`;
+          const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pp-mscz-'));
+          // Cap uploads at 50 MB so a bad client can't fill /tmp.
+          const MAX_BYTES = 50 * 1024 * 1024;
+
+          try {
+            // 1. Receive the .mscz via busboy → temp dir.
+            const received = await new Promise<{ origName: string; tmpPath: string }>((resolve, reject) => {
+              let file: { origName: string; tmpPath: string } | null = null;
+              let writePromise: Promise<void> | null = null;
+              let sizeExceeded = false;
+              const busboy = Busboy({
+                headers: req.headers as Record<string, string>,
+                limits: { files: 1, fileSize: MAX_BYTES },
+              });
+
+              busboy.on('file', (_field, stream, info) => {
+                const safeName = path.basename(info.filename || 'upload.mscz');
+                const tmpPath = path.join(tmpDir, safeName);
+                const ws = fs.createWriteStream(tmpPath);
+                stream.on('limit', () => { sizeExceeded = true; });
+                stream.pipe(ws);
+                writePromise = new Promise<void>((res, rej) => {
+                  ws.on('finish', () => {
+                    file = { origName: safeName, tmpPath };
+                    res();
+                  });
+                  ws.on('error', rej);
+                });
+              });
+
+              busboy.on('finish', () => {
+                if (sizeExceeded) {
+                  reject(new Error(`Upload exceeds ${MAX_BYTES} bytes`));
+                  return;
+                }
+                (writePromise ?? Promise.resolve()).then(() => {
+                  if (!file) reject(new Error('No file in upload'));
+                  else resolve(file);
+                }).catch(reject);
+              });
+              busboy.on('error', reject);
+              req.pipe(busboy);
+            });
+
+            // 2. Sanity-check extension so we don't feed MuseScore
+            // random binaries. The client already filters this, but
+            // an attacker hitting the API directly would bypass that.
+            const ext = path.extname(received.origName).toLowerCase();
+            if (ext !== '.mscz') {
+              return jsonResponse(res, 400, { error: `Expected .mscz upload, got "${received.origName}"` });
+            }
+
+            // 3. Run mscore -o <out>.mxl <in>.mscz.
+            const outPath = path.join(tmpDir, rawFilename);
+            try {
+              execFileSync(mscoreBin, ['-o', outPath, received.tmpPath], {
+                stdio: 'ignore',
+                // MuseScore spins up Qt; give it enough time for a
+                // reasonably large score. 60 s is plenty for the
+                // 93-measure Wiggle sample (~1 s in practice).
+                timeout: 60_000,
+              });
+            } catch (err: any) {
+              throw new Error(`MuseScore conversion failed: ${err.message ?? err}`);
+            }
+
+            if (!fs.existsSync(outPath)) {
+              throw new Error('MuseScore ran but produced no output file');
+            }
+
+            // 4. Upload the MXL to R2 under the target filename.
+            const filename = rawFilename;
+            const key = `${r2Prefix}/${filename}`;
+            const body = fs.readFileSync(outPath);
+            await r2.send(new PutObjectCommand({
+              Bucket: bucket,
+              Key: key,
+              Body: body,
+              ContentType: 'application/vnd.recordare.musicxml',
+              CacheControl: 'public, max-age=31536000, immutable',
+            }));
+
+            jsonResponse(res, 200, { ok: true, filename });
+          } catch (err: any) {
+            jsonResponse(res, 500, { error: err.message ?? 'MSCZ convert/upload failed' });
           } finally {
             fs.rmSync(tmpDir, { recursive: true, force: true });
           }
@@ -756,6 +914,29 @@ export function configApiPlugin(): Plugin {
               entry.type === 'song' && entry.songId === songId ? null : entry,
             );
 
+            jsonResponse(res, 200, { ok: true });
+          } catch (err: any) {
+            jsonResponse(res, 500, { error: err.message ?? 'Delete failed' });
+          }
+          return;
+        }
+
+        // --- DELETE /api/bands/{bandId}/songs/{songId}/file/{filename} ---
+        // Removes a single file within a song's folder. Used by the Edit
+        // Song save handler to clean up orphaned sheet-music files when
+        // the user removes or replaces the score.
+        const fileDeleteMatch = req.url?.match(/^\/api\/bands\/([^/]+)\/songs\/([^/]+)\/file\/([^/]+)$/);
+        if (fileDeleteMatch && req.method === 'DELETE') {
+          const bandId = fileDeleteMatch[1];
+          const songId = fileDeleteMatch[2];
+          const filename = decodeURIComponent(fileDeleteMatch[3]);
+          // Reject anything that looks like a path — we only delete
+          // direct children of the song's R2 folder.
+          if (!filename || filename.includes('/') || filename.includes('..')) {
+            return jsonResponse(res, 400, { error: 'Invalid filename' });
+          }
+          try {
+            await r2DeleteKey(`${bandId}/songs/${songId}/${filename}`);
             jsonResponse(res, 200, { ok: true });
           } catch (err: any) {
             jsonResponse(res, 500, { error: err.message ?? 'Delete failed' });

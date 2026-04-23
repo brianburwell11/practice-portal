@@ -67,6 +67,13 @@ export interface SongConfig {
   tapMap?: TapMapEntry[];
   navLinks?: NavLinkConfig[];
   tags?: string[];
+  sheetMusicUrl?: string;
+  audioOffsetSeconds?: number;
+  equalBeatWidth?: boolean;
+  /** When true, internal repeats / voltas are re-taken on the return
+   *  pass after a D.C. / D.S. jump. Default (unset / false) matches
+   *  the usual convention where D.C./D.S. walks straight through. */
+  repeatAfterDcDs?: boolean;
 }
 
 export interface SongManifestEntry {

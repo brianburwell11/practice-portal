@@ -4,7 +4,9 @@ import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema } from '../config/schema';
 import { detectStem, isAudioFile } from './utils/stemDetection';
 import { getAudioInfo } from './utils/audioConvert';
-import { uploadFormWithProgress } from './utils/uploadWithProgress';
+import { uploadFileWithProgress, uploadFormWithProgress } from './utils/uploadWithProgress';
+import { prepareSheetMusicUpload } from './utils/sheetMusic';
+import { SheetMusicUploader } from './SheetMusicUploader';
 import { r2Url } from '../utils/url';
 import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
@@ -42,6 +44,9 @@ export default function EditSongPage() {
   // add-time so the UI can offer a mono/stereo choice (matching the wizard)
   // without re-decoding the file on every render.
   const [newStemFiles] = useState(() => new Map<string, { file: File; channels: number }>());
+  // Sheet music file staged this session but not yet uploaded. Saved
+  // during handleSave via /api/r2/presign + PUT; cleared on success.
+  const [newSheetMusicFile, setNewSheetMusicFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drag-to-reorder state
@@ -93,16 +98,17 @@ export default function EditSongPage() {
 
   // Dirty-state warning
   useEffect(() => {
-    if (!isDirty(state)) return;
+    if (!isDirty(state) && !newSheetMusicFile) return;
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [state]);
+  }, [state, newSheetMusicFile]);
 
   const handleBack = useCallback(() => {
-    if (isDirty(state) && !window.confirm('You have unsaved changes. Leave anyway?')) return;
+    const dirty = isDirty(state) || !!newSheetMusicFile;
+    if (dirty && !window.confirm('You have unsaved changes. Leave anyway?')) return;
     navigate(`/${bandSlug}`);
-  }, [state, navigate, bandSlug]);
+  }, [state, newSheetMusicFile, navigate, bandSlug]);
 
   // Stem reorder handlers
   const onStemDragStart = (idx: number) => setDragIdx(idx);
@@ -210,9 +216,13 @@ export default function EditSongPage() {
     });
   };
 
-  // Save
+  // Save. A staged sheet-music file lives outside the reducer's config
+  // (it's held in local useState until upload), so picking one wouldn't
+  // flip `isDirty` on its own — include it explicitly or the Save button
+  // stays disabled on add/replace. Remove clears config.sheetMusicUrl
+  // via dispatch and flips dirty the normal way.
   const validation = config ? songConfigSchema.safeParse(config) : null;
-  const canSave = isDirty(state) && validation?.success && !state.saving;
+  const canSave = (isDirty(state) || !!newSheetMusicFile) && validation?.success && !state.saving;
 
   const handleSave = async () => {
     if (!config || !currentBand) return;
@@ -264,6 +274,64 @@ export default function EditSongPage() {
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
       }
 
+      // Upload new sheet music, if any. Uses the same oldId path as stems
+      // so a concurrent id-rename picks up the file via the /rename copy.
+      // Two paths depending on format:
+      // - `.mxl` / `.musicxml` / `.xml` → presigned PUT straight to R2;
+      //   plain XML gets zipped to MXL client-side (20–50× smaller).
+      // - `.mscz` → POSTed to the server-side conversion endpoint, which
+      //   shells out to the `mscore` CLI and writes `score.mxl` on R2.
+      if (newSheetMusicFile) {
+        const prepared = await prepareSheetMusicUpload(newSheetMusicFile);
+        if (!prepared) throw new Error('Unsupported sheet music file type');
+        if (prepared.mode === 'server-convert') {
+          const { file, filename } = prepared;
+          const sheetForm = new FormData();
+          sheetForm.append('sheetMusic', file, file.name);
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+            fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: file.size,
+          }});
+          const convertResult = await uploadFormWithProgress(
+            `/api/r2/mscz-convert-upload/${currentBand.id}/${oldId}?filename=${encodeURIComponent(filename)}`,
+            sheetForm,
+            (bytesSent, bytesTotal) => {
+              dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+                fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+              }});
+            },
+          );
+          if (!convertResult.ok) throw new Error(convertResult.error ?? 'MSCZ conversion failed');
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+          configToSave = { ...configToSave, sheetMusicUrl: filename };
+          dispatch({ type: 'SET_SHEET_MUSIC_URL', url: filename });
+        } else {
+          const { blob, filename } = prepared;
+          const presignRes = await fetch('/api/r2/presign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bandId: currentBand.id, songId: oldId, files: [filename] }),
+          });
+          if (!presignRes.ok) {
+            const err = await presignRes.json().catch(() => ({}));
+            throw new Error(err.error ?? 'Sheet music presign failed');
+          }
+          const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
+          const putUrl = urls[filename];
+          if (!putUrl) throw new Error('Sheet music presign returned no URL');
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+            fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: blob.size,
+          }});
+          await uploadFileWithProgress(putUrl, blob, (bytesSent, bytesTotal) => {
+            dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+              fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+            }});
+          });
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+          configToSave = { ...configToSave, sheetMusicUrl: filename };
+          dispatch({ type: 'SET_SHEET_MUSIC_URL', url: filename });
+        }
+      }
+
       // Save config to R2 (persisted before rename)
       const res = await fetch(`/api/bands/${currentBand.id}/songs/${oldId}/config`, {
         method: 'POST',
@@ -296,7 +364,26 @@ export default function EditSongPage() {
         });
       }
 
+      // Clean up orphaned sheet-music file. If the user removed or
+      // replaced the score with a file of a different name, the old
+      // one is now unreferenced in config.json but still sitting on R2.
+      // Runs AFTER the rename (if any) so it targets the song's current
+      // folder — the rename copies the whole folder, so the orphan
+      // follows the song to its new location.
+      const oldSheetMusicUrl = state.original?.sheetMusicUrl;
+      const newSheetMusicUrl = configToSave.sheetMusicUrl;
+      if (oldSheetMusicUrl && oldSheetMusicUrl !== newSheetMusicUrl) {
+        const finalId = idChanged ? newId : oldId;
+        // Fire-and-forget — don't fail the save if cleanup fails; the
+        // config is already authoritative and the orphan is harmless.
+        fetch(
+          `/api/bands/${currentBand.id}/songs/${finalId}/file/${encodeURIComponent(oldSheetMusicUrl)}`,
+          { method: 'DELETE' },
+        ).catch(() => { /* leave orphan on R2 rather than break save */ });
+      }
+
       newStemFiles.clear();
+      setNewSheetMusicFile(null);
       dispatch({ type: 'SET_SAVE_SUCCESS' });
       dispatch({ type: 'RESET_DIRTY' });
 
@@ -369,7 +456,7 @@ export default function EditSongPage() {
         <span className="text-sm text-gray-500 font-mono">{config.id}</span>
         <button
           onClick={() => {
-            if (isDirty(state) && !window.confirm('You have unsaved edits. Leave anyway?')) return;
+            if ((isDirty(state) || newSheetMusicFile) && !window.confirm('You have unsaved edits. Leave anyway?')) return;
             navigate(`/${bandSlug}/admin/align/${config.id}`);
           }}
           className="ml-auto text-sm px-3 py-1 bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded text-gray-200"
@@ -421,6 +508,27 @@ export default function EditSongPage() {
               onChange={(tags) => dispatch({ type: 'SET_TAGS', tags })}
             />
           </div>
+
+          <SheetMusicUploader
+            currentUrl={config.sheetMusicUrl}
+            pendingFile={newSheetMusicFile}
+            onSelect={(file) => setNewSheetMusicFile(file)}
+            onDiscardPending={() => setNewSheetMusicFile(null)}
+            onRemoveExisting={() => dispatch({ type: 'SET_SHEET_MUSIC_URL', url: undefined })}
+            disabled={state.saving}
+          />
+          {(config.sheetMusicUrl || newSheetMusicFile) && (
+            <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!config.repeatAfterDcDs}
+                onChange={(e) => dispatch({ type: 'SET_REPEAT_AFTER_DC_DS', value: e.target.checked })}
+                disabled={state.saving}
+                className="accent-blue-500"
+              />
+              <span>Repeat internal sections after D.C. / D.S.</span>
+            </label>
+          )}
 
           {state.original && config.id !== state.original.id && (
             <div className="bg-yellow-900/30 border border-yellow-700 rounded p-3 text-sm text-yellow-300">
@@ -707,7 +815,7 @@ export default function EditSongPage() {
 
           <div className="flex items-center justify-between">
             <span className={`text-sm ${state.saveSuccess ? 'text-green-400' : 'text-gray-500'}`}>
-              {state.saveSuccess ? 'Saved successfully' : isDirty(state) ? 'Unsaved changes' : 'No changes'}
+              {state.saveSuccess ? 'Saved successfully' : (isDirty(state) || newSheetMusicFile) ? 'Unsaved changes' : 'No changes'}
             </span>
             <button
               disabled={!canSave}
