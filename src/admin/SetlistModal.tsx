@@ -348,10 +348,10 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
       onKeyDown={(e) => e.stopPropagation()}
     >
       <div
-        className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6 space-y-4 max-h-[85vh] flex flex-col"
+        className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold">
+        <h2 className="text-lg font-semibold shrink-0 mb-4">
           {isEdit ? 'Edit Setlist' : 'Create Setlist'}
         </h2>
 
@@ -359,6 +359,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
           <div className="text-sm text-gray-400">Loading...</div>
         ) : (
           <>
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 -mr-2 pr-2">
             {/* Name input */}
             <div>
               <label className="block text-sm text-gray-400 mb-1">Setlist Name</label>
@@ -424,7 +425,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
               })()}
             </div>
 
-            <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
+            <div className="flex gap-4">
               {/* Song picker */}
               <div className="w-1/2 space-y-2">
                 <div className="flex items-center justify-between">
@@ -810,8 +811,9 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                 {error}
               </div>
             )}
+            </div>
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 shrink-0 mt-4">
               <button
                 onClick={onClose}
                 disabled={saving}
