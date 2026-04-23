@@ -34,9 +34,21 @@ interface LyricsEditorState {
   selectAll: () => void;
 }
 
+function isBracketAnnotation(text: string): boolean {
+  return /^\s*\[.*\]\s*$/.test(text);
+}
+
+function isInstrumentalAnnotation(text: string): boolean {
+  return /^\s*\[\s*instrumental\s*\]\s*$/i.test(text);
+}
+
 function nextNonBlankIndex(lines: LyricsLine[], from: number): number {
   for (let i = from; i < lines.length; i++) {
-    if (lines[i].text !== '' || lines[i].instrumental) return i;
+    if (lines[i].instrumental) return i;
+    if (lines[i].text === '') continue;
+    if (isInstrumentalAnnotation(lines[i].text)) return i;
+    if (isBracketAnnotation(lines[i].text)) continue;
+    return i;
   }
   return lines.length;
 }

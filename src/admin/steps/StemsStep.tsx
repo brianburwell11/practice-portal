@@ -352,8 +352,14 @@ export function StemsStep({ state, dispatch }: Props) {
               <span className="text-sm text-gray-400">
                 {group.stemIds.length} stems
               </span>
-              <span className="text-xs text-gray-500 ml-auto">
-                {group.stemIds.join(', ')}
+              <span className="text-xs text-gray-500 ml-auto font-mono">
+                {group.stemIds
+                  .map((id) => {
+                    const stem = state.stems.find((s) => s.id === id);
+                    if (!stem) return id;
+                    return stem.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || stem.id;
+                  })
+                  .join(', ')}
               </span>
               <button
                 onClick={() => dispatch({ type: 'REMOVE_GROUP', index: i })}

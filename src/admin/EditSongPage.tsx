@@ -817,15 +817,27 @@ export default function EditSongPage() {
             <span className={`text-sm ${state.saveSuccess ? 'text-green-400' : 'text-gray-500'}`}>
               {state.saveSuccess ? 'Saved successfully' : (isDirty(state) || newSheetMusicFile) ? 'Unsaved changes' : 'No changes'}
             </span>
-            <button
-              disabled={!canSave}
-              onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium"
-            >
-              {state.saving
-                ? state.uploadProgress ? 'Uploading...' : 'Saving...'
-                : 'Save'}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  if ((isDirty(state) || newSheetMusicFile) && !window.confirm('You have unsaved edits. Leave anyway?')) return;
+                  navigate(`/${bandSlug}#${config.id}`);
+                }}
+                disabled={state.saving}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm font-medium"
+              >
+                Open Song
+              </button>
+              <button
+                disabled={!canSave}
+                onClick={handleSave}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium"
+              >
+                {state.saving
+                  ? state.uploadProgress ? 'Uploading...' : 'Saving...'
+                  : 'Save'}
+              </button>
+            </div>
           </div>
         </section>
       </main>

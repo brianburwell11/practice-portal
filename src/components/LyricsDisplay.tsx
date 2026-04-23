@@ -6,6 +6,14 @@ import type { LyricsLine } from '../audio/lyricsTypes';
 
 const PRE_SHIFT_MS = 500;
 
+function isInstrumentalAnnotation(text: string): boolean {
+  return /^\s*\[\s*instrumental\s*\]\s*$/i.test(text);
+}
+
+function isInstrumentalLine(line: LyricsLine): boolean {
+  return !!line.instrumental || isInstrumentalAnnotation(line.text);
+}
+
 /** Pixels to nudge the lyric reading point right of the waveform's left
  *  edge. Keep in sync with the same constant in
  *  `src/components/sheet/ScrollingScore.tsx` so the lyric reading point,
@@ -22,9 +30,19 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
   const mobileVisible = useLyricsStore((s) => s.mobileVisible);
 
   // Use override lines (from editor) or store lines, excluding blank lines
+  // and admin-only bracket annotations like `[chorus]` or `[verse 2]` —
+  // these are notes for the editor, never shown in the song view.
+  // `[Instrumental]` is the exception: it survives the filter and renders
+  // as the music-note icon, same as a `instrumental: true` line.
   const lines = useMemo(() => {
     const raw = overrideLines ?? storeLines;
-    return raw.filter((l) => l.text !== '' || l.instrumental);
+    return raw.filter((l) => {
+      if (l.instrumental) return true;
+      if (l.text === '') return false;
+      if (isInstrumentalAnnotation(l.text)) return true;
+      if (/^\s*\[.*\]\s*$/.test(l.text)) return false;
+      return true;
+    });
   }, [overrideLines, storeLines]);
 
   // Compute which lyric should be bolded based on playback position
@@ -223,6 +241,7 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
         {lines.map((line, i) => {
           const isCurrent = i === targetIndex;
           const isPast = i < targetIndex;
+          const instrumental = isInstrumentalLine(line);
 
           return (
             <span
@@ -230,7 +249,7 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
               ref={(el) => { itemRefs.current[i] = el; }}
               onClick={() => { if (line.time !== null) engine.seek(line.time); }}
               className={`text-sm transition-all duration-300 shrink-0 cursor-pointer hover:text-gray-100 ${
-                line.instrumental
+                instrumental
                   ? isCurrent
                     ? 'mx-3 text-gray-100 font-medium'
                     : isPast
@@ -243,7 +262,7 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
                       : 'text-gray-500'
               }`}
             >
-              {line.instrumental ? <InstrumentalIcon /> : line.text}
+              {instrumental ? <InstrumentalIcon /> : line.text}
             </span>
           );
         })}
@@ -421,7 +440,7 @@ function VerticalTrack({ lines, targetIndex, visible = true, className }: TrackP
               }`}
               style={{ height: MOBILE_LINE_HEIGHT }}
             >
-              {line.instrumental ? <InstrumentalIcon /> : line.text}
+              {isInstrumentalLine(line) ? <InstrumentalIcon /> : line.text}
             </div>
           );
         })}

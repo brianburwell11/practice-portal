@@ -22,6 +22,18 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
     ...(s.offsetSec ? { offsetSec: s.offsetSec } : {}),
   }));
 
+  // Groups capture stem ids at the moment of group creation, but the saved
+  // stem ids are re-derived from labels above. Map the stored ids to the
+  // final ids so renamed stems don't drop out of their group.
+  const idMap = new Map<string, string>();
+  state.stems.forEach((original, i) => {
+    if (stems[i]) idMap.set(original.id, stems[i].id);
+  });
+  const remappedGroups = state.groups.map((g) => ({
+    ...g,
+    stemIds: g.stemIds.map((id) => idMap.get(id) ?? id),
+  }));
+
   // Tempo map
   const bpm = state.timingMode === 'manual' ? state.manualBpm : 120;
   const tempoMap = [{ beat: 0, bpm }];
@@ -66,7 +78,7 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
     durationSeconds,
     beatOffset: 0,
     stems,
-    groups: state.groups.length > 0 ? state.groups : undefined,
+    groups: remappedGroups.length > 0 ? remappedGroups : undefined,
     tempoMap,
     timeSignatureMap,
     metronome: {
