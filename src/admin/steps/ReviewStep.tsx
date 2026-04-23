@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
@@ -21,6 +21,7 @@ function extOf(name: string): string {
 export function ReviewStep({ state, dispatch }: Props) {
   const [result, setResult] = useState<'success' | null>(null);
   const { bandSlug = '' } = useParams();
+  const navigate = useNavigate();
   const bandName = useBandStore((s) => s.currentBand?.name ?? '');
   const config = buildConfig(state, bandName);
   const validation = songConfigSchema.safeParse(config);
@@ -189,8 +190,16 @@ export function ReviewStep({ state, dispatch }: Props) {
         <p className="text-2xl text-green-400">Song added!</p>
         <p className="text-gray-400">
           <span className="font-mono text-gray-300">{state.title}</span> by{' '}
-          <span className="text-gray-300">{state.artist}</span> has been saved to R2.
+          <span className="text-gray-300">{state.artist}</span> has been saved.
         </p>
+        <div className="flex justify-center">
+          <button
+            onClick={() => navigate(`/${bandSlug}#${state.id}`)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
+          >
+            Open Song
+          </button>
+        </div>
       </div>
     );
   }
