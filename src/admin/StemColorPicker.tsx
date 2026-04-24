@@ -73,10 +73,7 @@ export function StemColorPicker({ value, onChange, children, className, title }:
             <input
               type="color"
               value={value}
-              onChange={(e) => {
-                onChange(e.target.value);
-                setOpen(false);
-              }}
+              onChange={(e) => onChange(e.target.value)}
               className="w-6 h-6 rounded cursor-pointer bg-transparent border-0"
             />
             <span className="text-xs font-mono text-gray-500">{value}</span>
