@@ -1,6 +1,6 @@
 import { useReducer } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { wizardReducer, initialState } from './wizardReducer';
+import { wizardReducer, createInitialState } from './wizardReducer';
 import { MetadataStep } from './steps/MetadataStep';
 import { StemsStep } from './steps/StemsStep';
 import { AlignmentStep } from './steps/AlignmentStep';
@@ -9,7 +9,7 @@ import { ReviewStep } from './steps/ReviewStep';
 const stepLabels = ['Metadata', 'Stems & Groups', 'Align', 'Review'];
 
 export default function AddSongWizard() {
-  const [state, dispatch] = useReducer(wizardReducer, initialState);
+  const [state, dispatch] = useReducer(wizardReducer, undefined, createInitialState);
   const { bandSlug = '' } = useParams();
   const navigate = useNavigate();
 

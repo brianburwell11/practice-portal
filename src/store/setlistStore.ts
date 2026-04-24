@@ -1,11 +1,17 @@
 import { create } from 'zustand';
 import type { SetlistConfig } from '../audio/types';
 
+export interface SetlistIndexEntry {
+  id: string;
+  slug?: string;
+  name: string;
+}
+
 interface SetlistState {
-  index: { id: string; name: string }[] | null;
+  index: SetlistIndexEntry[] | null;
   activeSetlist: SetlistConfig | null;
   activeIndex: number;
-  setIndex: (index: { id: string; name: string }[]) => void;
+  setIndex: (index: SetlistIndexEntry[]) => void;
   setActiveSetlist: (s: SetlistConfig | null) => void;
   setActiveIndex: (i: number) => void;
 }

@@ -8,6 +8,7 @@ import { uploadFileWithProgress, uploadFormWithProgress } from './utils/uploadWi
 import { prepareSheetMusicUpload } from './utils/sheetMusic';
 import { SheetMusicUploader } from './SheetMusicUploader';
 import { r2Url } from '../utils/url';
+import { slugify } from '../utils/deriveId';
 import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
@@ -232,10 +233,16 @@ export default function EditSongPage() {
       const newId = config.id;
       const idChanged = oldId !== newId;
 
+      // Normalize the slug at the save boundary. The reducer stores a
+      // permissive live-edited form (trailing hyphens allowed while
+      // typing); strip edges here so what lands on R2 is the canonical
+      // slug.
+      const normalizedSlug = config.slug ? slugify(config.slug) : undefined;
+
       // Start from the current config; rebind if transcode rewrites filenames
       // so the POST below doesn't send stale extensions (e.g. .wav when R2
       // actually stores .opus, which 404s the player on reload).
-      let configToSave = config;
+      let configToSave: typeof config = { ...config, slug: normalizedSlug };
 
       // Upload new stem files using OLD id (files still at old location).
       // Send each under `${stemId}${origExt}` so server transcodes to the
@@ -353,14 +360,27 @@ export default function EditSongPage() {
         }
       } else if (
         state.original &&
-        (config.title !== state.original.title || config.artist !== state.original.artist)
+        (config.title !== state.original.title ||
+          config.artist !== state.original.artist ||
+          config.slug !== state.original.slug)
       ) {
-        // Title/artist text changed but ID stayed the same — update discography.
-        // overwrite:true because we're intentionally replacing the existing entry.
+        // Title / artist / slug changed but ID stayed the same —
+        // update discography so the manifest's slug entry matches
+        // the config. Without this, visiting `#{slug}` after an
+        // edit falls through because the manifest still carries
+        // the old slug (or none, for legacy songs).
+        // overwrite:true because we're replacing the existing entry.
         await fetch(`/api/bands/${currentBand.id}/songs/discography`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: config.id, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${config.id}`, overwrite: true }),
+          body: JSON.stringify({
+            id: config.id,
+            ...(config.slug ? { slug: config.slug } : {}),
+            title: config.title,
+            artist: config.artist,
+            audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${config.id}`,
+            overwrite: true,
+          }),
         });
       }
 
@@ -393,7 +413,7 @@ export default function EditSongPage() {
           setManifest({
             songs: manifest.songs.map((s) =>
               s.id === oldId
-                ? { ...s, id: newId, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${newId}` }
+                ? { ...s, id: newId, slug: config.slug, title: config.title, artist: config.artist, audioBasePath: `${import.meta.env.VITE_R2_PUBLIC_URL}/${currentBand.id}/songs/${newId}` }
                 : s,
             ),
           });
@@ -412,12 +432,14 @@ export default function EditSongPage() {
         window.history.replaceState(null, '', `/${bandSlug}/admin/edit-song/${newId}`);
       } else if (
         manifest && state.original &&
-        (config.title !== state.original.title || config.artist !== state.original.artist)
+        (config.title !== state.original.title ||
+          config.artist !== state.original.artist ||
+          config.slug !== state.original.slug)
       ) {
-        // Title/artist changed without ID change — update manifest
+        // Title / artist / slug changed without ID change — update manifest
         setManifest({
           songs: manifest.songs.map((s) =>
-            s.id === config.id ? { ...s, title: config.title, artist: config.artist } : s,
+            s.id === config.id ? { ...s, slug: config.slug, title: config.title, artist: config.artist } : s,
           ),
         });
       }
@@ -508,6 +530,27 @@ export default function EditSongPage() {
               onChange={(tags) => dispatch({ type: 'SET_TAGS', tags })}
             />
           </div>
+
+          <label className="space-y-1 block">
+            <span className="text-sm text-gray-400">
+              URL hash{' '}
+              <span className="text-gray-600 text-xs">
+                (lowercase, numbers, hyphens)
+              </span>
+            </span>
+            <div className="flex items-center gap-0 w-full bg-gray-800 border border-gray-600 rounded focus-within:border-blue-500">
+              <span className="pl-3 py-2 text-gray-500 font-mono text-sm select-none whitespace-nowrap">
+                /{bandSlug}#
+              </span>
+              <input
+                type="text"
+                value={config.slug ?? ''}
+                onChange={(e) => dispatch({ type: 'SET_SLUG', slug: e.target.value })}
+                className="flex-1 min-w-0 bg-transparent border-0 rounded-r px-1 py-2 text-gray-100 font-mono text-sm focus:outline-none"
+                placeholder={slugify(config.title || 'Song Title')}
+              />
+            </div>
+          </label>
 
           <SheetMusicUploader
             currentUrl={config.sheetMusicUrl}
@@ -821,7 +864,7 @@ export default function EditSongPage() {
               <button
                 onClick={() => {
                   if ((isDirty(state) || newSheetMusicFile) && !window.confirm('You have unsaved edits. Leave anyway?')) return;
-                  navigate(`/${bandSlug}#${config.id}`);
+                  navigate(`/${bandSlug}#${config.slug ?? config.id}`);
                 }}
                 disabled={state.saving}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm font-medium"

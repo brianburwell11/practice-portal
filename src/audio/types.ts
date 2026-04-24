@@ -54,6 +54,9 @@ export interface NavLinkConfig {
 
 export interface SongConfig {
   id: string;
+  /** Kebab-case URL segment, editable. Optional for legacy songs
+   *  whose `id` is itself a slug. */
+  slug?: string;
   title: string;
   artist: string;
   key: string;
@@ -79,6 +82,7 @@ export interface SongConfig {
 
 export interface SongManifestEntry {
   id: string;
+  slug?: string;
   title: string;
   artist: string;
   audioBasePath?: string;
@@ -124,6 +128,7 @@ export type SetlistEntry =
 
 export interface SetlistConfig {
   id: string;
+  slug?: string;
   name: string;
   entries: SetlistEntry[];
   navLinks?: NavLinkConfig[];
@@ -131,5 +136,5 @@ export interface SetlistConfig {
 }
 
 export interface SetlistIndex {
-  setlists: { id: string; name: string }[];
+  setlists: { id: string; slug?: string; name: string }[];
 }

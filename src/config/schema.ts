@@ -64,8 +64,11 @@ export const navLinkConfigSchema = z.object({
   url: z.string().url(),
 });
 
+const slugSchema = z.string().regex(/^[a-z0-9-]+$/).optional();
+
 export const songConfigSchema = z.object({
   id: z.string(),
+  slug: slugSchema,
   title: z.string(),
   artist: z.string(),
   key: z.string(),
@@ -98,6 +101,7 @@ export const songConfigSchema = z.object({
 
 export const songManifestEntrySchema = z.object({
   id: z.string(),
+  slug: slugSchema,
   title: z.string(),
   artist: z.string(),
   audioBasePath: z.string().optional(),
@@ -144,6 +148,7 @@ export const setlistEntrySchema = z.discriminatedUnion('type', [
 
 export const setlistConfigSchema = z.object({
   id: z.string(),
+  slug: slugSchema,
   name: z.string(),
   entries: z.array(setlistEntrySchema),
   navLinks: z.array(navLinkConfigSchema).optional(),
@@ -151,5 +156,7 @@ export const setlistConfigSchema = z.object({
 });
 
 export const setlistIndexSchema = z.object({
-  setlists: z.array(z.object({ id: z.string(), name: z.string() })),
+  setlists: z.array(
+    z.object({ id: z.string(), slug: slugSchema, name: z.string() }),
+  ),
 });

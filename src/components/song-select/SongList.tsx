@@ -62,7 +62,11 @@ export function useSongLoader() {
       if (setlistState.activeSetlist) {
         history.pushState(null, '', `#${setlistState.activeIndex + 1}`);
       } else {
-        history.pushState(null, '', `#${entry.id}`);
+        // Prefer the song's slug (readable kebab-case) when present;
+        // legacy songs fall back to their slug-shaped id, which
+        // matches the pre-refactor hash so bookmarks keep resolving.
+        const hashSegment = config.slug ?? entry.slug ?? entry.id;
+        history.pushState(null, '', `#${hashSegment}`);
       }
 
       const saved = loadMixerState(config.id);
@@ -176,18 +180,44 @@ export function SongList() {
     if (!r2Base) return;
     hasPreloadedSetlist.current = true;
     setlistPending.current = true;
-    const fullId = setlistParam.startsWith('setlist-') ? setlistParam : `setlist-${setlistParam}`;
-    fetch(`${r2Base}/${currentBand.id}/setlists/${fullId}.json`)
-      .then((r) => {
-        if (!r.ok) throw new Error('Not found');
-        return r.json();
-      })
-      .then((data) => {
-        const config = setlistConfigSchema.parse(data);
-        setActiveSetlist(config);
-      })
-      .catch(() => {})
-      .finally(() => { setlistPending.current = false; });
+
+    // Resolve the URL param (slug, opaque id, or legacy "setlist-…")
+    // against the index. The index is loaded by a sibling effect and
+    // may not be ready yet — fall through to the candidate-id loader
+    // below, which probes each plausible shape in turn.
+    const idx = useSetlistStore.getState().index ?? [];
+    const bySlug = idx.find((s) => s.slug && s.slug === setlistParam);
+    const byId = idx.find((s) => s.id === setlistParam);
+    const byLegacyId = idx.find((s) => s.id === `setlist-${setlistParam}`);
+    const candidateIds: string[] = [];
+    if (bySlug) candidateIds.push(bySlug.id);
+    else if (byId) candidateIds.push(byId.id);
+    else if (byLegacyId) candidateIds.push(byLegacyId.id);
+    else {
+      // Index unavailable \u2014 fall back to probing the raw param and
+      // the legacy-prefixed form. Preserves the pre-refactor behavior
+      // for deep-linked URLs that land before the index loads.
+      candidateIds.push(setlistParam);
+      if (!setlistParam.startsWith('setlist-')) {
+        candidateIds.push(`setlist-${setlistParam}`);
+      }
+    }
+
+    const tryLoad = async () => {
+      for (const id of candidateIds) {
+        try {
+          const r = await fetch(`${r2Base}/${currentBand.id}/setlists/${id}.json`);
+          if (!r.ok) continue;
+          const data = await r.json();
+          const config = setlistConfigSchema.parse(data);
+          setActiveSetlist(config);
+          return;
+        } catch {
+          // try next candidate
+        }
+      }
+    };
+    tryLoad().finally(() => { setlistPending.current = false; });
   }, [currentBand, setActiveSetlist]);
 
   const hasAutoLoaded = useRef(false);
@@ -207,7 +237,11 @@ export function SongList() {
         handleSelect(filteredSongs[idx]);
       }
     } else {
-      const entry = filteredSongs.find((s) => s.id === hash);
+      // Look up by slug first (new songs), fall back to id
+      // (legacy songs whose id is already a slug).
+      const entry =
+        filteredSongs.find((s) => s.slug && s.slug === hash) ??
+        filteredSongs.find((s) => s.id === hash);
       if (entry) {
         hasAutoLoaded.current = true;
         handleSelect(entry);
@@ -227,8 +261,11 @@ export function SongList() {
           handleSelect(filteredSongs[idx]);
         }
       } else {
-        if (hash === useSongStore.getState().selectedSong?.id) return;
-        const entry = filteredSongs.find((s) => s.id === hash);
+        const sel = useSongStore.getState().selectedSong;
+        if (sel && (hash === sel.slug || hash === sel.id)) return;
+        const entry =
+          filteredSongs.find((s) => s.slug && s.slug === hash) ??
+          filteredSongs.find((s) => s.id === hash);
         if (entry) handleSelect(entry);
       }
     };
@@ -329,8 +366,9 @@ export function SetlistDropdown() {
       setActiveSetlist(null);
       const url = new URL(window.location.href);
       url.searchParams.delete('setlist');
-      const songId = useSongStore.getState().selectedSong?.id;
-      url.hash = songId ? `#${songId}` : '';
+      const sel = useSongStore.getState().selectedSong;
+      const hashSegment = sel ? (sel.slug ?? sel.id) : '';
+      url.hash = hashSegment ? `#${hashSegment}` : '';
       history.replaceState(null, '', url.pathname + url.search + url.hash);
       return;
     }
@@ -340,7 +378,13 @@ export function SetlistDropdown() {
       const data: SetlistConfig = setlistConfigSchema.parse(await res.json());
       setActiveSetlist(data);
       const url = new URL(window.location.href);
-      url.searchParams.set('setlist', setlistId.replace(/^setlist-/, ''));
+      // Prefer the setlist's slug in the URL. For legacy setlists
+      // (no slug), strip the "setlist-" prefix to keep the param
+      // compact \u2014 matches the pre-refactor URL shape.
+      url.searchParams.set(
+        'setlist',
+        data.slug ?? setlistId.replace(/^setlist-/, ''),
+      );
       // activeIndex resets to 0 via setActiveSetlist, so first song
       url.hash = '#1';
       history.replaceState(null, '', url.pathname + url.search + url.hash);

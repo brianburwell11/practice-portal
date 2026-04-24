@@ -5,7 +5,17 @@ import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
 import { r2Url } from '../utils/url';
 import { getCamelotStyle } from '../utils/camelot';
+import { slugify } from '../utils/deriveId';
+import { generateId } from '../utils/generateId';
 import type { SetlistConfig, SetlistEntry, NavLinkConfig } from '../audio/types';
+
+/** Legacy setlist ids are prefixed with "setlist-". New-format ids are
+ *  opaque base62 (7 chars) with no prefix. Detecting the legacy shape
+ *  lets us preserve the old rename-and-recreate behavior on existing
+ *  setlists while using in-place rename for new ones. */
+function isLegacySetlistId(id: string): boolean {
+  return id.startsWith('setlist-');
+}
 
 interface SongMeta {
   key: string;
@@ -62,6 +72,8 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
 
   const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugEdited, setSlugEdited] = useState(false);
   const [entries, setEntries] = useState<SetlistEntry[]>([]);
   const [navLinks, setNavLinks] = useState<NavLinkConfig[]>([]);
   const [newLinkTitle, setNewLinkTitle] = useState('');
@@ -126,7 +138,10 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     fetch(`${r2Base}/${currentBand.id}/setlists/${sourceId}.json`)
       .then((r) => r.json())
       .then((data: SetlistConfig) => {
-        if (!isCopy) setName(data.name);
+        if (!isCopy) {
+          setName(data.name);
+          if (data.slug) setSlug(data.slug);
+        }
         setEntries(data.entries);
         setNavLinks(data.navLinks ?? []);
         if (data.desiredLengthSeconds) {
@@ -253,19 +268,39 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     });
   }, [availableSongs, songMeta, filterKeys, filterTags, durationMode, durationText, timeRemaining, hasActiveFilters, allowDuplicates, setlistSongIds]);
 
-  const deriveSetlistId = (n: string) =>
+  // Legacy rename path: old ids were derived as `setlist-{slug(name)}`.
+  // Kept only for renaming pre-existing legacy setlists (they still
+  // need the old copy-and-delete R2 dance on a name change).
+  const deriveLegacySetlistId = (n: string) =>
     'setlist-' + n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+  const effectiveSlug = slug || slugify(name);
 
   const handleSave = async () => {
     if (!currentBand || !name.trim() || entries.length === 0) return;
     setSaving(true);
     setError(null);
 
-    const newId = deriveSetlistId(name);
     const oldId = isEdit ? setlistId! : null;
+    const editingLegacy = isEdit && oldId !== null && isLegacySetlistId(oldId);
+
+    // New-format setlists (create or copy) get a fresh opaque id.
+    // Legacy edits keep the derive-from-name behavior so renaming a
+    // legacy setlist still produces a new legacy-shaped id + moves R2.
+    // Opaque edits keep the same id across renames.
+    let newId: string;
+    if (!isEdit) {
+      newId = generateId();
+    } else if (editingLegacy) {
+      newId = deriveLegacySetlistId(name);
+    } else {
+      newId = oldId!;
+    }
     const renamed = oldId !== null && oldId !== newId;
+
     const config: SetlistConfig = {
       id: newId,
+      ...(effectiveSlug ? { slug: effectiveSlug } : {}),
       name: name.trim(),
       entries,
       ...(navLinks.length > 0 ? { navLinks } : {}),
@@ -291,7 +326,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
       // Update store index optimistically
       const existing = storeIndex ?? [];
       const updated = existing.filter((s) => s.id !== newId && s.id !== oldId);
-      updated.push({ id: newId, name: name.trim() });
+      updated.push({ id: newId, slug: effectiveSlug || undefined, name: name.trim() });
       setIndex(updated);
 
       // If editing the active setlist, update it in the store
@@ -335,7 +370,14 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     setEntries((prev) => prev.map((e, i) => (i === idx && e.type === 'heading' ? { ...e, label } : e)));
 
   const songCount = entries.filter((e) => e.type === 'song').length;
-  const nameCollidesWithSource = isCopy && copySourceId !== null && deriveSetlistId(name) === copySourceId;
+  // Copy-as-new always gets a fresh opaque id, so the old
+  // slug-collision guard is no longer meaningful \u2014 but keep the
+  // "pick a different name" nudge if the admin types the source name
+  // verbatim on a copy, since the URL slug would otherwise collide.
+  const nameCollidesWithSource =
+    isCopy && copySourceId !== null && copySourceName
+      ? name.trim() === copySourceName
+      : false;
   const canSave = name.trim().length > 0 && songCount > 0 && !saving && !nameCollidesWithSource;
 
   // Song numbering: count only songs, not headings
@@ -387,6 +429,27 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
               {nameCollidesWithSource && (
                 <p className="mt-1 text-xs text-red-400">Pick a name different from the original setlist.</p>
               )}
+            </div>
+
+            {/* URL slug */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                URL slug{' '}
+                <span className="text-gray-600 text-xs">
+                  (lowercase, numbers, hyphens)
+                </span>
+              </label>
+              <input
+                type="text"
+                value={slug || (slugEdited ? '' : slugify(name))}
+                onChange={(e) => {
+                  setSlug(slugify(e.target.value));
+                  setSlugEdited(true);
+                }}
+                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-blue-500"
+                placeholder="auto-derived-from-name"
+                disabled={saving}
+              />
             </div>
 
             {/* Set length + time remaining */}

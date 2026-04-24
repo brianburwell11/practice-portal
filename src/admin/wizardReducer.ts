@@ -1,6 +1,7 @@
 import type { TapMapEntry, StemGroupConfig } from '../audio/types';
 import type { UploadProgress } from './utils/uploadWithProgress';
-import { deriveId } from '../utils/deriveId';
+import { slugify, cleanSlugInput } from '../utils/deriveId';
+import { generateId } from '../utils/generateId';
 
 export interface StemEntry {
   file: File;
@@ -22,7 +23,13 @@ export interface WizardState {
   title: string;
   artist: string;
   key: string;
+  /** Opaque random id (base62, 7 chars). Generated once on wizard init
+   *  and immutable for the life of the wizard. */
   id: string;
+  /** Kebab-case URL segment. Auto-derived from title until the admin
+   *  manually edits it (then `slugEdited` pins it). */
+  slug: string;
+  slugEdited: boolean;
   tags: string[];
   // Step 2: Stems & Groups
   stems: StemEntry[];
@@ -52,6 +59,7 @@ export type WizardAction =
   | { type: 'SET_TITLE'; title: string; fallbackArtist?: string }
   | { type: 'SET_ARTIST'; artist: string; fallbackArtist?: string }
   | { type: 'SET_KEY'; key: string }
+  | { type: 'SET_SLUG'; slug: string }
   | { type: 'SET_TAGS'; tags: string[] }
   | { type: 'SET_STEMS'; stems: StemEntry[]; durationSeconds: number }
   | { type: 'UPDATE_STEM'; index: number; updates: Partial<Omit<StemEntry, 'file'>> }
@@ -71,36 +79,46 @@ export type WizardAction =
   | { type: 'SET_SHEET_MUSIC_FILE'; file: File | null }
   | { type: 'SET_REPEAT_AFTER_DC_DS'; value: boolean };
 
-export const initialState: WizardState = {
-  step: 1,
-  title: '',
-  artist: '',
-  key: '',
-  id: '',
-  tags: [],
-  stems: [],
-  durationSeconds: 0,
-  timingMode: null,
-  tapMap: [],
-  manualBpm: 120,
-  timeSignatureNumerator: 4,
-  timeSignatureDenominator: 4,
-  groups: [],
-  sheetMusicFile: null,
-  repeatAfterDcDs: false,
-  saving: false,
-  error: null,
-  uploadProgress: null,
-};
+export function createInitialState(): WizardState {
+  return {
+    step: 1,
+    title: '',
+    artist: '',
+    key: '',
+    id: generateId(),
+    slug: '',
+    slugEdited: false,
+    tags: [],
+    stems: [],
+    durationSeconds: 0,
+    timingMode: null,
+    tapMap: [],
+    manualBpm: 120,
+    timeSignatureNumerator: 4,
+    timeSignatureDenominator: 4,
+    groups: [],
+    sheetMusicFile: null,
+    repeatAfterDcDs: false,
+    saving: false,
+    error: null,
+    uploadProgress: null,
+  };
+}
 
 export function wizardReducer(state: WizardState, action: WizardAction): WizardState {
   switch (action.type) {
     case 'SET_TITLE':
-      return { ...state, title: action.title, id: deriveId(action.title, state.artist || action.fallbackArtist || '') };
+      return {
+        ...state,
+        title: action.title,
+        slug: state.slugEdited ? state.slug : slugify(action.title),
+      };
     case 'SET_ARTIST':
-      return { ...state, artist: action.artist, id: deriveId(state.title, action.artist || action.fallbackArtist || '') };
+      return { ...state, artist: action.artist };
     case 'SET_KEY':
       return { ...state, key: action.key };
+    case 'SET_SLUG':
+      return { ...state, slug: cleanSlugInput(action.slug), slugEdited: true };
     case 'SET_TAGS':
       return { ...state, tags: action.tags };
     case 'SET_STEMS':
