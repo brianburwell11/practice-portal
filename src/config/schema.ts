@@ -40,6 +40,7 @@ export const stemGroupConfigSchema = z.object({
   label: z.string(),
   color: z.string(),
   stemIds: z.array(z.string()).min(1),
+  defaultVolume: z.number().min(0).max(1.5).optional(),
 });
 
 export const tapMapEntrySchema = z.object({

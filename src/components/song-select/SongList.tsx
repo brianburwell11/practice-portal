@@ -90,7 +90,7 @@ export function useSongLoader() {
       for (const group of config.groups ?? []) {
         const g = saved?.groups[group.id];
         groupStates[group.id] = {
-          volume: g?.volume ?? 1,
+          volume: g?.volume ?? group.defaultVolume ?? 1,
           muted: g?.muted ?? false,
           soloed: g?.soloed ?? false,
           expanded: false,

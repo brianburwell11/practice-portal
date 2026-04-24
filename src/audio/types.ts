@@ -38,6 +38,7 @@ export interface StemGroupConfig {
   label: string;
   color: string;
   stemIds: string[];
+  defaultVolume?: number;
 }
 
 export interface TapMapEntry {

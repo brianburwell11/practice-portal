@@ -85,8 +85,9 @@ export function MixerPanel() {
     clearSoloGroup();
 
     for (const group of selectedSong.groups ?? []) {
-      setGroupVolume(group.id, 1);
-      engine.setGroupVolume(group.id, 1);
+      const v = group.defaultVolume ?? 1;
+      setGroupVolume(group.id, v);
+      engine.setGroupVolume(group.id, v);
       setGroupMuted(group.id, false);
       engine.setGroupMuted(group.id, false);
       setGroupSoloed(group.id, false);
@@ -110,7 +111,7 @@ export function MixerPanel() {
     for (const group of selectedSong.groups ?? []) {
       const g = groups[group.id];
       if (!g) continue;
-      if (Math.abs(g.volume - 1) >= 0.001) return false;
+      if (Math.abs(g.volume - (group.defaultVolume ?? 1)) >= 0.001) return false;
       if (g.muted || g.soloed) return false;
     }
     return true;
@@ -140,9 +141,9 @@ export function MixerPanel() {
 
       setSaveState('saving');
       try {
-        // Spread the whole song config and only override stem defaults so we
-        // don't drop tags, offsetSec, or anything else the song happens to
-        // carry.
+        // Spread the whole song config and only override stem + group
+        // defaults so we don't drop tags, offsetSec, or anything else the
+        // song happens to carry.
         const updatedConfig = {
           ...selectedSong,
           stems: selectedSong.stems.map((stem) => ({
@@ -150,6 +151,12 @@ export function MixerPanel() {
             defaultVolume: Math.min(1.5, stems[stem.id]?.volume ?? stem.defaultVolume),
             defaultPan: Math.max(-1, Math.min(1, stems[stem.id]?.pan ?? stem.defaultPan)),
           })),
+          ...(selectedSong.groups ? {
+            groups: selectedSong.groups.map((group) => ({
+              ...group,
+              defaultVolume: Math.min(1.5, groups[group.id]?.volume ?? group.defaultVolume ?? 1),
+            })),
+          } : {}),
         };
         const res = await fetch(`/api/bands/${bandId}/songs/${selectedSong.id}/config`, {
           method: 'POST',
@@ -168,7 +175,7 @@ export function MixerPanel() {
         setTimeout(() => setSaveState('idle'), 2000);
       }
     }, 3000);
-  }, [saveState, selectedSong, bandId, stems]);
+  }, [saveState, selectedSong, bandId, stems, groups]);
 
   // Compute which stems are grouped vs ungrouped
   const { ungroupedStems } = useMemo(() => {
