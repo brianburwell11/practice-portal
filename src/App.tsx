@@ -37,6 +37,9 @@ export default function App() {
   useMixerPersistence();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const openMarkerEditor = useMarkerEditorStore((s) => s.open);
+  const closeMarkerEditor = useMarkerEditorStore((s) => s.close);
+  const markerEditorOpen = useMarkerEditorStore((s) => s.isOpen);
+  const markerEditorDirty = useMarkerEditorStore((s) => s.dirty);
   const openLyricsEditor = useLyricsEditorStore((s) => s.open);
   const closeLyricsEditor = useLyricsEditorStore((s) => s.close);
   const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
@@ -116,14 +119,30 @@ export default function App() {
                 if (dirty && !window.confirm('You have unsaved lyrics changes. Discard them?')) return;
                 closeLyricsEditor();
               }
+              if (markerEditorOpen) {
+                if (markerEditorDirty && !window.confirm('You have unsaved tapMap changes. Discard them?')) return;
+                closeMarkerEditor();
+              }
               setShowEditBandModal(true);
             }}
             onDeleteBand={() => setShowDeleteBandModal(true)}
             onAddSong={() => navigate(`/${bandRoute}/admin/add-song`)}
             onEditSong={() => selectedSong && navigate(`/${bandRoute}/admin/edit-song/${selectedSong.id}`)}
-            onTapMapEditor={() => selectedSong && openMarkerEditor(selectedSong.tapMap ?? [])}
+            onTapMapEditor={() => {
+              if (!selectedSong) return;
+              if (lyricsEditorOpen) {
+                const dirty = useLyricsEditorStore.getState().dirty;
+                if (dirty && !window.confirm('You have unsaved lyrics changes. Discard them?')) return;
+                closeLyricsEditor();
+              }
+              openMarkerEditor(selectedSong.tapMap ?? []);
+            }}
             onLyricsEditor={() => {
               if (!selectedSong || !currentBand) return;
+              if (markerEditorOpen) {
+                if (markerEditorDirty && !window.confirm('You have unsaved tapMap changes. Discard them?')) return;
+                closeMarkerEditor();
+              }
               setShowEditBandModal(false);
               fetch(r2Url(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`))
                 .then((r) => (r.ok ? r.json() : { lines: [] }))
@@ -162,7 +181,9 @@ export default function App() {
         </div>
 
         {/* Editor replaces mixer when open */}
-        {lyricsEditorOpen ? (
+        {markerEditorOpen ? (
+          <MarkerEditorModal />
+        ) : lyricsEditorOpen ? (
           <LyricsEditorModal />
         ) : showEditBandModal && EditBandModal && currentBand ? (
           <Suspense fallback={null}>
@@ -174,8 +195,6 @@ export default function App() {
           </div>
         )}
       </div>
-
-      <MarkerEditorModal />
       {showDeleteModal && selectedSong && (
         <DeleteSongModal
           songId={selectedSong.id}

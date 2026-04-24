@@ -3,6 +3,7 @@ import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
+import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import type { TapMapEntry } from '../../audio/types';
 import { markersToSeconds } from '../../audio/tempoUtils';
 
@@ -27,6 +28,19 @@ export function WaveformTimeline() {
   const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
   const lyricsLines = useLyricsEditorStore((s) => s.lines);
   const moveLyricLine = useLyricsEditorStore((s) => s.moveLine);
+
+  // TapMap editor integration \u2014 when the editor is open the timeline
+  // sources its tapMap from the editor store (live, dirty copy) and
+  // supports select-and-drag on entries. Outside the editor it reads
+  // the song's saved tapMap as before.
+  const markerEditorOpen = useMarkerEditorStore((s) => s.isOpen);
+  const editorTapMap = useMarkerEditorStore((s) => s.tapMap);
+  const markerSelectedIndex = useMarkerEditorStore((s) => s.selectedIndex);
+  const setMarkerSelectedIndex = useMarkerEditorStore((s) => s.setSelectedIndex);
+  const moveMarkerEntry = useMarkerEditorStore((s) => s.moveEntry);
+  const displayTapMap: TapMapEntry[] | undefined = markerEditorOpen
+    ? editorTapMap
+    : selectedSong?.tapMap;
 
   // Main canvas refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -91,7 +105,7 @@ export function WaveformTimeline() {
       const { width } = sizeRef.current;
       if (width === 0) return null;
 
-      const tapMap = selectedSong.tapMap;
+      const tapMap = displayTapMap;
       if (tapMap && tapMap.length > 0) {
         let closest: { time: number; dist: number } | null = null;
         for (const entry of tapMap as TapMapEntry[]) {
@@ -116,7 +130,7 @@ export function WaveformTimeline() {
       }
       return closest?.time ?? null;
     },
-    [duration, selectedSong, secondsToPixel],
+    [duration, selectedSong, displayTapMap, secondsToPixel],
   );
 
   // Hit test: check if a pixel X is within threshold of loop A or B marker
@@ -139,6 +153,32 @@ export function WaveformTimeline() {
 
   // Lyric marker drag state
   const dragLyricRef = useRef<{ index: number; time: number } | null>(null);
+  // TapMap editor entry drag state \u2014 mirrors the lyric-marker pattern.
+  const dragEditorEntryRef = useRef<{ index: number; time: number } | null>(null);
+
+  // Hit-test tapMap entries when the editor is active. Threshold
+  // matches HIT_PX (same as loop/lyric markers) so behavior is
+  // consistent across editable elements on the timeline.
+  const hitTestEditorEntry = useCallback(
+    (pixelX: number): number | null => {
+      if (!markerEditorOpen || editorTapMap.length === 0) return null;
+      const { width } = sizeRef.current;
+      if (width === 0) return null;
+      let closest: { index: number; dist: number } | null = null;
+      for (let i = 0; i < editorTapMap.length; i++) {
+        const t = dragEditorEntryRef.current?.index === i
+          ? dragEditorEntryRef.current.time
+          : editorTapMap[i].time;
+        const mx = secondsToPixel(t, width);
+        const dist = Math.abs(pixelX - mx);
+        if (dist <= HIT_PX && (!closest || dist < closest.dist)) {
+          closest = { index: i, dist };
+        }
+      }
+      return closest?.index ?? null;
+    },
+    [markerEditorOpen, editorTapMap, secondsToPixel],
+  );
 
   const hitTestLyricMarker = useCallback(
     (pixelX: number): number | null => {
@@ -185,7 +225,21 @@ export function WaveformTimeline() {
         return;
       }
 
-      // Single pointer: check lyric marker hit first
+      // Single pointer: check editor-entry hit first when the
+      // tapMap editor is open. Entry hits supersede the generic
+      // click-to-seek so markers can be selected/dragged without
+      // the playhead jumping.
+      const editorHit = hitTestEditorEntry(x);
+      if (editorHit !== null) {
+        e.preventDefault();
+        setMarkerSelectedIndex(editorHit);
+        dragEditorEntryRef.current = { index: editorHit, time: editorTapMap[editorHit].time };
+        didDragRef.current = false;
+        suppressClickRef.current = false;
+        return;
+      }
+
+      // Single pointer: check lyric marker hit next
       const lyricHit = hitTestLyricMarker(x);
       if (lyricHit !== null) {
         e.preventDefault();
@@ -209,7 +263,7 @@ export function WaveformTimeline() {
       dragStartRef.current = { x: e.clientX, viewStart };
       didDragRef.current = false;
     },
-    [hitTestLoopMarker, hitTestLyricMarker, lyricsLines, effectiveViewDuration, viewStart],
+    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, editorTapMap, lyricsLines, setMarkerSelectedIndex, effectiveViewDuration, viewStart],
   );
 
   const handlePointerMove = useCallback(
@@ -231,6 +285,14 @@ export function WaveformTimeline() {
         const newStart = centerSeconds - (pinchStartRef.current.centerX / sizeRef.current.width) * newDuration;
         setViewDuration(newDuration);
         setViewStart(clampViewStart(newStart, newDuration));
+        return;
+      }
+
+      // Single pointer: drag tapMap editor entry
+      if (dragEditorEntryRef.current) {
+        const seconds = pixelToSeconds(x, sizeRef.current.width);
+        dragEditorEntryRef.current.time = Math.max(0, Math.min(seconds, duration || 0));
+        suppressClickRef.current = true;
         return;
       }
 
@@ -271,13 +333,14 @@ export function WaveformTimeline() {
 
       // Hover effects (non-touch only)
       if (!isCoarse) {
+        const editorIdx = hitTestEditorEntry(x);
         const lyricIdx = hitTestLyricMarker(x);
         const hit = hitTestLoopMarker(x);
-        setCursorStyle(lyricIdx !== null || hit ? 'col-resize' : 'pointer');
+        setCursorStyle(editorIdx !== null || lyricIdx !== null || hit ? 'col-resize' : 'pointer');
         setHoveredTime(findSnapMarker(x));
       }
     },
-    [draggingMarker, findSnapMarker, hitTestLoopMarker, hitTestLyricMarker, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead],
+    [draggingMarker, findSnapMarker, hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead],
   );
 
   const handlePointerUp = useCallback(
@@ -289,6 +352,20 @@ export function WaveformTimeline() {
         if (pointersRef.current.size < 2) {
           pinchStartRef.current = null;
         }
+        dragStartRef.current = null;
+        return;
+      }
+
+      // End tapMap editor entry drag (or click-select)
+      if (dragEditorEntryRef.current) {
+        const { index, time } = dragEditorEntryRef.current;
+        // Only commit a move if the pointer actually moved enough
+        // to qualify as a drag. A plain click just selects.
+        if (didDragRef.current) {
+          moveMarkerEntry(index, time);
+          suppressClickRef.current = true;
+        }
+        dragEditorEntryRef.current = null;
         dragStartRef.current = null;
         return;
       }
@@ -330,7 +407,7 @@ export function WaveformTimeline() {
         setFollowPlayhead(true);
       }
     },
-    [draggingMarker, moveLyricLine, duration, findSnapMarker, pixelToSeconds, engine, setFollowPlayhead],
+    [draggingMarker, moveLyricLine, moveMarkerEntry, duration, findSnapMarker, pixelToSeconds, engine, setFollowPlayhead],
   );
 
   const handlePointerLeave = useCallback(
@@ -344,6 +421,7 @@ export function WaveformTimeline() {
         pinchStartRef.current = null;
       }
       dragLyricRef.current = null;
+      dragEditorEntryRef.current = null;
       dragStartRef.current = null;
       didDragRef.current = false;
       setCursorStyle('pointer');
@@ -445,14 +523,22 @@ export function WaveformTimeline() {
       height: number,
       toPixel: (seconds: number) => number,
     ) => {
-      const tapMap = selectedSong?.tapMap;
+      const tapMap = displayTapMap;
       if (tapMap && tapMap.length > 0) {
         ctx.font = '10px ui-monospace, monospace';
         ctx.textBaseline = 'top';
 
-        for (const entry of tapMap as TapMapEntry[]) {
-          const x = toPixel(entry.time);
+        for (let i = 0; i < tapMap.length; i++) {
+          const entry = tapMap[i];
+          // Substitute the live drag time for whichever entry is
+          // being moved, so the rendered line tracks the cursor.
+          const displayTime = markerEditorOpen && dragEditorEntryRef.current?.index === i
+            ? dragEditorEntryRef.current.time
+            : entry.time;
+          const x = toPixel(displayTime);
           if (x < -1 || x > width + 1) continue;
+
+          const isSelected = markerEditorOpen && markerSelectedIndex === i;
 
           if (entry.type === 'beat') {
             ctx.strokeStyle = 'rgba(255,255,255,0.12)';
@@ -465,10 +551,22 @@ export function WaveformTimeline() {
             ctx.lineWidth = 1;
           }
 
+          if (isSelected) {
+            ctx.shadowColor = '#60a5fa';
+            ctx.shadowBlur = 8;
+            ctx.strokeStyle = '#60a5fa';
+            ctx.lineWidth = 2;
+          }
+
           ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, height);
           ctx.stroke();
+
+          if (isSelected) {
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+          }
 
           if (entry.type === 'section' && entry.label) {
             const textWidth = ctx.measureText(entry.label).width;
@@ -533,7 +631,7 @@ export function WaveformTimeline() {
         }
       }
     },
-    [selectedSong, lyricsEditorOpen, lyricsLines],
+    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines],
   );
 
   // Draw main canvas (viewport-relative)

@@ -1,37 +1,61 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
-import { useTransportStore } from '../../store/transportStore';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
-import { MarkerEditorCanvas } from './MarkerEditorCanvas';
-import { TimelineNavigator } from './TimelineNavigator';
-import { EditorTransportControls } from './EditorTransportControls';
 import { SectionList } from './SectionList';
 import { parseXscFile } from '../../audio/xscParser';
+import { autoLabelSection } from '../../audio/tapMapUtils';
 
 export function MarkerEditorModal() {
-  const { isOpen, tapMap, dirty, close, importTapMap, onComplete } =
-    useMarkerEditorStore();
+  const {
+    isOpen, tapMap, dirty, selectedIndex,
+    close, importTapMap, addEntry, deleteEntry, undo, onComplete,
+  } = useMarkerEditorStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const setSelectedSong = useSongStore((s) => s.setSelectedSong);
   const currentBand = useBandStore((s) => s.currentBand);
   const engine = useAudioEngine();
-  const duration = useTransportStore((s) => s.duration);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [viewStart, setViewStart] = useState(0);
-  const [viewDuration, setViewDuration] = useState(Math.min(30, duration || 30));
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleViewChange = useCallback((newStart: number) => {
-    const maxStart = Math.max(0, (duration || 0) - viewDuration);
-    setViewStart(Math.max(0, Math.min(maxStart, newStart)));
-  }, [duration, viewDuration]);
+  // Keyboard shortcuts \u2014 S/M/B add an entry at the current playhead,
+  // Backspace/Delete removes the selected one, Z (or Cmd/Ctrl+Z) undoes.
+  // Guarded to only fire while the editor is open so the bindings don't
+  // interfere with normal app use.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-  const handleSeek = useCallback((seconds: number) => {
-    engine.seek(Math.max(0, Math.min(seconds, duration || 0)));
-  }, [engine, duration]);
+      if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      if (selectedIndex !== null && (e.key === 'Backspace' || e.key === 'Delete')) {
+        e.preventDefault();
+        deleteEntry(selectedIndex);
+        return;
+      }
+
+      const key = e.key.toUpperCase();
+      if (key === 'Z') { undo(); return; }
+
+      const currentPos = engine.clock.currentTime;
+      if (key === 'S') {
+        addEntry({ time: currentPos, type: 'section', label: autoLabelSection(tapMap) });
+      } else if (key === 'M') {
+        addEntry({ time: currentPos, type: 'measure' });
+      } else if (key === 'B') {
+        addEntry({ time: currentPos, type: 'beat' });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, selectedIndex, tapMap, engine, addEntry, deleteEntry, undo]);
 
   if (!isOpen || (!selectedSong && !onComplete)) return null;
 
@@ -103,18 +127,20 @@ export function MarkerEditorModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-        <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold text-gray-100">
-            TapMap Editor
-          </h2>
-          <span className="text-sm text-gray-400">
-            {selectedSong?.title ?? 'New Song'}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Toolbar — matches the LyricsEditor pattern: centered title,
+          actions on left/right. The waveform above now doubles as the
+          editor canvas (tapMap entries are sourced from this store while
+          the editor is open), so we only render the toolbar and the
+          section list here. */}
+      <div className="relative flex items-center justify-between px-5 py-2 border-b border-gray-700">
+        <h2 className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-100 pointer-events-none">
+          TapMap Editor
+          {selectedSong?.title && (
+            <span className="ml-2 text-gray-400 font-normal">· {selectedSong.title}</span>
+          )}
+        </h2>
+        <div className="flex items-center gap-2 relative z-10">
           <button
             className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
             onClick={() => fileInputRef.current?.click()}
@@ -128,6 +154,8 @@ export function MarkerEditorModal() {
             className="hidden"
             onChange={handleImportXsc}
           />
+        </div>
+        <div className="flex items-center gap-2 relative z-10">
           {error && (
             <span className="text-xs text-red-400 mr-2">{error}</span>
           )}
@@ -147,33 +175,25 @@ export function MarkerEditorModal() {
         </div>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 px-5 pt-4">
-        <MarkerEditorCanvas
-          viewStart={viewStart}
-          viewDuration={viewDuration}
-          onViewChange={handleViewChange}
-          onViewDurationChange={setViewDuration}
-        />
-      </div>
-
-      {/* Timeline navigator */}
-      <div className="px-5 pt-2">
-        <TimelineNavigator
-          viewStart={viewStart}
-          viewDuration={viewDuration}
-          onViewChange={handleViewChange}
-          onSeek={handleSeek}
-        />
-      </div>
-
-      {/* Transport controls */}
-      <div className="px-5 py-3">
-        <EditorTransportControls />
+      {/* Keyboard shortcut legend */}
+      <div className="px-5 py-2 text-xs text-gray-500 border-b border-gray-800 font-mono">
+        <span className="text-gray-300">S</span> section
+        <span className="mx-1.5">·</span>
+        <span className="text-gray-300">M</span> measure
+        <span className="mx-1.5">·</span>
+        <span className="text-gray-300">B</span> beat
+        <span className="mx-3 text-gray-700">|</span>
+        <span className="text-gray-300">click</span> select
+        <span className="mx-1.5">·</span>
+        <span className="text-gray-300">drag</span> move
+        <span className="mx-1.5">·</span>
+        <span className="text-gray-300">Del</span> remove
+        <span className="mx-1.5">·</span>
+        <span className="text-gray-300">⌘Z</span> undo
       </div>
 
       {/* Section list */}
-      <div className="px-5 pb-4 pt-2">
+      <div className="flex-1 min-h-0 overflow-auto px-5 pb-4 pt-2">
         <SectionList />
       </div>
     </div>
