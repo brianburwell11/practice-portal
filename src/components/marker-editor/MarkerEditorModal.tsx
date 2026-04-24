@@ -6,6 +6,9 @@ import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { SectionList } from './SectionList';
 import { parseXscFile } from '../../audio/xscParser';
 import { autoLabelSection } from '../../audio/tapMapUtils';
+import { buildXscContent } from '../../audio/xscExporter';
+import { renderStereoDownmix } from '../../audio/mixdown';
+import { encodeWav, interleaveStereo } from '../../admin/utils/audioConvert';
 
 export function MarkerEditorModal() {
   const {
@@ -17,6 +20,7 @@ export function MarkerEditorModal() {
   const currentBand = useBandStore((s) => s.currentBand);
   const engine = useAudioEngine();
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,6 +130,56 @@ export function MarkerEditorModal() {
     e.target.value = '';
   };
 
+  const triggerDownload = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportXsc = async () => {
+    if (tapMap.length === 0) return;
+    setExporting(true);
+    setError(null);
+    try {
+      const rendered = await renderStereoDownmix(engine);
+      const interleaved = interleaveStereo(rendered);
+      const wavBytes = encodeWav(interleaved, rendered.sampleRate, 2);
+
+      const rawName =
+        (selectedSong?.title && selectedSong.title.trim()) || selectedSong?.id || 'tapmap';
+      const safeName = rawName.replace(/[\\/:*?"<>|]/g, '_');
+      const wavFileName = `${safeName}.wav`;
+      const xscFileName = `${safeName}.xsc`;
+
+      const xscText = buildXscContent(tapMap, {
+        wavFileName,
+        wavInfo: {
+          frameCount: rendered.length,
+          channels: 2,
+          sampleRate: rendered.sampleRate,
+          durationSeconds: rendered.duration,
+          totalBytes: wavBytes.byteLength,
+          bitsPerSample: 16,
+        },
+      });
+
+      triggerDownload(
+        new Blob([xscText], { type: 'text/plain;charset=utf-8' }),
+        xscFileName,
+      );
+      triggerDownload(new Blob([wavBytes], { type: 'audio/wav' }), wavFileName);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar \u2014 mirrors the LyricsEditor layout: actions left/right,
@@ -159,6 +213,14 @@ export function MarkerEditorModal() {
             disabled={!dirty || saving}
           >
             {saving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-gray-300 transition-colors"
+            onClick={handleExportXsc}
+            disabled={tapMap.length === 0 || exporting}
+            title="Download a Transcribe! .xsc plus a stereo downmix .wav of the current mixer state"
+          >
+            {exporting ? 'Exporting…' : 'Export .xsc'}
           </button>
           <button
             className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"

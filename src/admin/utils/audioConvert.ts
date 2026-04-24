@@ -40,9 +40,18 @@ export async function getAudioInfo(file: File): Promise<{ duration: number; chan
   return { duration: audio.duration, channels: audio.numberOfChannels, buffer: audio };
 }
 
-function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
+/**
+ * Encode raw PCM samples as a 16-bit WAV. For stereo, pass interleaved
+ * samples (L,R,L,R,…) and `channels: 2`.
+ */
+export function encodeWav(
+  samples: Float32Array,
+  sampleRate: number,
+  channels = 1,
+): ArrayBuffer {
   const numSamples = samples.length;
   const bytesPerSample = 2; // 16-bit
+  const blockAlign = channels * bytesPerSample;
   const dataSize = numSamples * bytesPerSample;
   const buffer = new ArrayBuffer(44 + dataSize);
   const view = new DataView(buffer);
@@ -54,13 +63,13 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
 
   // fmt chunk
   writeString(view, 12, 'fmt ');
-  view.setUint32(16, 16, true);         // chunk size
-  view.setUint16(20, 1, true);          // PCM format
-  view.setUint16(22, 1, true);          // mono
+  view.setUint32(16, 16, true);                       // chunk size
+  view.setUint16(20, 1, true);                        // PCM format
+  view.setUint16(22, channels, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * bytesPerSample, true); // byte rate
-  view.setUint16(32, bytesPerSample, true);              // block align
-  view.setUint16(34, 16, true);                          // bits per sample
+  view.setUint32(28, sampleRate * blockAlign, true);  // byte rate
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true);                       // bits per sample
 
   // data chunk
   writeString(view, 36, 'data');
@@ -75,6 +84,19 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
   }
 
   return buffer;
+}
+
+/** Interleave an AudioBuffer's channels into [L,R,L,R,…] for WAV encoding. */
+export function interleaveStereo(buffer: AudioBuffer): Float32Array {
+  const length = buffer.length;
+  const out = new Float32Array(length * 2);
+  const left = buffer.getChannelData(0);
+  const right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : left;
+  for (let i = 0; i < length; i++) {
+    out[i * 2] = left[i];
+    out[i * 2 + 1] = right[i];
+  }
+  return out;
 }
 
 function writeString(view: DataView, offset: number, str: string) {
