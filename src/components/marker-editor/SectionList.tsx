@@ -28,6 +28,20 @@ export function SectionList() {
     }
   }
 
+  // Count measures per section: entries of type 'section' or 'measure' from
+  // this section (inclusive) up to the next section (exclusive). The section
+  // marker itself counts as a measure, so the minimum is 1.
+  const measureCountByIndex = new Map<number, number>();
+  for (let s = 0; s < sectionIndices.length; s++) {
+    const start = sectionIndices[s];
+    const end = s + 1 < sectionIndices.length ? sectionIndices[s + 1] : tapMap.length;
+    let count = 0;
+    for (let i = start; i < end; i++) {
+      if (tapMap[i].type === 'section' || tapMap[i].type === 'measure') count++;
+    }
+    measureCountByIndex.set(start, count);
+  }
+
   const handleClickRow = (tapMapIndex: number) => {
     setSelectedIndex(tapMapIndex);
     engine.seek(tapMap[tapMapIndex].time);
@@ -68,6 +82,7 @@ export function SectionList() {
             <tr className="text-gray-400 text-xs uppercase border-b border-gray-700">
               <th className="py-1 px-3 text-left">Time</th>
               <th className="py-1 px-3 text-left">Label</th>
+              <th className="py-1 px-3 text-right">Measures</th>
               <th className="py-1 px-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -116,6 +131,9 @@ export function SectionList() {
                         {entry.label || '(unnamed)'}
                       </span>
                     )}
+                  </td>
+                  <td className="py-1.5 px-3 text-right font-mono text-gray-400 tabular-nums">
+                    {measureCountByIndex.get(tapMapIdx) ?? 1}
                   </td>
                   <td className="py-1.5 px-3 text-right">
                     <button
