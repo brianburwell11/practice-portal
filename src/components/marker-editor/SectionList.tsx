@@ -62,7 +62,7 @@ export function SectionList() {
       <div className="text-xs text-gray-400 uppercase tracking-wide px-3 py-1">
         Sections ({sections.length})
       </div>
-      <div className="max-h-48 overflow-y-auto">
+      <div>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-gray-400 text-xs uppercase border-b border-gray-700">

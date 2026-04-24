@@ -128,17 +128,11 @@ export function MarkerEditorModal() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Toolbar — matches the LyricsEditor pattern: centered title,
-          actions on left/right. The waveform above now doubles as the
-          editor canvas (tapMap entries are sourced from this store while
-          the editor is open), so we only render the toolbar and the
-          section list here. */}
-      <div className="relative flex items-center justify-between px-5 py-2 border-b border-gray-700">
+      {/* Toolbar \u2014 mirrors the LyricsEditor layout: actions left/right,
+          centered title, no song name (shown in the header above). */}
+      <div className="relative flex items-center justify-between px-5 py-2">
         <h2 className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-100 pointer-events-none">
-          TapMap Editor
-          {selectedSong?.title && (
-            <span className="ml-2 text-gray-400 font-normal">· {selectedSong.title}</span>
-          )}
+          Edit TapMap
         </h2>
         <div className="flex items-center gap-2 relative z-10">
           <button
@@ -154,11 +148,11 @@ export function MarkerEditorModal() {
             className="hidden"
             onChange={handleImportXsc}
           />
+          {error && (
+            <span className="text-xs text-red-400 ml-2">{error}</span>
+          )}
         </div>
         <div className="flex items-center gap-2 relative z-10">
-          {error && (
-            <span className="text-xs text-red-400 mr-2">{error}</span>
-          )}
           <button
             className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
             onClick={handleSave}
@@ -175,26 +169,26 @@ export function MarkerEditorModal() {
         </div>
       </div>
 
-      {/* Keyboard shortcut legend */}
-      <div className="px-5 py-2 text-xs text-gray-500 border-b border-gray-800 font-mono">
-        <span className="text-gray-300">S</span> section
-        <span className="mx-1.5">·</span>
-        <span className="text-gray-300">M</span> measure
-        <span className="mx-1.5">·</span>
-        <span className="text-gray-300">B</span> beat
-        <span className="mx-3 text-gray-700">|</span>
-        <span className="text-gray-300">click</span> select
-        <span className="mx-1.5">·</span>
-        <span className="text-gray-300">drag</span> move
-        <span className="mx-1.5">·</span>
-        <span className="text-gray-300">Del</span> remove
-        <span className="mx-1.5">·</span>
-        <span className="text-gray-300">⌘Z</span> undo
+      {/* Section list \u2014 centered, narrow, fills all available space
+          between the toolbar and the footer. Internal scroll kicks in
+          when rows exceed that space; `min-h-0` keeps the flex child
+          from growing past its parent and pushing the page taller. */}
+      <div className="flex-1 min-h-0 overflow-y-auto mt-3 max-w-2xl w-full mx-auto rounded-lg border border-gray-700">
+        <SectionList />
       </div>
 
-      {/* Section list */}
-      <div className="flex-1 min-h-0 overflow-auto px-5 pb-4 pt-2">
-        <SectionList />
+      {/* Footer hints — mirrors the LyricsEditor footer style so the
+          two editors feel like the same family. `mt-auto` pins it to
+          the bottom of the flex column so the panel's breathing room
+          sits between the list and the footer. */}
+      <div className="mt-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-5 py-2 text-[10px] text-gray-600 border-t border-gray-700">
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">S</kbd> section</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">M</kbd> measure</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">B</kbd> beat</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">click</kbd> select</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">drag</kbd> move</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Del</kbd> remove</span>
+        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘Z</kbd> undo</span>
       </div>
     </div>
   );

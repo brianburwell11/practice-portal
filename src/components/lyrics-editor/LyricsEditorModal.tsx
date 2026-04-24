@@ -226,8 +226,9 @@ export function LyricsEditorModal() {
         </div>
       </div>
 
-      {/* Row list — centered, narrower, fixed height with own scrollbar */}
-      <div ref={listRef} className="overflow-y-auto mt-3 max-w-2xl w-full mx-auto rounded-lg border border-gray-700" style={{ height: 'clamp(200px, 40vh, 400px)' }}>
+      {/* Row list — centered, narrower, fills available space and
+          scrolls internally when lines overflow. */}
+      <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto mt-3 max-w-2xl w-full mx-auto rounded-lg border border-gray-700">
         {lines.map((line, i) => {
           const isSynced = line.time !== null;
           const isSyncTarget = i === currentSyncIndex;
@@ -392,8 +393,9 @@ export function LyricsEditorModal() {
         })}
       </div>
 
-      {/* Footer hints */}
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-5 py-2 text-[10px] text-gray-600 border-t border-gray-700">
+      {/* Footer hints — pinned to the bottom of the flex column so the
+          modal's breathing room sits above the shortcuts strip. */}
+      <div className="mt-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-5 py-2 text-[10px] text-gray-600 border-t border-gray-700">
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Space</kbd> play/pause</span>
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Tab</kbd> sync</span>
         <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘I</kbd> Instrumental</span>

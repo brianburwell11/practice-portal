@@ -62,7 +62,7 @@ export default function App() {
   return (
     <AudioEngineContext.Provider value={engine}>
       <div
-        className="min-h-screen flex flex-col"
+        className="h-screen overflow-hidden flex flex-col"
         style={{
           backgroundColor: 'var(--band-bg, #111827)',
           color: 'var(--band-text, #f3f4f6)',
