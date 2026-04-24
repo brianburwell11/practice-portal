@@ -5,7 +5,7 @@ import { useTransportStore } from '../../store/transportStore';
 import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
 import { useLyricsStore } from '../../store/lyricsStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
-import type { LyricsData } from '../../audio/lyricsTypes';
+import type { LyricsData, LyricsLine } from '../../audio/lyricsTypes';
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -26,6 +26,7 @@ export function LyricsEditorModal() {
     unsyncLine, unsyncSelected, deleteSelected, deleteLine,
     setCurrentSyncIndex, setSelectedIndices, setFocusedIndex,
     undo, redo, moveLineInDirection, duplicateLines, selectAll,
+    importLines,
   } = useLyricsEditorStore();
 
   const [saving, setSaving] = useState(false);
@@ -33,6 +34,7 @@ export function LyricsEditorModal() {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Focus a row's input after render
   const focusRow = useCallback((index: number) => {
@@ -73,6 +75,37 @@ export function LyricsEditorModal() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, [lines, selectedSong]);
+
+  // Import lyrics from a plain text file. Round-trip counterpart of
+  // handleExport: blank lines stay blank, `[Instrumental]` (any case)
+  // becomes an instrumental line. Replaces all existing lines after a
+  // confirm prompt when the editor already has non-blank content.
+  const handleImport = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const raw = reader.result as string;
+        const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        // Drop a single trailing newline but preserve blank lines inside.
+        const trimmed = normalized.endsWith('\n') ? normalized.slice(0, -1) : normalized;
+        const parsed: LyricsLine[] = trimmed.split('\n').map((t) => {
+          const text = t.trim();
+          if (/^\[\s*instrumental\s*\]$/i.test(text)) {
+            return { text: '', time: null, instrumental: true };
+          }
+          return { text, time: null };
+        });
+        const hasContent = lines.some((l) => l.text !== '' || l.instrumental);
+        if (hasContent && !window.confirm('Replace existing lyrics?')) return;
+        importLines(parsed);
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    },
+    [lines, importLines],
+  );
 
   // Save
   const handleSave = async () => {
@@ -189,9 +222,23 @@ export function LyricsEditorModal() {
       {/* Toolbar */}
       <div className="relative flex items-center justify-between px-5 py-2">
         <h2 className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-100 pointer-events-none">Add/Edit Lyrics</h2>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 relative z-10">
+          <button
+            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
+            onClick={() => fileInputRef.current?.click()}
+            title="Import lyrics from a .txt file (blank lines preserved; [Instrumental] lines become instrumental)"
+          >
+            Import .txt
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,text/plain"
+            className="hidden"
+            onChange={handleImport}
+          />
           {selectedIndices.size > 0 && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 ml-2">
               <span className="text-xs text-blue-400">{selectedIndices.size} selected</span>
               <button onClick={unsyncSelected} className="text-xs px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-yellow-300/80 hover:text-yellow-200 transition-colors">
                 Clear timestamps
@@ -202,9 +249,9 @@ export function LyricsEditorModal() {
               <button onClick={() => setSelectedIndices(new Set())} className="text-xs px-1.5 py-0.5 rounded text-gray-500 hover:text-gray-300 transition-colors">&times;</button>
             </div>
           )}
-          {error && <span className="text-xs text-red-400">{error}</span>}
+          {error && <span className="text-xs text-red-400 ml-2">{error}</span>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative z-10">
           <span className="text-xs text-gray-500">{syncedCount}/{contentLines.length} lyrics synced</span>
           <button
             className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"

@@ -32,6 +32,7 @@ interface LyricsEditorState {
   moveLineInDirection: (direction: 'up' | 'down') => void;
   duplicateLines: () => void;
   selectAll: () => void;
+  importLines: (lines: LyricsLine[]) => void;
 }
 
 function isBracketAnnotation(text: string): boolean {
@@ -325,4 +326,18 @@ export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
     set((state) => ({
       selectedIndices: new Set(state.lines.map((_, i) => i)),
     })),
+
+  importLines: (newLines) =>
+    set((state) => {
+      const final = newLines.length > 0 ? newLines : [{ text: '', time: null }];
+      return {
+        undoStack: pushUndo(state.undoStack, state.lines),
+        redoStack: [],
+        lines: final,
+        currentSyncIndex: nextNonBlankIndex(final, 0),
+        selectedIndices: new Set<number>(),
+        focusedIndex: null,
+        dirty: true,
+      };
+    }),
 }));
