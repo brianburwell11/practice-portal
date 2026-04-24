@@ -35,6 +35,17 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
     stemIds: g.stemIds.map((id) => idMap.get(id) ?? id),
   }));
 
+  // Mixer order also references stem ids; remap and drop ids that
+  // are no longer valid (e.g. a removed stem still listed) so the
+  // saved config stays clean.
+  const validIds = new Set<string>([
+    ...stems.map((s) => s.id),
+    ...remappedGroups.map((g) => g.id),
+  ]);
+  const remappedMixerOrder = state.mixerOrder
+    .map((id) => idMap.get(id) ?? id)
+    .filter((id) => validIds.has(id));
+
   // Tempo map
   const bpm = state.timingMode === 'manual' ? state.manualBpm : 120;
   const tempoMap = [{ beat: 0, bpm }];
@@ -82,6 +93,7 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
     beatOffset: 0,
     stems,
     groups: remappedGroups.length > 0 ? remappedGroups : undefined,
+    ...(remappedMixerOrder.length > 0 ? { mixerOrder: remappedMixerOrder } : {}),
     tempoMap,
     timeSignatureMap,
     metronome: {

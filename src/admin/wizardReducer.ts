@@ -35,6 +35,10 @@ export interface WizardState {
   stems: StemEntry[];
   durationSeconds: number;
   groups: StemGroupConfig[];
+  /** Top-level mixer order: group IDs and ungrouped stem IDs. May be
+   *  partial / out of sync with stems+groups; `resolveMixerOrder`
+   *  reconciles at render time, so the reducer is forgiving. */
+  mixerOrder: string[];
   // Step 3: Timing
   timingMode: 'xsc' | 'manual' | null;
   tapMap: TapMapEntry[];
@@ -71,6 +75,7 @@ export type WizardAction =
   | { type: 'CLEAR_TIMING' }
   | { type: 'ADD_GROUP'; group: StemGroupConfig }
   | { type: 'REMOVE_GROUP'; index: number }
+  | { type: 'SET_MIXER_ORDER'; order: string[] }
   | { type: 'NEXT_STEP' }
   | { type: 'PREV_STEP' }
   | { type: 'SET_SAVING'; saving: boolean }
@@ -97,6 +102,7 @@ export function createInitialState(): WizardState {
     timeSignatureNumerator: 4,
     timeSignatureDenominator: 4,
     groups: [],
+    mixerOrder: [],
     sheetMusicFile: null,
     repeatAfterDcDs: false,
     saving: false,
@@ -159,6 +165,8 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return { ...state, groups: [...state.groups, action.group] };
     case 'REMOVE_GROUP':
       return { ...state, groups: state.groups.filter((_, i) => i !== action.index) };
+    case 'SET_MIXER_ORDER':
+      return { ...state, mixerOrder: action.order };
     case 'NEXT_STEP':
       return { ...state, step: Math.min(state.step + 1, 4) as WizardState['step'] };
     case 'PREV_STEP':

@@ -16,6 +16,7 @@ import type { StemConfig, StemGroupConfig } from '../audio/types';
 import { TagInput } from './TagInput';
 import { SongKeyInput } from './SongKeyInput';
 import { StemColorPicker } from './StemColorPicker';
+import { MixerOrderEditor, shouldShowMixerOrderEditor } from './components/MixerOrderEditor';
 
 const groupColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
@@ -741,6 +742,20 @@ export default function EditSongPage() {
             </div>
           )}
         </section>
+
+        {/* Mixer Order */}
+        {shouldShowMixerOrderEditor(config) && (
+          <section className="space-y-4 border-t border-gray-700 pt-6">
+            <div>
+              <h2 className="text-xl font-semibold">Mixer Order</h2>
+              <p className="text-sm text-gray-400">Drag to reorder how groups and stems appear in the mixer.</p>
+            </div>
+            <MixerOrderEditor
+              song={config}
+              onChange={(order) => dispatch({ type: 'SET_MIXER_ORDER', order })}
+            />
+          </section>
+        )}
 
         {/* Nav Links */}
         <section className="space-y-4 border-t border-gray-700 pt-6">

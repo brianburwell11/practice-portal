@@ -76,6 +76,9 @@ export const songConfigSchema = z.object({
   beatOffset: z.number().min(0).default(0),
   stems: z.array(stemConfigSchema).min(1),
   groups: z.array(stemGroupConfigSchema).optional(),
+  /** Top-level mixer display order: a list of group IDs and ungrouped
+   *  stem IDs. Missing/unknown IDs are tolerated at runtime. */
+  mixerOrder: z.array(z.string()).optional(),
   tempoMap: z.array(tempoMapEntrySchema).min(1),
   timeSignatureMap: z.array(timeSignatureEntrySchema).min(1),
   metronome: metronomeConfigSchema,

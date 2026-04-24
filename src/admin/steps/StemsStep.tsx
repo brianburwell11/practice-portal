@@ -5,6 +5,7 @@ import { getAudioInfo } from '../utils/audioConvert';
 import { previewStem } from '../utils/stemPreview';
 import { StemColorPicker } from '../StemColorPicker';
 import { SheetMusicUploader } from '../SheetMusicUploader';
+import { MixerOrderEditor, shouldShowMixerOrderEditor } from '../components/MixerOrderEditor';
 
 interface Props {
   state: WizardState;
@@ -410,6 +411,24 @@ export function StemsStep({ state, dispatch }: Props) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Mixer display order — combines groups and ungrouped stems
+          into a single ordered list. Only shown when there's at least
+          one group AND multiple top-level items to reorder. */}
+      {shouldShowMixerOrderEditor({ stems: state.stems, groups: state.groups, mixerOrder: state.mixerOrder }) && (
+        <div className="space-y-3 border-t border-gray-700 pt-6">
+          <div>
+            <h3 className="text-lg font-medium">Mixer Order</h3>
+            <p className="text-sm text-gray-400">
+              Drag to reorder how groups and stems appear in the mixer.
+            </p>
+          </div>
+          <MixerOrderEditor
+            song={{ stems: state.stems, groups: state.groups, mixerOrder: state.mixerOrder }}
+            onChange={(order) => dispatch({ type: 'SET_MIXER_ORDER', order })}
+          />
         </div>
       )}
 

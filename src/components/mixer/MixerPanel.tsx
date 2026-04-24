@@ -6,6 +6,7 @@ import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useLongPress } from '../../hooks/useLongPress';
 import { ChannelStrip } from './ChannelStrip';
 import { GroupStrip } from './GroupStrip';
+import { resolveMixerOrder } from '../../audio/mixerOrder';
 
 type SaveState = 'idle' | 'pending' | 'cancelled' | 'saving' | 'saved' | 'error';
 
@@ -177,18 +178,9 @@ export function MixerPanel() {
     }, 3000);
   }, [saveState, selectedSong, bandId, stems, groups]);
 
-  // Compute which stems are grouped vs ungrouped
-  const { ungroupedStems } = useMemo(() => {
-    if (!selectedSong) return { ungroupedStems: [] };
-    const grouped = new Set<string>();
-    for (const group of selectedSong.groups ?? []) {
-      for (const id of group.stemIds) {
-        grouped.add(id);
-      }
-    }
-    const ungrouped = selectedSong.stems.filter((s) => !grouped.has(s.id));
-    return { ungroupedStems: ungrouped };
-  }, [selectedSong]);
+  // Top-level mixer order: groups + ungrouped stems, ordered by
+  // `mixerOrder` when set (with legacy fallback for missing items).
+  const mixerItems = useMemo(() => resolveMixerOrder(selectedSong), [selectedSong]);
 
   if (!selectedSong) {
     return (
@@ -320,17 +312,17 @@ export function MixerPanel() {
         )}
       </div>
 
-      {/* Groups and ungrouped stems */}
+      {/* Groups and ungrouped stems, in user-configured display order */}
       <div className="flex flex-col md:flex-row gap-3 md:flex-wrap md:items-start">
-        {(selectedSong.groups ?? []).map((group) => {
-          const stemConfigs = group.stemIds
-            .map((id) => selectedSong.stems.find((s) => s.id === id))
-            .filter((s) => s != null);
-          return <GroupStrip key={group.id} groupConfig={group} stemConfigs={stemConfigs} />;
+        {mixerItems.map((item) => {
+          if (item.kind === 'group') {
+            const stemConfigs = item.group.stemIds
+              .map((id) => selectedSong.stems.find((s) => s.id === id))
+              .filter((s) => s != null);
+            return <GroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />;
+          }
+          return <ChannelStrip key={item.id} stemConfig={item.stem} />;
         })}
-        {ungroupedStems.map((stem) => (
-          <ChannelStrip key={stem.id} stemConfig={stem} />
-        ))}
       </div>
     </div>
   );

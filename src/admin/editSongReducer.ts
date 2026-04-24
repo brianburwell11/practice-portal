@@ -27,6 +27,7 @@ export type EditSongAction =
   | { type: 'ADD_STEM'; stem: StemConfig }
   | { type: 'ADD_GROUP'; group: StemGroupConfig }
   | { type: 'REMOVE_GROUP'; index: number }
+  | { type: 'SET_MIXER_ORDER'; order: string[] }
   | { type: 'ADD_NAV_LINK'; link: NavLinkConfig }
   | { type: 'UPDATE_NAV_LINK'; index: number; link: NavLinkConfig }
   | { type: 'REMOVE_NAV_LINK'; index: number }
@@ -144,7 +145,8 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
       const groups = (state.config.groups ?? [])
         .map((g) => ({ ...g, stemIds: g.stemIds.filter((id) => id !== removedId) }))
         .filter((g) => g.stemIds.length > 0);
-      return updateConfig(state, { stems, groups });
+      const mixerOrder = (state.config.mixerOrder ?? []).filter((id) => id !== removedId);
+      return updateConfig(state, { stems, groups, mixerOrder: mixerOrder.length ? mixerOrder : undefined });
     }
 
     case 'MOVE_STEM': {
@@ -163,11 +165,21 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
       if (!state.config) return state;
       return updateConfig(state, { groups: [...(state.config.groups ?? []), action.group] });
 
-    case 'REMOVE_GROUP':
+    case 'REMOVE_GROUP': {
       if (!state.config) return state;
+      const removedGroupId = state.config.groups?.[action.index]?.id;
+      const mixerOrder = removedGroupId
+        ? (state.config.mixerOrder ?? []).filter((id) => id !== removedGroupId)
+        : state.config.mixerOrder;
       return updateConfig(state, {
         groups: (state.config.groups ?? []).filter((_, i) => i !== action.index),
+        mixerOrder: mixerOrder && mixerOrder.length ? mixerOrder : undefined,
       });
+    }
+
+    case 'SET_MIXER_ORDER':
+      if (!state.config) return state;
+      return updateConfig(state, { mixerOrder: action.order.length ? action.order : undefined });
 
     case 'ADD_NAV_LINK':
       if (!state.config) return state;

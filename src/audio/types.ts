@@ -64,6 +64,15 @@ export interface SongConfig {
   beatOffset: number;
   stems: StemConfig[];
   groups?: StemGroupConfig[];
+  /**
+   * Top-level display order for the mixer: an array of group IDs and
+   * standalone (ungrouped) stem IDs. When unset, the legacy default is
+   * used: groups first (in `groups` order), then ungrouped stems
+   * (in `stems` order). IDs not present in `stems`/`groups` are
+   * ignored; missing IDs are appended using the legacy default so a
+   * newly added stem/group never disappears.
+   */
+  mixerOrder?: string[];
   tempoMap: TempoMapEntry[];
   timeSignatureMap: TimeSignatureEntry[];
   metronome: MetronomeConfig;
