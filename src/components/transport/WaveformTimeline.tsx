@@ -6,7 +6,7 @@ import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import type { TapMapEntry } from '../../audio/types';
 import { markersToSeconds } from '../../audio/tempoUtils';
-import { autoLabelSection } from '../../audio/tapMapUtils';
+import { autoLabelSection, findEnclosingSectionIndex, getSectionRange } from '../../audio/tapMapUtils';
 
 /** Detect coarse pointer (touch device) */
 const isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
@@ -40,6 +40,7 @@ export function WaveformTimeline() {
   const setMarkerSelectedIndex = useMarkerEditorStore((s) => s.setSelectedIndex);
   const moveMarkerEntry = useMarkerEditorStore((s) => s.moveEntry);
   const updateMarkerEntryType = useMarkerEditorStore((s) => s.updateEntryType);
+  const deleteMarkerEntriesWhere = useMarkerEditorStore((s) => s.deleteEntriesWhere);
   const displayTapMap: TapMapEntry[] | undefined = markerEditorOpen
     ? editorTapMap
     : selectedSong?.tapMap;
@@ -269,6 +270,52 @@ export function WaveformTimeline() {
       setMarkerContextMenu(null);
     },
     [markerContextMenu, contextMenuEntry, editorTapMap, updateMarkerEntryType],
+  );
+
+  // Resolve the section that contains the right-clicked marker, and
+  // count beats/measures inside it so the bulk-action rows can show a
+  // preview and disable when nothing would happen.
+  const contextMenuSection =
+    markerContextMenu !== null
+      ? (() => {
+          const sectionIdx = findEnclosingSectionIndex(
+            editorTapMap,
+            markerContextMenu.entryIndex,
+          );
+          if (sectionIdx === null) return null;
+          const { start, end } = getSectionRange(editorTapMap, sectionIdx);
+          let beats = 0;
+          let measures = 0;
+          for (const e of editorTapMap) {
+            if (e.time < start || e.time >= end) continue;
+            if (e.type === 'beat') beats++;
+            else if (e.type === 'measure') measures++;
+          }
+          return {
+            sectionIdx,
+            label: editorTapMap[sectionIdx].label || '(unnamed)',
+            start,
+            end,
+            beats,
+            measures,
+          };
+        })()
+      : null;
+
+  const bulkDeleteInSection = useCallback(
+    (mode: 'beats' | 'measures' | 'submarkers') => {
+      if (!contextMenuSection) return;
+      const { start, end } = contextMenuSection;
+      deleteMarkerEntriesWhere((e) => {
+        if (e.time < start || e.time >= end) return false;
+        if (e.type === 'section') return false;
+        if (mode === 'beats') return e.type === 'beat';
+        if (mode === 'measures') return e.type === 'measure';
+        return e.type === 'beat' || e.type === 'measure';
+      });
+      setMarkerContextMenu(null);
+    },
+    [contextMenuSection, deleteMarkerEntriesWhere],
   );
 
   // --- Pointer event handlers (unified mouse + touch) ---
@@ -957,9 +1004,9 @@ export function WaveformTimeline() {
             data-marker-context-menu
             className="absolute z-30 rounded border border-gray-600 bg-gray-800 shadow-lg text-xs text-gray-100 overflow-hidden"
             style={{
-              left: Math.max(0, Math.min(markerContextMenu.x, sizeRef.current.width - 140)),
-              top: Math.max(0, Math.min(markerContextMenu.y, sizeRef.current.height - 96)),
-              minWidth: 132,
+              left: Math.max(0, Math.min(markerContextMenu.x, sizeRef.current.width - 220)),
+              top: Math.max(0, Math.min(markerContextMenu.y, sizeRef.current.height - 220)),
+              minWidth: 200,
             }}
             onPointerDown={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
@@ -986,6 +1033,44 @@ export function WaveformTimeline() {
                 </button>
               );
             })}
+            {contextMenuSection && (
+              <>
+                <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-400 border-t border-b border-gray-700">
+                  <span className="truncate">
+                    In section {contextMenuSection.label}
+                  </span>
+                </div>
+                {([
+                  ['beats', 'Delete all beats', contextMenuSection.beats],
+                  ['measures', 'Delete all measures', contextMenuSection.measures],
+                  [
+                    'submarkers',
+                    'Delete all sub-markers',
+                    contextMenuSection.beats + contextMenuSection.measures,
+                  ],
+                ] as const).map(([mode, label, count]) => {
+                  const disabled = count === 0;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => bulkDeleteInSection(mode)}
+                      className={`w-full text-left px-2 py-1.5 flex items-center justify-between transition-colors ${
+                        disabled
+                          ? 'text-gray-500 cursor-default'
+                          : 'hover:bg-red-900/40 text-gray-100'
+                      }`}
+                    >
+                      <span>{label}</span>
+                      <span className="text-[10px] text-gray-400 tabular-nums">
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </>
+            )}
           </div>
         )}
       </div>

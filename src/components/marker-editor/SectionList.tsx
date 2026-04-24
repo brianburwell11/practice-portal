@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
-import { getSections } from '../../audio/tapMapUtils';
+import { getSections, getSectionRange } from '../../audio/tapMapUtils';
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -12,11 +12,18 @@ function formatTime(seconds: number): string {
 
 export function SectionList() {
   const engine = useAudioEngine();
-  const { tapMap, selectedIndex, deleteEntry, updateSectionLabel, setSelectedIndex } =
-    useMarkerEditorStore();
+  const {
+    tapMap,
+    selectedIndex,
+    deleteEntry,
+    updateSectionLabel,
+    setSelectedIndex,
+    deleteEntriesWhere,
+  } = useMarkerEditorStore();
 
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [menuOpenIdx, setMenuOpenIdx] = useState<number | null>(null);
 
   const sections = getSections(tapMap);
 
@@ -61,6 +68,45 @@ export function SectionList() {
 
   const cancelEdit = () => {
     setEditingIdx(null);
+  };
+
+  useEffect(() => {
+    if (menuOpenIdx === null) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('[data-section-row-menu]')) return;
+      setMenuOpenIdx(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpenIdx(null);
+    };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpenIdx]);
+
+  const countInSection = (sectionIdx: number, kinds: ('beat' | 'measure')[]) => {
+    const { start, end } = getSectionRange(tapMap, sectionIdx);
+    let n = 0;
+    for (const e of tapMap) {
+      if (e.time < start || e.time >= end) continue;
+      if (e.type === 'section') continue;
+      if (kinds.includes(e.type as 'beat' | 'measure')) n++;
+    }
+    return n;
+  };
+
+  const bulkDelete = (sectionIdx: number, kinds: ('beat' | 'measure')[]) => {
+    const { start, end } = getSectionRange(tapMap, sectionIdx);
+    deleteEntriesWhere((e) => {
+      if (e.time < start || e.time >= end) return false;
+      if (e.type === 'section') return false;
+      return kinds.includes(e.type as 'beat' | 'measure');
+    });
+    setMenuOpenIdx(null);
   };
 
   if (sections.length === 0) {
@@ -136,16 +182,79 @@ export function SectionList() {
                     {measureCountByIndex.get(tapMapIdx) ?? 1}
                   </td>
                   <td className="py-1.5 px-3 text-right">
-                    <button
-                      className="px-2 py-0.5 text-xs rounded bg-red-900/60 hover:bg-red-800 text-red-300 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteEntry(tapMapIdx);
-                      }}
-                      title="Delete section"
-                    >
-                      Del
-                    </button>
+                    <div className="relative inline-flex items-center gap-1 justify-end">
+                      <button
+                        className="px-2 py-0.5 text-xs rounded bg-red-900/60 hover:bg-red-800 text-red-300 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteEntry(tapMapIdx);
+                        }}
+                        title="Delete section"
+                      >
+                        Del
+                      </button>
+                      <button
+                        data-section-row-menu
+                        className="px-2 py-0.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenIdx(
+                            menuOpenIdx === tapMapIdx ? null : tapMapIdx,
+                          );
+                        }}
+                        title="More actions"
+                      >
+                        ⋯
+                      </button>
+                      {menuOpenIdx === tapMapIdx && (() => {
+                        const beatCount = countInSection(tapMapIdx, ['beat']);
+                        const measureCount = countInSection(tapMapIdx, ['measure']);
+                        const subCount = beatCount + measureCount;
+                        const rows: Array<{
+                          label: string;
+                          count: number;
+                          kinds: ('beat' | 'measure')[];
+                        }> = [
+                          { label: 'Delete all beats', count: beatCount, kinds: ['beat'] },
+                          { label: 'Delete all measures', count: measureCount, kinds: ['measure'] },
+                          { label: 'Delete all sub-markers', count: subCount, kinds: ['beat', 'measure'] },
+                        ];
+                        return (
+                          <div
+                            data-section-row-menu
+                            className="absolute right-0 top-full mt-1 z-30 rounded border border-gray-600 bg-gray-800 shadow-lg text-xs text-gray-100 overflow-hidden"
+                            style={{ minWidth: 200 }}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-700">
+                              In section {entry.label || '(unnamed)'}
+                            </div>
+                            {rows.map((r) => {
+                              const disabled = r.count === 0;
+                              return (
+                                <button
+                                  key={r.label}
+                                  type="button"
+                                  disabled={disabled}
+                                  onClick={() => bulkDelete(tapMapIdx, r.kinds)}
+                                  className={`w-full text-left px-2 py-1.5 flex items-center justify-between transition-colors ${
+                                    disabled
+                                      ? 'text-gray-500 cursor-default'
+                                      : 'hover:bg-red-900/40 text-gray-100'
+                                  }`}
+                                >
+                                  <span>{r.label}</span>
+                                  <span className="text-[10px] text-gray-400 tabular-nums">
+                                    {r.count}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </td>
                 </tr>
               );

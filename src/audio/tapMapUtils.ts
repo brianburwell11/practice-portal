@@ -48,3 +48,36 @@ export function autoLabelSection(tapMap: TapMapEntry[]): string {
 export function sortTapMap(entries: TapMapEntry[]): TapMapEntry[] {
   return [...entries].sort((a, b) => a.time - b.time);
 }
+
+/**
+ * Time range of the section at `sectionIndex` (an index into the full
+ * tapMap, which must point at a `type === 'section'` entry). Upper
+ * bound is exclusive; the last section runs to +Infinity.
+ */
+export function getSectionRange(
+  tapMap: TapMapEntry[],
+  sectionIndex: number,
+): { start: number; end: number } {
+  const start = tapMap[sectionIndex].time;
+  for (let i = sectionIndex + 1; i < tapMap.length; i++) {
+    if (tapMap[i].type === 'section') {
+      return { start, end: tapMap[i].time };
+    }
+  }
+  return { start, end: Number.POSITIVE_INFINITY };
+}
+
+/**
+ * Walk backward from `entryIndex` to find the section that contains it.
+ * Returns the tapMap index of that section, or `null` if no section
+ * precedes the entry.
+ */
+export function findEnclosingSectionIndex(
+  tapMap: TapMapEntry[],
+  entryIndex: number,
+): number | null {
+  for (let i = entryIndex; i >= 0; i--) {
+    if (tapMap[i].type === 'section') return i;
+  }
+  return null;
+}
