@@ -170,15 +170,23 @@ export default function App() {
           onToggleSliders={() => setMobileControlsOpen((v) => !v)}
         />
 
-        {/* Lyrics display — uses editor lines as live preview when editor is open */}
-        <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
+        {/* Lyrics display \u2014 hidden when the tapMap or band editors
+            occupy the page. Stays visible under the lyrics editor so
+            the admin can sync against the live karaoke view. */}
+        {!markerEditorOpen && !showEditBandModal && (
+          <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
+        )}
 
-        {/* Scrolling sheet music — desktop only for now (md+). The current
-            viewport/scroll math isn't usable on narrow screens and needs
-            a dedicated mobile pass before we expose it there. */}
-        <div className="hidden md:contents">
-          <ScrollingScore />
-        </div>
+        {/* Scrolling sheet music \u2014 desktop only for now (md+). Hidden
+            under any of the on-page editors to give the editor full
+            vertical space. The current viewport/scroll math isn't usable
+            on narrow screens and needs a dedicated mobile pass before we
+            expose it there. */}
+        {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && (
+          <div className="hidden md:contents">
+            <ScrollingScore />
+          </div>
+        )}
 
         {/* Editor replaces mixer when open */}
         {markerEditorOpen ? (
