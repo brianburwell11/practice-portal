@@ -5,7 +5,7 @@ import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
 import { r2Url } from '../utils/url';
 import { getCamelotStyle } from '../utils/camelot';
-import { slugify } from '../utils/deriveId';
+import { slugify, cleanSlugInput } from '../utils/deriveId';
 import { generateId } from '../utils/generateId';
 import type { SetlistConfig, SetlistEntry, NavLinkConfig } from '../audio/types';
 
@@ -74,6 +74,12 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
+
+  // Keep the slug in sync with the name until the admin manually
+  // edits it \u2014 mirrors the song-wizard's auto-derive behavior.
+  useEffect(() => {
+    if (!slugEdited) setSlug(slugify(name));
+  }, [name, slugEdited]);
   const [entries, setEntries] = useState<SetlistEntry[]>([]);
   const [navLinks, setNavLinks] = useState<NavLinkConfig[]>([]);
   const [newLinkTitle, setNewLinkTitle] = useState('');
@@ -274,7 +280,11 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   const deriveLegacySetlistId = (n: string) =>
     'setlist-' + n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-  const effectiveSlug = slug || slugify(name);
+  // Canonicalize the slug at save time \u2014 input is live-sanitized
+  // (trailing hyphens allowed mid-typing) so strip edges here. When
+  // the admin hasn't touched the field, fall back to the auto-derived
+  // kebab form of the name.
+  const effectiveSlug = slugify(slug) || slugify(name);
 
   const handleSave = async () => {
     if (!currentBand || !name.trim() || entries.length === 0) return;
@@ -416,7 +426,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                   className={`w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 ${
                     isCopy && !name && copySourceName ? 'pr-32' : ''
                   }`}
-                  placeholder={isCopy && copySourceName ? `${copySourceName} (copy)` : 'e.g. Friday Night Gig'}
+                  placeholder={isCopy && copySourceName ? `${copySourceName} (copy)` : 'Friday Night Gig'}
                   autoFocus
                   disabled={saving}
                 />
@@ -431,38 +441,50 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
               )}
             </div>
 
-            {/* URL slug */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                URL slug{' '}
-                <span className="text-gray-600 text-xs">
-                  (lowercase, numbers, hyphens)
-                </span>
-              </label>
-              <input
-                type="text"
-                value={slug || (slugEdited ? '' : slugify(name))}
-                onChange={(e) => {
-                  setSlug(slugify(e.target.value));
-                  setSlugEdited(true);
-                }}
-                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-blue-500"
-                placeholder="auto-derived-from-name"
-                disabled={saving}
-              />
-            </div>
-
-            {/* Set length + time remaining */}
+            {/* URL slug + set length on one row */}
             <div className="flex items-end gap-3">
+              <div className="flex-1 min-w-0">
+                <label className="block text-sm text-gray-400 mb-1">
+                  URL slug{' '}
+                  <span className="text-gray-600 text-xs">
+                    (lowercase, numbers, hyphens)
+                  </span>
+                </label>
+                <div className="flex items-center gap-0 w-full bg-gray-800 border border-gray-600 rounded focus-within:border-blue-500">
+                  <span className="pl-3 py-2 text-gray-500 font-mono text-xs select-none whitespace-nowrap">
+                    /{currentBand?.route ?? ''}?setlist=
+                  </span>
+                  <input
+                    type="text"
+                    value={slug}
+                    onChange={(e) => {
+                      setSlug(cleanSlugInput(e.target.value));
+                      setSlugEdited(true);
+                    }}
+                    className="flex-1 min-w-0 bg-transparent border-0 px-1 py-2 text-sm text-gray-200 font-mono focus:outline-none"
+                    placeholder={slugify(name || 'Friday Night Gig')}
+                    disabled={saving}
+                  />
+                </div>
+              </div>
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Set Length</label>
                 <input
                   type="text"
                   value={desiredLengthText}
                   onChange={(e) => {
-                    setDesiredLengthText(e.target.value);
-                    const parsed = parseDuration(e.target.value);
-                    if (parsed !== null) setDesiredLengthSeconds(parsed);
+                    const v = e.target.value;
+                    setDesiredLengthText(v);
+                    // Empty input is the admin's intent to clear the
+                    // stored seconds. A non-empty-but-unparseable
+                    // string (e.g. mid-typing "1:") leaves the
+                    // previously-parsed value alone so we don't thrash.
+                    if (v === '') {
+                      setDesiredLengthSeconds(null);
+                    } else {
+                      const parsed = parseDuration(v);
+                      if (parsed !== null) setDesiredLengthSeconds(parsed);
+                    }
                   }}
                   onBlur={() => {
                     if (desiredLengthSeconds) {
@@ -472,7 +494,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                       setDesiredLengthSeconds(null);
                     }
                   }}
-                  className="w-20 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                  className="w-20 bg-gray-800 border border-gray-600 rounded px-2 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
                   placeholder="HH:MM:SS"
                   disabled={saving}
                 />
@@ -481,7 +503,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                 const remaining = desiredLengthSeconds - totalSeconds;
                 const isOver = remaining < 0;
                 return (
-                  <span className={`text-xs pb-1 ml-auto ${isOver ? 'text-red-400' : 'text-gray-500'}`}>
+                  <span className={`text-xs pb-2 ${isOver ? 'text-red-400' : 'text-gray-500'}`}>
                     {isOver ? '-' : ''}{formatDuration(Math.abs(remaining))} {isOver ? 'over' : 'remaining'}
                   </span>
                 );
