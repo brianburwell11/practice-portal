@@ -7,6 +7,7 @@ import { uploadFileWithProgress, uploadFormWithProgress } from '../utils/uploadW
 import { prepareSheetMusicUpload } from '../utils/sheetMusic';
 import { r2Url } from '../../utils/url';
 import { useBandStore } from '../../store/bandStore';
+import { slugify } from '../../utils/deriveId';
 
 interface Props {
   state: WizardState;
@@ -162,11 +163,13 @@ export function ReviewStep({ state, dispatch }: Props) {
       }
 
       // 4. Update discography with R2 audio path
+      const finalSlug = slugify(state.slug);
       const discographyRes = await fetch(`/api/bands/${bandId}/songs/discography`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: state.id,
+          ...(finalSlug ? { slug: finalSlug } : {}),
           title: state.title,
           artist: state.artist,
           audioBasePath: publicBase,
@@ -194,7 +197,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         </p>
         <div className="flex justify-center">
           <button
-            onClick={() => navigate(`/${bandSlug}#${state.id}`)}
+            onClick={() => navigate(`/${bandSlug}#${slugify(state.slug) || state.id}`)}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
           >
             Open Song

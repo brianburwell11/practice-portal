@@ -1,10 +1,14 @@
 import type { SongConfig, StemConfig, StemGroupConfig, NavLinkConfig } from '../audio/types';
 import type { UploadProgress } from './utils/uploadWithProgress';
-import { deriveId } from '../utils/deriveId';
+import { deriveId, slugify, cleanSlugInput } from '../utils/deriveId';
+import { OPAQUE_ID_RE } from '../utils/generateId';
 
 export interface EditSongState {
   config: SongConfig | null;
   original: SongConfig | null;
+  /** True once the admin manually edits the slug \u2014 stops the
+   *  title-\u2192slug auto-derive from overwriting it. */
+  slugEdited: boolean;
   saving: boolean;
   error: string | null;
   saveSuccess: boolean;
@@ -16,6 +20,7 @@ export type EditSongAction =
   | { type: 'SET_TITLE'; title: string }
   | { type: 'SET_ARTIST'; artist: string }
   | { type: 'SET_KEY'; key: string }
+  | { type: 'SET_SLUG'; slug: string }
   | { type: 'UPDATE_STEM'; index: number; updates: Partial<StemConfig> }
   | { type: 'REMOVE_STEM'; index: number }
   | { type: 'MOVE_STEM'; from: number; to: number }
@@ -38,11 +43,20 @@ export type EditSongAction =
 export const initialEditState: EditSongState = {
   config: null,
   original: null,
+  slugEdited: false,
   saving: false,
   error: null,
   saveSuccess: false,
   uploadProgress: null,
 };
+
+/** Legacy songs store a slug-shaped string in `id`; on those, renaming the
+ *  title still needs to regenerate the id (and trigger a folder rename via
+ *  the /rename endpoint). New songs have opaque random ids and their id
+ *  never changes on rename \u2014 only the slug does. */
+function isLegacyId(id: string): boolean {
+  return !OPAQUE_ID_RE.test(id);
+}
 
 export function isDirty(state: EditSongState): boolean {
   return JSON.stringify(state.config) !== JSON.stringify(state.original);
@@ -60,22 +74,48 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
         ...state,
         config: structuredClone(action.config),
         original: structuredClone(action.config),
+        slugEdited: false,
         error: null,
         saveSuccess: false,
       };
 
-    case 'SET_TITLE':
+    case 'SET_TITLE': {
+      if (!state.config) return state;
+      const legacy = isLegacyId(state.config.id);
+      const nextSlug = state.slugEdited
+        ? state.config.slug
+        : slugify(action.title);
       return updateConfig(state, {
         title: action.title,
-        id: deriveId(action.title, state.config!.artist),
+        slug: nextSlug || undefined,
+        ...(legacy
+          ? { id: deriveId(action.title, state.config.artist) }
+          : {}),
       });
-    case 'SET_ARTIST':
+    }
+    case 'SET_ARTIST': {
+      if (!state.config) return state;
+      const legacy = isLegacyId(state.config.id);
       return updateConfig(state, {
         artist: action.artist,
-        id: deriveId(state.config!.title, action.artist),
+        ...(legacy
+          ? { id: deriveId(state.config.title, action.artist) }
+          : {}),
       });
+    }
     case 'SET_KEY':
       return updateConfig(state, { key: action.key });
+    case 'SET_SLUG': {
+      // Live-sanitize: lowercase + non-alphanumeric \u2192 '-'. Leave
+      // trailing hyphens intact so typing "my-" is possible on the way
+      // to "my-song". Edge hyphens get stripped at save time via
+      // slugify() in EditSongPage's handleSave.
+      const cleaned = cleanSlugInput(action.slug);
+      return {
+        ...updateConfig(state, { slug: cleaned || undefined }),
+        slugEdited: true,
+      };
+    }
 
     case 'UPDATE_STEM': {
       if (!state.config) return state;

@@ -959,7 +959,7 @@ export function configApiPlugin(): Plugin {
             await r2WriteJson(`${bandId}/setlists/${setlistId}.json`, validated);
 
             // Update setlist index
-            let index: { setlists: { id: string; name: string }[] } = { setlists: [] };
+            let index: { setlists: { id: string; slug?: string; name: string }[] } = { setlists: [] };
             try {
               index = await r2ReadJson(`${bandId}/setlists/index.json`);
             } catch {
@@ -967,7 +967,11 @@ export function configApiPlugin(): Plugin {
             }
 
             index.setlists = index.setlists.filter((s) => s.id !== setlistId);
-            index.setlists.push({ id: setlistId, name: validated.name });
+            index.setlists.push({
+              id: setlistId,
+              ...(validated.slug ? { slug: validated.slug } : {}),
+              name: validated.name,
+            });
             await r2WriteJson(`${bandId}/setlists/index.json`, index);
 
             jsonResponse(res, 200, { ok: true });
@@ -986,7 +990,7 @@ export function configApiPlugin(): Plugin {
           try {
             await r2DeleteKey(`${bandId}/setlists/${setlistId}.json`);
 
-            let index: { setlists: { id: string; name: string }[] } = { setlists: [] };
+            let index: { setlists: { id: string; slug?: string; name: string }[] } = { setlists: [] };
             try {
               index = await r2ReadJson(`${bandId}/setlists/index.json`);
             } catch {

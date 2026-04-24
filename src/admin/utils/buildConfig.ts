@@ -1,6 +1,7 @@
 import type { SongConfig, MarkerConfig } from '../../audio/types';
 import type { WizardState } from '../wizardReducer';
 import { deduplicateLabels } from './stemDetection';
+import { slugify } from '../../utils/deriveId';
 
 const markerColors = [
   '#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ef4444',
@@ -70,8 +71,10 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
   }, 0);
   const durationSeconds = Math.max(state.durationSeconds, alignedEnd);
 
+  const finalSlug = slugify(state.slug);
   return {
     id: state.id,
+    ...(finalSlug ? { slug: finalSlug } : {}),
     title: state.title,
     artist: state.artist.trim() || fallbackArtist || '',
     key: state.key,
