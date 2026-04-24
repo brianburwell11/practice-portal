@@ -20,6 +20,7 @@ interface TapMapEditorState {
   deleteEntry: (index: number) => void;
   moveEntry: (index: number, newTime: number) => void;
   updateSectionLabel: (index: number, label: string) => void;
+  updateEntryType: (index: number, type: TapMapEntry['type'], label?: string) => void;
   setSelectedIndex: (index: number | null) => void;
   undo: () => void;
   importTapMap: (entries: TapMapEntry[]) => void;
@@ -91,6 +92,21 @@ export const useMarkerEditorStore = create<TapMapEditorState>((set) => ({
       ),
       dirty: true,
     })),
+
+  updateEntryType: (index, type, label) =>
+    set((state) => {
+      const current = state.tapMap[index];
+      if (!current || current.type === type) return state;
+      const next: TapMapEntry =
+        type === 'section'
+          ? { time: current.time, type, label: label ?? current.label ?? '' }
+          : { time: current.time, type };
+      return {
+        undoStack: pushUndo(state.undoStack, state.tapMap),
+        tapMap: state.tapMap.map((e, i) => (i === index ? next : e)),
+        dirty: true,
+      };
+    }),
 
   setSelectedIndex: (index) => set({ selectedIndex: index }),
 

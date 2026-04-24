@@ -6,6 +6,7 @@ import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import type { TapMapEntry } from '../../audio/types';
 import { markersToSeconds } from '../../audio/tempoUtils';
+import { autoLabelSection } from '../../audio/tapMapUtils';
 
 /** Detect coarse pointer (touch device) */
 const isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
@@ -38,6 +39,7 @@ export function WaveformTimeline() {
   const markerSelectedIndex = useMarkerEditorStore((s) => s.selectedIndex);
   const setMarkerSelectedIndex = useMarkerEditorStore((s) => s.setSelectedIndex);
   const moveMarkerEntry = useMarkerEditorStore((s) => s.moveEntry);
+  const updateMarkerEntryType = useMarkerEditorStore((s) => s.updateEntryType);
   const displayTapMap: TapMapEntry[] | undefined = markerEditorOpen
     ? editorTapMap
     : selectedSong?.tapMap;
@@ -201,6 +203,73 @@ export function WaveformTimeline() {
   );
 
   const [cursorStyle, setCursorStyle] = useState<string>('pointer');
+
+  // Right-click context menu for changing a tapMap entry's type. Only
+  // active while the marker editor is open. Position is in container-
+  // relative pixels so the popup stays pinned to the waveform.
+  const [markerContextMenu, setMarkerContextMenu] = useState<{
+    entryIndex: number;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!markerEditorOpen) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const hit = hitTestEditorEntry(x);
+      if (hit === null) return;
+      e.preventDefault();
+      setMarkerSelectedIndex(hit);
+      setMarkerContextMenu({
+        entryIndex: hit,
+        x,
+        y: e.clientY - rect.top,
+      });
+    },
+    [markerEditorOpen, hitTestEditorEntry, setMarkerSelectedIndex],
+  );
+
+  // Close the menu automatically if the editor closes or the entry
+  // vanishes (e.g. deleted, undo), and on outside click / Escape.
+  useEffect(() => {
+    if (!markerContextMenu) return;
+    if (!markerEditorOpen || markerContextMenu.entryIndex >= editorTapMap.length) {
+      setMarkerContextMenu(null);
+      return;
+    }
+    const onDown = (ev: MouseEvent) => {
+      const target = ev.target as HTMLElement | null;
+      if (target && target.closest('[data-marker-context-menu]')) return;
+      setMarkerContextMenu(null);
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setMarkerContextMenu(null);
+    };
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [markerContextMenu, markerEditorOpen, editorTapMap.length]);
+
+  const contextMenuEntry =
+    markerContextMenu !== null ? editorTapMap[markerContextMenu.entryIndex] : undefined;
+
+  const handleChangeMarkerType = useCallback(
+    (newType: TapMapEntry['type']) => {
+      if (!markerContextMenu || !contextMenuEntry) return;
+      const label =
+        newType === 'section' && !contextMenuEntry.label
+          ? autoLabelSection(editorTapMap)
+          : undefined;
+      updateMarkerEntryType(markerContextMenu.entryIndex, newType, label);
+      setMarkerContextMenu(null);
+    },
+    [markerContextMenu, contextMenuEntry, editorTapMap, updateMarkerEntryType],
+  );
 
   // --- Pointer event handlers (unified mouse + touch) ---
 
@@ -881,7 +950,44 @@ export function WaveformTimeline() {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerLeave}
+          onContextMenu={handleContextMenu}
         />
+        {markerContextMenu && contextMenuEntry && (
+          <div
+            data-marker-context-menu
+            className="absolute z-30 rounded border border-gray-600 bg-gray-800 shadow-lg text-xs text-gray-100 overflow-hidden"
+            style={{
+              left: Math.max(0, Math.min(markerContextMenu.x, sizeRef.current.width - 140)),
+              top: Math.max(0, Math.min(markerContextMenu.y, sizeRef.current.height - 96)),
+              minWidth: 132,
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-700">
+              Change type
+            </div>
+            {(['section', 'measure', 'beat'] as const).map((t) => {
+              const isCurrent = contextMenuEntry.type === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  disabled={isCurrent}
+                  onClick={() => handleChangeMarkerType(t)}
+                  className={`w-full text-left px-2 py-1.5 flex items-center justify-between transition-colors ${
+                    isCurrent
+                      ? 'bg-gray-700/60 text-gray-400 cursor-default'
+                      : 'hover:bg-blue-900/40 text-gray-100'
+                  }`}
+                >
+                  <span className="capitalize">{t}</span>
+                  {isCurrent && <span className="text-[10px]">current</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Overview bar + zoom controls — only visible when zoomed */}
