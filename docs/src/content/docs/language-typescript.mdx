@@ -1,0 +1,41 @@
+---
+title: "TypeScript, in Plain Words"
+description: "A beginner-friendly primer on TypeScript — what it is, what it does well, and the few corners of this practice app where it earns its keep."
+pubDate: "Apr 21 2026"
+tags: ["language", "typescript", "primer"]
+---
+
+If you have ever written a JavaScript file and watched a typo in a property name survive until a user clicked the wrong button, you have already met the problem TypeScript is trying to solve. TypeScript is JavaScript with a second layer on top — annotations that describe the shape of your data and the arguments your functions expect. Those annotations disappear before the code ever reaches the browser. What stays behind is plain JavaScript; what you get during development is a compiler and editor that can point at a broken assumption and tell you about it before you run the code.
+
+## Where it fits
+
+TypeScript is maintained by Microsoft and tracks closely with ECMAScript — the standard that governs JavaScript itself. Each new JavaScript feature tends to show up in TypeScript around the time it lands in the spec, and TypeScript never adds runtime features that JavaScript does not already have. The official site is typescriptlang.org, and the language spec lives in the open on GitHub.
+
+Day to day, people reach for TypeScript when the codebase is large enough that nobody holds the whole thing in their head, or when the team is big enough that changes in one file have to stay compatible with another file written by someone else. It is the de facto default for new React, Node, and Deno projects of any real size. It works with the same package ecosystem as JavaScript; most popular npm libraries either ship their own type definitions or have community-maintained ones on `@types/*` packages.
+
+## What you actually write
+
+In practice, TypeScript adds three things to your JavaScript muscle memory:
+
+- **Type annotations on variables and parameters** — `const count: number = 0`, or `function greet(name: string): void`. Most of the time you can skip the annotation because TypeScript infers it from the value, and reading idiomatic TS code means reading mostly plain JavaScript with a few shape declarations near the seams.
+- **Interfaces and type aliases** — named shapes you can reuse. `interface Song { title: string; durationSeconds: number }`. Two different shapes with the same fields are considered compatible; this is called *structural typing* and it is one of the parts that surprises people coming from Java or C#. You do not have to declare "class X implements Y"; if the fields line up, they are the same shape.
+- **Unions, generics, and discriminated unions** — ways to express "this is either an A or a B." A lot of real-world code ends up leaning on these more than on classes. A `Result<T>` that is either `{ ok: true, value: T }` or `{ ok: false, error: string }` is a common pattern, and TypeScript can narrow which branch you are in based on a `switch` on the `ok` field.
+
+## A few honest caveats
+
+TypeScript types do not exist at runtime. If you need to check the shape of JSON coming in from the network, the compiler cannot help you — you need a validator. This is why schema libraries like Zod are so common in TS projects: Zod defines the shape at runtime *and* produces a matching TypeScript type, so the two stay in sync.
+
+The type system is also gradual, which means you can opt out with `any` or an `as` cast. Both are sometimes necessary and both are ways to lie to the compiler. A healthy TS codebase uses them sparingly and only with a comment explaining why.
+
+One small operator worth knowing: the non-null assertion `!`. Writing `element!.focus()` tells the compiler "I know this is not null, trust me." Like `any`, it is a promise you are making on behalf of the compiler, and you should only make promises you can keep.
+
+## How this app uses it
+
+The whole React front end is TypeScript. Where TS really pays for itself here is at the boundaries:
+
+- **`src/audio/types.ts`** defines the core data shapes — `SongConfig`, `StemConfig`, `TempoMapEntry`, `TapMapEntry`. Every other file that touches a song imports from here, which means I can rename a field in one place and see every caller the compiler wants me to fix.
+- **`src/config/schema.ts`** declares the same shapes again using Zod. Zod parses untrusted `config.json` at load time, and TypeScript uses the inferred types everywhere downstream. The types in `types.ts` and the schemas in `schema.ts` are kept in sync by hand; a mismatch shows up as a compile error the first time anyone uses the data.
+- **`src/store/`** holds the Zustand stores — `transportStore`, `songStore`, `sheetMusicStore`. Zustand is fully typed, so a component that calls `useTransportStore(s => s.position)` gets a `number` back without any casts. Subscribing to the wrong field is a compile error, not a runtime undefined.
+- **`src/audio/xscParser.ts`** takes a text blob from Transcribe!'s `.xsc` format and returns `TapMapEntry[]`. The return type alone tells the next function what it is allowed to assume, and the parser's job is to make that promise true.
+
+There is nothing exotic going on type-wise — no conditional types, no template literal wizardry. The project uses TypeScript the way most working projects do: as a way to keep a few dozen data shapes honest across a few hundred files, and to make the editor useful while I am writing them.

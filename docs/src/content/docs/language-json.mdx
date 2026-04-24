@@ -1,0 +1,52 @@
+---
+title: "JSON, and Why It's Everywhere"
+description: "A beginner-friendly primer on JSON — the data format that powers configs, APIs, and almost every app on the modern web — plus how this practice app uses it for per-song configuration."
+pubDate: "Apr 21 2026"
+tags: ["language", "json", "primer"]
+---
+
+If you have used any web API in the last fifteen years, you have read JSON. It is the plain-text format that shows up when you inspect a network request, the file format most tools use for configuration, and the default shape of data being passed between almost any two programs on the modern web. JSON stands for JavaScript Object Notation, and despite the name, it is not specific to JavaScript — there are mature parsers for every language you are likely to reach for. The formal spec is maintained as RFC 8259 and ECMA-404, both short enough to read in one sitting.
+
+## Where it fits
+
+JSON's job is to move structured data from one place to another in a form both humans and machines can read. A few concrete places you run into it:
+
+- **HTTP APIs.** When a web app asks a server for your profile, the response body is almost always JSON. When it posts a new comment, the request body is JSON.
+- **Configuration files.** `package.json` for Node, `tsconfig.json` for TypeScript, `composer.json` for PHP, `appsettings.json` for .NET, Cargo.toml for Rust (that one is TOML, not JSON — configuration files are not a monoculture).
+- **Local storage and caches.** Browsers' `localStorage` only stores strings, so the conventional move is to `JSON.stringify` objects going in and `JSON.parse` them coming back out.
+- **Inter-tool data.** Most CLI tools with structured output have a `--json` flag; most data pipelines speak JSON at their seams.
+
+The reason JSON won is that it is small, easy to read, easy to parse, and maps cleanly to the basic data types every language already has.
+
+## The actual format
+
+JSON has exactly six kinds of values:
+
+- **Objects** — curly braces around `"key": value` pairs: `{ "title": "Blue Bossa", "key": "Cm" }`. Keys must be strings with double quotes.
+- **Arrays** — square brackets around comma-separated values: `[1, 2, 3]`. They can be heterogeneous: `["a", 2, true, null]`.
+- **Strings** — always double-quoted. Single quotes are not valid JSON.
+- **Numbers** — `42`, `3.14`, `-0.001`, `1e6`. No distinction between int and float; there are just numbers.
+- **Booleans** — `true` or `false`, lowercase.
+- **Null** — the lowercase literal `null`.
+
+That is it. No dates (you use strings, usually ISO 8601). No undefined. No functions. No binary blobs (you base64 them into strings). No references between objects (you either duplicate the data or use an id and let the reader resolve it).
+
+## The gotchas worth knowing
+
+- **No comments.** This is the one that trips everyone up. Strict JSON does not allow `//` or `/* */`. There is a widely used flavor called JSONC that does, and some tools (notably VS Code's settings files and TypeScript configs) accept it. For anything else, a `_comment` field on an object is the ugly-but-working workaround.
+- **No trailing commas.** `[1, 2, 3,]` is valid JavaScript but not valid JSON. Most human-authored JSON breaks because of a trailing comma left after deleting the last item from an array.
+- **Key order is not guaranteed.** Parsers may preserve it, they may not. Do not build logic that depends on the order of keys in an object.
+- **No schema.** JSON tells you the shape of one specific document; it does not tell you what shape other documents of the same type should have. Validating that is a job for a layer on top — JSON Schema, or in the case of this project, Zod.
+
+If you want a richer format, JSON5 allows comments and trailing commas; YAML adds indentation-based structure and references; TOML is popular for configs. All of them still serialize to and from the same basic types JSON uses, so in practice JSON remains the lingua franca.
+
+## How this app uses it
+
+JSON is how every song in Practice Portal is described. There is no database; each song is a directory with audio files and a `config.json`.
+
+- **`public/audio/<band>/song-<id>/config.json`** is the per-song configuration. It describes the song's metadata (title, artist, key), the list of audio stems with their filenames and default volume/pan, the tempo map (BPM at each beat), the time signature map, an optional tap map (tapped beat timestamps for recordings that were not played to a click), markers for sections, and optional metadata like nav links and tags. A full schema walkthrough lives in the [song config guide](/docs/song-config-guide/).
+- **`src/config/schema.ts`** defines Zod schemas that validate every config at load time. If a config is missing a required field, has the wrong type, or violates a constraint (volumes between 0 and 1.5, BPMs greater than zero), parsing fails loudly instead of the app breaking three screens deep into playback. The Zod schemas also produce TypeScript types automatically, so the static and runtime views of the data stay in sync.
+- **`public/audio/manifest.json`** is the top-level index listing every song and its audio path. The app reads this first on load, then fetches each song's individual `config.json` on demand.
+- **`src/utils/sheetMusicSongStorage.ts` and the other storage helpers** use `JSON.stringify` and `JSON.parse` to persist things like per-song hidden-parts selections, per-song "repeat after D.C./D.S." toggles, and other UI preferences in `localStorage`.
+
+The write path on the admin side is the same story in reverse: the UI produces a JavaScript object, Zod validates it, `JSON.stringify` serializes it, and it goes up to Cloudflare R2 as a file in the song's directory. The whole data model is "a folder with a JSON config and some audio next to it," which has turned out to be a very comfortable way to work on a small project — no migration step, no schema drift, and any change I want to make to a song I can make in a text editor.

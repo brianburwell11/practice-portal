@@ -1,0 +1,43 @@
+---
+title: "CSS, and the Tailwind-Flavored Slice of It"
+description: "A beginner-friendly primer on CSS — the cascade, selectors, and media queries — followed by how this practice app uses Tailwind utility classes instead of hand-written stylesheets."
+pubDate: "Apr 21 2026"
+tags: ["language", "css", "tailwind", "primer"]
+---
+
+If you have ever written a web page, you have probably bumped into CSS without quite realizing it. It is the language that decides what a button looks like, where a sidebar sits, and why the text on one page feels calmer than the text on another. HTML says what is on the page. CSS says how it looks. The two have been evolving side by side since the mid-1990s, and CSS is standardized at the W3C as a collection of modules — Selectors, Flexbox, Grid, Cascade, and so on — rather than one single spec.
+
+## Where it fits
+
+CSS is the styling layer of every web browser. It runs alongside HTML and JavaScript, and you do not install anything to use it — the browser is the interpreter. When you write CSS, you are declaring rules: pick some elements, then apply some visual properties to them. Font size, color, spacing, borders, animations, layout. Everything visual about a web page is CSS, even if a framework is generating the CSS for you.
+
+Outside of web pages, the same language shows up in places you would not immediately expect: styling Electron desktop apps, some React Native layout primitives, email newsletters (a painful dialect), and increasingly even native iOS and Android via cross-platform frameworks.
+
+## The three ideas you have to hold
+
+Most CSS confusion comes from missing one of these:
+
+- **Selectors** pick which elements a rule applies to. `.button`, `#header`, `nav a`, `button:hover`, `input[type="text"]`. A selector can be as specific as "the third paragraph inside a sidebar that has a `data-active` attribute" or as broad as "every link on the page."
+- **The cascade** decides what wins when two rules target the same element. The answer is a combination of specificity (more specific selectors win), source order (later rules win among equals), and importance (`!important` overrides normal rules; use it sparingly or not at all). This is the "C" in CSS and the source of most head-scratching.
+- **The box model** governs layout. Every element is a box with content, padding, border, and margin. Modern layout is mostly done with Flexbox (one-dimensional rows or columns) and Grid (two-dimensional). Both are worth learning well; almost everything else is a variation on "align things in a flex or grid container."
+
+Media queries (`@media (min-width: 768px) { ... }`) let you apply different rules at different screen sizes. That is how responsive design — the same page looking right on a phone and a 4K monitor — is actually built.
+
+## Tailwind: CSS with a different editing surface
+
+This project does not write hand-authored stylesheets. It uses Tailwind, which is a utility-class library: a long list of pre-defined class names that each correspond to one CSS property. `p-4` is `padding: 1rem`. `flex` is `display: flex`. `text-gray-200` is a specific gray color. `md:flex-row` means "apply `flex-direction: row` at the medium breakpoint and up."
+
+The trade-off is obvious and worth being honest about. Your JSX gets busier — you will see `className` strings that look like `"px-4 py-3 border-b border-gray-700 flex flex-wrap items-center gap-y-2"`. In exchange, you stop inventing class names, stop switching files to change a margin, and stop writing stylesheets that slowly drift out of date with the components they style. It also produces smaller CSS bundles in practice, because Tailwind only ships the utility classes you actually use.
+
+Tailwind is its own project, not part of the W3C spec. Under the hood, though, it is still regular CSS — the tooling scans your source files for class names, generates the corresponding CSS rules, and hands that stylesheet to the browser. Nothing proprietary ends up at runtime.
+
+## How this app uses it
+
+Styling in Practice Portal is almost entirely Tailwind classes in JSX, with a thin global stylesheet for resets and a handful of edge cases.
+
+- **`src/index.css`** is the only hand-written CSS in the app. It imports Tailwind (`@import "tailwindcss"`), sets the page background and default font, and adds two small media queries: one to disable text selection on touch devices during drags, and one to re-enable a hover-style background on tap for devices that do not support hover.
+- **Component files like `src/components/transport/TransportBar.tsx` and `src/components/mixer/MixerPanel.tsx`** lean on Tailwind for layout — `flex`, `grid`, `items-center`, `gap-2` — and for the dark-mode-by-default palette. The app is dark from the start, so most color utilities are the gray-800 / gray-200 family rather than light variants.
+- **Responsive behavior** uses Tailwind's `md:` prefix. Look at `src/App.tsx` for mobile-first layouts that rearrange into desktop-style rows at the medium breakpoint, or for the pattern where mobile controls are hidden behind a toggle and revealed with `hidden md:contents`.
+- **Band-specific theming** leans on CSS custom properties. Each band in the config has a `colors` object (`primary`, `accent`, `background`, `text`) that gets applied as CSS variables on a root element, and Tailwind utilities reference those variables via arbitrary-value syntax like `bg-[var(--band-primary)]`. This is how the same components look different when you load a different band's route.
+
+There is almost no `!important` anywhere in the codebase, no deeply nested selectors, no BEM naming conventions. Most of what would traditionally live in a stylesheet lives in the JSX, where the element being styled is right there next to its classes. For a small app with one person maintaining it, that trade has been worth it.

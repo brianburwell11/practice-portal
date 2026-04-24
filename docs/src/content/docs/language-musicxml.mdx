@@ -1,0 +1,70 @@
+---
+title: "MusicXML, the Sheet Music Interchange Format"
+description: "A primer on MusicXML — what it is, how music notation gets encoded as XML, and the places in this practice app where it drives the scrolling sheet music."
+pubDate: "Apr 21 2026"
+tags: ["language", "musicxml", "xml", "music", "primer"]
+---
+
+If you have ever needed to move sheet music between two notation programs — Finale to Sibelius, MuseScore to Dorico — you have probably exported a MusicXML file. It is the lingua franca for notation: a standardized way of describing every note, rest, measure, clef, time signature, tempo, dynamic marking, and repeat sign in a score, encoded as plain text XML. Every serious notation tool can read and write it, which is exactly why it exists.
+
+## Where it fits
+
+MusicXML is a W3C Community Group specification, currently at version 4.0. The full spec and schema are published at w3.org/2021/06/musicxml40. The original design goal — and still its main use — is interchange: getting a score out of one program and into another without losing the parts that matter. Most notation software uses a proprietary binary format internally (MuseScore's `.mscz`, Finale's `.musx`, Sibelius's `.sib`) and treats MusicXML as the export/import path.
+
+There are two flavors, chosen by a single root element:
+
+- **Partwise** (`<score-partwise>`) groups the music by instrument: part 1 contains all of its measures, then part 2 contains all of its measures. This is how the file reads top-to-bottom by voice.
+- **Timewise** (`<score-timewise>`) inverts that: measure 1 contains all parts playing in it, then measure 2. Almost everyone uses partwise. The spec ships XSLT to convert between the two.
+
+MusicXML files come in two packagings: `.musicxml` (or historically `.xml`) for the raw text, and `.mxl` for a zipped version containing one or more musicxml files and a manifest. `.mxl` is smaller and is what most tools prefer to ship.
+
+## What it encodes
+
+At its simplest, a MusicXML file is a tree of elements. The shape is:
+
+```
+score-partwise
+  part-list          # names and labels for each instrument
+  part id="P1"
+    measure number="1"
+      attributes    # divisions, key, time, clef — typically only in measure 1
+      note
+        pitch       # step (A-G), alter (±1 for sharp/flat), octave
+        duration    # in divisions, not seconds
+        type        # quarter, eighth, sixteenth, etc.
+      note
+      ...
+    measure number="2"
+      note
+      ...
+```
+
+The interesting quirk is the *divisions* concept. Each measure's timing is not given in seconds or even in fractions of a whole note — it is given in integer "divisions" per quarter note, declared once in the attributes. If `<divisions>12</divisions>`, then a quarter note has duration 12, an eighth is 6, a sixteenth is 3, and a dotted eighth is 9. Triplets work because 12 is divisible by 3. Pick a divisions value that cleanly represents every note type in the piece, and every duration becomes an integer. This is how MusicXML avoids floating-point time entirely.
+
+Beyond notes and rests, the format has dedicated elements for almost every notational concept:
+
+- **Repeats and jumps** — `<barline>` with `<repeat direction="forward|backward"/>`, `<ending>` for voltas (first/second-time bars), and `<direction>` with `<words>` or `<segno>` / `<coda>` children for D.S., D.C., and Fine markings.
+- **Articulations and ornaments** — `<staccato/>`, `<tenuto/>`, `<accent/>`, `<trill-mark/>`, all nested under a `<notations>` element on the note they apply to.
+- **Dynamics and tempo** — `<dynamics>` for `p`, `mf`, `ff`; `<metronome>` and `<sound tempo="120"/>` for machine-readable tempo changes.
+- **Transposition** — `<transpose>` on a part declares that the written notes differ from the sounding notes by a given chromatic interval. A B-flat trumpet part, for example, is written two semitones up from what it sounds.
+
+There is more — lyrics, chord symbols, figured bass, guitar tablature, percussion mapping — but the core is notes in measures in parts.
+
+## A few gotchas
+
+MusicXML is not small. A simple lead sheet can easily be 50KB uncompressed; a full orchestral score runs into megabytes. The `.mxl` zipping is worth taking seriously.
+
+Different publishers of MusicXML files format them differently. MuseScore and Finale both produce valid output, but they place certain optional elements in different orders, use different amounts of whitespace, and disagree about when to inline attributes versus hoist them. Any parser that round-trips MusicXML has to be lenient.
+
+The format describes notation, not performance. A `<note>` with `<pitch>` and `<duration>` tells you what to engrave, not what a human player will actually do with it. Tempo rubato, micro-timing, swing feel — none of that is in the file. For a practice tool that synchronizes audio with notation, this is the central problem: the score says one thing, the recording does another, and you have to build a bridge.
+
+## How this app uses it
+
+MusicXML shows up in the sheet-music pipeline:
+
+- **`src/admin/SheetMusicUploader.tsx`** accepts `.musicxml`, `.mxl`, or `.mscz` uploads. Raw MusicXML gets zipped into `.mxl` client-side before upload (smaller, single-file). MuseScore `.mscz` uploads are converted server-side via a small endpoint that shells out to MuseScore's CLI and returns `.mxl`.
+- **`src/components/sheet/InfiniteScoreRenderer.tsx`** loads the `.mxl` as a Blob, hands it to OpenSheetMusicDisplay (which wraps VexFlow), and gets back rendered SVG. This is where the XML actually becomes visible notation.
+- **`src/components/sheet/ScrollingScore.tsx`** builds the bridge between audio time and measure position. It walks the rendered score's measure boundaries, maps each one to a beat in the song's tempo map, and drives the playhead and scroll position from `transportStore.position`. Repeats, voltas, D.S., D.C., and Fine are unfolded into a playback order so the cursor can follow a jump the same way a human reader would.
+- **`public/audio/*/song-*/score-*.mxl`** is where the files live at rest. Each song can have a full score plus one `.mxl` per instrument part, and the UI offers a parts dropdown to switch between them.
+
+The format itself is the easy half. The hard half is the part MusicXML deliberately leaves out: making written notation line up with a recording that was never played to a click.

@@ -1,0 +1,149 @@
+---
+title: "What's Under the Hood of Practice Portal"
+description: "A walk through the tech stack behind Practice Portal — the browser-based multi-stem practice tool — with pointers to the actual code that makes each piece work."
+pubDate: "Apr 21 2026"
+tags: ["architecture", "tech-stack", "web-audio-api", "react", "typescript"]
+---
+
+I play in a couple of bands, and I learn most of my parts by looping sections of a recording at half speed, sometimes in a different key, sometimes with the bass pulled out of the mix so I can hear the drums. I've paid for [Transcribe!](https://www.seventhstring.com/xscribe/overview.html) for years to do this on my laptop. What I couldn't do was share that setup with the other people in the band, or put it on a tablet at a rehearsal. Practice Portal is the web-based version I built to do both — a practice tool that plays synced multi-stem audio, shows a scrolling score under a playhead, tracks lyrics like karaoke, and lets you loop any stretch of the song at any tempo.
+
+It's a single-page app, no user backend, no accounts — the data layer is a Cloudflare R2 bucket and a handful of JSON files. The interesting work is almost entirely in the browser: decoding and resampling audio, keeping a sheet-music view glued to the playhead, unfolding a MusicXML score's repeats and jumps into linear playback order, and holding it all together with a state model that's small enough to reason about at 1 a.m. when I'm chasing a bug during a rehearsal.
+
+The stack reflects that. I lean hard on tools that give me a lot of leverage per line of config — Vite, Zustand, Zod, Tailwind — and I keep the custom code focused on the things the platform doesn't solve for me: audio scheduling, coordinate math, and the weird corners of music notation. What follows is a tour of the pieces and why they're there.
+
+## React 19 + TypeScript + Vite
+
+The app is a Vite project in strict TypeScript. React 19 with function components throughout; no class components, no Redux. The entry point is `src/App.tsx`, which wires an `AudioEngine` singleton into context and lays out the header, transport bar, lyrics, scrolling score, and mixer. Every non-trivial component takes typed props and reads from Zustand via selectors rather than full-store subscriptions, which keeps re-renders local.
+
+A few concrete patterns worth naming:
+
+- **Controlled scroll position as single source of truth** in `src/components/sheet/ScrollingScore.tsx`. The scroll host's `scrollLeft` is never just "whatever the browser felt like leaving it at" — a sync effect keyed on the transport position writes it, and a scroll listener distinguishes user scrolls from programmatic ones by comparing actual `scrollLeft` against an `expectedScrollLeftRef`. That's how "user scrolled ahead during playback, freeze auto-scroll until playback catches up" works without race conditions.
+- **Refs-as-latest-value** for event handlers attached once to a long-lived DOM node. Same file uses `measureXsRef`, `unfoldedRef`, `trackingModeRef` so the pointer handlers always see the freshest values without re-subscribing per render.
+- **Lazy-loaded admin-only routes** via `React.lazy` + `Suspense`, gated behind `import.meta.env.DEV`. The production bundle never ships the edit-band modal or the tapMap editor.
+
+TypeScript earns its place by catching drift between the runtime config schema and the audio engine. The config types in `src/audio/types.ts` are the source of truth for what a song config looks like; Zod schemas in `src/config/schema.ts` validate it on the way in; the same types flow through `AudioEngine.loadSong` and the admin flow without a single cast.
+
+## State with Zustand
+
+I chose Zustand over Redux Toolkit because the stores are small, independent, and rarely need middleware. Each concern gets its own file in `src/store/`:
+
+- `transportStore.ts` — playing/paused, position, loop A/B, tempo ratio. The audio engine is the writer; everything else reads via selectors.
+- `songStore.ts` — currently selected song and its load state.
+- `bandStore.ts` — which band's library is loaded.
+- `mixerStore.ts` — persisted per-song stem volumes / mutes / solos.
+- `sheetMusicStore.ts` — tracking mode (continuous vs windowed), zoom, whether the playhead line is shown.
+- `markerEditorStore.ts`, `lyricsEditorStore.ts` — admin tools' open state and draft data.
+- `setlistStore.ts` — active setlist for the current band.
+
+The `AudioEngine` pushes its state into `transportStore` through a single `setOnStateChange` callback wired up in `src/hooks/useAudioEngine.ts`. Every React surface that cares about the transport — waveform, lyrics, sheet music, transport bar — subscribes to exactly the slice it needs. There's no central render loop. This is the thing I'd have gotten wrong with `requestAnimationFrame` five years ago.
+
+## Web Audio and SoundTouch
+
+The audio engine (`src/audio/AudioEngine.ts`) is the largest custom piece. Each song loads as a set of stems fetched as Opus-encoded files from Cloudflare R2, decoded into `AudioBuffer`s, and wired into a shared graph:
+
+```
+AudioBufferSourceNode (per stem)
+  → GainNode → StereoPannerNode → MonoMixer
+  → shared mixBus
+  → SoundTouch AudioWorklet (pitch-corrected time-stretch)
+  → masterGain
+  → ctx.destination
+```
+
+One detail that matters: **SoundTouch runs once on the shared bus, not per stem**. An earlier version had a SoundTouchNode per stem and fell apart at five or six stems because all AudioWorklets run sequentially on a single audio thread. Moving to a shared node (see the `connectPitchNode` method and the writeup at `docs/src/content/docs/audio-performance-multi-stem.md`) cut CPU by an order of magnitude and let me mix tens of stems on a modest laptop.
+
+The other audio things worth pointing at:
+
+- **`TransportClock`** (`src/audio/TransportClock.ts`) converts between `AudioContext.currentTime` and song position, with explicit handling for tempo-ratio changes mid-playback so the transport position stays continuous.
+- **Lazy decode** for muted stems in `AudioEngine`. Fetch all stems in parallel at load, but only call `decodeAudioData` on stems whose default volume is non-zero. Unmuting later kicks off decode + join-the-currently-playing graph. Memory is the bottleneck on phones, and most songs have a few stems you never actually listen to.
+- **Mobile-specific decode at 22,050 Hz** via `OfflineAudioContext`. The `AudioContext` resamples transparently on connect, so all the downstream scheduling math keeps working.
+- **Worklet fallback** in `src/audio/SoundTouchFallbackNode.ts` for older Safari — same algorithm, `ScriptProcessorNode` instead of `AudioWorkletNode`.
+- **`wakeLock` + `statechange` handling** so a phone propped up on a music stand doesn't dim-to-sleep mid-song and then fight the audio context when the screen comes back.
+- **Loop scheduler** — A `setInterval` at 10 ms polls the clock position and seeks back to loop-A when playback crosses loop-B. Not the fanciest approach; reliable, stops cleanly, easy to reason about.
+
+## Cloudflare R2 + a custom Vite middleware
+
+Media and config live in a Cloudflare R2 bucket under per-band / per-song prefixes. The production app reads everything directly from R2 through a public URL. No API server in prod.
+
+The interesting piece is how uploads and config edits work in dev. `vite-plugin-config-api.ts` is a Vite plugin that attaches middleware to the dev server, handling endpoints like:
+
+- `POST /api/bands/{bandId}/songs/{songId}/config` — writes a Zod-validated config.json to R2.
+- `POST /api/r2/transcode-upload/{bandId}/{songId}` — receives a multipart upload, shells out to `ffmpeg` for loudness normalization and Opus encoding, then uploads the transcoded stem to R2.
+- `POST /api/r2/mscz-convert-upload/{bandId}/{songId}` — accepts a `.mscz` from MuseScore, shells out to the MuseScore CLI to convert it to MXL, and uploads the result under a canonical filename the renderer already knows how to find.
+- `POST /api/r2/presign` — issues presigned PUT URLs so the browser can upload directly to R2 for large files.
+- Cascading deletes / renames that keep `discography.json`, `registry.json`, and every setlist's references in sync.
+
+This setup means I can develop the admin flow against real R2 but deploy the public site as a static bundle. The same file uses `busboy` for streaming multipart, `@aws-sdk/client-s3` (R2 speaks S3), and `dotenv` for credentials. No hosted function, no CORS dance, no separate deploy target.
+
+The S3 client setup is worth a line: R2 is configured as `region: 'auto'` with a custom endpoint, and that's all. Pre-sign URLs work through `@aws-sdk/s3-request-presigner` unchanged.
+
+## Zod for config validation
+
+Every config object crossing a boundary gets parsed through a Zod schema in `src/config/schema.ts`. `songConfigSchema`, `bandConfigSchema`, `setlistConfigSchema`, `lyricsDataSchema` — saved server-side before writing to R2, validated on load. Zod gives me runtime guarantees that match my TypeScript types without maintaining a second definition.
+
+The per-song JSON config is the only way to describe a song. It carries stems, groups, the tempo/time-signature maps, the tapMap, metronome settings, markers, optional navigation links, tags, and an optional sheet-music URL. There's no database; a song *is* its config file plus its media files under the song prefix.
+
+## TapMap — timing without a constant BPM
+
+A lot of the recordings I practice to are live, or have rubato, or drift. Assuming a constant BPM and deriving a beat grid from it doesn't survive contact with actual music. So Practice Portal has two timing models, and the default is the non-constant one.
+
+A **tapMap** is a time-sorted array of `{ time, type: 'section' | 'measure' | 'beat', label? }` entries. I play the song in the TapMap Editor and hit S / M / B on my keyboard to mark sections, measure-starts, and beats. Downstream code walks this array with a binary search (`findNearestEntry` in `src/audio/tapMapUtils.ts`) to answer "which measure is the playhead in right now?" without ever assuming constant tempo.
+
+The fallback is a **tempoMap** — a classic list of `{ beat, bpm }` entries with a `beatOffset`. Songs with tapMaps use them; songs without fall back to the tempoMap. There's no explicit mode flag; the presence of `tapMap` in the config infers it.
+
+The TapMap Editor itself (`src/components/marker-editor/`) is admin-only, keyboard-driven, and reducer-backed. Inspiration came from Transcribe!'s marker UI — if you've used that software you'll recognize the shape. There's also a parser for Transcribe!'s own `.xsc` file format in `src/audio/xscParser.ts`, so I can bootstrap a tapMap by importing an existing file instead of tapping a song from scratch.
+
+## Scrolling sheet music
+
+The scrolling score is the feature I'm most pleased with. It renders the current song's MusicXML and keeps it scrolled so the current measure sits under a fixed playhead, like karaoke for sheet music. Windowed mode instead shows a static page of N bars and advances a page at a time when the playhead crosses the right edge. You can also click anywhere to seek to that measure.
+
+The stack underneath: **[OpenSheetMusicDisplay](https://opensheetmusicdisplay.org/) (OSMD)** parses the MusicXML and renders to SVG. I wrap it in `src/components/sheet/InfiniteScoreRenderer.tsx`, which configures OSMD for a single horizontal staffline (`renderSingleHorizontalStaffline: true`, `drawingParameters: 'compacttight'`, `EngravingRules.NewSystemAtXMLNewSystemAttribute = false`, and a bumped `SheetMaximumWidth`). The renderer reports back per-measure x-pixel positions and an `InfiniteBeatStamp` timeline.
+
+Then `src/components/sheet/ScrollingScore.tsx` does the sync math. It listens to the transport position via a Zustand selector (no RAF loop), maps the current time through the tapMap to get an unfolded measure index, resolves that through the repeat-unfold table to a *written* measure index, and lerps an x-pixel between the barlines of the current and next measures.
+
+**The gnarly bit**: OSMD renders to SVG, but its internal "unit" coordinate system doesn't round-trip cleanly into the host's pixel space at arbitrary zoom levels. Measures reported in OSMD units were landing a bar-and-a-half off where the actual glyphs were drawn. The workaround in `InfiniteScoreRenderer.tsx` is to walk the rendered DOM and measure barlines via `getBoundingClientRect`, and to re-measure the preamble (clef + key sig + time sig) by iterating every `<text>` and `<path>` inside a cloned SVG and finding the rightmost glyph before the first note. Slower on paper than trusting OSMD's coordinate system, but every downstream calculation — playhead position, bbox, click-to-jump — stays in one coordinate space: host pixels.
+
+Supporting infrastructure:
+
+- A `ResizeObserver` on the scroll host plus `window.resize` and `orientationchange` listeners trigger a re-derive of the window-mode bars-per-page, since viewport reflows don't always refire RO.
+- A "sticky preamble" overlay mounts a cloned SVG fragment clipped to the preamble width, slid leftward with the scroll until it pins at x=0. Without this, the key signature scrolls off-screen on a long piece.
+- A `ref`-based scroll-lock distinguishes user scrolls from programmatic ones and holds the viewport still while playback catches up.
+- The parts dropdown drives a `visiblePartIds` set that the renderer applies by mutating each instrument's `Visible` flag on the cached OSMD instance and re-rendering — no full reload.
+
+## The repeat / jump unfolder
+
+Rock and jazz charts are written with repeat signs, voltas, D.C., D.S., Segno, Coda, and Fine — they compress. Audio playback doesn't. So the tapMap is indexed in *unfolded* order (one entry per audible downbeat), but the score is rendered in *written* order. The bridge is `src/audio/unfoldRepeats.ts`.
+
+It parses the MusicXML into a per-measure structure (`parseMusicXML`) capturing every forward/backward repeat, volta number and boundary, segno/coda, D.C./D.S. variants, To Coda, Fine, and the `times` attribute on backward repeats. Then `unfold` runs a state machine over that structure and produces an array of `{ srcIndex, pass, cause? }` steps — the linear sequence of written measures in the order they're actually played.
+
+Priorities per measure (matching the research post at `docs/src/content/docs/sheet-music-repeats.mdx`): Fine → To-Coda → D.C./D.S. → backward-repeat → volta gate. The output is consumed in `ScrollingScore.tsx`: given an unfolded measure index `u`, look up `srcIndex` to know which written measure's x-pixel to use. Without this, clicking measure 9 of a score with a repeat block would seek to the ninth unfolded bar — usually not measure 9 at all.
+
+The per-song `repeatAfterDcDs` flag (default false) flips whether internal repeats re-fire after a D.C./D.S. jump, because there's no universal convention for that and different songs want different behavior. The renderer caches the parsed structure so flipping the flag re-runs `unfold` without re-fetching or re-rendering the SVG.
+
+## Mixer, lyrics, waveform
+
+- **Mixer** (`src/components/mixer/`) — per-stem volume / pan / mute / solo / stereo-vs-mono, plus grouping. Stem groups have their own solo semantics (soloing a group plays all its non-muted children). Persisted per song via `useMixerPersistence.ts` writing to localStorage.
+- **Lyrics** (`src/components/LyricsDisplay.tsx`) — two layouts (horizontal karaoke on desktop, vertical scroll on mobile), both driven by `{ text, time, instrumental? }` lines with the same pre-shift timing trick as a karaoke player (bold the next line 500 ms before it lands). The lyrics editor is a separate modal under `src/components/lyrics-editor/`.
+- **Waveform timeline** (`src/components/transport/WaveformTimeline.tsx`) — merged peaks are precomputed once per song from all loaded stems (`AudioEngine.computeMergedPeaks`) and rendered as a min/max pair of polylines. Clicking seeks; dragging scrubs.
+
+Everything above shares a `FOCUS_LEFT_NUDGE_PX` constant — the lyric reading point, the karaoke playhead, and the first bar of a windowed score all line up vertically. Small thing, but when they drift by two pixels you notice instantly.
+
+## Tooling: Tailwind, Radix, linting
+
+- **Tailwind v4** via `@tailwindcss/vite`. No `tailwind.config.js` — configuration lives inline in `src/index.css` (the v4 convention). CSS variables drive per-band theming: each band ships its own `colors.background` / `colors.text` values, the app sets them as `--band-bg` / `--band-text` at the root, and every utility that reads them (`bg-[var(--band-bg)]`, etc.) repaints on band switch.
+- **[Radix UI](https://www.radix-ui.com/) Slider primitives** for the tempo / volume controls, wrapped in a custom `TouchSlider` (`src/components/ui/TouchSlider.tsx`) that adds mobile-specific gesture locking: on touchstart I measure whether the user's first 8 pixels of movement are mostly-horizontal (adjust slider) or mostly-vertical (scroll the page) and commit to one axis for the gesture's lifetime. Without this, fiddling with a slider on a phone constantly fights the page scroll.
+- **ESLint** via flat config with `typescript-eslint` and `eslint-plugin-react-hooks`, run as a pre-commit via a git hook wired up in the `prepare` script.
+
+## Docs site: Astro + Starlight-ish pattern
+
+The docs site under `docs/` is a separate npm package running Astro with `@astrojs/mdx` and `@astrojs/react`. Content lives in `docs/src/content/docs/*.{md,mdx}` and is type-checked against a Zod schema in `docs/src/content.config.ts`. Math uses `remark-math` + `rehype-katex`. Local fonts via Astro's font provider.
+
+The trick I rely on most: the docs site imports live React components from the parent project via an `@app/` alias in `docs/astro.config.mjs`, hydrated as Astro islands with `client:load`. So a post on the scrolling-score UX can embed the actual `TouchSlider` from the app, a `RepeatUnfolder` widget running on a sample `.mxl`, a `MsczInspector` that unzips a `.mscz` in the browser with `jszip` and lets you click through the internal files, a `CamelotWheel` that chimes the root chord when you click a segment, and an A/B library comparison rendering the same score in OSMD, [Verovio](https://www.verovio.org/), and [VexFlow](https://www.vexflow.com/) side by side.
+
+I use this for research: instead of writing "here's how the algorithm would work" I ship a widget that runs it. Half the time I find a bug in the algorithm before I finish writing the post.
+
+## What this stack reveals about how I work
+
+The short version: I prefer small, boring building blocks that I can hold in my head and a few custom pieces where the platform doesn't help. I didn't reach for a framework over React (Next, Remix, anything server-rendered) because the app is client-first by nature — once a song loads, nothing should touch the network again. I didn't reach for Redux or a saga library because Zustand's per-concern stores plus the audio engine's single state-change callback is already less ceremony than a middleware stack. I shell out to `ffmpeg` and the MuseScore CLI from a Vite middleware because writing a transcoder or a score converter in the browser is not where my time should go.
+
+The custom code clusters around the things a hiring reader would actually want to see: coordinate math that survives real-world layout (the OSMD pixel workaround), a domain-specific state machine (the MusicXML unfolder), a scheduling-heavy audio graph with fallbacks for older browsers, and an admin flow that treats uploaded files as first-class — transcoded, normalized, validated — before they ever hit storage. The rest of it is wiring, and the wiring stays small on purpose.
