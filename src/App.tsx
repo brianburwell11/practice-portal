@@ -25,6 +25,9 @@ const SetlistModal = import.meta.env.DEV
 const DeleteSetlistModal = import.meta.env.DEV
   ? lazy(() => import('./admin/DeleteSetlistModal').then((m) => ({ default: m.DeleteSetlistModal })))
   : null;
+const ViewAllSetlistsModal = import.meta.env.DEV
+  ? lazy(() => import('./admin/ViewAllSetlistsModal').then((m) => ({ default: m.ViewAllSetlistsModal })))
+  : null;
 const EditBandModal = import.meta.env.DEV
   ? lazy(() => import('./admin/EditBandModal').then((m) => ({ default: m.EditBandModal })))
   : null;
@@ -51,6 +54,7 @@ export default function App() {
   const [editSetlistId, setEditSetlistId] = useState<string | undefined>(undefined);
   const [copySetlistId, setCopySetlistId] = useState<string | undefined>(undefined);
   const [showDeleteSetlistModal, setShowDeleteSetlistModal] = useState(false);
+  const [showViewAllSetlistsModal, setShowViewAllSetlistsModal] = useState(false);
   const [showEditBandModal, setShowEditBandModal] = useState(false);
   const [showDeleteBandModal, setShowDeleteBandModal] = useState(false);
   // Mobile-only toggle: shows the master volume/speed sliders + mixer panel below the lyrics.
@@ -154,6 +158,7 @@ export default function App() {
             onEditSetlist={() => { if (activeSetlist) { setEditSetlistId(activeSetlist.id); setCopySetlistId(undefined); setShowSetlistModal(true); } }}
             onCopySetlist={() => { if (activeSetlist) { setEditSetlistId(undefined); setCopySetlistId(activeSetlist.id); setShowSetlistModal(true); } }}
             onDeleteSetlist={() => setShowDeleteSetlistModal(true)}
+            onViewAllSetlists={() => setShowViewAllSetlistsModal(true)}
           />
         ) : (
           (activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length) ? (
@@ -225,6 +230,13 @@ export default function App() {
             setlistId={activeSetlist.id}
             setlistName={activeSetlist.name}
             onClose={() => setShowDeleteSetlistModal(false)}
+          />
+        </Suspense>
+      )}
+      {showViewAllSetlistsModal && ViewAllSetlistsModal && (
+        <Suspense fallback={null}>
+          <ViewAllSetlistsModal
+            onClose={() => setShowViewAllSetlistsModal(false)}
           />
         </Suspense>
       )}

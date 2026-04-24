@@ -20,6 +20,7 @@ interface Props {
   onEditSetlist?: () => void;
   onCopySetlist?: () => void;
   onDeleteSetlist?: () => void;
+  onViewAllSetlists?: () => void;
 }
 
 function MenuItem({
@@ -66,6 +67,7 @@ export function AdminRibbon({
   onEditSetlist,
   onCopySetlist,
   onDeleteSetlist,
+  onViewAllSetlists,
 }: Props) {
   const [open, setOpen] = useState<DropdownId>(null);
   const [showHelp, setShowHelp] = useState(false);
@@ -143,6 +145,7 @@ export function AdminRibbon({
                 <MenuItem label="Edit Setlist" enabled={!!hasSetlist} onClick={() => { close(); onEditSetlist?.(); }} />
                 <MenuItem label="Copy Setlist" enabled={!!hasSetlist} onClick={() => { close(); onCopySetlist?.(); }} />
                 <MenuItem label="Delete Setlist" enabled={!!hasSetlist} danger onClick={() => { close(); onDeleteSetlist?.(); }} />
+                <MenuItem label="View All Setlists" enabled onClick={() => { close(); onViewAllSetlists?.(); }} />
               </div>
             )}
           </div>

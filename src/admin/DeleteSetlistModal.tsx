@@ -15,6 +15,7 @@ export function DeleteSetlistModal({ setlistId, setlistName, onClose }: Props) {
   const currentBand = useBandStore((s) => s.currentBand);
   const setIndex = useSetlistStore((s) => s.setIndex);
   const storeIndex = useSetlistStore((s) => s.index);
+  const activeSetlist = useSetlistStore((s) => s.activeSetlist);
   const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
 
   const expected = `delete ${setlistId}`;
@@ -34,7 +35,7 @@ export function DeleteSetlistModal({ setlistId, setlistName, onClose }: Props) {
 
       // Update store
       setIndex((storeIndex ?? []).filter((s) => s.id !== setlistId));
-      setActiveSetlist(null);
+      if (activeSetlist?.id === setlistId) setActiveSetlist(null);
       onClose();
     } catch (err: any) {
       setError(err.message);
