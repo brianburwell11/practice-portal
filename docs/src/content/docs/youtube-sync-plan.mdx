@@ -1,0 +1,141 @@
+---
+title: "YouTube Sync: Implementation Plan"
+description: "Floating, draggable YouTube mini-players that follow the song's playback state with per-video offsets and rate-matching."
+pubDate: "Apr 24 2026"
+tags: ["youtube", "sync", "implementation", "plan"]
+---
+
+Practice tool for studying live performances, music videos, and tutorials alongside a song. Up to four floating YouTube mini-players per song, each with its own offset, slaved to the song's play/pause/seek/rate.
+
+## Decisions
+
+| Question | Choice |
+|---|---|
+| Use case | Reference / study (watch live perfs, MVs, tutorials while practicing) |
+| Sync model | Slave to song clock with per-video offset; rate-match `playbackRate` on tempo/speed changes |
+| Audio | Default muted; per-video unmute toggle; not wired into stem mixer |
+| UI | Floating draggable mini-windows (PiP-style) |
+| Persistence | Per-song admin config in `config.json`, all band users see the same set |
+| Authoring | Dedicated "YouTube videos" section in song admin panel |
+| Offset entry | Numeric input *and* tap-to-sync workflow |
+| Loop / seek | Full follow — YT seeks when song seeks; loops with loop markers |
+| Window size | Fixed 320×180 (16:9), no resize |
+| Default position | Auto-stack in fixed corner (cascade); user drags from there, not persisted |
+| Click on window body | Brings to front |
+| Mute state | Always starts muted on page load |
+| Cap | Hard cap of 4 videos per song |
+
+## Phase 1: Config schema + types
+
+Extend the song config to carry the video list. No UI yet — pure data plumbing.
+
+- [ ] Add `Video` type to `src/audio/types.ts` with fields: `id`, `videoId`, `title?`, `offsetSeconds`, `addedAt` (config field stays generic — `videoId` happens to be a YouTube id today)
+- [ ] Add optional `videos?: Video[]` to `SongConfig`
+- [ ] Add `parseYouTubeId(url: string)` util that accepts `youtube.com/watch?v=…`, `youtu.be/…`, and embed URLs; returns the 11-char id or null
+- [ ] Add `@types/youtube` dev dependency for `YT.Player` typings
+
+**Test:**
+- [ ] `parseYouTubeId` unit test cases pass
+- [ ] Existing songs (no `youtubeVideos`) still load and play
+
+---
+
+## Phase 2: IFrame API loader + player wrapper
+
+A single-instance loader for the YT IFrame script, plus a React component that wraps `YT.Player` and exposes an imperative ref.
+
+- [ ] Add `src/youtube/loadYouTubeApi.ts` — singleton promise that injects `https://www.youtube.com/iframe_api` once and resolves when `window.YT.Player` is ready
+- [ ] Add `src/components/youtube/YouTubeIframe.tsx` — wraps `YT.Player`, accepts `videoId`, `muted`, `onReady`, `onStateChange`; exposes a `forwardRef` with `play()`, `pause()`, `seekTo(t)`, `setPlaybackRate(r)`, `getCurrentTime()`
+- [ ] Confirm muted autoplay works in Chrome/Safari (required for YT IFrame to start without user gesture when slaved to song)
+
+**Test:**
+- [ ] Render a sandbox page with one video; verify play/pause/seek/rate via the imperative ref
+
+---
+
+## Phase 3: Floating window shell
+
+Draggable wrapper with header + body. No sync yet — the wrapper just holds the iframe and lets the user drag it around.
+
+- [ ] Add `src/components/youtube/YouTubeMiniPlayer.tsx` — fixed 320×180 + header bar
+- [ ] Header contains: title, mute/unmute toggle, "bring to front" affordance (click anywhere on header), close button (admin-only)
+- [ ] Drag-to-move via header (mouse + touch); position is local component state (not persisted)
+- [ ] Default position: bottom-right cascade — first video at `(viewport.right - 340, viewport.bottom - 220)`, each subsequent video offset by `(–24, –24)`
+- [ ] Click on window body raises z-index above sibling players
+- [ ] Mute state local to the component, defaults to muted on every mount
+
+**Test:**
+- [ ] Open 4 mini-players manually, drag them around, verify z-order on click
+
+---
+
+## Phase 4: Sync controller
+
+Slave the YT players to the song's playback state via the existing audio store.
+
+- [ ] Add `src/youtube/useYouTubeSync.ts` hook — subscribes to audio store for `isPlaying`, `currentTime`, `playbackRate`, seek events
+- [ ] On song play → `ytPlayer.playVideo()` after seeking to `songTime + offset`
+- [ ] On song pause → `ytPlayer.pauseVideo()`
+- [ ] On song seek → `ytPlayer.seekTo(songTime + offset, true)`
+- [ ] On rate change → `ytPlayer.setPlaybackRate(rate)` — clamped to YT's 0.25–2 range
+- [ ] Drift correction: every 1s while playing, if `|ytTime - (songTime + offset)| > 0.4s`, re-seek
+- [ ] Loop markers: when audio engine wraps the loop, treat as a seek event (same handler)
+- [ ] Wire `<YouTubeMiniPlayer>` into the main playback view, reading `videos` from current song config
+
+**Test:**
+- [ ] Play, pause, seek, change tempo, set loop A/B — YT player tracks within ~½ second
+- [ ] Open multiple players with different offsets — each tracks independently
+
+---
+
+## Phase 5: Admin "YouTube videos" section
+
+Dedicated config screen in the song admin panel.
+
+- [ ] Identify the song admin panel entry point and add a "YouTube videos" section/tab
+- [ ] Add-video form: paste URL → auto-parse `videoId`, prefill `title` from oEmbed, default `offsetSeconds: 0`
+- [ ] List existing videos with: thumbnail, title, numeric offset input (mm:ss.cs), remove button
+- [ ] Hard-cap enforcement: disable "Add" once 4 videos exist
+- [ ] Save → write back to `config.json` via existing config save path
+- [ ] Reorder via drag (optional — defer if it gets complex)
+
+**Test:**
+- [ ] Add → save → reload — video appears in the floating player on song view
+- [ ] Edit offset numerically → reload — sync updates
+- [ ] Remove a video → reload — its mini-player disappears
+
+---
+
+## Phase 6: Tap-to-sync
+
+Inline tool to set offsets without doing arithmetic.
+
+- [ ] Add a "Sync" button to each mini-player in admin mode
+- [ ] Clicking opens a small popover: "Pause song and YT at the same anchor moment, then click Set Sync"
+- [ ] On "Set Sync" press: capture `songTime` (from store) and `ytTime` (from player ref), compute `offset = ytTime - songTime`, persist to config (debounced save)
+- [ ] Show the resulting offset value with an "undo last sync" link
+
+**Test:**
+- [ ] Pick a downbeat, scrub song there, scrub YT to the same downbeat, click Set Sync — verify the saved offset matches manually-computed value within frame precision
+
+---
+
+## Phase 7: Polish
+
+- [ ] Handle YT errors (private video, removed video, region block) — show error state in the mini-player header instead of a black box
+- [ ] Handle network failure on IFrame API load — surface a non-fatal warning, gracefully no-op
+- [ ] Ensure mini-players are hidden when no song is loaded
+- [ ] Defensive bounds: keep mini-player position within viewport on resize (clamp on window resize event)
+
+**Test:**
+- [ ] Add an unlisted/private video URL — error state renders cleanly
+- [ ] Resize browser to small width — players reposition into the visible area
+- [ ] Navigate away from a song — players unmount, no audio leaks
+
+---
+
+## Open questions / future ideas
+
+- Per-user position persistence (decided no for v1; revisit if multiple users share a song and complain)
+- Mixer-stem integration for YT audio (decided no for v1; would let YT track mix into the master volume curve)
+- Per-video color tag for visual identification when multiple are open
