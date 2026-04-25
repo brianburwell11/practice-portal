@@ -24,10 +24,14 @@ interface Props {
   onReady?: () => void;
   onStateChange?: (state: number) => void;
   onError?: (code: number) => void;
+  /** Fired when the IFrame API itself fails to load (network failure,
+   *  ad blocker, etc.) — distinct from `onError`, which surfaces YT's
+   *  per-video errors after the API is up. */
+  onLoadError?: (err: Error) => void;
 }
 
 export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function YouTubeIframe(
-  { videoId, width = 320, height = 180, muted = true, interactive = false, onReady, onStateChange, onError },
+  { videoId, width = 320, height = 180, muted = true, interactive = false, onReady, onStateChange, onError, onLoadError },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -37,9 +41,11 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
   const onReadyRef = useRef(onReady);
   const onStateChangeRef = useRef(onStateChange);
   const onErrorRef = useRef(onError);
+  const onLoadErrorRef = useRef(onLoadError);
   onReadyRef.current = onReady;
   onStateChangeRef.current = onStateChange;
   onErrorRef.current = onError;
+  onLoadErrorRef.current = onLoadError;
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +86,9 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
         },
       });
       playerRef.current = player;
+    }).catch((err: Error) => {
+      if (cancelled) return;
+      onLoadErrorRef.current?.(err);
     });
 
     return () => {

@@ -129,15 +129,16 @@ Inline tool to set offsets without doing arithmetic.
 
 ## Phase 7: Polish
 
-- [ ] Handle YT errors (private video, removed video, region block) — show error state in the mini-player header instead of a black box
-- [ ] Handle network failure on IFrame API load — surface a non-fatal warning, gracefully no-op
-- [ ] Ensure mini-players are hidden when no song is loaded
-- [ ] Defensive bounds: keep mini-player position within viewport on resize (clamp on window resize event)
+- [x] Surface YT player errors (codes 2 / 5 / 100 / 101 / 150) as a labelled error overlay over the iframe, with the video id below for debugging
+- [x] Handle IFrame API load failure: `loadYouTubeApi` now rejects on `<script>` onerror or 10s timeout, the singleton resets so a later call can retry, and the iframe wrapper forwards the rejection through a new `onLoadError` prop → the mini-player shows "YouTube unavailable"
+- [x] Mini-players are already gated on `selectedSong?.videos && selectedSong.videos.length > 0` in App.tsx — they unmount when the user navigates away or selects a song without videos
+- [x] Window-resize listener clamps each player's position to the visible viewport (`x ∈ [0, innerWidth - WIDTH]`, `y ∈ [0, innerHeight - HEIGHT - HEADER]`)
 
 **Test:**
-- [ ] Add an unlisted/private video URL — error state renders cleanly
-- [ ] Resize browser to small width — players reposition into the visible area
-- [ ] Navigate away from a song — players unmount, no audio leaks
+- [ ] Add an embedding-disabled video URL (e.g. some music label uploads block embeds) — the mini-player shows "Embedding disabled" with the video id
+- [ ] Add a removed-video URL — shows "Video not found"
+- [ ] Resize the browser narrower than the cascade — mini-players reposition into the visible area
+- [ ] Switch songs — players for the previous song unmount; players for the new song's videos appear; no leftover iframes/audio
 
 ---
 
