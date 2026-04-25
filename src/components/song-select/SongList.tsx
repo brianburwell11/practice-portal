@@ -168,9 +168,13 @@ export function SongList() {
       .catch(() => setSetlistIndex([]));
   }, [currentBand, setSetlistIndex]);
 
-  // Preload setlist from URL ?setlist= parameter
+  // Preload setlist from URL ?setlist= parameter. Waits for the
+  // setlist index to load so a slug param can be resolved to its
+  // opaque id before we try to fetch the JSON — otherwise the
+  // raw slug ends up as the filename and 404s.
   const hasPreloadedSetlist = useRef(false);
   const setlistPending = useRef(false);
+  const setlistIndexFromStore = useSetlistStore((s) => s.index);
   useEffect(() => {
     if (hasPreloadedSetlist.current || !currentBand) return;
     const params = new URLSearchParams(window.location.search);
@@ -178,14 +182,14 @@ export function SongList() {
     if (!setlistParam) return;
     const r2Base = import.meta.env.VITE_R2_PUBLIC_URL;
     if (!r2Base) return;
+    // Hold off until the sibling effect has populated (or failed and
+    // set to []) the index, so slug → id resolution actually works.
+    if (setlistIndexFromStore === null) return;
+
     hasPreloadedSetlist.current = true;
     setlistPending.current = true;
 
-    // Resolve the URL param (slug, opaque id, or legacy "setlist-…")
-    // against the index. The index is loaded by a sibling effect and
-    // may not be ready yet — fall through to the candidate-id loader
-    // below, which probes each plausible shape in turn.
-    const idx = useSetlistStore.getState().index ?? [];
+    const idx = setlistIndexFromStore;
     const bySlug = idx.find((s) => s.slug && s.slug === setlistParam);
     const byId = idx.find((s) => s.id === setlistParam);
     const byLegacyId = idx.find((s) => s.id === `setlist-${setlistParam}`);
@@ -194,9 +198,9 @@ export function SongList() {
     else if (byId) candidateIds.push(byId.id);
     else if (byLegacyId) candidateIds.push(byLegacyId.id);
     else {
-      // Index unavailable \u2014 fall back to probing the raw param and
-      // the legacy-prefixed form. Preserves the pre-refactor behavior
-      // for deep-linked URLs that land before the index loads.
+      // The index loaded but doesn't contain a matching entry —
+      // probe the raw param and the legacy-prefixed form for
+      // deep-linked URLs from before the index existed.
       candidateIds.push(setlistParam);
       if (!setlistParam.startsWith('setlist-')) {
         candidateIds.push(`setlist-${setlistParam}`);
@@ -218,7 +222,7 @@ export function SongList() {
       }
     };
     tryLoad().finally(() => { setlistPending.current = false; });
-  }, [currentBand, setActiveSetlist]);
+  }, [currentBand, setActiveSetlist, setlistIndexFromStore]);
 
   const hasAutoLoaded = useRef(false);
   const setActiveIndex = useSetlistStore((s) => s.setActiveIndex);
