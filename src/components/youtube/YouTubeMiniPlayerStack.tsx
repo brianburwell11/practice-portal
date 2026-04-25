@@ -4,9 +4,9 @@ import { useSongStore } from '../../store/songStore';
 import type { Video } from '../../audio/types';
 
 const MAX_VIDEOS = 4;
-const PLAYER_W = 340;
-const PLAYER_H = 220;
-const CASCADE = 24;
+const PLAYER_W = 320;
+const PLAYER_H = 204;
+const BOTTOM_PADDING = 16;
 
 interface Props {
   videos: Video[];
@@ -50,19 +50,29 @@ export function YouTubeMiniPlayerStack({ videos, admin = false, bandId }: Props)
     [bandId],
   );
 
+  // Evenly distribute players along the bottom edge with equal gaps
+  // (including leading and trailing margins). Falls back to packing
+  // from the left when the viewport is too narrow to fit them all
+  // without overlap; the per-player resize clamp keeps them in view.
+  const count = limited.length;
+  const totalWidth = count * PLAYER_W;
+  const gap = Math.max(0, (window.innerWidth - totalWidth) / (count + 1));
+  const maxX = Math.max(0, window.innerWidth - PLAYER_W);
+  const defaultY = Math.max(0, window.innerHeight - PLAYER_H - BOTTOM_PADDING);
+
   return (
     <>
       {limited.map((video, i) => {
-        const defaultX = window.innerWidth - PLAYER_W - i * CASCADE;
-        const defaultY = window.innerHeight - PLAYER_H - i * CASCADE;
+        const rawX = gap + i * (PLAYER_W + gap);
+        const defaultX = Math.min(Math.max(0, rawX), maxX);
         return (
           <YouTubeMiniPlayer
             key={video.id}
             videoId={video.videoId}
             title={video.title}
             offsetSeconds={video.offsetSeconds}
-            defaultX={Math.max(0, defaultX)}
-            defaultY={Math.max(0, defaultY)}
+            defaultX={defaultX}
+            defaultY={defaultY}
             zIndex={zIndexFor(video.id)}
             admin={admin}
             onBringToFront={() => bringToFront(video.id)}
