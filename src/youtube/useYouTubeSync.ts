@@ -29,6 +29,7 @@ export function useYouTubeSync(
   player: YouTubeIframeHandle | null,
   ready: boolean,
   offsetSeconds: number,
+  disabled = false,
 ) {
   const engine = useAudioEngine();
   const playing = useTransportStore((s) => s.playing);
@@ -42,16 +43,16 @@ export function useYouTubeSync(
   // to 0 (YT can't seek before the start of the video); the player
   // stays paused there until the song catches up.
   useEffect(() => {
-    if (!ready || !player) return;
+    if (!ready || !player || disabled) return;
     const t = engine.clock.currentTime;
     const target = t + offsetSeconds;
     player.seekTo(Math.max(0, target), true);
     lastPosRef.current = t;
-  }, [ready, player, offsetSeconds, engine]);
+  }, [ready, player, offsetSeconds, engine, disabled]);
 
   // Seek detection — react only to non-natural position jumps.
   useEffect(() => {
-    if (!ready || !player) return;
+    if (!ready || !player || disabled) return;
     const last = lastPosRef.current;
     const delta = position - last;
     lastPosRef.current = position;
@@ -66,28 +67,28 @@ export function useYouTubeSync(
       player.seekTo(target, true);
       if (playing) player.play();
     }
-  }, [position, ready, player, offsetSeconds, playing]);
+  }, [position, ready, player, offsetSeconds, playing, disabled]);
 
   // Play/pause. While in the wait window (target < 0), keep YT paused
   // even when the song is playing — the 1Hz monitor below will start
   // YT once the song crosses into the playable range.
   useEffect(() => {
-    if (!ready || !player) return;
+    if (!ready || !player || disabled) return;
     const target = engine.clock.currentTime + offsetSeconds;
     if (playing && target >= 0) player.play();
     else player.pause();
-  }, [playing, ready, player, offsetSeconds, engine]);
+  }, [playing, ready, player, offsetSeconds, engine, disabled]);
 
   // Match playback rate to song tempo.
   useEffect(() => {
-    if (!ready || !player) return;
+    if (!ready || !player || disabled) return;
     player.setPlaybackRate(clampRate(tempoRatio));
-  }, [tempoRatio, ready, player]);
+  }, [tempoRatio, ready, player, disabled]);
 
   // 1Hz monitor: drift correction during normal play, plus the
   // negative→positive transition for offset videos.
   useEffect(() => {
-    if (!ready || !player || !playing) return;
+    if (!ready || !player || !playing || disabled) return;
     const interval = setInterval(() => {
       if (player.getPlayerState() === YT_BUFFERING) return;
       const target = engine.clock.currentTime + offsetSeconds;
@@ -117,5 +118,5 @@ export function useYouTubeSync(
       }
     }, DRIFT_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [playing, ready, player, offsetSeconds, engine]);
+  }, [playing, ready, player, offsetSeconds, engine, disabled]);
 }

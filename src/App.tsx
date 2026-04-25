@@ -247,7 +247,11 @@ export default function App() {
         </Suspense>
       )}
       {selectedSong?.videos && selectedSong.videos.length > 0 && (
-        <YouTubeMiniPlayerStack videos={selectedSong.videos} />
+        <YouTubeMiniPlayerStack
+          videos={selectedSong.videos}
+          admin={import.meta.env.DEV}
+          bandId={currentBand?.id}
+        />
       )}
     </AudioEngineContext.Provider>
   );

@@ -112,13 +112,18 @@ Dedicated config screen in the song admin panel.
 
 Inline tool to set offsets without doing arithmetic.
 
-- [ ] Add a "Sync" button to each mini-player in admin mode
-- [ ] Clicking opens a small popover: "Pause song and YT at the same anchor moment, then click Set Sync"
-- [ ] On "Set Sync" press: capture `songTime` (from store) and `ytTime` (from player ref), compute `offset = ytTime - songTime`, persist to config (debounced save)
-- [ ] Show the resulting offset value with an "undo last sync" link
+- [x] Add a **Sync** button to each mini-player when `admin` (DEV) is true
+- [x] Clicking enters calibration mode: rebuilds the iframe with native YT controls + pointer events, pauses the sync hook, and amber-highlights the header so the admin knows they're scrubbing freely
+- [x] **Set Sync** captures `engine.clock.currentTime` (song) and `player.getCurrentTime()` (YT), computes `offset = ytTime - songTime`, POSTs to `/api/bands/:bandId/songs/:songId/config`, and updates the local song store so the new offset takes effect immediately on exit
+- [x] **Cancel** exits without saving
+- [ ] ~~"undo last sync" link~~ — deferred; admins can re-calibrate or numerically edit on the Edit Song page
 
 **Test:**
-- [ ] Pick a downbeat, scrub song there, scrub YT to the same downbeat, click Set Sync — verify the saved offset matches manually-computed value within frame precision
+- [ ] Open a song with a video. Click Sync on the mini-player — header turns amber, YT controls appear.
+- [ ] Pause the song at a known anchor (e.g. first downbeat). Scrub YT to the same musical moment via its progress bar.
+- [ ] Click **Set Sync** — header returns to grey, header label restores, sync hook resumes with the new offset.
+- [ ] Reload the song page — the offset should persist (saved to `config.json`).
+- [ ] Open Edit Song → Videos — the offset value should match what was just captured.
 
 ---
 

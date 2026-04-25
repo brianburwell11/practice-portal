@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { YouTubeIframe, type YouTubeIframeHandle } from './YouTubeIframe';
 import { useYouTubeSync } from '../../youtube/useYouTubeSync';
 import { useTransportStore } from '../../store/transportStore';
+import { useAudioEngine } from '../../hooks/useAudioEngine';
 
 interface Props {
   videoId: string;
@@ -10,7 +11,9 @@ interface Props {
   defaultX: number;
   defaultY: number;
   zIndex: number;
+  admin?: boolean;
   onBringToFront: () => void;
+  onSaveOffset?: (offset: number) => Promise<void>;
 }
 
 const WIDTH = 320;
@@ -24,17 +27,30 @@ export function YouTubeMiniPlayer({
   defaultX,
   defaultY,
   zIndex,
+  admin = false,
   onBringToFront,
+  onSaveOffset,
 }: Props) {
   const [pos, setPos] = useState({ x: defaultX, y: defaultY });
   const [muted, setMuted] = useState(true);
   const [ready, setReady] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
+  const [savingSync, setSavingSync] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const playerRef = useRef<YouTubeIframeHandle>(null);
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const songPosition = useTransportStore((s) => s.position);
-  const inWaitWindow = offsetSeconds < 0 && songPosition + offsetSeconds < 0;
+  const engine = useAudioEngine();
+  const inWaitWindow = !calibrating && offsetSeconds < 0 && songPosition + offsetSeconds < 0;
 
-  useYouTubeSync(playerRef.current, ready, offsetSeconds);
+  // Toggling calibrate mode rebuilds the iframe (different playerVars),
+  // so the existing player handle becomes stale until the new YT
+  // instance fires onReady again.
+  useEffect(() => {
+    setReady(false);
+  }, [calibrating]);
+
+  useYouTubeSync(playerRef.current, ready, offsetSeconds, calibrating);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     onBringToFront();
@@ -70,6 +86,23 @@ export function YouTubeMiniPlayer({
     });
   };
 
+  const handleSetSync = async () => {
+    if (!playerRef.current || !onSaveOffset) return;
+    const ytTime = playerRef.current.getCurrentTime();
+    const songTime = engine.clock.currentTime;
+    const newOffset = ytTime - songTime;
+    setSavingSync(true);
+    setSyncError(null);
+    try {
+      await onSaveOffset(newOffset);
+      setCalibrating(false);
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSavingSync(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -83,13 +116,15 @@ export function YouTubeMiniPlayer({
         borderRadius: 6,
         boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
         overflow: 'hidden',
+        outline: calibrating ? '2px solid #f59e0b' : 'none',
+        outlineOffset: -2,
       }}
       onPointerDown={onBringToFront}
     >
       <div
         style={{
           height: HEADER,
-          background: '#1f2937',
+          background: calibrating ? '#78350f' : '#1f2937',
           color: '#d1d5db',
           fontSize: 11,
           padding: '0 6px',
@@ -113,8 +148,68 @@ export function YouTubeMiniPlayer({
             whiteSpace: 'nowrap',
           }}
         >
-          {title || videoId}
+          {calibrating ? 'Calibrating — line up the anchor' : title || videoId}
         </span>
+        {admin && onSaveOffset && (
+          calibrating ? (
+            <>
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); handleSetSync(); }}
+                disabled={savingSync || !ready}
+                title="Capture current YT/song times as the new offset"
+                style={{
+                  background: '#16a34a',
+                  border: 'none',
+                  color: '#fff',
+                  cursor: savingSync || !ready ? 'wait' : 'pointer',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  padding: '2px 6px',
+                  borderRadius: 3,
+                  opacity: savingSync || !ready ? 0.6 : 1,
+                }}
+              >
+                {savingSync ? 'Saving…' : 'Set Sync'}
+              </button>
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setCalibrating(false); }}
+                title="Cancel calibration"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#fbbf24',
+                  cursor: 'pointer',
+                  fontSize: 10,
+                  padding: '2px 4px',
+                }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); setCalibrating(true); }}
+              title="Calibrate sync — scrub YT to match the song's anchor"
+              style={{
+                background: 'transparent',
+                border: '1px solid #4b5563',
+                color: '#9ca3af',
+                cursor: 'pointer',
+                fontSize: 10,
+                padding: '1px 6px',
+                borderRadius: 3,
+              }}
+            >
+              Sync
+            </button>
+          )
+        )}
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
@@ -154,6 +249,7 @@ export function YouTubeMiniPlayer({
         width={WIDTH}
         height={HEIGHT}
         muted={muted}
+        interactive={calibrating}
         onReady={() => setReady(true)}
       />
       {inWaitWindow && (
@@ -193,6 +289,24 @@ export function YouTubeMiniPlayer({
             starts in {Math.ceil(-(songPosition + offsetSeconds))}s
           </div>
         </>
+      )}
+      {syncError && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 4,
+            left: 4,
+            right: 4,
+            background: 'rgba(127, 29, 29, 0.9)',
+            color: '#fecaca',
+            fontSize: 10,
+            padding: '2px 6px',
+            borderRadius: 3,
+            pointerEvents: 'none',
+          }}
+        >
+          {syncError}
+        </div>
       )}
     </div>
   );

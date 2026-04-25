@@ -17,13 +17,17 @@ interface Props {
   width?: number;
   height?: number;
   muted?: boolean;
+  /** When true the player is rebuilt with native YT controls, fullscreen,
+   *  keyboard shortcuts, and pointer events enabled — used for the
+   *  admin's tap-to-sync calibration. */
+  interactive?: boolean;
   onReady?: () => void;
   onStateChange?: (state: number) => void;
   onError?: (code: number) => void;
 }
 
 export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function YouTubeIframe(
-  { videoId, width = 320, height = 180, muted = true, onReady, onStateChange, onError },
+  { videoId, width = 320, height = 180, muted = true, interactive = false, onReady, onStateChange, onError },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -47,16 +51,24 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
         videoId,
         width,
         height,
-        playerVars: {
-          autoplay: 0,
-          controls: 0,
-          disablekb: 1,
-          fs: 0,
-          iv_load_policy: 3,
-          modestbranding: 1,
-          playsinline: 1,
-          rel: 0,
-        },
+        playerVars: interactive
+          ? {
+              autoplay: 0,
+              controls: 1,
+              modestbranding: 1,
+              playsinline: 1,
+              rel: 0,
+            }
+          : {
+              autoplay: 0,
+              controls: 0,
+              disablekb: 1,
+              fs: 0,
+              iv_load_policy: 3,
+              modestbranding: 1,
+              playsinline: 1,
+              rel: 0,
+            },
         events: {
           onReady: () => {
             readyRef.current = true;
@@ -80,7 +92,7 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
       }
       playerRef.current = null;
     };
-  }, [videoId, width, height]);
+  }, [videoId, width, height, interactive]);
 
   useImperativeHandle(
     ref,
@@ -98,7 +110,7 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
   );
 
   return (
-    <div style={{ pointerEvents: 'none' }}>
+    <div style={{ pointerEvents: interactive ? 'auto' : 'none' }}>
       <div ref={containerRef} />
     </div>
   );
