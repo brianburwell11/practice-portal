@@ -7,6 +7,7 @@ import { r2Url } from '../utils/url';
 import { getCamelotStyle } from '../utils/camelot';
 import { slugify, cleanSlugInput } from '../utils/deriveId';
 import { generateId } from '../utils/generateId';
+import { CamelotWheel } from '../components/CamelotWheel';
 import type { SetlistConfig, SetlistEntry, NavLinkConfig } from '../audio/types';
 
 /** Legacy setlist ids are prefixed with "setlist-". New-format ids are
@@ -92,6 +93,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
 
   // Filter state
   const [filterOpen, setFilterOpen] = useState(false);
+  const [wheelOpen, setWheelOpen] = useState(false);
   const [filterKeys, setFilterKeys] = useState<Set<string>>(new Set());
   const [filterTags, setFilterTags] = useState<Set<string>>(new Set());
   const [allowDuplicates, setAllowDuplicates] = useState(true);
@@ -429,6 +431,26 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
       onClick={onClose}
       onKeyDown={(e) => e.stopPropagation()}
     >
+      {wheelOpen && (
+        <div
+          className="absolute hidden lg:block bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-3"
+          style={{
+            top: '50%',
+            right: 'calc(50% + 21rem + 1rem)',
+            transform: 'translateY(-50%)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => setWheelOpen(false)}
+            className="absolute top-1 right-2 text-gray-500 hover:text-gray-300 text-base leading-none z-10"
+            title="Close"
+          >
+            ×
+          </button>
+          <CamelotWheel size={320} />
+        </div>
+      )}
       <div
         className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -545,16 +567,29 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
               <div className="w-1/2 space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium text-gray-400">Available Songs</h3>
-                  <button
-                    ref={filterBtnRef}
-                    onClick={openFilter}
-                    className={`p-1 rounded hover:bg-gray-700 ${hasActiveFilters || sortMode !== 'title' || sortDir !== 'asc' ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
-                    title="Filter & sort songs"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1.5 2h13M3.5 5.5h9M5.5 9h5M7 12.5h2" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setWheelOpen((v) => !v)}
+                      className={`p-1 rounded hover:bg-gray-700 ${wheelOpen ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
+                      title="Camelot wheel"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="8" cy="8" r="6.5" />
+                        <circle cx="8" cy="8" r="2.5" />
+                        <path d="M8 1.5v4M8 10.5v4M1.5 8h4M10.5 8h4M3.4 3.4l2.8 2.8M9.8 9.8l2.8 2.8M12.6 3.4L9.8 6.2M6.2 9.8l-2.8 2.8" />
+                      </svg>
+                    </button>
+                    <button
+                      ref={filterBtnRef}
+                      onClick={openFilter}
+                      className={`p-1 rounded hover:bg-gray-700 ${hasActiveFilters || sortMode !== 'title' || sortDir !== 'asc' ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
+                      title="Filter & sort songs"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1.5 2h13M3.5 5.5h9M5.5 9h5M7 12.5h2" />
+                      </svg>
+                    </button>
+                  </div>
                   {filterOpen && createPortal(
                     <div
                       ref={filterRef}
