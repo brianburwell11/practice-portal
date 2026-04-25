@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 const HUES: Record<number, number> = {
   1: 50, 2: 80, 3: 120, 4: 155, 5: 180, 6: 200,
@@ -116,11 +116,11 @@ type Rule = 'none' | 'same' | 'relative' | 'adjacent' | 'boost' | 'drop' | 'para
 const RULE_OPTIONS: { value: Rule; label: string }[] = [
   { value: 'none', label: '—' },
   { value: 'same', label: 'Seamless' },
-  { value: 'relative', label: 'Mood shift' },
   { value: 'adjacent', label: 'Gentle change' },
+  { value: 'relative', label: 'Mood shift' },
+  { value: 'parallel', label: 'Strong mood shift' },
   { value: 'boost', label: 'Energy boost' },
   { value: 'drop', label: 'Energy drop' },
-  { value: 'parallel', label: 'Strong mood shift' },
 ];
 
 const wrap = (n: number) => ((((n - 1) % 12) + 12) % 12) + 1;
@@ -148,11 +148,16 @@ function getTargets(sourceId: string, rule: Rule): string[] {
 
 interface Props {
   size?: number;
+  /** Emitted when the user picks (or clears) a source wedge while a rule
+   *  is active. `null` = no active selection; otherwise the recommended
+   *  target Camelot codes per the current rule. */
+  onTargetKeysChange?: (keys: string[] | null) => void;
 }
 
-export function CamelotWheel({ size = 320 }: Props) {
+export function CamelotWheel({ size = 320, onTargetKeysChange }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [rule, setRule] = useState<Rule>('none');
   const ctxRef = useRef<AudioContext | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -185,18 +190,47 @@ export function CamelotWheel({ size = 320 }: Props) {
     timeoutRef.current = setTimeout(() => setActive(null), 1800);
   }, []);
 
-  const targets = hovered ? getTargets(hovered, rule) : [];
+  // Selection wins over hover for target computation — once the user
+  // clicks a wedge, the highlight stays there even as the cursor moves.
+  const sourceId = selected ?? hovered;
+  const targets = sourceId ? getTargets(sourceId, rule) : [];
   const targetSet = new Set(targets);
-  const ruleActive = rule !== 'none' && hovered !== null;
+  const ruleActive = rule !== 'none' && sourceId !== null;
+
+  // Reset selection whenever the rule loses meaning.
+  useEffect(() => {
+    if (rule === 'none' && selected !== null) setSelected(null);
+  }, [rule, selected]);
+
+  // Notify the parent whenever the locked target set changes. The
+  // emitted list includes the source key itself plus the rule's
+  // recommended targets — callers usually want both "songs in the
+  // selected key" and "songs that transition well from it".
+  useEffect(() => {
+    if (!onTargetKeysChange) return;
+    if (selected && rule !== 'none') {
+      onTargetKeysChange([selected, ...getTargets(selected, rule)]);
+    } else {
+      onTargetKeysChange(null);
+    }
+  }, [selected, rule, onTargetKeysChange]);
+
+  const handleClick = useCallback((seg: Segment) => {
+    playChord(seg);
+    if (rule === 'none') return;
+    setSelected((prev) => (prev === seg.id ? null : seg.id));
+  }, [playChord, rule]);
 
   return (
     <div style={{ textAlign: 'center', position: 'relative', width: size, margin: '0 auto' }}>
       <svg viewBox="0 0 500 500" style={{ width: size, height: size, display: 'block' }}>
         {SEGMENTS.map((seg) => {
-          const isHovered = hovered === seg.id;
-          const isTarget = targetSet.has(seg.id) && !isHovered;
+          const isSelected = selected === seg.id;
+          const isHovered = hovered === seg.id && !isSelected;
+          const isSource = isSelected || (selected === null && isHovered);
+          const isTarget = targetSet.has(seg.id) && !isSource;
           const isActive = active === seg.id;
-          const dimmed = ruleActive && !isHovered && !isTarget;
+          const dimmed = ruleActive && !isSource && !isTarget;
           const isOuter = seg.side === 'B';
 
           let lightness = 28;
@@ -207,12 +241,12 @@ export function CamelotWheel({ size = 320 }: Props) {
 
           if (isActive) {
             lightness = 45;
-          } else if (isHovered) {
+          } else if (isSource) {
             lightness = 42;
             saturation = 65;
             if (rule !== 'none') {
               strokeColor = '#fff';
-              strokeWidth = 2.5;
+              strokeWidth = isSelected ? 3 : 2.5;
             } else {
               lightness = 35;
             }
@@ -229,12 +263,12 @@ export function CamelotWheel({ size = 320 }: Props) {
 
           const fill = `hsl(${seg.hue} ${saturation}% ${lightness}%)`;
           const textAlpha = dimmed ? 0.35 : 1;
-          const textFill = `hsl(${seg.hue} 60% ${isHovered || isTarget || isActive ? 95 : 82}%)`;
+          const textFill = `hsl(${seg.hue} 60% ${isSource || isTarget || isActive ? 95 : 82}%)`;
 
           return (
             <g
               key={seg.id}
-              onClick={() => playChord(seg)}
+              onClick={() => handleClick(seg)}
               onMouseEnter={() => setHovered(seg.id)}
               onMouseLeave={() => setHovered(null)}
               style={{ cursor: 'pointer', opacity, transition: 'opacity 0.15s' }}
