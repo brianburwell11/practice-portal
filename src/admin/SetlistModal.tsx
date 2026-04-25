@@ -4,7 +4,7 @@ import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
 import { r2Url } from '../utils/url';
-import { getCamelotStyle } from '../utils/camelot';
+import { getCamelotStyle, getCamelotHue, toCamelotCode } from '../utils/camelot';
 import { slugify, cleanSlugInput } from '../utils/deriveId';
 import { generateId } from '../utils/generateId';
 import { CamelotWheel } from '../components/CamelotWheel';
@@ -94,6 +94,14 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   // Filter state
   const [filterOpen, setFilterOpen] = useState(false);
   const [wheelOpen, setWheelOpen] = useState(false);
+  /** Camelot codes the wheel currently recommends as transition targets. */
+  const [wheelTargetKeys, setWheelTargetKeys] = useState<Set<string> | null>(null);
+
+  // Closing the wheel always clears the highlight, regardless of which
+  // path was taken (toolbar toggle, in-panel ×, etc.).
+  useEffect(() => {
+    if (!wheelOpen) setWheelTargetKeys(null);
+  }, [wheelOpen]);
   const [filterKeys, setFilterKeys] = useState<Set<string>>(new Set());
   const [filterTags, setFilterTags] = useState<Set<string>>(new Set());
   const [allowDuplicates, setAllowDuplicates] = useState(true);
@@ -448,7 +456,12 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
           >
             ×
           </button>
-          <CamelotWheel size={320} />
+          <CamelotWheel
+            size={320}
+            onTargetKeysChange={(keys) =>
+              setWheelTargetKeys(keys && keys.length > 0 ? new Set(keys) : null)
+            }
+          />
         </div>
       )}
       <div
@@ -749,10 +762,24 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                 <div className="space-y-1 overflow-y-auto max-h-60">
                   {displaySongs.map((song) => {
                     const meta = songMeta[song.id];
+                    const songCamelot = meta?.key ? toCamelotCode(meta.key) : null;
+                    const recommended =
+                      wheelTargetKeys !== null && songCamelot !== null && wheelTargetKeys.has(songCamelot);
+                    const recHue = recommended && meta?.key ? getCamelotHue(meta.key) : null;
                     return (
                       <div
                         key={song.id}
-                        className="flex items-center gap-2 bg-gray-800 rounded px-3 py-1.5 text-sm"
+                        className={`flex items-center gap-2 rounded px-3 py-1.5 text-sm transition-colors ${
+                          recommended ? '' : 'bg-gray-800'
+                        }`}
+                        style={
+                          recHue !== null
+                            ? {
+                                backgroundColor: `hsl(${recHue} 50% 22%)`,
+                                boxShadow: `0 0 0 1px hsl(${recHue} 80% 65%)`,
+                              }
+                            : undefined
+                        }
                       >
                         <span className="truncate flex-1">{song.title}</span>
                         {meta?.durationSeconds ? (
@@ -813,6 +840,12 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                     // Find the set this entry belongs to for per-set time display
                     const setInfo = isHeading ? sets.find((s) => s.startIdx === i) : null;
 
+                    const setlistKey = !isHeading ? songMeta[entry.songId]?.key : undefined;
+                    const setlistCamelot = setlistKey ? toCamelotCode(setlistKey) : null;
+                    const setlistRecommended =
+                      wheelTargetKeys !== null && setlistCamelot !== null && wheelTargetKeys.has(setlistCamelot);
+                    const setlistRecHue = setlistRecommended && setlistKey ? getCamelotHue(setlistKey) : null;
+
                     return (
                       <div
                         key={`${isHeading ? 'h' : 's'}-${i}`}
@@ -823,10 +856,21 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                         className={`flex items-center gap-2 rounded px-3 py-1.5 text-sm transition-opacity ${
                           isHeading
                             ? 'bg-gray-700/60 border border-gray-600 font-semibold text-gray-200'
-                            : 'bg-gray-800'
+                            : setlistRecHue !== null ? '' : 'bg-gray-800'
                         } ${
                           dragIdx === i ? 'opacity-40' : ''
-                        } ${dropIdx === i && dragIdx !== null ? 'ring-1 ring-blue-500' : ''}`}
+                        } ${dropIdx === i && dragIdx !== null && setlistRecHue === null ? 'ring-1 ring-blue-500' : ''}`}
+                        style={
+                          setlistRecHue !== null
+                            ? {
+                                backgroundColor: `hsl(${setlistRecHue} 50% 22%)`,
+                                boxShadow:
+                                  dropIdx === i && dragIdx !== null
+                                    ? `0 0 0 1px hsl(${setlistRecHue} 80% 65%), 0 0 0 2px rgb(59 130 246)`
+                                    : `0 0 0 1px hsl(${setlistRecHue} 80% 65%)`,
+                              }
+                            : undefined
+                        }
                       >
                         <span
                           className="text-gray-600 cursor-grab active:cursor-grabbing select-none"
