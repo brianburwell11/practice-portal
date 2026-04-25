@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { YouTubeMiniPlayer } from './YouTubeMiniPlayer';
 import { useSongStore } from '../../store/songStore';
+import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 import type { Video } from '../../audio/types';
 
 const MAX_VIDEOS = 4;
@@ -17,35 +18,38 @@ interface Props {
 
 export function YouTubeMiniPlayerStack({ videos, admin = false, bandId }: Props) {
   const [order, setOrder] = useState<string[]>([]);
-  const [minimized, setMinimized] = useState<Set<string>>(() => new Set());
+  const items = usePanelMinimizeStore((s) => s.items);
+  const minimizeVideo = usePanelMinimizeStore((s) => s.minimizeVideo);
+  const minimizedSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of items) {
+      if (item.kind === 'video') set.add(item.id);
+    }
+    return set;
+  }, [items]);
+  const ribbonVisible = items.length > 0;
 
   const limited = videos.slice(0, MAX_VIDEOS);
-  const anyMinimized = minimized.size > 0;
 
-  const bringToFront = (id: string) => {
+  const bringToFront = useCallback((id: string) => {
     setOrder((prev) => [id, ...prev.filter((x) => x !== id)]);
-  };
+  }, []);
+
+  // When a video is restored from the unified ribbon, bring it to front.
+  // The ribbon dispatches the store action directly; this effect mirrors
+  // it into local z-order state.
+  const prevMinRef = useRef(minimizedSet);
+  useEffect(() => {
+    const prev = prevMinRef.current;
+    for (const id of prev) {
+      if (!minimizedSet.has(id)) bringToFront(id);
+    }
+    prevMinRef.current = minimizedSet;
+  }, [minimizedSet, bringToFront]);
 
   const zIndexFor = (id: string) => {
     const idx = order.indexOf(id);
     return idx === -1 ? 100 : 100 + (order.length - idx);
-  };
-
-  const minimize = (id: string) => {
-    setMinimized((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-  };
-
-  const restore = (id: string) => {
-    setMinimized((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    bringToFront(id);
   };
 
   const saveOffsetFor = useCallback(
@@ -70,9 +74,9 @@ export function YouTubeMiniPlayerStack({ videos, admin = false, bandId }: Props)
     [bandId],
   );
 
-  // Reserve the toolbar's footprint when one or more videos are
-  // minimized so newly-mounted players don't sit behind it.
-  const toolbarReserve = anyMinimized ? TOOLBAR_HEIGHT : 0;
+  // Reserve the unified ribbon's footprint when visible so newly-mounted
+  // players don't sit behind it.
+  const toolbarReserve = ribbonVisible ? TOOLBAR_HEIGHT : 0;
   const count = limited.length;
   const totalWidth = count * PLAYER_W;
   const gap = Math.max(0, (window.innerWidth - totalWidth) / (count + 1));
@@ -81,8 +85,6 @@ export function YouTubeMiniPlayerStack({ videos, admin = false, bandId }: Props)
     0,
     window.innerHeight - PLAYER_H - BOTTOM_PADDING - toolbarReserve,
   );
-
-  const minimizedVideos = limited.filter((v) => minimized.has(v.id));
 
   return (
     <>
@@ -99,74 +101,13 @@ export function YouTubeMiniPlayerStack({ videos, admin = false, bandId }: Props)
             defaultY={defaultY}
             zIndex={zIndexFor(video.id)}
             admin={admin}
-            minimized={minimized.has(video.id)}
+            minimized={minimizedSet.has(video.id)}
             onBringToFront={() => bringToFront(video.id)}
-            onMinimize={() => minimize(video.id)}
+            onMinimize={() => minimizeVideo(video.id)}
             onSaveOffset={admin && bandId ? (off) => saveOffsetFor(video.id, off) : undefined}
           />
         );
       })}
-      {anyMinimized && (
-        <div
-          style={{
-            position: 'fixed',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: TOOLBAR_HEIGHT,
-            background: '#0f172a',
-            borderTop: '1px solid #1e293b',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '0 12px',
-            overflowX: 'auto',
-            zIndex: 200,
-          }}
-        >
-          <span style={{ fontSize: 11, color: '#64748b', letterSpacing: 0.5, flexShrink: 0 }}>
-            Minimized
-          </span>
-          {minimizedVideos.map((video) => (
-            <button
-              key={video.id}
-              type="button"
-              onClick={() => restore(video.id)}
-              title={`Restore ${video.title || video.videoId}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                background: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: 4,
-                padding: '2px 8px 2px 2px',
-                cursor: 'pointer',
-                color: '#e2e8f0',
-                fontSize: 12,
-                flexShrink: 0,
-                maxWidth: 220,
-                height: 28,
-              }}
-            >
-              <img
-                src={`https://img.youtube.com/vi/${video.videoId}/default.jpg`}
-                alt=""
-                style={{ width: 40, height: 24, objectFit: 'cover', borderRadius: 2 }}
-              />
-              <span
-                style={{
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {video.title || video.videoId}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
     </>
   );
 }

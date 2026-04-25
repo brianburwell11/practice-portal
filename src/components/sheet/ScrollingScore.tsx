@@ -3,6 +3,7 @@ import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
 import { useSheetMusicStore } from '../../store/sheetMusicStore';
+import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 import { measureStartTimes, currentMeasureIndex } from '../../audio/tempoUtils';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { r2Url } from '../../utils/url';
@@ -996,6 +997,16 @@ export function ScrollingScore() {
               </div>
             )}
           </div>
+          <button
+            onClick={() => usePanelMinimizeStore.getState().minimizePanel('sheet')}
+            className="flex items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+            title="Minimize sheet music"
+            aria-label="Minimize sheet music"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="19" x2="19" y2="19" />
+            </svg>
+          </button>
         </div>
       <div ref={rendererWrapperRef} style={{ position: 'relative' }}>
         <InfiniteScoreRenderer

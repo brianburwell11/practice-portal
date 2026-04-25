@@ -1,10 +1,11 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
 import { LyricsDisplay } from './components/LyricsDisplay';
 import { ScrollingScore } from './components/sheet/ScrollingScore';
 import { MixerPanel } from './components/mixer/MixerPanel';
+import { MinimizedRibbon } from './components/MinimizedRibbon';
 import { YouTubeMiniPlayerStack } from './components/youtube/YouTubeMiniPlayerStack';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
 import { LyricsEditorModal } from './components/lyrics-editor/LyricsEditorModal';
@@ -12,6 +13,8 @@ import { DeleteSongModal } from './components/song-select/DeleteSongModal';
 import { AdminRibbon } from './admin/AdminRibbon';
 import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useLyricsEditorStore } from './store/lyricsEditorStore';
+import { usePanelMinimizeStore } from './store/panelMinimizeStore';
+import { useLyricsStore } from './store/lyricsStore';
 import { r2Url } from './utils/url';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
@@ -61,6 +64,32 @@ export default function App() {
   // Mobile-only toggle: shows the master volume/speed sliders + mixer panel below the lyrics.
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
+  const sheetMinimized = usePanelMinimizeStore((s) =>
+    s.items.some((x) => x.kind === 'panel' && x.id === 'sheet'),
+  );
+  const lyricsLoaded = useLyricsStore((s) => s.loaded);
+  const lyricsLineCount = useLyricsStore((s) => s.lines.length);
+
+  // When the loaded song changes: scope per-song video minimize memory
+  // (saved video chips for this song are restored from localStorage; the
+  // previous song's video chips are dropped). Sheet music chip is pruned
+  // synchronously when the new song has no `sheetMusicUrl`. Mixer and
+  // lyrics chips persist by default — lyrics is pruned in a separate
+  // effect once the lyrics store finishes loading (it loads async).
+  useEffect(() => {
+    const store = usePanelMinimizeStore.getState();
+    store.setCurrentSongId(selectedSong?.id ?? null);
+    if (!selectedSong?.sheetMusicUrl) store.restorePanel('sheet');
+  }, [selectedSong?.id, selectedSong?.sheetMusicUrl]);
+
+  // Prune the lyrics chip when the new song has no lyrics. Gated on
+  // `loaded` so we don't false-fire during the brief empty window
+  // between `clear()` and the fetch settling.
+  useEffect(() => {
+    if (lyricsLoaded && lyricsLineCount === 0) {
+      usePanelMinimizeStore.getState().restorePanel('lyrics');
+    }
+  }, [lyricsLoaded, lyricsLineCount]);
 
   const bandRoute = currentBand?.route ?? '';
 
@@ -188,7 +217,7 @@ export default function App() {
             vertical space. The current viewport/scroll math isn't usable
             on narrow screens and needs a dedicated mobile pass before we
             expose it there. */}
-        {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && (
+        {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && !sheetMinimized && (
           <div className="hidden md:contents">
             <ScrollingScore />
           </div>
@@ -253,6 +282,7 @@ export default function App() {
           bandId={currentBand?.id}
         />
       )}
+      <MinimizedRibbon />
     </AudioEngineContext.Provider>
   );
 }
