@@ -1,10 +1,11 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
 import { LyricsDisplay } from './components/LyricsDisplay';
 import { ScrollingScore } from './components/sheet/ScrollingScore';
 import { MixerPanel } from './components/mixer/MixerPanel';
+import { MinimizedRibbon } from './components/MinimizedRibbon';
 import { YouTubeMiniPlayerStack } from './components/youtube/YouTubeMiniPlayerStack';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
 import { LyricsEditorModal } from './components/lyrics-editor/LyricsEditorModal';
@@ -12,6 +13,7 @@ import { DeleteSongModal } from './components/song-select/DeleteSongModal';
 import { AdminRibbon } from './admin/AdminRibbon';
 import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useLyricsEditorStore } from './store/lyricsEditorStore';
+import { usePanelMinimizeStore } from './store/panelMinimizeStore';
 import { r2Url } from './utils/url';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
@@ -61,6 +63,17 @@ export default function App() {
   // Mobile-only toggle: shows the master volume/speed sliders + mixer panel below the lyrics.
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
+  const sheetMinimized = usePanelMinimizeStore((s) =>
+    s.items.some((x) => x.kind === 'panel' && x.id === 'sheet'),
+  );
+
+  // Reset minimize state when the loaded song changes — chips for the
+  // previous song's videos / lyrics / sheet would otherwise persist as
+  // stale entries (e.g. video IDs that don't exist on the new song,
+  // lyrics chip when the new song has no lyrics).
+  useEffect(() => {
+    usePanelMinimizeStore.getState().clearAll();
+  }, [selectedSong?.id]);
 
   const bandRoute = currentBand?.route ?? '';
 
@@ -188,7 +201,7 @@ export default function App() {
             vertical space. The current viewport/scroll math isn't usable
             on narrow screens and needs a dedicated mobile pass before we
             expose it there. */}
-        {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && (
+        {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && !sheetMinimized && (
           <div className="hidden md:contents">
             <ScrollingScore />
           </div>
@@ -253,6 +266,7 @@ export default function App() {
           bandId={currentBand?.id}
         />
       )}
+      <MinimizedRibbon />
     </AudioEngineContext.Provider>
   );
 }

@@ -2,6 +2,7 @@ import { useMemo, useCallback, useState, useRef } from 'react';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
 import { useBandStore } from '../../store/bandStore';
+import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useLongPress } from '../../hooks/useLongPress';
 import { ChannelStrip } from './ChannelStrip';
@@ -182,6 +183,11 @@ export function MixerPanel() {
   // `mixerOrder` when set (with legacy fallback for missing items).
   const mixerItems = useMemo(() => resolveMixerOrder(selectedSong), [selectedSong]);
 
+  const minimized = usePanelMinimizeStore((s) =>
+    s.items.some((x) => x.kind === 'panel' && x.id === 'mixer'),
+  );
+  const minimizePanel = usePanelMinimizeStore((s) => s.minimizePanel);
+
   if (!selectedSong) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-500">
@@ -191,7 +197,7 @@ export function MixerPanel() {
   }
 
   return (
-    <div className="flex-1 p-4 overflow-auto">
+    <div className={`flex-1 p-4 overflow-auto ${minimized ? 'md:hidden' : ''}`}>
       {/* Global mute/solo + save defaults */}
       <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3">
         {/* Mobile-only full-width reset bar, above the M/S buttons */}
@@ -310,6 +316,16 @@ export function MixerPanel() {
             {saveState === 'error' && <span>Save failed</span>}
           </button>
         )}
+        <button
+          onClick={() => minimizePanel('mixer')}
+          className="hidden md:inline-flex items-center gap-1 text-xs px-2 py-1 ml-auto rounded font-medium text-gray-500 hover:text-gray-300 transition-colors"
+          title="Minimize mixer"
+          aria-label="Minimize mixer"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="5" y1="19" x2="19" y2="19" />
+          </svg>
+        </button>
       </div>
 
       {/* Groups and ungrouped stems, in user-configured display order */}

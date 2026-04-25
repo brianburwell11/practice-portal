@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } fr
 import { useAudioEngine } from '../hooks/useAudioEngine';
 import { useTransportStore } from '../store/transportStore';
 import { useLyricsStore } from '../store/lyricsStore';
+import { usePanelMinimizeStore } from '../store/panelMinimizeStore';
 import type { LyricsLine } from '../audio/lyricsTypes';
 
 const PRE_SHIFT_MS = 500;
@@ -28,6 +29,9 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
   const position = useTransportStore((s) => s.position);
   const storeLines = useLyricsStore((s) => s.lines);
   const mobileVisible = useLyricsStore((s) => s.mobileVisible);
+  const desktopMinimized = usePanelMinimizeStore((s) =>
+    s.items.some((x) => x.kind === 'panel' && x.id === 'lyrics'),
+  );
 
   // Use override lines (from editor) or store lines, excluding blank lines
   // and admin-only bracket annotations like `[chorus]` or `[verse 2]` —
@@ -72,7 +76,9 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
 
   return (
     <>
-      <HorizontalTrack lines={lines} targetIndex={targetIndex} className="hidden md:block" />
+      {!desktopMinimized && (
+        <HorizontalTrack lines={lines} targetIndex={targetIndex} className="hidden md:block" />
+      )}
       <VerticalTrack
         lines={lines}
         targetIndex={targetIndex}
@@ -220,53 +226,65 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
   }, [targetIndex, getAutoTranslateX, findIndexAtReadingPoint]);
 
   return (
-    <div
-      ref={containerRef}
-      className={`relative overflow-hidden py-2 ${className ?? ''}`}
-      style={{
-        height: 40,
-        maskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 160px), transparent calc(100% - 112px))',
-        WebkitMaskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 160px), transparent calc(100% - 112px))',
-      }}
-    >
-      {/* Scrolling lyrics */}
+    <div className={`relative ${className ?? ''}`}>
       <div
-        ref={trackRef}
-        className="flex items-center gap-4 whitespace-nowrap h-full"
+        ref={containerRef}
+        className="relative overflow-hidden py-2"
         style={{
-          transform: `translateX(${translateX}px)`,
-          transition: scrollLockedRef.current ? 'none' : 'transform 500ms ease',
+          height: 40,
+          maskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 160px), transparent calc(100% - 112px))',
+          WebkitMaskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 160px), transparent calc(100% - 112px))',
         }}
       >
-        {lines.map((line, i) => {
-          const isCurrent = i === targetIndex;
-          const isPast = i < targetIndex;
-          const instrumental = isInstrumentalLine(line);
+        {/* Scrolling lyrics */}
+        <div
+          ref={trackRef}
+          className="flex items-center gap-4 whitespace-nowrap h-full"
+          style={{
+            transform: `translateX(${translateX}px)`,
+            transition: scrollLockedRef.current ? 'none' : 'transform 500ms ease',
+          }}
+        >
+          {lines.map((line, i) => {
+            const isCurrent = i === targetIndex;
+            const isPast = i < targetIndex;
+            const instrumental = isInstrumentalLine(line);
 
-          return (
-            <span
-              key={i}
-              ref={(el) => { itemRefs.current[i] = el; }}
-              onClick={() => { if (line.time !== null) engine.seek(line.time); }}
-              className={`text-sm transition-all duration-300 shrink-0 cursor-pointer hover:text-gray-100 ${
-                instrumental
-                  ? isCurrent
-                    ? 'mx-3 text-gray-100 font-medium'
-                    : isPast
-                      ? 'mx-3 text-gray-600'
-                      : 'mx-3 text-gray-500'
-                  : isCurrent
-                    ? 'text-gray-100 font-medium'
-                    : isPast
-                      ? 'text-gray-600'
-                      : 'text-gray-500'
-              }`}
-            >
-              {instrumental ? <InstrumentalIcon /> : line.text}
-            </span>
-          );
-        })}
+            return (
+              <span
+                key={i}
+                ref={(el) => { itemRefs.current[i] = el; }}
+                onClick={() => { if (line.time !== null) engine.seek(line.time); }}
+                className={`text-sm transition-all duration-300 shrink-0 cursor-pointer hover:text-gray-100 ${
+                  instrumental
+                    ? isCurrent
+                      ? 'mx-3 text-gray-100 font-medium'
+                      : isPast
+                        ? 'mx-3 text-gray-600'
+                        : 'mx-3 text-gray-500'
+                    : isCurrent
+                      ? 'text-gray-100 font-medium'
+                      : isPast
+                        ? 'text-gray-600'
+                        : 'text-gray-500'
+                }`}
+              >
+                {instrumental ? <InstrumentalIcon /> : line.text}
+              </span>
+            );
+          })}
+        </div>
       </div>
+      <button
+        onClick={() => usePanelMinimizeStore.getState().minimizePanel('lyrics')}
+        className="absolute top-1 right-1 z-10 flex items-center justify-center rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-200"
+        title="Minimize lyrics"
+        aria-label="Minimize lyrics"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="5" y1="19" x2="19" y2="19" />
+        </svg>
+      </button>
     </div>
   );
 }
