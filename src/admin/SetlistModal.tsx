@@ -6,6 +6,7 @@ import { useSetlistStore } from '../store/setlistStore';
 import { r2Url } from '../utils/url';
 import { getCamelotStyle, getCamelotHue, toCamelotCode } from '../utils/camelot';
 import { slugify, cleanSlugInput } from '../utils/deriveId';
+import { dedupeSlug } from '../utils/dedupeSlug';
 import { generateId } from '../utils/generateId';
 import { CamelotWheel } from '../components/CamelotWheel';
 import type { SetlistConfig, SetlistEntry, NavLinkConfig } from '../audio/types';
@@ -76,11 +77,26 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
 
+  // Slugs of *other* setlists in this band — auto-derive avoids these
+  // and a manual entry that lands on one shows an inline error.
+  const takenSlugs = useMemo(() => {
+    const idx = storeIndex ?? [];
+    return new Set(
+      idx
+        .filter((s) => s.id !== setlistId)
+        .map((s) => s.slug)
+        .filter((x): x is string => !!x),
+    );
+  }, [storeIndex, setlistId]);
+
   // Keep the slug in sync with the name until the admin manually
   // edits it \u2014 mirrors the song-wizard's auto-derive behavior.
+  // Auto-derived slugs avoid collisions by appending -1, -2 ...
   useEffect(() => {
-    if (!slugEdited) setSlug(slugify(name));
-  }, [name, slugEdited]);
+    if (!slugEdited) setSlug(dedupeSlug(slugify(name), takenSlugs));
+  }, [name, slugEdited, takenSlugs]);
+
+  const slugCollides = slugEdited && !!slug && takenSlugs.has(slugify(slug));
   const [entries, setEntries] = useState<SetlistEntry[]>([]);
   const [navLinks, setNavLinks] = useState<NavLinkConfig[]>([]);
   const [newLinkTitle, setNewLinkTitle] = useState('');
@@ -428,7 +444,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     isCopy && copySourceId !== null && copySourceName
       ? name.trim() === copySourceName
       : false;
-  const canSave = name.trim().length > 0 && songCount > 0 && !saving && !nameCollidesWithSource;
+  const canSave = name.trim().length > 0 && songCount > 0 && !saving && !nameCollidesWithSource && !slugCollides;
 
   // Song numbering: count only songs, not headings
   let songNumber = 0;
@@ -515,7 +531,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                     (lowercase, numbers, hyphens)
                   </span>
                 </label>
-                <div className="flex items-center gap-0 w-full bg-gray-800 border border-gray-600 rounded focus-within:border-blue-500">
+                <div className={`flex items-center gap-0 w-full bg-gray-800 border rounded focus-within:border-blue-500 ${slugCollides ? 'border-red-500' : 'border-gray-600'}`}>
                   <span className="pl-3 py-2 text-gray-500 font-mono text-xs select-none whitespace-nowrap">
                     /{currentBand?.route ?? ''}?setlist=
                   </span>
@@ -527,10 +543,13 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                       setSlugEdited(true);
                     }}
                     className="flex-1 min-w-0 bg-transparent border-0 px-1 py-2 text-sm text-gray-200 font-mono focus:outline-none"
-                    placeholder={slugify(name || 'Friday Night Gig')}
+                    placeholder={dedupeSlug(slugify(name || 'Friday Night Gig'), takenSlugs)}
                     disabled={saving}
                   />
                 </div>
+                {slugCollides && (
+                  <p className="mt-1 text-xs text-red-400">This URL slug is already taken by another setlist.</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Set Length</label>

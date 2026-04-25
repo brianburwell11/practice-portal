@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBandStore } from '../store/bandStore';
+import { dedupeSlug } from '../utils/dedupeSlug';
 import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
+
+function nameToSlug(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
 
 interface Props {
   band: BandConfig;
@@ -69,6 +74,15 @@ export function EditBandModal({ band, onClose }: Props) {
       root.style.setProperty('--band-text', current.colors.text);
     };
   }, []);
+
+  const takenRoutes = useMemo(
+    () =>
+      new Set(
+        (bandsManifest?.bands ?? []).filter((b) => b.id !== band.id).map((b) => b.route),
+      ),
+    [bandsManifest, band.id],
+  );
+  const routeCollides = !!draft.route && takenRoutes.has(nameToSlug(draft.route));
 
   const updateDraft = (updates: Partial<BandConfig>) => {
     setDraft((d) => ({ ...d, ...updates }));
@@ -205,7 +219,7 @@ export function EditBandModal({ band, onClose }: Props) {
           <button
             className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
             onClick={handleSave}
-            disabled={saving || !draft.name || !draft.route}
+            disabled={saving || !draft.name || !draft.route || routeCollides}
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
@@ -233,15 +247,19 @@ export function EditBandModal({ band, onClose }: Props) {
           </label>
           <label className="space-y-1">
             <span className="text-xs text-gray-400">Route</span>
-            <div className="flex items-center bg-gray-800 border border-gray-600 rounded focus-within:border-blue-500">
+            <div className={`flex items-center bg-gray-800 border rounded focus-within:border-blue-500 ${routeCollides ? 'border-red-500' : 'border-gray-600'}`}>
               <span className="text-gray-500 pl-3 text-sm">/</span>
               <input
                 type="text"
                 value={draft.route}
                 onChange={(e) => updateDraft({ route: e.target.value })}
                 className="flex-1 bg-transparent px-1 py-2 text-gray-100 font-mono text-sm focus:outline-none"
+                placeholder={dedupeSlug(nameToSlug(draft.name) || 'myband', takenRoutes)}
               />
             </div>
+            {routeCollides && (
+              <p className="text-xs text-red-400">This route is already taken by another band.</p>
+            )}
           </label>
         </div>
 

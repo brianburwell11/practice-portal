@@ -1,6 +1,7 @@
 import type { TapMapEntry, StemGroupConfig } from '../audio/types';
 import type { UploadProgress } from './utils/uploadWithProgress';
 import { slugify, cleanSlugInput } from '../utils/deriveId';
+import { dedupeSlug } from '../utils/dedupeSlug';
 import { generateId } from '../utils/generateId';
 
 export interface StemEntry {
@@ -60,7 +61,7 @@ export interface WizardState {
 }
 
 export type WizardAction =
-  | { type: 'SET_TITLE'; title: string; fallbackArtist?: string }
+  | { type: 'SET_TITLE'; title: string; fallbackArtist?: string; takenSlugs?: Iterable<string> }
   | { type: 'SET_ARTIST'; artist: string; fallbackArtist?: string }
   | { type: 'SET_KEY'; key: string }
   | { type: 'SET_SLUG'; slug: string }
@@ -117,7 +118,9 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return {
         ...state,
         title: action.title,
-        slug: state.slugEdited ? state.slug : slugify(action.title),
+        slug: state.slugEdited
+          ? state.slug
+          : dedupeSlug(slugify(action.title), action.takenSlugs ?? []),
       };
     case 'SET_ARTIST':
       return { ...state, artist: action.artist };

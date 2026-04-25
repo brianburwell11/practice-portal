@@ -1,6 +1,7 @@
 import type { SongConfig, StemConfig, StemGroupConfig, NavLinkConfig, Video } from '../audio/types';
 import type { UploadProgress } from './utils/uploadWithProgress';
 import { deriveId, slugify, cleanSlugInput } from '../utils/deriveId';
+import { dedupeSlug } from '../utils/dedupeSlug';
 import { OPAQUE_ID_RE } from '../utils/generateId';
 
 export interface EditSongState {
@@ -17,7 +18,7 @@ export interface EditSongState {
 
 export type EditSongAction =
   | { type: 'INIT'; config: SongConfig }
-  | { type: 'SET_TITLE'; title: string }
+  | { type: 'SET_TITLE'; title: string; takenSlugs?: Iterable<string> }
   | { type: 'SET_ARTIST'; artist: string }
   | { type: 'SET_KEY'; key: string }
   | { type: 'SET_SLUG'; slug: string }
@@ -88,7 +89,7 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
       const legacy = isLegacyId(state.config.id);
       const nextSlug = state.slugEdited
         ? state.config.slug
-        : slugify(action.title);
+        : dedupeSlug(slugify(action.title), action.takenSlugs ?? []);
       return updateConfig(state, {
         title: action.title,
         slug: nextSlug || undefined,

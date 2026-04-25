@@ -1,6 +1,9 @@
+import { useMemo } from 'react';
 import type { WizardState, WizardAction } from '../wizardReducer';
 import { useBandStore } from '../../store/bandStore';
+import { useSongStore } from '../../store/songStore';
 import { slugify } from '../../utils/deriveId';
+import { dedupeSlug } from '../../utils/dedupeSlug';
 import { TagInput } from '../TagInput';
 import { SongKeyInput } from '../SongKeyInput';
 
@@ -12,7 +15,16 @@ interface Props {
 export function MetadataStep({ state, dispatch }: Props) {
   const bandName = useBandStore((s) => s.currentBand?.name ?? '');
   const bandRoute = useBandStore((s) => s.currentBand?.route ?? '');
-  const canProceed = state.title.trim() !== '';
+  const manifest = useSongStore((s) => s.manifest);
+  const takenSlugs = useMemo(() => {
+    return new Set(
+      (manifest?.songs ?? [])
+        .map((s) => s.slug)
+        .filter((x): x is string => !!x),
+    );
+  }, [manifest]);
+  const slugCollides = state.slugEdited && !!state.slug && takenSlugs.has(slugify(state.slug));
+  const canProceed = state.title.trim() !== '' && !slugCollides;
 
   return (
     <div className="space-y-6">
@@ -24,7 +36,7 @@ export function MetadataStep({ state, dispatch }: Props) {
           <input
             type="text"
             value={state.title}
-            onChange={(e) => dispatch({ type: 'SET_TITLE', title: e.target.value, fallbackArtist: bandName })}
+            onChange={(e) => dispatch({ type: 'SET_TITLE', title: e.target.value, fallbackArtist: bandName, takenSlugs })}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:border-blue-500"
             placeholder="Song Title"
           />
@@ -64,7 +76,7 @@ export function MetadataStep({ state, dispatch }: Props) {
               (lowercase, numbers, hyphens)
             </span>
           </label>
-          <div className="flex items-center gap-0 w-full bg-gray-800 border border-gray-600 rounded focus-within:border-blue-500">
+          <div className={`flex items-center gap-0 w-full bg-gray-800 border rounded focus-within:border-blue-500 ${slugCollides ? 'border-red-500' : 'border-gray-600'}`}>
             <span className="pl-3 py-2 text-gray-500 font-mono text-sm select-none whitespace-nowrap">
               /{bandRoute}#
             </span>
@@ -73,9 +85,12 @@ export function MetadataStep({ state, dispatch }: Props) {
               value={state.slug}
               onChange={(e) => dispatch({ type: 'SET_SLUG', slug: e.target.value })}
               className="flex-1 min-w-0 bg-transparent border-0 rounded-r px-1 py-2 text-gray-100 font-mono text-sm focus:outline-none"
-              placeholder={slugify(state.title || 'Song Title')}
+              placeholder={dedupeSlug(slugify(state.title || 'Song Title'), takenSlugs)}
             />
           </div>
+          {slugCollides && (
+            <p className="mt-1 text-xs text-red-400">This URL hash is already taken by another song.</p>
+          )}
         </div>
 
         {state.id && (

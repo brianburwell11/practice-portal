@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBandStore } from '../store/bandStore';
 import { bandsManifestSchema } from '../config/schema';
 import { r2Url } from '../utils/url';
 import { generateUniqueBandId } from '../utils/bandId';
+import { dedupeSlug } from '../utils/dedupeSlug';
 import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
 
 const defaultColors: BandColors = {
@@ -68,9 +69,12 @@ export default function NewBandPage() {
     setDraft((d) => ({ ...d, colors: { ...d.colors, [key]: value } }));
   };
 
+  const takenRoutes = useMemo(() => new Set(bands.map((b) => b.route)), [bands]);
+  const routeCollides = routeDirty && !!draft.route && takenRoutes.has(nameToSlug(draft.route));
+
   const handleNameChange = (name: string) => {
     const updates: Partial<BandConfig> = { name };
-    if (!routeDirty) updates.route = nameToSlug(name);
+    if (!routeDirty) updates.route = dedupeSlug(nameToSlug(name), takenRoutes);
     updateDraft(updates);
   };
 
@@ -200,16 +204,19 @@ export default function NewBandPage() {
 
         <label className="block">
           <span className="text-sm text-gray-400">Route</span>
-          <div className="mt-1 flex items-center bg-gray-800 border border-gray-600 rounded focus-within:border-blue-500">
+          <div className={`mt-1 flex items-center bg-gray-800 border rounded focus-within:border-blue-500 ${routeCollides ? 'border-red-500' : 'border-gray-600'}`}>
             <span className="text-gray-500 pl-3 text-sm">/</span>
             <input
               type="text"
               value={draft.route}
               onChange={(e) => handleRouteChange(e.target.value)}
-              placeholder="myband"
+              placeholder={dedupeSlug(nameToSlug(draft.name) || 'myband', takenRoutes)}
               className="flex-1 bg-transparent px-1 py-2 text-gray-100 font-mono text-sm focus:outline-none"
             />
           </div>
+          {routeCollides && (
+            <p className="mt-1 text-xs text-red-400">This route is already taken by another band.</p>
+          )}
         </label>
 
         <div className="space-y-2">
@@ -320,7 +327,7 @@ export default function NewBandPage() {
         <div className="flex items-center gap-3 pt-2">
           <button
             onClick={handleSave}
-            disabled={saving || !draft.name || !draft.route}
+            disabled={saving || !draft.name || !draft.route || routeCollides}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium"
           >
             {saving ? 'Creating...' : 'Create Band'}

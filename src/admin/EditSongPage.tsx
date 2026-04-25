@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useRef, useState, useCallback } from 'react';
+import { useReducer, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema } from '../config/schema';
@@ -9,6 +9,7 @@ import { prepareSheetMusicUpload } from './utils/sheetMusic';
 import { SheetMusicUploader } from './SheetMusicUploader';
 import { r2Url } from '../utils/url';
 import { slugify } from '../utils/deriveId';
+import { dedupeSlug } from '../utils/dedupeSlug';
 import { generateId } from '../utils/generateId';
 import { parseYouTubeId } from '../utils/parseYouTubeId';
 import { useBandStore } from '../store/bandStore';
@@ -254,13 +255,25 @@ export default function EditSongPage() {
     });
   };
 
+  // Slugs of *other* songs in this band — used for auto-derive dedup
+  // and inline collision detection.
+  const takenSlugs = useMemo(() => {
+    return new Set(
+      (manifest?.songs ?? [])
+        .filter((s) => s.id !== config?.id)
+        .map((s) => s.slug)
+        .filter((x): x is string => !!x),
+    );
+  }, [manifest, config?.id]);
+  const slugCollides = !!config?.slug && takenSlugs.has(slugify(config.slug));
+
   // Save. A staged sheet-music file lives outside the reducer's config
   // (it's held in local useState until upload), so picking one wouldn't
   // flip `isDirty` on its own — include it explicitly or the Save button
   // stays disabled on add/replace. Remove clears config.sheetMusicUrl
   // via dispatch and flips dirty the normal way.
   const validation = config ? songConfigSchema.safeParse(config) : null;
-  const canSave = (isDirty(state) || !!newSheetMusicFile) && validation?.success && !state.saving;
+  const canSave = (isDirty(state) || !!newSheetMusicFile) && validation?.success && !state.saving && !slugCollides;
 
   const handleSave = async () => {
     if (!config || !currentBand) return;
@@ -534,7 +547,7 @@ export default function EditSongPage() {
               <input
                 type="text"
                 value={config.title}
-                onChange={(e) => dispatch({ type: 'SET_TITLE', title: e.target.value })}
+                onChange={(e) => dispatch({ type: 'SET_TITLE', title: e.target.value, takenSlugs })}
                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:border-blue-500"
               />
             </label>
@@ -575,7 +588,7 @@ export default function EditSongPage() {
                 (lowercase, numbers, hyphens)
               </span>
             </span>
-            <div className="flex items-center gap-0 w-full bg-gray-800 border border-gray-600 rounded focus-within:border-blue-500">
+            <div className={`flex items-center gap-0 w-full bg-gray-800 border rounded focus-within:border-blue-500 ${slugCollides ? 'border-red-500' : 'border-gray-600'}`}>
               <span className="pl-3 py-2 text-gray-500 font-mono text-sm select-none whitespace-nowrap">
                 /{bandSlug}#
               </span>
@@ -584,9 +597,12 @@ export default function EditSongPage() {
                 value={config.slug ?? ''}
                 onChange={(e) => dispatch({ type: 'SET_SLUG', slug: e.target.value })}
                 className="flex-1 min-w-0 bg-transparent border-0 rounded-r px-1 py-2 text-gray-100 font-mono text-sm focus:outline-none"
-                placeholder={slugify(config.title || 'Song Title')}
+                placeholder={dedupeSlug(slugify(config.title || 'Song Title'), takenSlugs)}
               />
             </div>
+            {slugCollides && (
+              <p className="mt-1 text-xs text-red-400">This URL hash is already taken by another song.</p>
+            )}
           </label>
 
           <SheetMusicUploader
