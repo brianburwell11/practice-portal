@@ -7,6 +7,7 @@ export interface YouTubeIframeHandle {
   seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
   setPlaybackRate: (rate: number) => void;
   getCurrentTime: () => number;
+  getPlayerState: () => number;
   mute: () => void;
   unMute: () => void;
 }
@@ -28,6 +29,7 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YT.Player | null>(null);
   const readyRef = useRef(false);
+  const initialMutedRef = useRef(muted);
   const onReadyRef = useRef(onReady);
   const onStateChangeRef = useRef(onStateChange);
   const onErrorRef = useRef(onError);
@@ -47,8 +49,10 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
         height,
         playerVars: {
           autoplay: 0,
-          controls: 1,
-          disablekb: 0,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          iv_load_policy: 3,
           modestbranding: 1,
           playsinline: 1,
           rel: 0,
@@ -56,7 +60,7 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
         events: {
           onReady: () => {
             readyRef.current = true;
-            if (muted) player?.mute();
+            if (initialMutedRef.current) player?.mute();
             onReadyRef.current?.();
           },
           onStateChange: (e) => onStateChangeRef.current?.(e.data),
@@ -76,7 +80,7 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
       }
       playerRef.current = null;
     };
-  }, [videoId, width, height, muted]);
+  }, [videoId, width, height]);
 
   useImperativeHandle(
     ref,
@@ -86,11 +90,16 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
       seekTo: (s, allowSeekAhead = true) => playerRef.current?.seekTo(s, allowSeekAhead),
       setPlaybackRate: (r) => playerRef.current?.setPlaybackRate(r),
       getCurrentTime: () => playerRef.current?.getCurrentTime() ?? 0,
+      getPlayerState: () => playerRef.current?.getPlayerState() ?? -1,
       mute: () => playerRef.current?.mute(),
       unMute: () => playerRef.current?.unMute(),
     }),
     [],
   );
 
-  return <div ref={containerRef} />;
+  return (
+    <div style={{ pointerEvents: 'none' }}>
+      <div ref={containerRef} />
+    </div>
+  );
 });

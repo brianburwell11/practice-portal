@@ -57,12 +57,12 @@ A single-instance loader for the YT IFrame script, plus a React component that w
 
 Draggable wrapper with header + body. No sync yet — the wrapper just holds the iframe and lets the user drag it around.
 
-- [ ] Add `src/components/youtube/YouTubeMiniPlayer.tsx` — fixed 320×180 + header bar
-- [ ] Header contains: title, mute/unmute toggle, "bring to front" affordance (click anywhere on header), close button (admin-only)
-- [ ] Drag-to-move via header (mouse + touch); position is local component state (not persisted)
-- [ ] Default position: bottom-right cascade — first video at `(viewport.right - 340, viewport.bottom - 220)`, each subsequent video offset by `(–24, –24)`
-- [ ] Click on window body raises z-index above sibling players
-- [ ] Mute state local to the component, defaults to muted on every mount
+- [x] Add `src/components/youtube/YouTubeMiniPlayer.tsx` — fixed 320×180 + 24px header
+- [x] Header contains: title, mute/unmute toggle (SVG icon), drag-to-move surface; close button deferred (admin removes via Edit Song instead)
+- [x] Drag-to-move via header using PointerEvent + setPointerCapture (mouse + touch)
+- [x] Default position: bottom-right cascade in `YouTubeMiniPlayerStack` — first at `(viewport.right - 340, viewport.bottom - 220)`, each subsequent offset by `(–24, –24)`
+- [x] PointerDown anywhere on the player raises z-index above siblings via stack-managed order list
+- [x] Mute state local to the component, defaults to `true` on every mount; toggle uses imperative `mute()` / `unMute()` so the iframe is not torn down
 
 **Test:**
 - [ ] Open 4 mini-players manually, drag them around, verify z-order on click
@@ -73,14 +73,14 @@ Draggable wrapper with header + body. No sync yet — the wrapper just holds the
 
 Slave the YT players to the song's playback state via the existing audio store.
 
-- [ ] Add `src/youtube/useYouTubeSync.ts` hook — subscribes to audio store for `isPlaying`, `currentTime`, `playbackRate`, seek events
-- [ ] On song play → `ytPlayer.playVideo()` after seeking to `songTime + offset`
-- [ ] On song pause → `ytPlayer.pauseVideo()`
-- [ ] On song seek → `ytPlayer.seekTo(songTime + offset, true)`
-- [ ] On rate change → `ytPlayer.setPlaybackRate(rate)` — clamped to YT's 0.25–2 range
-- [ ] Drift correction: every 1s while playing, if `|ytTime - (songTime + offset)| > 0.4s`, re-seek
-- [ ] Loop markers: when audio engine wraps the loop, treat as a seek event (same handler)
-- [ ] Wire `<YouTubeMiniPlayer>` into the main playback view, reading `videos` from current song config
+- [x] Add `src/youtube/useYouTubeSync.ts` hook — subscribes to `useTransportStore` for `playing`, `position`, `tempoRatio`
+- [x] On song play → YT plays
+- [x] On song pause → YT pauses
+- [x] On song seek (or any position update) → YT seeks to `songTime + offset`
+- [x] On rate change → `setPlaybackRate` clamped to 0.25–2
+- [x] Drift correction: 1Hz interval while playing, re-seek when YT drifts > 0.4s from target — reads live position via `engine.clock.currentTime`
+- [x] Loop wrap is handled transitively: the engine's loop wrap updates `position`, which triggers the same seek effect
+- [x] Wire `<YouTubeMiniPlayerStack>` into `App.tsx`, reading `videos` from `selectedSong`
 
 **Test:**
 - [ ] Play, pause, seek, change tempo, set loop A/B — YT player tracks within ~½ second
