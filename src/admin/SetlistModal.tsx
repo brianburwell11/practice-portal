@@ -97,6 +97,8 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   const [allowDuplicates, setAllowDuplicates] = useState(true);
   const [durationMode, setDurationMode] = useState<'' | 'longer' | 'shorter' | 'fits'>('');
   const [durationText, setDurationText] = useState('');
+  const [sortMode, setSortMode] = useState<'title' | 'duration' | 'key'>('title');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const filterRef = useRef<HTMLDivElement>(null);
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const [filterPos, setFilterPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
@@ -273,6 +275,34 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
       return true;
     });
   }, [availableSongs, songMeta, filterKeys, filterTags, durationMode, durationText, timeRemaining, hasActiveFilters, allowDuplicates, setlistSongIds]);
+
+  // Sorted display list — applies on top of the filtered songs. Unknown
+  // values (missing key / duration) always sort to the end regardless
+  // of direction so the useful rows land near the top.
+  const displaySongs = useMemo(() => {
+    const arr = [...filteredSongs];
+    const mul = sortDir === 'desc' ? -1 : 1;
+    if (sortMode === 'title') {
+      arr.sort((a, b) => a.title.localeCompare(b.title) * mul);
+    } else if (sortMode === 'duration') {
+      arr.sort((a, b) => {
+        const da = songMeta[a.id]?.durationSeconds ?? 0;
+        const db = songMeta[b.id]?.durationSeconds ?? 0;
+        if (da === 0 && db !== 0) return 1;
+        if (db === 0 && da !== 0) return -1;
+        return (da - db) * mul;
+      });
+    } else if (sortMode === 'key') {
+      arr.sort((a, b) => {
+        const ka = songMeta[a.id]?.key ?? '';
+        const kb = songMeta[b.id]?.key ?? '';
+        if (!ka && kb) return 1;
+        if (!kb && ka) return -1;
+        return ka.localeCompare(kb) * mul;
+      });
+    }
+    return arr;
+  }, [filteredSongs, sortMode, sortDir, songMeta]);
 
   // Legacy rename path: old ids were derived as `setlist-{slug(name)}`.
   // Kept only for renaming pre-existing legacy setlists (they still
@@ -518,8 +548,8 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                   <button
                     ref={filterBtnRef}
                     onClick={openFilter}
-                    className={`p-1 rounded hover:bg-gray-700 ${hasActiveFilters ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
-                    title="Filter songs"
+                    className={`p-1 rounded hover:bg-gray-700 ${hasActiveFilters || sortMode !== 'title' || sortDir !== 'asc' ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
+                    title="Filter & sort songs"
                   >
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M1.5 2h13M3.5 5.5h9M5.5 9h5M7 12.5h2" />
@@ -532,6 +562,29 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                       style={{ width: 220, top: filterPos.top, left: filterPos.left }}
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {/* Sort */}
+                      <div className="space-y-1.5">
+                        <div className="text-xs text-gray-400">Sort by</div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={sortMode}
+                            onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+                            className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="title">Title</option>
+                            <option value="duration">Duration</option>
+                            <option value="key">Key</option>
+                          </select>
+                          <select
+                            value={sortDir}
+                            onChange={(e) => setSortDir(e.target.value as typeof sortDir)}
+                            className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="asc">Ascending</option>
+                            <option value="desc">Descending</option>
+                          </select>
+                        </div>
+                      </div>
                       {/* Allow duplicates toggle */}
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-400">Allow duplicates</span>
@@ -659,7 +712,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                   )}
                 </div>
                 <div className="space-y-1 overflow-y-auto max-h-60">
-                  {filteredSongs.map((song) => {
+                  {displaySongs.map((song) => {
                     const meta = songMeta[song.id];
                     return (
                       <div
