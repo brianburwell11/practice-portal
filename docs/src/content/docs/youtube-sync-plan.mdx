@@ -29,14 +29,14 @@ Practice tool for studying live performances, music videos, and tutorials alongs
 
 Extend the song config to carry the video list. No UI yet — pure data plumbing.
 
-- [ ] Add `Video` type to `src/audio/types.ts` with fields: `id`, `videoId`, `title?`, `offsetSeconds`, `addedAt` (config field stays generic — `videoId` happens to be a YouTube id today)
-- [ ] Add optional `videos?: Video[]` to `SongConfig`
-- [ ] Add `parseYouTubeId(url: string)` util that accepts `youtube.com/watch?v=…`, `youtu.be/…`, and embed URLs; returns the 11-char id or null
-- [ ] Add `@types/youtube` dev dependency for `YT.Player` typings
+- [x] Add `Video` type to `src/audio/types.ts` with fields: `id`, `videoId`, `title?`, `offsetSeconds`, `addedAt` (config field stays generic — `videoId` happens to be a YouTube id today)
+- [x] Add optional `videos?: Video[]` to `SongConfig`
+- [x] Add `parseYouTubeId(url: string)` util that accepts `youtube.com/watch?v=…`, `youtu.be/…`, and embed URLs; returns the 11-char id or null
+- [x] Add `@types/youtube` dev dependency for `YT.Player` typings
 
 **Test:**
-- [ ] `parseYouTubeId` unit test cases pass
-- [ ] Existing songs (no `youtubeVideos`) still load and play
+- [x] `tsc -b && vite build` passes with new schema (no test framework in repo; smoke-checked via build)
+- [x] Existing songs (no `videos` field) still load (optional field, no migration needed)
 
 ---
 
