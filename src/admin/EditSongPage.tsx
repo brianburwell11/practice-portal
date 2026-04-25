@@ -9,6 +9,8 @@ import { prepareSheetMusicUpload } from './utils/sheetMusic';
 import { SheetMusicUploader } from './SheetMusicUploader';
 import { r2Url } from '../utils/url';
 import { slugify } from '../utils/deriveId';
+import { generateId } from '../utils/generateId';
+import { parseYouTubeId } from '../utils/parseYouTubeId';
 import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
@@ -63,6 +65,40 @@ export default function EditSongPage() {
   // Nav link creation state
   const [newLinkTitle, setNewLinkTitle] = useState('');
   const [newLinkUrl, setNewLinkUrl] = useState('');
+
+  // Video creation state
+  const [newVideoUrl, setNewVideoUrl] = useState('');
+  const [addingVideo, setAddingVideo] = useState(false);
+
+  const handleAddVideo = useCallback(async () => {
+    const videoId = parseYouTubeId(newVideoUrl);
+    if (!videoId) return;
+    setAddingVideo(true);
+    let title: string | undefined;
+    try {
+      const res = await fetch(
+        `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.title === 'string') title = data.title;
+      }
+    } catch {
+      // oEmbed lookup failed; admin can fill in the title manually below.
+    }
+    dispatch({
+      type: 'ADD_VIDEO',
+      video: {
+        id: generateId(),
+        videoId,
+        title,
+        offsetSeconds: 0,
+        addedAt: new Date().toISOString(),
+      },
+    });
+    setNewVideoUrl('');
+    setAddingVideo(false);
+  }, [newVideoUrl]);
 
   // Nav link drag-to-reorder state
   const [linkDragIdx, setLinkDragIdx] = useState<number | null>(null);
@@ -831,6 +867,89 @@ export default function EditSongPage() {
               Add
             </button>
           </div>
+        </section>
+
+        {/* Videos */}
+        <section className="space-y-4 border-t border-gray-700 pt-6">
+          <div>
+            <h2 className="text-xl font-semibold">Videos</h2>
+            <p className="text-sm text-gray-400">
+              YouTube videos that play in sync with the song. Up to 4 per song.
+            </p>
+          </div>
+
+          {(config.videos ?? []).map((video, i) => (
+            <div key={video.id} className="flex items-center gap-3 bg-gray-800 rounded-lg p-3">
+              <img
+                src={`https://img.youtube.com/vi/${video.videoId}/default.jpg`}
+                alt=""
+                className="w-20 h-[3.75rem] object-cover rounded bg-black"
+              />
+              <input
+                type="text"
+                value={video.title ?? ''}
+                onChange={(e) =>
+                  dispatch({ type: 'UPDATE_VIDEO', index: i, updates: { title: e.target.value } })
+                }
+                className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+                placeholder="Title"
+              />
+              <label className="flex items-center gap-1 text-xs text-gray-400">
+                Offset
+                <input
+                  type="number"
+                  step="0.01"
+                  value={video.offsetSeconds}
+                  onChange={(e) =>
+                    dispatch({
+                      type: 'UPDATE_VIDEO',
+                      index: i,
+                      updates: { offsetSeconds: Number(e.target.value) || 0 },
+                    })
+                  }
+                  className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+                />
+                <span>s</span>
+              </label>
+              <a
+                href={`https://youtu.be/${video.videoId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-gray-500 hover:text-gray-300 font-mono"
+                title="Open on YouTube"
+              >
+                {video.videoId}
+              </a>
+              <button
+                onClick={() => dispatch({ type: 'REMOVE_VIDEO', index: i })}
+                className="text-gray-500 hover:text-red-400 text-sm px-1"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+
+          {(config.videos?.length ?? 0) < 4 ? (
+            <div className="flex items-center gap-3 bg-gray-800 rounded-lg p-4">
+              <input
+                type="url"
+                value={newVideoUrl}
+                onChange={(e) => setNewVideoUrl(e.target.value)}
+                placeholder="https://youtube.com/watch?v=..."
+                className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+                disabled={addingVideo}
+              />
+              <button
+                disabled={!parseYouTubeId(newVideoUrl) || addingVideo}
+                onClick={handleAddVideo}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm"
+              >
+                {addingVideo ? 'Adding…' : 'Add'}
+              </button>
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500">Maximum of 4 videos per song.</div>
+          )}
         </section>
 
         {/* Save bar */}

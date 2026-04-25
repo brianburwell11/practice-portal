@@ -52,6 +52,18 @@ export interface NavLinkConfig {
   url: string;
 }
 
+export interface Video {
+  id: string;
+  /** Currently always a YouTube 11-char id; field stays generic so
+   *  future video sources can reuse the schema. */
+  videoId: string;
+  title?: string;
+  /** Video time at song time 0. Positive = video starts ahead of song. */
+  offsetSeconds: number;
+  /** ISO timestamp of when the admin added this video. */
+  addedAt: string;
+}
+
 export interface SongConfig {
   id: string;
   /** Kebab-case URL segment, editable. Optional for legacy songs
@@ -79,6 +91,7 @@ export interface SongConfig {
   markers: MarkerConfig[];
   tapMap?: TapMapEntry[];
   navLinks?: NavLinkConfig[];
+  videos?: Video[];
   tags?: string[];
   sheetMusicUrl?: string;
   audioOffsetSeconds?: number;

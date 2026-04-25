@@ -5,6 +5,7 @@ import { TransportBar } from './components/transport/TransportBar';
 import { LyricsDisplay } from './components/LyricsDisplay';
 import { ScrollingScore } from './components/sheet/ScrollingScore';
 import { MixerPanel } from './components/mixer/MixerPanel';
+import { YouTubeMiniPlayerStack } from './components/youtube/YouTubeMiniPlayerStack';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
 import { LyricsEditorModal } from './components/lyrics-editor/LyricsEditorModal';
 import { DeleteSongModal } from './components/song-select/DeleteSongModal';
@@ -244,6 +245,13 @@ export default function App() {
         <Suspense fallback={null}>
           <DeleteBandModal band={currentBand} onClose={() => setShowDeleteBandModal(false)} />
         </Suspense>
+      )}
+      {selectedSong?.videos && selectedSong.videos.length > 0 && (
+        <YouTubeMiniPlayerStack
+          videos={selectedSong.videos}
+          admin={import.meta.env.DEV}
+          bandId={currentBand?.id}
+        />
       )}
     </AudioEngineContext.Provider>
   );

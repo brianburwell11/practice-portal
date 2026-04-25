@@ -1,4 +1,4 @@
-import type { SongConfig, StemConfig, StemGroupConfig, NavLinkConfig } from '../audio/types';
+import type { SongConfig, StemConfig, StemGroupConfig, NavLinkConfig, Video } from '../audio/types';
 import type { UploadProgress } from './utils/uploadWithProgress';
 import { deriveId, slugify, cleanSlugInput } from '../utils/deriveId';
 import { OPAQUE_ID_RE } from '../utils/generateId';
@@ -32,6 +32,9 @@ export type EditSongAction =
   | { type: 'UPDATE_NAV_LINK'; index: number; link: NavLinkConfig }
   | { type: 'REMOVE_NAV_LINK'; index: number }
   | { type: 'MOVE_NAV_LINK'; from: number; to: number }
+  | { type: 'ADD_VIDEO'; video: Video }
+  | { type: 'UPDATE_VIDEO'; index: number; updates: Partial<Video> }
+  | { type: 'REMOVE_VIDEO'; index: number }
   | { type: 'SET_TAGS'; tags: string[] }
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_ERROR'; error: string | null }
@@ -203,6 +206,24 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
       const [moved] = links.splice(action.from, 1);
       links.splice(action.to, 0, moved);
       return updateConfig(state, { navLinks: links });
+    }
+
+    case 'ADD_VIDEO':
+      if (!state.config) return state;
+      return updateConfig(state, { videos: [...(state.config.videos ?? []), action.video] });
+
+    case 'UPDATE_VIDEO': {
+      if (!state.config) return state;
+      const videos = (state.config.videos ?? []).map((v, i) =>
+        i === action.index ? { ...v, ...action.updates } : v,
+      );
+      return updateConfig(state, { videos });
+    }
+
+    case 'REMOVE_VIDEO': {
+      if (!state.config) return state;
+      const remaining = (state.config.videos ?? []).filter((_, i) => i !== action.index);
+      return updateConfig(state, { videos: remaining.length > 0 ? remaining : undefined });
     }
 
     case 'SET_TAGS':
