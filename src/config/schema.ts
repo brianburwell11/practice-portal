@@ -64,6 +64,14 @@ export const navLinkConfigSchema = z.object({
   url: z.string().url(),
 });
 
+export const videoSchema = z.object({
+  id: z.string(),
+  videoId: z.string(),
+  title: z.string().optional(),
+  offsetSeconds: z.number(),
+  addedAt: z.string(),
+});
+
 const slugSchema = z.string().regex(/^[a-z0-9-]+$/).optional();
 
 export const songConfigSchema = z.object({
@@ -85,6 +93,7 @@ export const songConfigSchema = z.object({
   markers: z.array(markerConfigSchema),
   tapMap: z.array(tapMapEntrySchema).optional(),
   navLinks: z.array(navLinkConfigSchema).optional(),
+  videos: z.array(videoSchema).optional(),
   tags: z.array(z.string().min(1).max(40)).optional(),
   /** Path (relative to the song's audio base) of a MusicXML score to render
    *  in the scrolling-score panel. If absent, the panel is hidden. */

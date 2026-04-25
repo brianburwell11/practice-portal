@@ -92,17 +92,19 @@ Slave the YT players to the song's playback state via the existing audio store.
 
 Dedicated config screen in the song admin panel.
 
-- [ ] Identify the song admin panel entry point and add a "YouTube videos" section/tab
-- [ ] Add-video form: paste URL → auto-parse `videoId`, prefill `title` from oEmbed, default `offsetSeconds: 0`
-- [ ] List existing videos with: thumbnail, title, numeric offset input (mm:ss.cs), remove button
-- [ ] Hard-cap enforcement: disable "Add" once 4 videos exist
-- [ ] Save → write back to `config.json` via existing config save path
-- [ ] Reorder via drag (optional — defer if it gets complex)
+- [x] Add a "Videos" section to `EditSongPage` between Nav Links and Save
+- [x] Add-video form: paste URL → auto-parse `videoId`, prefill `title` from oEmbed, default `offsetSeconds: 0`
+- [x] List existing videos with: thumbnail, title input, numeric offset input (seconds, 0.01 step), remove button
+- [x] Hard-cap enforcement: hide the add form and show a "Maximum of 4" notice once 4 videos exist
+- [x] Save → write back to `config.json` via the existing edit-song save path (videos travel through the reducer like other config fields)
+- [ ] ~~Reorder via drag~~ — deferred; videos are independent sync targets, ordering doesn't affect behavior
 
 **Test:**
-- [ ] Add → save → reload — video appears in the floating player on song view
-- [ ] Edit offset numerically → reload — sync updates
-- [ ] Remove a video → reload — its mini-player disappears
+- [ ] Open a song in admin → Edit Song → scroll to Videos → paste a YouTube URL → Add → confirm thumbnail and title appear
+- [ ] Save → reload → video persists in `config.json`
+- [ ] Edit title and offset inline → save → reload → values stick
+- [ ] Remove a video → save → reload → video gone from config
+- [ ] Floating mini-player on song view: not yet wired (Phase 4)
 
 ---
 
