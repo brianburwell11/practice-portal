@@ -20,8 +20,9 @@ export function DeleteSongModal({ songId, songTitle, onClose }: Props) {
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
   const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
 
-  const expected = `delete ${songId}`;
-  const canDelete = confirmation === expected && !deleting;
+  const expected = `delete ${songTitle}`;
+  const canDelete =
+    confirmation.trim().toLowerCase() === expected.trim().toLowerCase() && !deleting;
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -76,7 +77,7 @@ export function DeleteSongModal({ songId, songTitle, onClose }: Props) {
 
         <div>
           <label className="block text-sm text-gray-400 mb-1">
-            Type <span className="font-mono text-gray-300">{expected}</span> to confirm:
+            Type <span className="font-semibold text-gray-300">{expected}</span> to confirm:
           </label>
           <input
             type="text"

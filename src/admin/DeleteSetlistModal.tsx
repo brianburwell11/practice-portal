@@ -18,8 +18,9 @@ export function DeleteSetlistModal({ setlistId, setlistName, onClose }: Props) {
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
   const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
 
-  const expected = `delete ${setlistId}`;
-  const canDelete = confirmation === expected && !deleting;
+  const expected = `delete ${setlistName}`;
+  const canDelete =
+    confirmation.trim().toLowerCase() === expected.trim().toLowerCase() && !deleting;
 
   const handleDelete = async () => {
     if (!currentBand) return;
@@ -64,7 +65,7 @@ export function DeleteSetlistModal({ setlistId, setlistName, onClose }: Props) {
 
         <div>
           <label className="block text-sm text-gray-400 mb-1">
-            Type <span className="font-mono text-gray-300">{expected}</span> to confirm:
+            Type <span className="font-semibold text-gray-300">{expected}</span> to confirm:
           </label>
           <input
             type="text"
