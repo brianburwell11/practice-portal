@@ -14,6 +14,7 @@ import { AdminRibbon } from './admin/AdminRibbon';
 import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useLyricsEditorStore } from './store/lyricsEditorStore';
 import { usePanelMinimizeStore } from './store/panelMinimizeStore';
+import { useLyricsStore } from './store/lyricsStore';
 import { r2Url } from './utils/url';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
@@ -66,14 +67,29 @@ export default function App() {
   const sheetMinimized = usePanelMinimizeStore((s) =>
     s.items.some((x) => x.kind === 'panel' && x.id === 'sheet'),
   );
+  const lyricsLoaded = useLyricsStore((s) => s.loaded);
+  const lyricsLineCount = useLyricsStore((s) => s.lines.length);
 
-  // Reset minimize state when the loaded song changes — chips for the
-  // previous song's videos / lyrics / sheet would otherwise persist as
-  // stale entries (e.g. video IDs that don't exist on the new song,
-  // lyrics chip when the new song has no lyrics).
+  // When the loaded song changes: scope per-song video minimize memory
+  // (saved video chips for this song are restored from localStorage; the
+  // previous song's video chips are dropped). Sheet music chip is pruned
+  // synchronously when the new song has no `sheetMusicUrl`. Mixer and
+  // lyrics chips persist by default — lyrics is pruned in a separate
+  // effect once the lyrics store finishes loading (it loads async).
   useEffect(() => {
-    usePanelMinimizeStore.getState().clearAll();
-  }, [selectedSong?.id]);
+    const store = usePanelMinimizeStore.getState();
+    store.setCurrentSongId(selectedSong?.id ?? null);
+    if (!selectedSong?.sheetMusicUrl) store.restorePanel('sheet');
+  }, [selectedSong?.id, selectedSong?.sheetMusicUrl]);
+
+  // Prune the lyrics chip when the new song has no lyrics. Gated on
+  // `loaded` so we don't false-fire during the brief empty window
+  // between `clear()` and the fetch settling.
+  useEffect(() => {
+    if (lyricsLoaded && lyricsLineCount === 0) {
+      usePanelMinimizeStore.getState().restorePanel('lyrics');
+    }
+  }, [lyricsLoaded, lyricsLineCount]);
 
   const bandRoute = currentBand?.route ?? '';
 
