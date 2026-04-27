@@ -5,6 +5,7 @@ import { useTransportStore } from '../../store/transportStore';
 import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
 import { useLyricsStore } from '../../store/lyricsStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
+import { LYRIC_SECTIONS, isSectionMarker, isInstrumentalAnnotation } from '../../audio/lyricSections';
 import type { LyricsData, LyricsLine } from '../../audio/lyricsTypes';
 
 function formatTime(seconds: number): string {
@@ -31,10 +32,35 @@ export function LyricsEditorModal() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sectionMenuRef = useRef<HTMLDivElement>(null);
+
+  // Insert a `#SECTION` row at the current cursor — after the row being
+  // edited if any, else after the highlighted sync-target row.
+  const insertSection = useCallback(
+    (name: string) => {
+      const after = focusedIndex ?? currentSyncIndex;
+      insertLines(after, [{ text: `#${name}`, time: null }]);
+      setSectionMenuOpen(false);
+    },
+    [focusedIndex, currentSyncIndex, insertLines],
+  );
+
+  // Close the section menu on outside click
+  useEffect(() => {
+    if (!sectionMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!sectionMenuRef.current?.contains(e.target as Node)) {
+        setSectionMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [sectionMenuOpen]);
 
   // Focus a row's input after render
   const focusRow = useCallback((index: number) => {
@@ -57,13 +83,13 @@ export function LyricsEditorModal() {
   }, [dirty, close]);
 
   // Export lyrics as a plain text file. Instrumental lines become
-  // `[instrumental]` so the export round-trips through the paste handler
-  // on line 311. Blank text lines stay blank. Timestamps are omitted —
-  // this is for human-readable reuse, not re-sync.
+  // `#INSTRUMENTAL` so the export round-trips through the import handler.
+  // Blank text lines stay blank. Timestamps are omitted — this is for
+  // human-readable reuse, not re-sync.
   const handleExport = useCallback(() => {
     if (!selectedSong) return;
     const content = lines
-      .map((l) => (l.instrumental ? '[Instrumental]' : l.text))
+      .map((l) => (l.instrumental ? '#INSTRUMENTAL' : l.text))
       .join('\n');
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -92,7 +118,7 @@ export function LyricsEditorModal() {
         const trimmed = normalized.endsWith('\n') ? normalized.slice(0, -1) : normalized;
         const parsed: LyricsLine[] = trimmed.split('\n').map((t) => {
           const text = t.trim();
-          if (/^\[\s*instrumental\s*\]$/i.test(text)) {
+          if (isInstrumentalAnnotation(text)) {
             return { text: '', time: null, instrumental: true };
           }
           return { text, time: null };
@@ -143,15 +169,16 @@ export function LyricsEditorModal() {
         return;
       }
 
-      // Cmd/Ctrl+I — insert an instrumental block: blank, [Instrumental], blank.
-      // All three lines are hidden in the song view (blanks + bracket
-      // annotation), giving the lyrics a quiet gap during the instrumental.
+      // Cmd/Ctrl+I — insert an instrumental block: blank, #INSTRUMENTAL, blank.
+      // The marker renders as the music-note icon in the song view; the
+      // surrounding blanks give the lyrics a quiet gap during the
+      // instrumental.
       if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
         e.preventDefault();
         const after = focusedIndex ?? lines.length - 1;
         insertLines(after, [
           { text: '', time: null },
-          { text: '[Instrumental]', time: null },
+          { text: '#INSTRUMENTAL', time: null },
           { text: '', time: null },
         ]);
         focusRow(after + 3);
@@ -226,7 +253,7 @@ export function LyricsEditorModal() {
           <button
             className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
             onClick={() => fileInputRef.current?.click()}
-            title="Import lyrics from a .txt file (blank lines preserved; [Instrumental] lines become instrumental)"
+            title="Import lyrics from a .txt file (blank lines preserved; #INSTRUMENTAL or [Instrumental] lines become instrumental)"
           >
             Import .txt
           </button>
@@ -237,6 +264,28 @@ export function LyricsEditorModal() {
             className="hidden"
             onChange={handleImport}
           />
+          <div ref={sectionMenuRef} className="relative">
+            <button
+              className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
+              onClick={() => setSectionMenuOpen((v) => !v)}
+              title="Insert a section marker (#VERSE, #CHORUS, etc.)"
+            >
+              + Section ▾
+            </button>
+            {sectionMenuOpen && (
+              <div className="absolute left-0 top-full mt-1 z-20 min-w-[10rem] rounded border border-gray-600 bg-gray-800 shadow-lg py-1">
+                {LYRIC_SECTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => insertSection(s)}
+                    className="block w-full text-left px-3 py-1 text-xs font-mono text-purple-300 hover:bg-gray-700 transition-colors"
+                  >
+                    #{s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {selectedIndices.size > 0 && (
             <div className="flex items-center gap-1.5 ml-2">
               <span className="text-xs text-blue-400">{selectedIndices.size} selected</span>
@@ -263,7 +312,7 @@ export function LyricsEditorModal() {
           <button
             className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
             onClick={handleExport}
-            title="Download lyrics as a .txt file (blank lines preserved; Instrumental lines become [Instrumental])"
+            title="Download lyrics as a .txt file (blank lines preserved; Instrumental lines become #INSTRUMENTAL)"
           >
             Export .txt
           </button>
@@ -281,6 +330,7 @@ export function LyricsEditorModal() {
           const isSyncTarget = i === currentSyncIndex;
           const isSelected = selectedIndices.has(i);
           const isFocused = i === focusedIndex;
+          const isSection = !line.instrumental && (isSectionMarker(line.text) || isInstrumentalAnnotation(line.text));
 
           return (
             <React.Fragment key={i}>
@@ -389,7 +439,7 @@ export function LyricsEditorModal() {
                     const newLines = pastedLines.slice(1).map((t) => ({
                       text: t.trim(),
                       time: null,
-                      ...(/^\[instrumental\]$/i.test(t.trim()) ? { instrumental: true, text: '' } : {}),
+                      ...(isInstrumentalAnnotation(t.trim()) ? { instrumental: true, text: '' } : {}),
                     }));
                     if (newLines.length > 0) {
                       insertLines(i, newLines);
@@ -398,7 +448,11 @@ export function LyricsEditorModal() {
                   }
                 }}
                 className={`flex-1 bg-transparent border-none outline-none text-sm min-w-0 ${
-                  line.instrumental ? 'italic text-gray-500' : 'text-gray-200 placeholder-gray-600'
+                  line.instrumental
+                    ? 'italic text-gray-500'
+                    : isSection
+                      ? 'font-mono font-semibold text-purple-300 uppercase tracking-wide'
+                      : 'text-gray-200 placeholder-gray-600'
                 }`}
                 placeholder={!line.instrumental && i === 0 && lines.length === 1 ? 'Double-click to add/edit lyrics...' : ''}
                 spellCheck={false}

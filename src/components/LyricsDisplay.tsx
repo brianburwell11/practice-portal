@@ -3,13 +3,10 @@ import { useAudioEngine } from '../hooks/useAudioEngine';
 import { useTransportStore } from '../store/transportStore';
 import { useLyricsStore } from '../store/lyricsStore';
 import { usePanelMinimizeStore } from '../store/panelMinimizeStore';
+import { isSectionMarker, isInstrumentalAnnotation } from '../audio/lyricSections';
 import type { LyricsLine } from '../audio/lyricsTypes';
 
 const PRE_SHIFT_MS = 500;
-
-function isInstrumentalAnnotation(text: string): boolean {
-  return /^\s*\[\s*instrumental\s*\]\s*$/i.test(text);
-}
 
 function isInstrumentalLine(line: LyricsLine): boolean {
   return !!line.instrumental || isInstrumentalAnnotation(line.text);
@@ -34,16 +31,18 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
   );
 
   // Use override lines (from editor) or store lines, excluding blank lines
-  // and admin-only bracket annotations like `[chorus]` or `[verse 2]` —
-  // these are notes for the editor, never shown in the song view.
-  // `[Instrumental]` is the exception: it survives the filter and renders
-  // as the music-note icon, same as a `instrumental: true` line.
+  // and admin-only section markers like `#VERSE` or legacy bracket
+  // annotations like `[chorus]` — these are notes for the editor, never
+  // shown in the song view. `[Instrumental]` is the exception: it survives
+  // the filter and renders as the music-note icon, same as an
+  // `instrumental: true` line.
   const lines = useMemo(() => {
     const raw = overrideLines ?? storeLines;
     return raw.filter((l) => {
       if (l.instrumental) return true;
       if (l.text === '') return false;
       if (isInstrumentalAnnotation(l.text)) return true;
+      if (isSectionMarker(l.text)) return false;
       if (/^\s*\[.*\]\s*$/.test(l.text)) return false;
       return true;
     });
