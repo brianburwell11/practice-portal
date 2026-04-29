@@ -11,6 +11,11 @@ import type { Note } from '../../audio/types';
 const ADMIN = import.meta.env.DEV;
 const FADE_IN_MS = 250;
 
+/** Pixels to nudge the first sticky right of the waveform's left edge so
+ *  it lines up with the focused lyric. Keep in sync with the same
+ *  constant in `LyricsDisplay.tsx` and `ScrollingScore.tsx`. */
+const FOCUS_LEFT_NUDGE_PX = 24;
+
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
@@ -37,10 +42,35 @@ export function NotesLayer() {
     return [...matching].sort((a, b) => b.time - a.time);
   }, [notes, dirty, position]);
 
+  // Track the waveform's left edge so the first sticky lines up with the
+  // focused-lyric reading point (waveform.left + FOCUS_LEFT_NUDGE_PX).
+  const [leftPadding, setLeftPadding] = useState<number | null>(null);
+  useEffect(() => {
+    const measure = () => {
+      const waveformEl = document.querySelector('[data-waveform-timeline]') as HTMLElement | null;
+      if (!waveformEl) return;
+      const rect = waveformEl.getBoundingClientRect();
+      setLeftPadding(rect.left + FOCUS_LEFT_NUDGE_PX);
+    };
+    measure();
+    const waveformEl = document.querySelector('[data-waveform-timeline]');
+    if (!waveformEl) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(waveformEl);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
   if (visible.length === 0) return null;
 
   return (
-    <div className="px-4 pb-2 pt-2 flex flex-col md:flex-row md:items-start md:flex-wrap gap-2 shrink-0">
+    <div
+      className="pr-4 pb-2 pt-2 flex flex-col md:flex-row md:items-start md:flex-wrap gap-2 shrink-0"
+      style={{ paddingLeft: leftPadding ?? 16 }}
+    >
       {visible.map((note) => (
         <Sticky key={note.id} note={note} isDirty={dirty.has(note.id)} />
       ))}
@@ -107,7 +137,7 @@ function Sticky({ note, isDirty }: StickyProps) {
 
   return (
     <div
-      className={`rounded-md shadow-md text-gray-900 flex flex-col w-full md:w-[calc(25vw-1rem)] md:max-w-[25vw] min-h-[80px] transition-opacity ease-out ${
+      className={`rounded-md shadow-md text-gray-900 flex flex-col w-full md:w-[calc(30ch+1rem)] transition-opacity ease-out ${
         entered ? 'opacity-100' : 'opacity-0'
       }`}
       style={{ backgroundColor: NOTE_COLOR, transitionDuration: `${FADE_IN_MS}ms` }}
@@ -133,10 +163,12 @@ function Sticky({ note, isDirty }: StickyProps) {
           value={note.text}
           onChange={(e) => setText(note.id, e.target.value)}
           placeholder="Note…"
-          className="flex-1 resize-none bg-transparent outline-none px-2 pb-1 text-sm text-gray-900 placeholder-gray-600/60 min-h-[48px]"
+          rows={2}
+          maxLength={60}
+          className="resize-none bg-transparent outline-none px-2 pb-1 text-sm leading-snug text-gray-900 placeholder-gray-600/60"
         />
       ) : (
-        <div className="flex-1 px-2 pb-2 text-sm whitespace-pre-wrap text-gray-900">
+        <div className="px-2 pb-2 text-sm leading-snug whitespace-pre-wrap line-clamp-2 text-gray-900">
           {note.text}
         </div>
       )}
