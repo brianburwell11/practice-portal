@@ -3,6 +3,8 @@ import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
 import { LyricsDisplay } from './components/LyricsDisplay';
+import { NotesLayer } from './components/notes/NotesLayer';
+import { useNotesKeyboard } from './hooks/useNotesKeyboard';
 import { ScrollingScore } from './components/sheet/ScrollingScore';
 import { MixerPanel } from './components/mixer/MixerPanel';
 import { MinimizedRibbon } from './components/MinimizedRibbon';
@@ -42,6 +44,7 @@ const DeleteBandModal = import.meta.env.DEV
 export default function App() {
   const engine = useCreateEngine();
   useMixerPersistence();
+  useNotesKeyboard();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const openMarkerEditor = useMarkerEditorStore((s) => s.open);
   const closeMarkerEditor = useMarkerEditorStore((s) => s.close);
@@ -204,6 +207,9 @@ export default function App() {
           showSliders={mobileControlsOpen}
           onToggleSliders={() => setMobileControlsOpen((v) => !v)}
         />
+
+        {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
+        {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && <NotesLayer />}
 
         {/* Lyrics display \u2014 hidden when the tapMap or band editors
             occupy the page. Stays visible under the lyrics editor so

@@ -8,6 +8,7 @@ import { songManifestSchema, songConfigSchema, setlistConfigSchema } from '../..
 import { r2Url } from '../../utils/url';
 import { loadMixerState } from '../../utils/mixerStorage';
 import { useLyricsStore } from '../../store/lyricsStore';
+import { useNotesStore } from '../../store/notesStore';
 import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
 
 export function useSongLoader() {
@@ -37,6 +38,7 @@ export function useSongLoader() {
     setLoading(true);
     setError(null);
     useLyricsStore.getState().clear();
+    useNotesStore.getState().clear();
 
     try {
       const bandId = currentBand?.id;
@@ -57,6 +59,12 @@ export function useSongLoader() {
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => useLyricsStore.getState().setLyrics(data?.lines ?? []))
         .catch(() => useLyricsStore.getState().setLyrics([]));
+
+      // Load timestamp notes (non-blocking)
+      fetch(r2Url(`${bandId}/songs/${entry.id}/notes.json`))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => useNotesStore.getState().load(bandId!, entry.id, data?.notes ?? []))
+        .catch(() => useNotesStore.getState().load(bandId!, entry.id, []));
 
       const setlistState = useSetlistStore.getState();
       if (setlistState.activeSetlist) {

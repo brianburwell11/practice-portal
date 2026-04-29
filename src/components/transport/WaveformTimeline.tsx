@@ -7,6 +7,7 @@ import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import type { TapMapEntry } from '../../audio/types';
 import { markersToSeconds } from '../../audio/tempoUtils';
 import { autoLabelSection, findEnclosingSectionIndex, getSectionRange } from '../../audio/tapMapUtils';
+import { useNotesStore, NOTE_COLOR } from '../../store/notesStore';
 
 /** Detect coarse pointer (touch device) */
 const isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
@@ -29,6 +30,7 @@ export function WaveformTimeline() {
   const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
   const lyricsLines = useLyricsEditorStore((s) => s.lines);
   const moveLyricLine = useLyricsEditorStore((s) => s.moveLine);
+  const notes = useNotesStore((s) => s.notes);
 
   // TapMap editor integration \u2014 when the editor is open the timeline
   // sources its tapMap from the editor store (live, dirty copy) and
@@ -718,6 +720,26 @@ export function WaveformTimeline() {
         }
       }
 
+      // Note markers (timestamp notes — always visible to admin and viewers)
+      if (notes.length > 0) {
+        for (const note of notes) {
+          const x = toPixel(note.time);
+          if (x < -2 || x > width + 2) continue;
+          ctx.strokeStyle = NOTE_COLOR;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+          // Small "pin" head at the top so a note tick is distinguishable
+          // from a tapMap marker even at a glance.
+          ctx.fillStyle = NOTE_COLOR;
+          ctx.beginPath();
+          ctx.arc(x, 4, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
       // Lyric markers (when editor is open)
       if (lyricsEditorOpen && lyricsLines.length > 0) {
         ctx.font = '9px ui-monospace, monospace';
@@ -747,7 +769,7 @@ export function WaveformTimeline() {
         }
       }
     },
-    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines],
+    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines, notes],
   );
 
   // Draw main canvas (viewport-relative)
