@@ -12,6 +12,14 @@ function genId(): string {
   return `n_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** A note that was just deleted, kept around briefly so the UI can offer Undo. */
+export interface DeletedNote {
+  note: Note;
+  /** True if the note was persisted on the server before deletion (vs. a draft). */
+  wasSaved: boolean;
+  deletedAt: number;
+}
+
 interface NotesState {
   /** All notes (saved + drafts + locally-edited saved). */
   notes: Note[];
@@ -22,13 +30,18 @@ interface NotesState {
   /** Identifies which song's notes.json we'd POST to when saving. */
   bandId: string | null;
   songId: string | null;
+  /** Most recently deleted note, available for Undo for ~5s. */
+  lastDeleted: DeletedNote | null;
 
   load: (bandId: string, songId: string, notes: Note[]) => void;
   clear: () => void;
   createDraft: (time: number) => string;
   setText: (id: string, text: string) => void;
+  setTime: (id: string, time: number) => void;
   saveNote: (id: string) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
+  undoDelete: () => Promise<void>;
+  clearLastDeleted: () => void;
 }
 
 async function persistSavedSet(bandId: string, songId: string, notes: Note[]): Promise<void> {
@@ -50,6 +63,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   loaded: false,
   bandId: null,
   songId: null,
+  lastDeleted: null,
 
   load: (bandId, songId, notes) =>
     set({
@@ -58,10 +72,11 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       notes: [...notes].sort((a, b) => a.time - b.time),
       dirty: new Set(),
       loaded: true,
+      lastDeleted: null,
     }),
 
   clear: () =>
-    set({ notes: [], dirty: new Set(), loaded: false, bandId: null, songId: null }),
+    set({ notes: [], dirty: new Set(), loaded: false, bandId: null, songId: null, lastDeleted: null }),
 
   createDraft: (time) => {
     const id = genId();
@@ -82,6 +97,16 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       return { notes, dirty };
     }),
 
+  setTime: (id, time) =>
+    set((s) => {
+      const next = s.notes
+        .map((n) => (n.id === id ? { ...n, time: Math.max(0, time) } : n))
+        .sort((a, b) => a.time - b.time);
+      const dirty = new Set(s.dirty);
+      dirty.add(id);
+      return { notes: next, dirty };
+    }),
+
   saveNote: async (id) => {
     const { notes, dirty, bandId, songId } = get();
     if (!bandId || !songId) throw new Error('No song loaded');
@@ -96,17 +121,45 @@ export const useNotesStore = create<NotesState>((set, get) => ({
 
   deleteNote: async (id) => {
     const { notes, dirty, bandId, songId } = get();
+    const target = notes.find((n) => n.id === id);
+    if (!target) return;
     const wasDirty = dirty.has(id);
+    const wasSaved = !wasDirty;
     const remaining = notes.filter((n) => n.id !== id);
     const nextDirty = new Set(dirty);
     nextDirty.delete(id);
 
     // If the note was already persisted, push the new saved set up to the server.
-    if (!wasDirty) {
+    if (wasSaved) {
       if (!bandId || !songId) throw new Error('No song loaded');
       const persistedSet = remaining.filter((n) => !nextDirty.has(n.id));
       await persistSavedSet(bandId, songId, persistedSet);
     }
-    set({ notes: remaining, dirty: nextDirty });
+    set({
+      notes: remaining,
+      dirty: nextDirty,
+      lastDeleted: { note: target, wasSaved, deletedAt: Date.now() },
+    });
   },
+
+  undoDelete: async () => {
+    const { lastDeleted, notes, dirty, bandId, songId } = get();
+    if (!lastDeleted) return;
+    const { note, wasSaved } = lastDeleted;
+    // Restore the note locally; if it was previously saved, re-persist
+    // so the server matches local state again.
+    const restored = [...notes, note].sort((a, b) => a.time - b.time);
+    const nextDirty = new Set(dirty);
+    if (wasSaved) {
+      if (!bandId || !songId) throw new Error('No song loaded');
+      const persistedSet = restored.filter((n) => !nextDirty.has(n.id));
+      await persistSavedSet(bandId, songId, persistedSet);
+    } else {
+      // It was a draft — restore as a draft so admin still gets the Save button.
+      nextDirty.add(note.id);
+    }
+    set({ notes: restored, dirty: nextDirty, lastDeleted: null });
+  },
+
+  clearLastDeleted: () => set({ lastDeleted: null }),
 }));

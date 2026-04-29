@@ -22,6 +22,21 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+/** Parse `mm:ss[.fraction]` or a bare seconds value. Returns null if unparseable. */
+function parseTimeInput(raw: string): number | null {
+  const s = raw.trim();
+  if (!s) return null;
+  const m = s.match(/^(\d+):(\d{1,2}(?:\.\d+)?)$/);
+  if (m) {
+    const minutes = parseInt(m[1], 10);
+    const seconds = parseFloat(m[2]);
+    if (!isFinite(seconds) || seconds >= 60) return null;
+    return minutes * 60 + seconds;
+  }
+  const n = parseFloat(s);
+  return isFinite(n) && n >= 0 ? n : null;
+}
+
 export function NotesLayer() {
   const position = useTransportStore((s) => s.position);
   const notes = useNotesStore((s) => s.notes);
@@ -130,11 +145,15 @@ interface StickyProps {
 
 function Sticky({ note, isDirty }: StickyProps) {
   const setText = useNotesStore((s) => s.setText);
+  const setTime = useNotesStore((s) => s.setTime);
   const saveNote = useNotesStore((s) => s.saveNote);
   const deleteNote = useNotesStore((s) => s.deleteNote);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [busy, setBusy] = useState<'saving' | 'deleting' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pulsing, setPulsing] = useState(false);
+  const [editingTime, setEditingTime] = useState(false);
+  const [timeInput, setTimeInput] = useState('');
 
   // Drives the fade-IN: stays false until after first paint so the
   // transition has a non-zero starting opacity to animate from.
@@ -143,6 +162,27 @@ function Sticky({ note, isDirty }: StickyProps) {
     const id = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(id);
   }, []);
+
+  // Pulse when the playhead crosses this note's exact timestamp. We
+  // subscribe to the transport store imperatively so the sticky doesn't
+  // re-render on every position tick.
+  useEffect(() => {
+    let prev = useTransportStore.getState().position;
+    let timeoutId: number | null = null;
+    const unsubscribe = useTransportStore.subscribe((s) => {
+      const curr = s.position;
+      if (prev < note.time && curr >= note.time && curr - note.time < 1) {
+        if (timeoutId !== null) clearTimeout(timeoutId);
+        setPulsing(true);
+        timeoutId = window.setTimeout(() => setPulsing(false), 600);
+      }
+      prev = curr;
+    });
+    return () => {
+      unsubscribe();
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    };
+  }, [note.time]);
 
   // Auto-focus a freshly created empty draft so admin can start typing.
   const autoFocusedRef = useRef(false);
@@ -180,15 +220,54 @@ function Sticky({ note, isDirty }: StickyProps) {
     // No setBusy(null) on success — the component unmounts when the note's gone.
   };
 
+  const startTimeEdit = () => {
+    setTimeInput(formatTime(note.time));
+    setEditingTime(true);
+  };
+  const commitTimeEdit = () => {
+    setEditingTime(false);
+    const parsed = parseTimeInput(timeInput);
+    if (parsed !== null && parsed !== note.time) setTime(note.id, parsed);
+  };
+
   return (
     <div
       className={`rounded-md shadow-md text-gray-900 flex flex-col w-full md:w-[calc(30ch+1rem)] transition-opacity ease-out ${
         entered ? 'opacity-100' : 'opacity-0'
       }`}
-      style={{ backgroundColor: NOTE_COLOR, transitionDuration: `${FADE_IN_MS}ms` }}
+      style={{
+        backgroundColor: NOTE_COLOR,
+        transitionDuration: `${FADE_IN_MS}ms`,
+        animation: pulsing ? 'note-pulse 600ms ease-out' : undefined,
+      }}
     >
       <div className="flex items-center justify-between px-2 pt-1.5 pb-1 text-[11px] font-mono text-gray-700">
-        <span>{formatTime(note.time)}</span>
+        {ADMIN && editingTime ? (
+          <input
+            type="text"
+            inputMode="numeric"
+            autoFocus
+            value={timeInput}
+            onChange={(e) => setTimeInput(e.target.value)}
+            onBlur={commitTimeEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commitTimeEdit(); }
+              if (e.key === 'Escape') { e.preventDefault(); setEditingTime(false); }
+            }}
+            className="w-[6ch] bg-yellow-100/60 border border-gray-700/30 rounded px-1 outline-none focus:border-gray-700 text-gray-900 font-mono text-[11px]"
+          />
+        ) : ADMIN ? (
+          <button
+            type="button"
+            onClick={startTimeEdit}
+            title="Edit timestamp"
+            className="hover:text-gray-900 cursor-text"
+          >
+            {formatTime(note.time)}
+          </button>
+        ) : (
+          <span>{formatTime(note.time)}</span>
+        )}
         {ADMIN && (
           <button
             type="button"
@@ -207,6 +286,12 @@ function Sticky({ note, isDirty }: StickyProps) {
           ref={textareaRef}
           value={note.text}
           onChange={(e) => setText(note.id, e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              if (isDirty && !busy) handleSave();
+            }
+          }}
           placeholder="Note…"
           rows={2}
           maxLength={60}

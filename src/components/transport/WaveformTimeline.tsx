@@ -31,6 +31,7 @@ export function WaveformTimeline() {
   const lyricsLines = useLyricsEditorStore((s) => s.lines);
   const moveLyricLine = useLyricsEditorStore((s) => s.moveLine);
   const notes = useNotesStore((s) => s.notes);
+  const setNoteTime = useNotesStore((s) => s.setTime);
 
   // TapMap editor integration \u2014 when the editor is open the timeline
   // sources its tapMap from the editor store (live, dirty copy) and
@@ -160,6 +161,11 @@ export function WaveformTimeline() {
   const dragLyricRef = useRef<{ index: number; time: number } | null>(null);
   // TapMap editor entry drag state \u2014 mirrors the lyric-marker pattern.
   const dragEditorEntryRef = useRef<{ index: number; time: number } | null>(null);
+  // Note marker drag state — held in a ref for high-frequency updates;
+  // `noteDragTick` bumps on each move so the canvas redraws.
+  const dragNoteRef = useRef<{ id: string; time: number; startX: number; moved: boolean } | null>(null);
+  const [noteDragTick, setNoteDragTick] = useState(0);
+  const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
 
   // Hit-test tapMap entries when the editor is active. Threshold
   // matches HIT_PX (same as loop/lyric markers) so behavior is
@@ -183,6 +189,31 @@ export function WaveformTimeline() {
       return closest?.index ?? null;
     },
     [markerEditorOpen, editorTapMap, secondsToPixel],
+  );
+
+  // Hit-test note markers. Note dots live at (x, height-4) so we
+  // require both a small horizontal AND vertical proximity — clicks
+  // higher up in the canvas (over the waveform) shouldn't catch a
+  // note. Uses live drag time for the dragging note so its dot stays
+  // hittable mid-drag.
+  const hitTestNote = useCallback(
+    (pixelX: number, pixelY: number): string | null => {
+      if (notes.length === 0) return null;
+      const { width, height } = sizeRef.current;
+      if (width === 0 || height === 0) return null;
+      if (Math.abs(pixelY - (height - 4)) > 14) return null;
+      let closest: { id: string; dist: number } | null = null;
+      for (const note of notes) {
+        const t = dragNoteRef.current?.id === note.id ? dragNoteRef.current.time : note.time;
+        const mx = secondsToPixel(t, width);
+        const dist = Math.abs(pixelX - mx);
+        if (dist <= 8 && (!closest || dist < closest.dist)) {
+          closest = { id: note.id, dist };
+        }
+      }
+      return closest?.id ?? null;
+    },
+    [notes, secondsToPixel],
   );
 
   const hitTestLyricMarker = useCallback(
@@ -343,6 +374,23 @@ export function WaveformTimeline() {
         return;
       }
 
+      const y = e.clientY - rect.top;
+
+      // Note marker hit — clicking seeks to the note's time, dragging
+      // retimes it. Checked first so a note dot near a tapMap marker
+      // still wins.
+      const noteHit = hitTestNote(x, y);
+      if (noteHit) {
+        e.preventDefault();
+        const note = notes.find((n) => n.id === noteHit);
+        if (note) {
+          dragNoteRef.current = { id: noteHit, time: note.time, startX: x, moved: false };
+        }
+        didDragRef.current = false;
+        suppressClickRef.current = false;
+        return;
+      }
+
       // Single pointer: check editor-entry hit first when the
       // tapMap editor is open. Entry hits supersede the generic
       // click-to-seek so markers can be selected/dragged without
@@ -381,7 +429,7 @@ export function WaveformTimeline() {
       dragStartRef.current = { x: e.clientX, viewStart };
       didDragRef.current = false;
     },
-    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, editorTapMap, lyricsLines, setMarkerSelectedIndex, effectiveViewDuration, viewStart],
+    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestNote, editorTapMap, lyricsLines, notes, setMarkerSelectedIndex, effectiveViewDuration, viewStart],
   );
 
   const handlePointerMove = useCallback(
@@ -403,6 +451,19 @@ export function WaveformTimeline() {
         const newStart = centerSeconds - (pinchStartRef.current.centerX / sizeRef.current.width) * newDuration;
         setViewDuration(newDuration);
         setViewStart(clampViewStart(newStart, newDuration));
+        return;
+      }
+
+      // Single pointer: drag note marker
+      if (dragNoteRef.current) {
+        const seconds = pixelToSeconds(x, sizeRef.current.width);
+        const clamped = Math.max(0, Math.min(seconds, duration || 0));
+        dragNoteRef.current.time = clamped;
+        if (Math.abs(x - dragNoteRef.current.startX) > DRAG_THRESHOLD) {
+          dragNoteRef.current.moved = true;
+          suppressClickRef.current = true;
+        }
+        setNoteDragTick((t) => t + 1);
         return;
       }
 
@@ -451,14 +512,22 @@ export function WaveformTimeline() {
 
       // Hover effects (non-touch only)
       if (!isCoarse) {
+        const noteIdx = hitTestNote(x, e.clientY - rect.top);
         const editorIdx = hitTestEditorEntry(x);
         const lyricIdx = hitTestLyricMarker(x);
         const hit = hitTestLoopMarker(x);
-        setCursorStyle(editorIdx !== null || lyricIdx !== null || hit ? 'col-resize' : 'pointer');
+        setHoveredNoteId(noteIdx);
+        if (noteIdx) {
+          setCursorStyle('grab');
+        } else if (editorIdx !== null || lyricIdx !== null || hit) {
+          setCursorStyle('col-resize');
+        } else {
+          setCursorStyle('pointer');
+        }
         setHoveredTime(findSnapMarker(x));
       }
     },
-    [draggingMarker, findSnapMarker, hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead],
+    [draggingMarker, findSnapMarker, hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestNote, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead],
   );
 
   const handlePointerUp = useCallback(
@@ -470,6 +539,20 @@ export function WaveformTimeline() {
         if (pointersRef.current.size < 2) {
           pinchStartRef.current = null;
         }
+        dragStartRef.current = null;
+        return;
+      }
+
+      // End note marker drag — drag commits a setTime, click seeks.
+      if (dragNoteRef.current) {
+        const { id, time, moved } = dragNoteRef.current;
+        if (moved) {
+          setNoteTime(id, time);
+        } else {
+          const note = notes.find((n) => n.id === id);
+          if (note && duration) engine.seek(Math.max(0, Math.min(note.time, duration)));
+        }
+        dragNoteRef.current = null;
         dragStartRef.current = null;
         return;
       }
@@ -525,7 +608,7 @@ export function WaveformTimeline() {
         setFollowPlayhead(true);
       }
     },
-    [draggingMarker, moveLyricLine, moveMarkerEntry, duration, findSnapMarker, pixelToSeconds, engine, setFollowPlayhead],
+    [draggingMarker, moveLyricLine, moveMarkerEntry, setNoteTime, notes, duration, findSnapMarker, pixelToSeconds, engine, setFollowPlayhead],
   );
 
   const handlePointerLeave = useCallback(
@@ -540,6 +623,8 @@ export function WaveformTimeline() {
       }
       dragLyricRef.current = null;
       dragEditorEntryRef.current = null;
+      dragNoteRef.current = null;
+      setHoveredNoteId(null);
       dragStartRef.current = null;
       didDragRef.current = false;
       setCursorStyle('pointer');
@@ -720,11 +805,14 @@ export function WaveformTimeline() {
         }
       }
 
-      // Note markers (timestamp notes — always visible to admin and viewers)
+      // Note markers (timestamp notes — always visible to admin and viewers).
+      // Substitutes the live drag time for a dragging note so the dot
+      // tracks the cursor.
       if (notes.length > 0) {
         ctx.fillStyle = NOTE_COLOR;
         for (const note of notes) {
-          const x = toPixel(note.time);
+          const t = dragNoteRef.current?.id === note.id ? dragNoteRef.current.time : note.time;
+          const x = toPixel(t);
           if (x < -4 || x > width + 4) continue;
           ctx.beginPath();
           ctx.arc(x, height - 4, 3, 0, Math.PI * 2);
@@ -761,7 +849,7 @@ export function WaveformTimeline() {
         }
       }
     },
-    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines, notes],
+    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines, notes, noteDragTick],
   );
 
   // Draw main canvas (viewport-relative)
@@ -1013,6 +1101,32 @@ export function WaveformTimeline() {
           onPointerLeave={handlePointerLeave}
           onContextMenu={handleContextMenu}
         />
+        {hoveredNoteId && !dragNoteRef.current && (() => {
+          const note = notes.find((n) => n.id === hoveredNoteId);
+          if (!note) return null;
+          const { width } = sizeRef.current;
+          if (width === 0) return null;
+          const cx = secondsToPixel(note.time, width);
+          if (cx < -100 || cx > width + 100) return null;
+          const TIP_W = 220;
+          const left = Math.max(4, Math.min(cx - TIP_W / 2, width - TIP_W - 4));
+          const text = note.text.trim() || '(empty)';
+          return (
+            <div
+              className="absolute pointer-events-none z-20 rounded border px-2 py-1 text-xs leading-snug shadow-lg whitespace-pre-wrap"
+              style={{
+                left,
+                bottom: 18,
+                width: TIP_W,
+                backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                borderColor: NOTE_COLOR,
+                color: NOTE_COLOR,
+              }}
+            >
+              {text}
+            </div>
+          );
+        })()}
         {markerContextMenu && contextMenuEntry && (
           <div
             data-marker-context-menu

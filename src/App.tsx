@@ -4,6 +4,7 @@ import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/
 import { TransportBar } from './components/transport/TransportBar';
 import { LyricsDisplay } from './components/LyricsDisplay';
 import { NotesLayer } from './components/notes/NotesLayer';
+import { UndoToast } from './components/notes/UndoToast';
 import { useNotesKeyboard } from './hooks/useNotesKeyboard';
 import { ScrollingScore } from './components/sheet/ScrollingScore';
 import { MixerPanel } from './components/mixer/MixerPanel';
@@ -289,6 +290,7 @@ export default function App() {
         />
       )}
       <MinimizedRibbon />
+      <UndoToast />
     </AudioEngineContext.Provider>
   );
 }
