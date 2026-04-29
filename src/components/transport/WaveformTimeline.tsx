@@ -722,20 +722,12 @@ export function WaveformTimeline() {
 
       // Note markers (timestamp notes — always visible to admin and viewers)
       if (notes.length > 0) {
+        ctx.fillStyle = NOTE_COLOR;
         for (const note of notes) {
           const x = toPixel(note.time);
-          if (x < -2 || x > width + 2) continue;
-          ctx.strokeStyle = NOTE_COLOR;
-          ctx.lineWidth = 1.5;
+          if (x < -4 || x > width + 4) continue;
           ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, height);
-          ctx.stroke();
-          // Small "pin" head at the top so a note tick is distinguishable
-          // from a tapMap marker even at a glance.
-          ctx.fillStyle = NOTE_COLOR;
-          ctx.beginPath();
-          ctx.arc(x, 4, 3, 0, Math.PI * 2);
+          ctx.arc(x, height - 4, 3, 0, Math.PI * 2);
           ctx.fill();
         }
       }
