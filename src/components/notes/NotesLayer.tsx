@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTransportStore } from '../../store/transportStore';
+import { useSongStore } from '../../store/songStore';
 import {
   useNotesStore,
   NOTE_COLOR,
@@ -81,6 +82,7 @@ export function NotesLayer() {
   }, []);
 
   const loaded = useNotesStore((s) => s.loaded);
+  const selectedSong = useSongStore((s) => s.selectedSong);
 
   // Admins always see the layer (so the add-note button is reachable).
   // Viewers only see it when there's something to show.
@@ -92,6 +94,23 @@ export function NotesLayer() {
     useNotesStore.getState().createDraft(pos);
   };
 
+  const handleExport = () => {
+    const all = useNotesStore.getState().notes;
+    if (all.length === 0) return;
+    const sorted = [...all].sort((a, b) => a.time - b.time);
+    const body = sorted.map((n) => `${formatTime(n.time)}\t${n.text}`).join('\n') + '\n';
+    const slug = selectedSong?.slug ?? selectedSong?.id ?? 'song';
+    const blob = new Blob([body], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${slug}-notes.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div
       className="pr-4 pb-2 pt-2 flex flex-col md:flex-row md:items-start md:flex-wrap gap-2 shrink-0"
@@ -101,7 +120,26 @@ export function NotesLayer() {
       {visible.map((note) => (
         <Sticky key={note.id} note={note} isDirty={dirty.has(note.id)} />
       ))}
+      {ADMIN && <ExportButton onClick={handleExport} disabled={notes.length === 0} />}
     </div>
+  );
+}
+
+function ExportButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title="Download all notes as a .txt file"
+      // md:ml-auto pushes the button to the right edge of the row on
+      // desktop. On mobile (flex-col) it falls to the bottom of the stack.
+      // self-center keeps the label vertically aligned with the taller
+      // sticky cards on desktop.
+      className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 md:ml-auto md:self-center"
+    >
+      Export .txt
+    </button>
   );
 }
 
