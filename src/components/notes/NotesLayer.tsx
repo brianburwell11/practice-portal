@@ -29,8 +29,9 @@ export function NotesLayer() {
 
   // Notes whose timestamp window contains the playhead, plus any
   // dirty (admin-only) drafts that should stay visible until saved.
-  // Sorted newest-first so a freshly-added note lands at the left of
-  // the row and the layout collapses immediately when one leaves.
+  // Sorted earliest-first so the chronologically-earliest note sits
+  // at the left and later notes appear to its right; when the leftmost
+  // note's window ends, the rest slide left to fill its spot.
   const visible = useMemo(() => {
     const matching = notes.filter((n) => {
       if (ADMIN && dirty.has(n.id)) return true;
@@ -39,7 +40,7 @@ export function NotesLayer() {
         position <= n.time + NOTE_TAIL_SECONDS
       );
     });
-    return [...matching].sort((a, b) => b.time - a.time);
+    return [...matching].sort((a, b) => a.time - b.time);
   }, [notes, dirty, position]);
 
   // Track the waveform's left edge so the first sticky lines up with the
