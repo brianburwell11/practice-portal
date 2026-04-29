@@ -74,8 +74,9 @@ export function ReviewStep({ state, dispatch }: Props) {
         fileIndex: 0, fileCount: state.stems.length, bytesSent: 0, bytesTotal: 1,
       }});
 
+      const transcodeQuery = state.normalize ? '' : '?normalize=0';
       const uploadResult = await uploadFormWithProgress(
-        `/api/r2/transcode-upload/${bandId}/${state.id}`,
+        `/api/r2/transcode-upload/${bandId}/${state.id}${transcodeQuery}`,
         formData,
         (bytesSent, bytesTotal) => {
           dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {

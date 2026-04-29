@@ -221,6 +221,22 @@ export function StemsStep({ state, dispatch }: Props) {
         )}
       </div>
 
+      {/* Normalize toggle — applies ffmpeg loudnorm during transcode.
+          Tooltip explains the trade-off so curators can opt out for
+          mixes that are already balanced. */}
+      <label
+        className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer w-fit"
+        title="Levels each stem to a consistent loudness target (-16 LUFS) before transcoding. Not recommended for tracks that are already mixed well — normalization can squash a balanced mix."
+      >
+        <input
+          type="checkbox"
+          checked={state.normalize}
+          onChange={(e) => dispatch({ type: 'SET_NORMALIZE', value: e.target.checked })}
+          className="accent-blue-500"
+        />
+        <span>Normalize stem loudness on upload</span>
+      </label>
+
       {/* Optional sheet music */}
       <SheetMusicUploader
         pendingFile={state.sheetMusicFile}

@@ -36,6 +36,11 @@ export interface WizardState {
   stems: StemEntry[];
   durationSeconds: number;
   groups: StemGroupConfig[];
+  /** When true, the server runs ffmpeg's loudnorm filter on each stem
+   *  before transcoding to opus. Off for tracks that are already mixed
+   *  well — loudnorm can squash a balanced mix. Wizard-only; not
+   *  persisted to song config. */
+  normalize: boolean;
   /** Top-level mixer order: group IDs and ungrouped stem IDs. May be
    *  partial / out of sync with stems+groups; `resolveMixerOrder`
    *  reconciles at render time, so the reducer is forgiving. */
@@ -83,7 +88,8 @@ export type WizardAction =
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_UPLOAD_PROGRESS'; progress: UploadProgress | null }
   | { type: 'SET_SHEET_MUSIC_FILE'; file: File | null }
-  | { type: 'SET_REPEAT_AFTER_DC_DS'; value: boolean };
+  | { type: 'SET_REPEAT_AFTER_DC_DS'; value: boolean }
+  | { type: 'SET_NORMALIZE'; value: boolean };
 
 export function createInitialState(): WizardState {
   return {
@@ -104,6 +110,7 @@ export function createInitialState(): WizardState {
     timeSignatureDenominator: 4,
     groups: [],
     mixerOrder: [],
+    normalize: true,
     sheetMusicFile: null,
     repeatAfterDcDs: false,
     saving: false,
@@ -184,5 +191,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return { ...state, sheetMusicFile: action.file };
     case 'SET_REPEAT_AFTER_DC_DS':
       return { ...state, repeatAfterDcDs: action.value };
+    case 'SET_NORMALIZE':
+      return { ...state, normalize: action.value };
   }
 }

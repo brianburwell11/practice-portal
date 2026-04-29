@@ -194,14 +194,17 @@ function transcodeToOpus(
   inputPath: string,
   outputPath: string,
   probe: ProbeResult,
-  loudness?: LoudnessInfo,
+  loudness: LoudnessInfo | undefined,
+  normalize: boolean,
 ): void {
   const isMono = probe.channels === 1;
   const bitrate = isMono ? '64k' : '128k';
   const channelFlag = isMono ? '-ac 1' : '';
 
   let filterFlag: string;
-  if (loudness && parseFloat(loudness.input_i) <= 0) {
+  if (!normalize) {
+    filterFlag = '';
+  } else if (loudness && parseFloat(loudness.input_i) <= 0) {
     filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:measured_I=${loudness.input_i}:measured_TP=${loudness.input_tp}:measured_LRA=${loudness.input_lra}:measured_thresh=${loudness.input_thresh}:offset=${loudness.target_offset}:linear=true`;
   } else {
     filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`;
@@ -426,10 +429,17 @@ export function configApiPlugin(): Plugin {
         }
 
         // --- POST /api/r2/transcode-upload/{bandId}/{songId} ---
-        const transcodeMatch = req.url?.match(/^\/api\/r2\/transcode-upload\/([^/]+)\/([^/]+)$/);
+        // Split path / query first so the path-only regex doesn't have to
+        // tolerate `?normalize=…` etc.
+        const [transcodePathname, transcodeQuery = ''] = (req.url ?? '').split('?');
+        const transcodeMatch = transcodePathname.match(/^\/api\/r2\/transcode-upload\/([^/]+)\/([^/]+)$/);
         if (transcodeMatch && req.method === 'POST') {
           const bandId = transcodeMatch[1];
           const songId = transcodeMatch[2];
+          const transcodeParams = new URLSearchParams(transcodeQuery);
+          // Default to true so existing callers (older clients, scripts)
+          // keep the historical loudnorm behavior.
+          const normalize = transcodeParams.get('normalize') !== '0';
           const r2 = getR2Client();
           const bucket = process.env.R2_BUCKET;
           if (!r2 || !bucket) {
@@ -473,16 +483,18 @@ export function configApiPlugin(): Plugin {
               const probe = ffprobe(tmpPath);
 
               let loudness: LoudnessInfo | undefined;
-              try {
-                loudness = measureLoudness(tmpPath);
-              } catch (err: any) {
-                console.warn(`Loudness measurement failed for ${origName}, transcoding without normalization:`, err.message);
+              if (normalize) {
+                try {
+                  loudness = measureLoudness(tmpPath);
+                } catch (err: any) {
+                  console.warn(`Loudness measurement failed for ${origName}, transcoding without normalization:`, err.message);
+                }
               }
 
               const baseName = path.basename(origName, path.extname(origName));
               const uploadName = `${baseName}.opus`;
               const uploadPath = path.join(tmpDir, `out-${uploadName}`);
-              transcodeToOpus(tmpPath, uploadPath, probe, loudness);
+              transcodeToOpus(tmpPath, uploadPath, probe, loudness, normalize);
 
               // Upload to R2
               const key = `${r2Prefix}/${uploadName}`;
