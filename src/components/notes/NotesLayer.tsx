@@ -64,17 +64,61 @@ export function NotesLayer() {
     };
   }, []);
 
-  if (visible.length === 0) return null;
+  const loaded = useNotesStore((s) => s.loaded);
+
+  // Admins always see the layer (so the add-note button is reachable).
+  // Viewers only see it when there's something to show.
+  if (!ADMIN && visible.length === 0) return null;
+
+  const handleAdd = () => {
+    if (!loaded) return;
+    const pos = useTransportStore.getState().position;
+    useNotesStore.getState().createDraft(pos);
+  };
 
   return (
     <div
       className="pr-4 pb-2 pt-2 flex flex-col md:flex-row md:items-start md:flex-wrap gap-2 shrink-0"
       style={{ paddingLeft: leftPadding ?? 16 }}
     >
+      {ADMIN && <AddNoteButton onClick={handleAdd} disabled={!loaded} />}
       {visible.map((note) => (
         <Sticky key={note.id} note={note} isDirty={dirty.has(note.id)} />
       ))}
     </div>
+  );
+}
+
+function AddNoteButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title="Add a note (N)"
+      aria-label="Add a note"
+      // On desktop, pull the button left by its own width + the flex gap
+      // (40px + 8px) so the first sticky still lands at the focused-lyric
+      // edge. On mobile (flex-col) the button stacks above the stickies,
+      // so the negative margin doesn't apply.
+      className="w-10 h-10 rounded-lg flex items-center justify-center text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition hover:brightness-110 shrink-0 shadow-md md:-ml-12"
+      style={{ backgroundColor: NOTE_COLOR }}
+    >
+      <svg
+        className="w-5 h-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {/* Document with the top-right corner left open for the pencil */}
+        <path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" />
+        {/* Pencil writing onto that corner */}
+        <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+      </svg>
+    </button>
   );
 }
 
