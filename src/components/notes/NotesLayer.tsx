@@ -8,6 +8,10 @@ import {
   NOTE_LEAD_SECONDS,
   NOTE_TAIL_SECONDS,
 } from '../../store/notesStore';
+import {
+  usePersonalNotesStore,
+  PERSONAL_NOTE_COLOR,
+} from '../../store/personalNotesStore';
 import type { Note } from '../../audio/types';
 
 const ADMIN = import.meta.env.DEV;
@@ -39,26 +43,114 @@ function parseTimeInput(raw: string): number | null {
   return isFinite(n) && n >= 0 ? n : null;
 }
 
+interface NoteActions {
+  setText: (id: string, text: string) => void;
+  setTime: (id: string, time: number) => void;
+  saveNote: (id: string) => Promise<void>;
+  deleteNote: (id: string) => Promise<void>;
+}
+
+interface StickyTheme {
+  bg: string;
+  /** RGB triplet (no `rgb()` wrapper) used by the note-pulse keyframe to
+   *  color its box-shadow halo for this theme. */
+  pulseRgb: string;
+  textClass: string;
+  mutedTextClass: string;
+  placeholderClass: string;
+  saveButtonClass: string;
+  errorTextClass: string;
+  deleteButtonClass: string;
+  inputClass: string;
+}
+
+const ADMIN_THEME: StickyTheme = {
+  bg: NOTE_COLOR,
+  pulseRgb: '255, 224, 102',
+  textClass: 'text-gray-900',
+  mutedTextClass: 'text-gray-700',
+  placeholderClass: 'placeholder-gray-600/60',
+  saveButtonClass: 'bg-gray-900 text-yellow-100 hover:bg-gray-800',
+  errorTextClass: 'text-red-700',
+  deleteButtonClass: 'text-red-600 hover:text-red-700',
+  inputClass: 'bg-yellow-100/60 border-gray-700/30 focus:border-gray-700 text-gray-900',
+};
+
+const PERSONAL_THEME: StickyTheme = {
+  bg: PERSONAL_NOTE_COLOR,
+  pulseRgb: '59, 130, 246',
+  textClass: 'text-blue-50',
+  mutedTextClass: 'text-blue-100',
+  placeholderClass: 'placeholder-blue-200/70',
+  saveButtonClass: 'bg-blue-900 text-blue-50 hover:bg-blue-800',
+  errorTextClass: 'text-red-200',
+  deleteButtonClass: 'text-red-200 hover:text-red-50',
+  inputClass: 'bg-blue-300/30 border-blue-100/40 focus:border-blue-50 text-blue-50',
+};
+
+interface VisibleEntry {
+  note: Note;
+  kind: 'admin' | 'personal';
+  isDirty: boolean;
+  editable: boolean;
+  theme: StickyTheme;
+  actions: NoteActions;
+}
+
 export function NotesLayer() {
   const position = useTransportStore((s) => s.position);
-  const notes = useNotesStore((s) => s.notes);
-  const dirty = useNotesStore((s) => s.dirty);
+  const adminNotes = useNotesStore((s) => s.notes);
+  const adminDirty = useNotesStore((s) => s.dirty);
+  const adminLoaded = useNotesStore((s) => s.loaded);
+  const adminActions: NoteActions = {
+    setText: useNotesStore((s) => s.setText),
+    setTime: useNotesStore((s) => s.setTime),
+    saveNote: useNotesStore((s) => s.saveNote),
+    deleteNote: useNotesStore((s) => s.deleteNote),
+  };
 
-  // Notes whose timestamp window contains the playhead, plus any
-  // dirty (admin-only) drafts that should stay visible until saved.
-  // Sorted earliest-first so the chronologically-earliest note sits
-  // at the left and later notes appear to its right; when the leftmost
-  // note's window ends, the rest slide left to fill its spot.
-  const visible = useMemo(() => {
-    const matching = notes.filter((n) => {
-      if (ADMIN && dirty.has(n.id)) return true;
-      return (
-        position >= n.time - NOTE_LEAD_SECONDS &&
-        position <= n.time + NOTE_TAIL_SECONDS
-      );
-    });
-    return [...matching].sort((a, b) => a.time - b.time);
-  }, [notes, dirty, position]);
+  const personalNotes = usePersonalNotesStore((s) => s.notes);
+  const personalDirty = usePersonalNotesStore((s) => s.dirty);
+  const personalLoaded = usePersonalNotesStore((s) => s.loaded);
+  const personalActions: NoteActions = {
+    setText: usePersonalNotesStore((s) => s.setText),
+    setTime: usePersonalNotesStore((s) => s.setTime),
+    saveNote: usePersonalNotesStore((s) => s.saveNote),
+    deleteNote: usePersonalNotesStore((s) => s.deleteNote),
+  };
+
+  // Combined visible set across both stores. Admin notes are read-only
+  // for non-admin viewers; personal notes are editable for everyone.
+  // Dirty notes (drafts/edits) stay visible until saved so the editor
+  // has time to type. Sorted earliest-first so the chronologically
+  // earliest sticky lands on the left.
+  const visible: VisibleEntry[] = useMemo(() => {
+    const inWindow = (n: Note) =>
+      position >= n.time - NOTE_LEAD_SECONDS && position <= n.time + NOTE_TAIL_SECONDS;
+
+    const out: VisibleEntry[] = [];
+    for (const n of adminNotes) {
+      if (ADMIN && adminDirty.has(n.id)) {
+        out.push({ note: n, kind: 'admin', isDirty: true, editable: true, theme: ADMIN_THEME, actions: adminActions });
+      } else if (inWindow(n)) {
+        out.push({ note: n, kind: 'admin', isDirty: false, editable: ADMIN, theme: ADMIN_THEME, actions: adminActions });
+      }
+    }
+    for (const n of personalNotes) {
+      if (personalDirty.has(n.id) || inWindow(n)) {
+        out.push({
+          note: n,
+          kind: 'personal',
+          isDirty: personalDirty.has(n.id),
+          editable: true,
+          theme: PERSONAL_THEME,
+          actions: personalActions,
+        });
+      }
+    }
+    return out.sort((a, b) => a.note.time - b.note.time);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminNotes, adminDirty, personalNotes, personalDirty, position]);
 
   // Track the waveform's left edge so the first sticky lines up with the
   // focused-lyric reading point (waveform.left + FOCUS_LEFT_NUDGE_PX).
@@ -82,23 +174,29 @@ export function NotesLayer() {
     };
   }, []);
 
-  const loaded = useNotesStore((s) => s.loaded);
   const selectedSong = useSongStore((s) => s.selectedSong);
   const minimized = usePanelMinimizeStore((s) =>
     s.items.some((x) => x.kind === 'panel' && x.id === 'notes'),
   );
   const minimizePanel = usePanelMinimizeStore((s) => s.minimizePanel);
 
-  // Hidden entirely when minimized — restore from the bottom ribbon.
   if (minimized) return null;
-  // Admins always see the layer (so the add-note button is reachable).
-  // Viewers only see it when there's something to show.
-  if (!ADMIN && visible.length === 0) return null;
+
+  // Add-note button is always visible (admin: yellow, viewer: blue) so
+  // the layer renders even when no stickies are currently in view.
+  const addReady = ADMIN ? adminLoaded : personalLoaded;
+  const addTheme = ADMIN ? ADMIN_THEME : PERSONAL_THEME;
+  const addIconClass = ADMIN ? 'text-gray-900' : 'text-white';
 
   const handleAdd = () => {
-    if (!loaded) return;
     const pos = useTransportStore.getState().position;
-    useNotesStore.getState().createDraft(pos);
+    if (ADMIN) {
+      if (!useNotesStore.getState().loaded) return;
+      useNotesStore.getState().createDraft(pos);
+    } else {
+      if (!usePersonalNotesStore.getState().loaded) return;
+      usePersonalNotesStore.getState().createDraft(pos);
+    }
   };
 
   const handleExport = () => {
@@ -123,12 +221,24 @@ export function NotesLayer() {
       className="pr-4 pb-2 pt-2 flex flex-col md:flex-row md:items-start md:flex-wrap gap-2 shrink-0"
       style={{ paddingLeft: leftPadding ?? 16 }}
     >
-      {ADMIN && <AddNoteButton onClick={handleAdd} disabled={!loaded} />}
-      {visible.map((note) => (
-        <Sticky key={note.id} note={note} isDirty={dirty.has(note.id)} />
+      <AddNoteButton
+        onClick={handleAdd}
+        disabled={!addReady}
+        bg={addTheme.bg}
+        iconClass={addIconClass}
+      />
+      {visible.map((entry) => (
+        <Sticky
+          key={`${entry.kind}:${entry.note.id}`}
+          note={entry.note}
+          isDirty={entry.isDirty}
+          editable={entry.editable}
+          theme={entry.theme}
+          actions={entry.actions}
+        />
       ))}
       <div className="flex items-center gap-2 md:ml-auto md:self-center">
-        {ADMIN && <ExportButton onClick={handleExport} disabled={notes.length === 0} />}
+        {ADMIN && <ExportButton onClick={handleExport} disabled={adminNotes.length === 0} />}
         <MinimizeButton onClick={() => minimizePanel('notes')} />
       </div>
     </div>
@@ -158,18 +268,24 @@ function ExportButton({ onClick, disabled }: { onClick: () => void; disabled: bo
       onClick={onClick}
       disabled={disabled}
       title="Download all notes as a .txt file"
-      // md:ml-auto pushes the button to the right edge of the row on
-      // desktop. On mobile (flex-col) it falls to the bottom of the stack.
-      // self-center keeps the label vertically aligned with the taller
-      // sticky cards on desktop.
-      className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 md:ml-auto md:self-center"
+      className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
     >
       Export .txt
     </button>
   );
 }
 
-function AddNoteButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+function AddNoteButton({
+  onClick,
+  disabled,
+  bg,
+  iconClass,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  bg: string;
+  iconClass: string;
+}) {
   return (
     <button
       type="button"
@@ -181,8 +297,8 @@ function AddNoteButton({ onClick, disabled }: { onClick: () => void; disabled: b
       // (40px + 8px) so the first sticky still lands at the focused-lyric
       // edge. On mobile (flex-col) the button stacks above the stickies,
       // so the negative margin doesn't apply.
-      className="w-10 h-10 rounded-lg flex items-center justify-center text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition hover:brightness-110 shrink-0 shadow-md md:-ml-12"
-      style={{ backgroundColor: NOTE_COLOR }}
+      className={`w-10 h-10 rounded-lg flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition hover:brightness-110 shrink-0 shadow-md md:-ml-12 ${iconClass}`}
+      style={{ backgroundColor: bg }}
     >
       <svg
         className="w-5 h-5"
@@ -193,9 +309,7 @@ function AddNoteButton({ onClick, disabled }: { onClick: () => void; disabled: b
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {/* Document with the top-right corner left open for the pencil */}
         <path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" />
-        {/* Pencil writing onto that corner */}
         <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z" />
       </svg>
     </button>
@@ -205,13 +319,12 @@ function AddNoteButton({ onClick, disabled }: { onClick: () => void; disabled: b
 interface StickyProps {
   note: Note;
   isDirty: boolean;
+  editable: boolean;
+  theme: StickyTheme;
+  actions: NoteActions;
 }
 
-function Sticky({ note, isDirty }: StickyProps) {
-  const setText = useNotesStore((s) => s.setText);
-  const setTime = useNotesStore((s) => s.setTime);
-  const saveNote = useNotesStore((s) => s.saveNote);
-  const deleteNote = useNotesStore((s) => s.deleteNote);
+function Sticky({ note, isDirty, editable, theme, actions }: StickyProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [busy, setBusy] = useState<'saving' | 'deleting' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -219,17 +332,28 @@ function Sticky({ note, isDirty }: StickyProps) {
   const [editingTime, setEditingTime] = useState(false);
   const [timeInput, setTimeInput] = useState('');
 
-  // Drives the fade-IN: stays false until after first paint so the
-  // transition has a non-zero starting opacity to animate from.
   const [entered, setEntered] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Pulse when the playhead crosses this note's exact timestamp. We
-  // subscribe to the transport store imperatively so the sticky doesn't
-  // re-render on every position tick.
+  // Fresh-draft pulse: confirms the placement when the user just dropped
+  // a note via N or the add button. We can't rely on the cross-over
+  // subscription below because the playhead is already at note.time the
+  // moment we mount.
+  useEffect(() => {
+    if (isDirty && note.text === '') {
+      setPulsing(true);
+      const t = window.setTimeout(() => setPulsing(false), 600);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Cross-over pulse: fires when the playhead crosses this note's exact
+  // timestamp during playback (or scrub). Subscribes imperatively so the
+  // sticky doesn't re-render on every position tick.
   useEffect(() => {
     let prev = useTransportStore.getState().position;
     let timeoutId: number | null = null;
@@ -248,22 +372,22 @@ function Sticky({ note, isDirty }: StickyProps) {
     };
   }, [note.time]);
 
-  // Auto-focus a freshly created empty draft so admin can start typing.
+  // Auto-focus a freshly created empty draft so user can start typing.
   const autoFocusedRef = useRef(false);
   useEffect(() => {
     if (autoFocusedRef.current) return;
-    if (ADMIN && isDirty && note.text === '' && textareaRef.current) {
+    if (editable && isDirty && note.text === '' && textareaRef.current) {
       textareaRef.current.focus();
       autoFocusedRef.current = true;
     }
-  }, [isDirty, note.text]);
+  }, [editable, isDirty, note.text]);
 
   const handleSave = async () => {
     if (busy) return;
     setError(null);
     setBusy('saving');
     try {
-      await saveNote(note.id);
+      await actions.saveNote(note.id);
     } catch (err: any) {
       setError(err?.message ?? 'Save failed');
     } finally {
@@ -276,12 +400,11 @@ function Sticky({ note, isDirty }: StickyProps) {
     setError(null);
     setBusy('deleting');
     try {
-      await deleteNote(note.id);
+      await actions.deleteNote(note.id);
     } catch (err: any) {
       setError(err?.message ?? 'Delete failed');
       setBusy(null);
     }
-    // No setBusy(null) on success — the component unmounts when the note's gone.
   };
 
   const startTimeEdit = () => {
@@ -291,22 +414,23 @@ function Sticky({ note, isDirty }: StickyProps) {
   const commitTimeEdit = () => {
     setEditingTime(false);
     const parsed = parseTimeInput(timeInput);
-    if (parsed !== null && parsed !== note.time) setTime(note.id, parsed);
+    if (parsed !== null && parsed !== note.time) actions.setTime(note.id, parsed);
   };
 
   return (
     <div
-      className={`rounded-md shadow-md text-gray-900 flex flex-col w-full md:w-[calc(30ch+1rem)] transition-opacity ease-out ${
+      className={`rounded-md shadow-md flex flex-col w-full md:w-[calc(30ch+1rem)] transition-opacity ease-out ${theme.textClass} ${
         entered ? 'opacity-100' : 'opacity-0'
       }`}
       style={{
-        backgroundColor: NOTE_COLOR,
+        backgroundColor: theme.bg,
         transitionDuration: `${FADE_IN_MS}ms`,
         animation: pulsing ? 'note-pulse 600ms ease-out' : undefined,
+        ['--pulse-rgb' as any]: theme.pulseRgb,
       }}
     >
-      <div className="flex items-center justify-between px-2 pt-1.5 pb-1 text-[11px] font-mono text-gray-700">
-        {ADMIN && editingTime ? (
+      <div className={`flex items-center justify-between px-2 pt-1.5 pb-1 text-[11px] font-mono ${theme.mutedTextClass}`}>
+        {editable && editingTime ? (
           <input
             type="text"
             inputMode="numeric"
@@ -318,68 +442,65 @@ function Sticky({ note, isDirty }: StickyProps) {
               if (e.key === 'Enter') { e.preventDefault(); commitTimeEdit(); }
               if (e.key === 'Escape') { e.preventDefault(); setEditingTime(false); }
             }}
-            className="w-[6ch] bg-yellow-100/60 border border-gray-700/30 rounded px-1 outline-none focus:border-gray-700 text-gray-900 font-mono text-[11px]"
+            className={`w-[6ch] border rounded px-1 outline-none font-mono text-[11px] ${theme.inputClass}`}
           />
-        ) : ADMIN ? (
+        ) : editable ? (
           <button
             type="button"
             onClick={startTimeEdit}
             title="Edit timestamp"
-            className="hover:text-gray-900 cursor-text"
+            className={`hover:${theme.textClass} cursor-text`}
           >
             {formatTime(note.time)}
           </button>
         ) : (
           <span>{formatTime(note.time)}</span>
         )}
-        {ADMIN && (
+        {editable && (
           <button
             type="button"
             onClick={handleDelete}
             disabled={!!busy}
             title="Delete note"
-            className="text-red-600 hover:text-red-700 disabled:opacity-40 leading-none text-base px-1"
+            className={`disabled:opacity-40 leading-none text-base px-1 ${theme.deleteButtonClass}`}
           >
             &times;
           </button>
         )}
       </div>
 
-      {ADMIN ? (
-        <textarea
-          ref={textareaRef}
-          value={note.text}
-          onChange={(e) => setText(note.id, e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              if (isDirty && !busy) handleSave();
-            }
-          }}
-          placeholder="Note…"
-          rows={2}
-          maxLength={60}
-          className="resize-none bg-transparent outline-none px-2 pb-1 text-sm leading-snug text-gray-900 placeholder-gray-600/60"
-        />
-      ) : (
-        <div className="px-2 pb-2 text-sm leading-snug whitespace-pre-wrap line-clamp-2 text-gray-900">
-          {note.text}
-        </div>
-      )}
+      <textarea
+        ref={textareaRef}
+        value={note.text}
+        readOnly={!editable}
+        onChange={editable ? (e) => actions.setText(note.id, e.target.value) : undefined}
+        onKeyDown={editable ? (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (isDirty && !busy) handleSave();
+          }
+        } : undefined}
+        placeholder={editable ? 'Note…' : undefined}
+        rows={2}
+        maxLength={editable ? 60 : undefined}
+        className={`resize-none bg-transparent outline-none px-2 pb-1 text-sm leading-snug ${theme.textClass} ${theme.placeholderClass} ${
+          editable ? '' : 'cursor-default'
+        }`}
+      />
 
-      {ADMIN && (isDirty || error) && (
+      {editable && (isDirty || error) && (
         <div className="flex items-center justify-between px-2 pb-1.5 gap-2">
           {error ? (
-            <span className="text-[11px] text-red-700 truncate">{error}</span>
+            <span className={`text-[11px] truncate ${theme.errorTextClass}`}>{error}</span>
           ) : (
-            <span className="text-[11px] text-gray-700/80">Unsaved</span>
+            <span className={`text-[11px] ${theme.mutedTextClass}`}>Unsaved</span>
           )}
           {isDirty && (
             <button
               type="button"
               onClick={handleSave}
               disabled={!!busy}
-              className="text-xs px-2 py-0.5 rounded bg-gray-900 text-yellow-100 hover:bg-gray-800 disabled:opacity-50"
+              className={`text-xs px-2 py-0.5 rounded disabled:opacity-50 ${theme.saveButtonClass}`}
             >
               {busy === 'saving' ? 'Saving…' : 'Save'}
             </button>

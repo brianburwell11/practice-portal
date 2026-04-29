@@ -1,14 +1,18 @@
 import { useEffect } from 'react';
 import { useTransportStore } from '../store/transportStore';
 import { useNotesStore } from '../store/notesStore';
+import { usePersonalNotesStore } from '../store/personalNotesStore';
+
+const ADMIN = import.meta.env.DEV;
 
 /**
- * Admin/dev-only `n` shortcut: drop a draft note at the current playhead.
- * Ignored while typing in inputs/textareas and when a song isn't loaded.
+ * `n` shortcut: drop a draft note at the current playhead. Routed to the
+ * admin store in dev (saved to R2) or the personal store in production
+ * (saved to localStorage). Ignored while typing in inputs/textareas and
+ * when no song is loaded.
  */
 export function useNotesKeyboard() {
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'n' && e.key !== 'N') return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -17,11 +21,18 @@ export function useNotesKeyboard() {
         e.target instanceof HTMLTextAreaElement ||
         (e.target instanceof HTMLElement && e.target.isContentEditable)
       ) return;
-      const { loaded, bandId, songId } = useNotesStore.getState();
-      if (!loaded || !bandId || !songId) return;
-      e.preventDefault();
       const position = useTransportStore.getState().position;
-      useNotesStore.getState().createDraft(position);
+      if (ADMIN) {
+        const { loaded, bandId, songId } = useNotesStore.getState();
+        if (!loaded || !bandId || !songId) return;
+        e.preventDefault();
+        useNotesStore.getState().createDraft(position);
+      } else {
+        const { loaded, songId } = usePersonalNotesStore.getState();
+        if (!loaded || !songId) return;
+        e.preventDefault();
+        usePersonalNotesStore.getState().createDraft(position);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
