@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
+import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 import {
   useNotesStore,
   NOTE_COLOR,
@@ -83,7 +84,13 @@ export function NotesLayer() {
 
   const loaded = useNotesStore((s) => s.loaded);
   const selectedSong = useSongStore((s) => s.selectedSong);
+  const minimized = usePanelMinimizeStore((s) =>
+    s.items.some((x) => x.kind === 'panel' && x.id === 'notes'),
+  );
+  const minimizePanel = usePanelMinimizeStore((s) => s.minimizePanel);
 
+  // Hidden entirely when minimized — restore from the bottom ribbon.
+  if (minimized) return null;
   // Admins always see the layer (so the add-note button is reachable).
   // Viewers only see it when there's something to show.
   if (!ADMIN && visible.length === 0) return null;
@@ -120,8 +127,27 @@ export function NotesLayer() {
       {visible.map((note) => (
         <Sticky key={note.id} note={note} isDirty={dirty.has(note.id)} />
       ))}
-      {ADMIN && <ExportButton onClick={handleExport} disabled={notes.length === 0} />}
+      <div className="flex items-center gap-2 md:ml-auto md:self-center">
+        {ADMIN && <ExportButton onClick={handleExport} disabled={notes.length === 0} />}
+        <MinimizeButton onClick={() => minimizePanel('notes')} />
+      </div>
     </div>
+  );
+}
+
+function MinimizeButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Minimize notes"
+      aria-label="Minimize notes"
+      className="flex items-center justify-center rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-200 transition-colors"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="5" y1="19" x2="19" y2="19" />
+      </svg>
+    </button>
   );
 }
 
