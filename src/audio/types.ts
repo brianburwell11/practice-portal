@@ -52,6 +52,16 @@ export interface NavLinkConfig {
   url: string;
 }
 
+export interface Note {
+  id: string;
+  time: number;
+  text: string;
+}
+
+export interface NotesData {
+  notes: Note[];
+}
+
 export interface Video {
   id: string;
   /** Currently always a YouTube 11-char id; field stays generic so

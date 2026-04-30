@@ -7,6 +7,7 @@ const PANEL_LABELS: Record<PanelId, string> = {
   sheet: 'Sheet music',
   mixer: 'Mixer',
   lyrics: 'Lyrics',
+  notes: 'Notes',
 };
 
 function PanelIcon({ id }: { id: PanelId }) {
@@ -16,6 +17,14 @@ function PanelIcon({ id }: { id: PanelId }) {
         <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="2" y1="14" x2="6" y2="14" />
         <line x1="12" y1="21" x2="12" y2="8" /><line x1="12" y1="4" x2="12" y2="3" /><line x1="10" y1="8" x2="14" y2="8" />
         <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="18" y1="16" x2="22" y2="16" />
+      </svg>
+    );
+  }
+  if (id === 'notes') {
+    return (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" />
+        <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z" />
       </svg>
     );
   }

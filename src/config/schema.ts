@@ -59,6 +59,16 @@ export const lyricsDataSchema = z.object({
   lines: z.array(lyricsLineSchema),
 });
 
+export const noteSchema = z.object({
+  id: z.string().min(1),
+  time: z.number().min(0),
+  text: z.string(),
+});
+
+export const notesDataSchema = z.object({
+  notes: z.array(noteSchema),
+});
+
 export const navLinkConfigSchema = z.object({
   title: z.string().min(1).max(40),
   url: z.string().url(),
