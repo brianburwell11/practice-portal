@@ -7,6 +7,7 @@ import { SectionList } from './SectionList';
 import { parseXscFile } from '../../audio/xscParser';
 import { autoLabelSection } from '../../audio/tapMapUtils';
 import { buildXscContent } from '../../audio/xscExporter';
+import { buildMusicXmlContent } from '../../audio/musicXmlExporter';
 import { renderStereoDownmix } from '../../audio/mixdown';
 import { encodeWav, interleaveStereo } from '../../admin/utils/audioConvert';
 
@@ -180,6 +181,25 @@ export function MarkerEditorModal() {
     }
   };
 
+  const handleExportMusicXml = () => {
+    if (tapMap.length === 0) return;
+    setError(null);
+    try {
+      const rawName =
+        (selectedSong?.title && selectedSong.title.trim()) ||
+        selectedSong?.id ||
+        'tapmap';
+      const safeName = rawName.replace(/[\\/:*?"<>|]/g, '_');
+      const xml = buildMusicXmlContent(tapMap, { title: rawName });
+      triggerDownload(
+        new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' }),
+        `${safeName}.musicxml`,
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Export failed');
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar \u2014 mirrors the LyricsEditor layout: actions left/right,
@@ -221,6 +241,14 @@ export function MarkerEditorModal() {
             title="Download a Transcribe! .xsc plus a stereo downmix .wav of the current mixer state"
           >
             {exporting ? 'Exporting…' : 'Export .xsc'}
+          </button>
+          <button
+            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-gray-300 transition-colors"
+            onClick={handleExportMusicXml}
+            disabled={tapMap.length === 0 || exporting}
+            title="Download a blank single-staff MusicXML file with rehearsal marks at each section"
+          >
+            Export MusicXML
           </button>
           <button
             className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
