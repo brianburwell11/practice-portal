@@ -1,0 +1,69 @@
+---
+title: "How rekordbox finds the beat (and how stems could help)"
+description: "A short tour of rekordbox-style beat detection, plus an exploration of doing the same job with separated drum stems in Practice Portal."
+pubDate: "May 12 2026"
+tags: ["audio", "beat-detection", "stems", "tapmap", "research"]
+---
+
+import { BeatDetectionPipeline } from '../../components/react/BeatDetectionPipeline';
+import { StemsBeatComparison } from '../../components/react/StemsBeatComparison';
+import { RubatoBeatDetection } from '../../components/react/RubatoBeatDetection';
+
+Beat detection is a strange thing to build a practice tool on top of. We don't actually need to play tracks back in sync with anything — we just want a stable grid the user can scroll through, mark sections against, and tap along to. The closest off-the-shelf approximation of that is what DJ software does, and rekordbox is the most opinionated example.
+
+## The rekordbox pipeline
+
+When rekordbox imports a track it runs an offline analysis pass that produces two artifacts in the `.dat` files Pioneer hardware reads: a single BPM (or a small set of BPM markers, in "dynamic" mode) and a first-beat anchor. Everything else — bars, downbeats, the white-and-red grid you see in the waveform — is derived from those two numbers.
+
+Under the hood the algorithm is the same shape as every academic beat tracker since [Ellis's 2007 dynamic-programming paper](https://www.ee.columbia.edu/~dpwe/pubs/Ellis07-beattrack.pdf) and the open-source equivalents in [librosa](https://librosa.org/doc/main/generated/librosa.beat.beat_track.html) and madmom:
+
+1. **Onset detection.** Take a moving spectral-flux–style measurement of the audio: where energy in any frequency band suddenly rises, that's an onset. The output is a 1-D "onset envelope" that spikes on percussive hits and stays quiet during sustained notes.
+2. **Tempo estimation.** Autocorrelate the onset envelope. Peaks in the autocorrelation correspond to candidate beat periods. Weight against a perceptual prior (human tempo perception clusters around 120 BPM) and pick the strongest plausible peak.
+3. **Beat grid alignment.** Anchor at the first strong onset, then walk forward by the estimated period, snapping each beat to the nearest local maximum in the onset envelope (this is the dynamic-programming step in Ellis's formulation).
+4. **Downbeat anchoring.** A separate, weaker process tries to align bar boundaries — usually by looking for the loudest kick-on-1 pattern. This is the part rekordbox most often gets wrong, and the part users hand-correct.
+
+The widget below steps through stages 1–3 on a synthetic clip. The audio is fake; the shapes of the curves are not.
+
+<BeatDetectionPipeline client:load />
+
+Rekordbox layers a few production-grade extras on top: a "high precision" mode that increases the analysis window, a "dynamic" mode that emits a piecewise-constant tempo curve for tracks with real tempo drift (live recordings, classic disco), and a manual editor for fixing the cases where the algorithm hallucinates. The core is still onset → autocorrelation → grid.
+
+## Where it falls apart
+
+The whole pipeline depends on the onset envelope being clean. It usually isn't. Sparse intros give the autocorrelation nothing to lock onto. Tracks with a strong sustained bassline confuse the spectral flux because the "energy" never really drops. Syncopated genres — afrobeats, drum'n'bass, anything with prominent off-beat snares — routinely fool the downbeat picker into snapping the grid half a beat early. And electronic tracks with sidechained pads can produce onset peaks on the *release* of the pad rather than the kick.
+
+## Stems change the game
+
+If you isolate the drums first, almost all of those failure modes disappear. The onset envelope becomes nearly binary: silence between hits, sharp spikes on every kick and snare. Autocorrelation locks immediately. Downbeat anchoring becomes easier because the kick-on-1 pattern is no longer competing with vocal consonants, chord stabs and bass slides.
+
+The widget below runs the same detector against two versions of the same eight-beat clip: a full mix with harmony and a vocal entry between beats 4 and 5, and an isolated drum stem. Same synthetic ground truth in both; the only thing that changes is the input.
+
+<StemsBeatComparison client:load />
+
+The full-mix detector locks onto a chord stab between beats 2 and 3 and drifts for the rest of the bar. The drum-stem detector finds every kick. We didn't change the algorithm — we changed the signal.
+
+## What about rubato?
+
+Everything above assumes one dominant tempo. Most pop and dance music *is* one dominant tempo, which is why the autocorrelation peak in the first widget is so sharp — there's exactly one lag at which the onset envelope lines up with itself. In a rubato passage (a ballad intro, a romantic-era phrase, almost any solo piano performance) the autocorrelation peak isn't sharp. The energy is smeared across a range of lags, and even after smoothing there's no honest single answer. Imposing one anyway is how DJ software ends up with a grid that visibly drifts off the beats by the end of the bar.
+
+Three approaches actually work, in increasing order of pragmatism:
+
+1. **A local tempo curve instead of a single BPM.** Run autocorrelation in short overlapping windows and stitch the per-window estimates into a tempo *curve*. Madmom and beat_this can do this; rekordbox's "dynamic" mode is a constrained piecewise-constant version. Better than a flat grid, but the curve is always one window behind the music, so transitions still wobble.
+2. **Onset-following on the drum stem, skip tempo entirely.** If the onset envelope is clean enough — and a drum stem is — you don't need to estimate a period at all. Each detected onset becomes a beat. No BPM, no grid, no continuity penalty. This is exactly how a tapMap is structured.
+3. **Tap-anchor + snap.** For a *practice tool*, let the user tap a few anchor beats in the rubato passage and snap each anchor to the nearest detected onset. Human intuition for where the beat *is*, onset detection for where it precisely *lands*. The pragmatic option that combines the best parts of the other two.
+
+<RubatoBeatDetection client:load />
+
+Same passage, three views: a constant-BPM grid that drifts visibly, a local tempo curve that mostly tracks but still leaks errors at transitions, and pure onset-following that lands on every beat because it never tried to predict where the next one *should* be.
+
+## What this could look like in Practice Portal
+
+We already have stems as a first-class concept, and we already have two competing timing models: a [`tempoMap`](https://github.com/) of piecewise-constant BPM segments, and a [`tapMap`](https://github.com/) of literal tapped beat positions. The tapMap is what we actually use for everything beat-aware in the UI — equal-width bars, section markers, the marker editor — because real recordings drift.
+
+A stem-aware beat detector slots in naturally as a *bootstrap* for the tapMap:
+
+- During the add-song wizard, after stems are uploaded and aligned, run an onset+autocorrelation pass on the drum stem only.
+- Pre-populate the tapMap with the detector's output, plus a confidence score per beat.
+- Drop the user into the marker editor with that tapMap as a starting point — they refine the spots the detector wasn't sure about, instead of tapping eight bars from scratch.
+
+That's the right division of labor for a practice tool. The detector handles the boring middle of the song where it'll be right 95% of the time; the user handles the intros, the outros, the half-time bridge, the rubato ballad opener — the places where they want the grid to *feel* a certain way regardless of where the kicks land. The tapMap model already assumes the spacing between beats isn't regular, which is why a stem-based onset detector plus a handful of human-tapped anchors is a usable bootstrap even when there is no honest BPM to find. Same instinct that drove the [`.xsc` import path](https://www.transcribe.com/) for Transcribe! users: the goal isn't to replace tapping, it's to skip the tedious part.
