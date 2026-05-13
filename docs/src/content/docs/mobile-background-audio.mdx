@@ -1,0 +1,184 @@
+---
+title: "Mobile Background Audio: Keep Playing When the App Goes Away"
+description: "Plan for SoundCloud-style background playback on mobile — Media Session API, lock-screen controls, the iOS Web Audio suspension wall, and a phased path through it."
+pubDate: "May 13 2026"
+tags: ["audio", "mobile", "media-session", "pwa", "plan"]
+---
+
+Practice Portal's audio engine is a Web Audio API graph: each song fans 10–25 `AudioBufferSourceNode`s through a shared `mixBus → SoundTouch worklet → masterGain → destination`. That architecture is essential for live per-stem control and pitch-corrected tempo changes — and it's exactly the architecture that mobile browsers refuse to keep alive in the background. This doc explains why, what we can do about it, and tracks the implementation in phases.
+
+## Why this is hard
+
+iOS Safari forcibly suspends the `AudioContext` the moment the page is backgrounded or the screen locks. There is no Web Audio API workaround — Apple's WebKit treats long-running Web Audio in a hidden tab as a battery threat and shuts it down. Android Chrome is more lenient: with the [Media Session API](https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API) wired up and our auto-pause-on-suspend handler relaxed, audio keeps playing in the background today, no architectural change. SoundCloud gets away with seamless iOS background playback because it plays a single pre-rendered file through an `<audio>` element — a path that's fundamentally incompatible with a live stem mixer doing real-time pitch correction. Reaching parity on iOS requires giving up live mixing while backgrounded, which is the tradeoff Phase 2 makes explicit.
+
+The engine also actively fights background playback right now: a `statechange` listener at `AudioEngine.ts:63-67` calls `pause()` whenever `ctx.state` leaves `running`. Even when iOS *would* let audio continue (Android case, headphone-jack interruptions on iOS), we shut it down ourselves. Step one of any background-audio work is teaching the engine not to do that.
+
+## What works on each platform
+
+| Capability | Android Chrome | iOS Safari (browser tab) | iOS Safari (installed PWA) |
+| --- | --- | --- | --- |
+| Lock-screen metadata (title, artist, artwork) | Yes (Phase 1) | Yes (Phase 1) | Yes (Phase 1) |
+| Lock-screen controls (play/pause/seek) | Yes (Phase 1) | Yes (Phase 1) | Yes (Phase 1) |
+| Bluetooth headset play/pause buttons | Yes (Phase 1) | Yes (Phase 1) | Yes (Phase 1) |
+| Audio continues across app switch | Yes (Phase 1) | No — needs Phase 2 | Sometimes (depends on iOS version) — Phase 2 makes it reliable |
+| Audio continues across screen lock | Yes (Phase 1) | No — needs Phase 2 | No — needs Phase 2 |
+| Per-stem control while backgrounded | Yes (Phase 1) | No (architectural) | No (architectural) |
+| `playbackRate` honored on lock-screen progress | Yes (Phase 1) | Yes (Phase 1) | Yes (Phase 1) |
+
+Phase 1 is the 80% solution: real Android background playback, full lock-screen UI on iOS even though audio stops on lock. Phase 2 adds true iOS background playback by handing off to a pre-rendered master mix in a hidden `<audio>` element.
+
+## Phase 1: Universal best-effort
+
+The goal of Phase 1 is to make the engine cooperate with the OS instead of fighting it, and to surface a real "now playing" presence on the lock screen.
+
+### 1.1 Cover art in song config
+
+- [ ] Add optional `coverArt?: string` to `SongConfig` in `src/audio/types.ts`
+- [ ] Add optional `coverArt?: string` to `BandConfig` (used as fallback)
+- [ ] Extend the Zod schema in `src/config/schema.ts` for both new fields
+- [ ] Confirm existing songs continue to load (fields are optional)
+
+### 1.2 PWA-legitimacy meta tags
+
+Even without a full PWA, these tags unlock slightly more lenient OS treatment when the user adds the site to their home screen.
+
+- [ ] `<meta name="apple-mobile-web-app-capable" content="yes">` in `index.html`
+- [ ] `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">`
+- [ ] `<meta name="theme-color" content="#111827">`
+- [ ] `<link rel="manifest" href="/manifest.webmanifest">`
+- [ ] Add `public/manifest.webmanifest` with `name`, `short_name`, `theme_color`, `background_color`, `display: "standalone"`, and a single 512×512 icon entry (icon file can come in Phase 3 — Chrome will warn but the manifest still registers)
+
+### 1.3 MediaSessionController module
+
+A new `src/audio/MediaSessionController.ts` wires the engine into the OS lock screen.
+
+- [ ] Populate `navigator.mediaSession.metadata` from `song.title`, `song.artist`, and artwork URL resolved as `song.coverArt ?? band.coverArt ?? band.logo`, routed through the existing `r2Url()` helper in `src/utils/url.ts`
+- [ ] Register `setActionHandler` for `play`, `pause`, `stop`, `seekto` (honor the `fastSeek` flag), `seekbackward` (10s default), `seekforward` (10s default), each routing to the matching `AudioEngine` method
+- [ ] On every engine notify, call `navigator.mediaSession.setPositionState({ duration, position, playbackRate: engine.clock.tempoRatio })` — passing `tempoRatio` is essential, or the lock-screen progress bar drifts at non-1× tempos
+- [ ] Mirror `clock.playing` into `navigator.mediaSession.playbackState`
+- [ ] Guard the whole module with `if ('mediaSession' in navigator)`
+
+### 1.4 Background-tolerant position tick
+
+The engine's `startPositionUpdates` (`AudioEngine.ts:544`) is driven by `requestAnimationFrame`, which pauses when the document is hidden. Without a fix, the Android lock-screen progress bar freezes the moment the screen locks.
+
+- [ ] Add a `setInterval(500ms)` tick that runs only while `document.hidden`, firing the same notify path used by rAF
+- [ ] Toggle the two ticks on `visibilitychange` so they never run simultaneously
+
+### 1.5 Multi-subscriber engine notifications
+
+`AudioEngine.setOnStateChange` is single-subscriber. Both `useCreateEngine` and the new `MediaSessionController` need to observe state changes.
+
+- [ ] Refactor to `subscribe(cb): unsubscribe` on `AudioEngine`
+- [ ] Update existing call site in `src/hooks/useAudioEngine.ts`
+- [ ] Construct one `MediaSessionController` alongside the engine singleton in `useCreateEngine`
+
+### 1.6 Relax the suspend-pause handler
+
+The handler at `AudioEngine.ts:63-67` is the active blocker. Two stages to minimize regression risk:
+
+- [ ] **Stage A (ship first):** keep the auto-pause-on-suspend, but verify the Media Session `play` action from the lock screen routes through `engine.play()` — which already resumes the AudioContext and creates fresh sources. On iOS this means "tap play from the lock screen, audio comes back with a brief re-buffer." On Android this gets us most of the way already.
+- [ ] **Stage B (ship only if Android testing demands it):** introduce a `private _suspended = false` flag. On `statechange` to non-running, set the flag and `stem.stop()` each stem, but *don't* call `clock.pause()`. On `statechange` back to `running` while `_suspended && clock.playing`, re-issue starts from `clock.currentTime` (same path `seek` already uses). This is what makes Android tab-switching seamless without UI desync.
+
+### 1.7 Wake Lock re-acquire on visibility
+
+`WakeLockSentinel` auto-releases when the document is hidden (`AudioEngine.ts:489-501`).
+
+- [ ] Add a `visibilitychange` listener: when visible and `clock.playing`, re-call `acquireWakeLock()`
+
+## Phase 2: True iOS background via pre-rendered master
+
+The naive approach — bouncing the current mix at the moment of `visibilitychange` — is **not viable**. `OfflineAudioContext` rendering a 6-minute 25-stem mix takes multiple seconds on a phone, and `visibilitychange` gives no time budget. By the time `startRendering()` resolves, iOS has already suspended the page.
+
+The realistic path: pre-render a stereo master at song-upload time, store it on R2, and hand off to a hidden `<audio>` element on backgrounding. The tradeoff is explicit and unavoidable on iOS — backgrounded playback reflects the *default* mix only, not the user's live mute/solo/volume choices, and pitch (semitones) is not preserved (only tempo, via `audio.playbackRate`).
+
+### 2.1 Asset pipeline
+
+- [ ] Add a server-side mixdown step to the add-song / migrate scripts that produces `master.m4a` (AAC-in-MP4 — universally supported, faster decode than Opus/WebM on older devices)
+- [ ] Store at `r2://{band}/songs/{song}/master.m4a`
+- [ ] Add `masterMixUrl?: string` to `SongConfig`
+- [ ] Backfill existing songs (one-off script)
+
+### 2.2 Hidden audio element
+
+- [ ] `AudioEngine` maintains a single hidden `<audio>` element
+- [ ] `src = song.masterMixUrl` set on `loadSong`
+- [ ] Never `.play()` during foreground operation
+
+### 2.3 Handoff: foreground → background
+
+- [ ] On `visibilitychange` going hidden while `clock.playing`:
+  1. Pause the Web Audio graph (stop sources; AudioContext is about to suspend anyway)
+  2. `audio.currentTime = engine.clock.currentTime / engine.clock.tempoRatio` (the master is rendered at 1×, so divide)
+  3. `audio.playbackRate = engine.clock.tempoRatio` (iOS clamps to ~0.5–2.0)
+  4. `audio.play()`
+
+### 2.4 Handoff: background → foreground
+
+- [ ] On `visibilitychange` going visible while `<audio>` is playing:
+  1. Read `audio.currentTime`, pause it
+  2. Translate back to song-time (multiply by `tempoRatio`)
+  3. Resume the Web Audio graph at that position
+
+### 2.5 UI affordance
+
+- [ ] Surface a subtle indicator that backgrounded mix = default mix only (avoid the "why don't my mutes work on the lock screen?" support question)
+
+If the asset-pipeline change isn't tractable, skip Phase 2 entirely and document iOS as "lock-screen controls only" indefinitely. Most practice happens with the screen on; the "phone in pocket, walking around" use case is the only one Phase 2 unlocks.
+
+## Phase 3: PWA polish
+
+Not required for background audio per se — these are quality-of-life items that make the installed-PWA path feel like a real app.
+
+- [ ] Real icon set: 192px, 512px, and maskable variants
+- [ ] Install-prompt UX (custom button that fires `beforeinstallprompt`)
+- [ ] Service worker for offline asset cache (separate, larger effort)
+
+## Platform quirks reference
+
+### iOS Safari
+
+- **`AudioContext` suspends on lock and on app-switch.** No Web Audio workaround. Phase 2 (`<audio>` handoff) is the only path to actual background playback.
+- **`statechange: interrupted`** (distinct from `suspended`) fires on phone calls, Siri, and other media sources taking over. iOS 17+. Same handling as `suspended` for our purposes.
+- **Installed PWA gets slightly more leeway** than an in-browser tab. Adding to home screen is the documented path to the best experience.
+- **Artwork constraints**: must be HTTPS, ≤ a few hundred KB, ideally 512×512 PNG. iOS silently drops artwork that fails these.
+- **Audio format for Phase 2**: AAC-in-MP4 is universally supported and decodes faster than Opus/WebM on older devices. Don't ship WebM.
+- **The silent-switch mute banner** in `TransportBar.tsx` already covers the related case of iOS hardware-mute. Cross-reference rather than duplicating.
+
+### Android Chrome
+
+- **`requestAnimationFrame` pauses when hidden.** The current position-tick path freezes the lock-screen progress bar without the interval-based fallback in [1.4](#14-background-tolerant-position-tick).
+- **WakeLock auto-releases on hide** — re-acquire on `visibilitychange` (see [1.7](#17-wake-lock-re-acquire-on-visibility)).
+- **Bluetooth headset play/pause** routes through Media Session action handlers. Test with at least one BT device.
+- **Loops keep working in background.** The loop-check is already a `setInterval` (`AudioEngine.ts:607`), which is not throttled by tab visibility on Android.
+
+### Both platforms
+
+- **Honor `seekto.fastSeek`** — pass it through to `engine.seek()`, which is already fast-seek-compatible.
+- **Safari's 4-AudioContext-per-page limit** (covered in the [original mobile audio research](/docs/mobile-audio-playback/)) forbids opening a second context for the bounced output. Phase 2's hidden `<audio>` element sidesteps this — it doesn't need an AudioContext.
+
+## Testing matrix
+
+Real-device testing only. The simulator misses too many of these.
+
+- [ ] Play song → lock screen → metadata + artwork appear on iOS lock screen
+- [ ] Tap play from lock screen → iOS resumes (brief re-buffer acceptable); Android continues without interruption
+- [ ] Switch to another app on Android → audio continues; switch back → progress bar correct
+- [ ] Switch to another app on iOS → audio stops (Phase 1 expected); Phase 2: audio continues
+- [ ] Take a phone call mid-song → `statechange: interrupted` handled gracefully; audio resumes after call
+- [ ] Plug/unplug headphones mid-song → no crash, audio routes correctly
+- [ ] Bluetooth headset play/pause buttons → engine responds
+- [ ] Change tempo to 0.7× → lock-screen progress bar advances at 0.7× (proves `setPositionState({ playbackRate })`)
+- [ ] Engage A/B loop → loop check keeps running while hidden on Android
+
+## Out of scope
+
+- **Per-stem control during backgrounded playback** — architecturally infeasible on iOS without keeping the screen on. The `<audio>` element handoff is a single stereo stream by design.
+- **Pitch (semitone) preservation through Phase 2 handoff** — `<audio>` only honors playback rate. Practicing in a different key requires the screen on.
+- **Service-worker offline caching of audio assets** — deferred to Phase 3 or later. Background audio works fine without it as long as the network is reachable.
+
+## Related
+
+- [Playing 25 Stems at Once: Mobile Audio Playback for a Practice Tool](/docs/mobile-audio-playback/) — the memory/format/CPU research this work builds on.
+- [Tier 2 Mobile Audio: Implementation Plan](/docs/mobile-audio-tier2-plan/) — single-bus SoundTouch and lazy decode, which together made the current architecture mobile-feasible.
+- [Tech stack walkthrough](/docs/tech-stack/) — overview of how the audio engine, stores, and React tree fit together.
