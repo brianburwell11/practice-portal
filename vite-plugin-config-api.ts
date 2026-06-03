@@ -645,6 +645,7 @@ export function configApiPlugin(): Plugin {
 
             // 3. Run mscore -o <out>.mxl <in>.mscz.
             const outPath = path.join(tmpDir, rawFilename);
+            let convertErr: any = null;
             try {
               execFileSync(mscoreBin, ['-o', outPath, received.tmpPath], {
                 stdio: 'ignore',
@@ -654,11 +655,18 @@ export function configApiPlugin(): Plugin {
                 timeout: 60_000,
               });
             } catch (err: any) {
-              throw new Error(`MuseScore conversion failed: ${err.message ?? err}`);
+              // MuseScore 4.7.x writes the MXL successfully but then crashes
+              // during Qt teardown (exit 134, "mutex lock failed"), so a
+              // non-zero exit no longer means the conversion failed. Defer
+              // the verdict to the output-file check below; only treat it as
+              // a hard failure if nothing was produced.
+              convertErr = err;
             }
 
             if (!fs.existsSync(outPath)) {
-              throw new Error('MuseScore ran but produced no output file');
+              throw new Error(
+                `MuseScore produced no output file${convertErr ? `: ${convertErr.message ?? convertErr}` : ''}`,
+              );
             }
 
             // 4. Upload the MXL to R2 under the target filename.
