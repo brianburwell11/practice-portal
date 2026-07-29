@@ -50,7 +50,7 @@ function resolveBandForSong(songId: string): string | null {
   return bands.find((b: any) => b.songIds.includes(songId))?.id ?? null;
 }
 
-// --- ffmpeg helpers (mirrored from vite-plugin-config-api.ts) ---
+// --- ffmpeg helpers (mirrored from server/core/media/ffmpeg.ts) ---
 
 interface ProbeResult {
   codec: string;

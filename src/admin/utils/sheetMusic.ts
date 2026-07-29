@@ -11,8 +11,8 @@
  * `.mscz` (MuseScore native) can't be converted in the browser — the
  * inner `.mscx` XML is MuseScore's proprietary dialect, not MusicXML.
  * Those files are sent raw to the server, which shells out to the
- * `mscore` CLI to produce the target MXL (see `mscz-convert-upload`
- * endpoint in `vite-plugin-config-api.ts`).
+ * `mscore` CLI to produce the target MXL (see `msczConvertUpload` in
+ * `server/core/handlers/uploads.ts`).
  */
 import JSZip from 'jszip';
 
