@@ -87,9 +87,9 @@ Verified against real R2 with real `ffmpeg` and MuseScore 4: 22 steps / 47 asser
 
 Schema first, before any server code, because the roles design constrains it. Memberships, invites, and revocable grants all need transactional storage — this is what rules out JSON-in-R2 as source of truth.
 
-- [ ] Provision Postgres (Fly Postgres or Neon).
-- [ ] Pick a migration tool and a query layer (Drizzle fits the existing TypeScript/Zod setup well).
-- [ ] Write the initial schema:
+- [ ] Provision Postgres (Fly Postgres or Neon). **Blocked** — needs an account; everything below is verified without it.
+- [x] Pick a migration tool and a query layer (Drizzle fits the existing TypeScript/Zod setup well).
+- [x] Write the initial schema:
 
 ```sql
 create table app_user (
@@ -200,10 +200,53 @@ create table audit_log (
 );
 ```
 
-- [ ] Define the capability catalog as data, not code — one table or one constant, listing every capability string (`band.settings`, `song.create`, `song.delete`, `song.audio.write`, `song.timing.write`, `song.score.write`, `song.content.write`, `setlist.write`, `song.read`, `audio.download`, `member.invite`, `member.role.set`, `band.publish`, `band.transfer`, `band.billing`, `band.delete`).
-- [ ] Map roles to capability bundles in that same data. Splitting Editor into Editor + Producer later must be a row change, never a code change.
+- [x] Define the capability catalog as data, not code — one table or one constant, listing every capability string (`band.settings`, `song.create`, `song.delete`, `song.audio.write`, `song.timing.write`, `song.score.write`, `song.content.write`, `setlist.write`, `song.read`, `audio.download`, `member.invite`, `member.role.set`, `band.publish`, `band.transfer`, `band.billing`, `band.delete`).
+- [x] Map roles to capability bundles in that same data. Splitting Editor into Editor + Producer later must be a row change, never a code change.
 
 **Exit criteria**: migrations run clean; capability catalog and role bundles are queryable data.
+
+### What landed
+
+```
+server/db/
+  schema.ts        Drizzle schema — 13 tables
+  capabilities.ts  typed capability catalog + role bundles (the seed source)
+  client.ts        postgres.js pool behind DATABASE_URL
+  migrations/
+    0000_extensions.sql               create extension citext
+    0001_initial_schema.sql           generated from schema.ts
+    0002_seed_roles_and_capabilities.sql   generated from capabilities.ts
+drizzle.config.ts
+scripts/gen-seed-migration.ts   emits 0002 (has a --check mode)
+scripts/verify-db.ts            applies migrations to PGlite and asserts behavior
+```
+
+| Script | Does |
+|---|---|
+| `npm run db:generate` | regenerate SQL after editing `schema.ts` |
+| `npm run db:seed:gen` | regenerate `0002` after editing `capabilities.ts` |
+| `npm run db:verify` | offline: seed file is current + all migrations apply + 44 assertions |
+| `npm run db:migrate` | apply to a real database (needs `DATABASE_URL`) |
+
+Verification runs against **PGlite** — Postgres 18.3 compiled to WASM, in-process, with the real `citext` extension and Drizzle's real migrator. So "migrations run clean" is checked on every machine with no server and no cloud account, and the same harness will carry Phase 6's authorization tests.
+
+**44 assertions pass**: migrations apply and re-apply idempotently, all 13 tables exist and nothing extra, the 16 capabilities and 5 roles come back by query, every role's bundle matches, `citext` makes email case-insensitively unique, every check constraint rejects bad input, and deleting a band cascades songs/memberships/grants/user state while `audit_log` survives with `band_id` nulled.
+
+### Divergences from the SQL sketch above
+
+Each of these is a deliberate change, not a transcription slip:
+
+1. **`org` table now exists.** `band.org_id references org(id)` pointed at a table the sketch never defined, which is a hard error. It's three columns and stays empty — the hedge is unchanged.
+2. **`membership.role` and `invite.role` are foreign keys to a `role` table, not check constraints.** The sketch's `check (role in ('manager','editor','member'))` directly contradicts "splitting Editor into Editor + Producer later must be a row change, never a code change" — a new role would have needed an `ALTER`. Now it's an insert.
+3. **`role.membership_eligible`** marks `owner` and `guest` as not assignable via membership (Owner lives in `band.owner_user_id`; Guest is a grant-link actor kind). Postgres can't express that as a cross-table check, so the roster/invite code enforces it.
+4. **`song.media_prefix`.** Phase 4 says media doesn't move and rows store R2 keys — but nothing in the sketch could hold `dev/songs/8xDKlqH`. Without it there's no way back from a row to its audio, and a slug rename would strand the objects.
+5. **`audit_log.actor_kind` got a real check** for `user | grant | system | support`; the sketch listed them in a comment only.
+6. **Added** `setlist.created_at` and indexes on `band(owner_user_id)`, `membership(band_id)`, `invite(band_id)`, `grant_link(band_id)`, `audit_log(band_id, at desc)`.
+
+### Two things to confirm
+
+- **Role bundles are derived, not authoritative.** `practice-portal-roles.pdf` wasn't available, so the bundles come from constraints stated in this plan: Owner alone gets `band.publish`/`transfer`/`billing`/`delete`; Editor is denied `song.delete` and `song.timing.write` (Phase 6's exit criteria); Member gets read + download. Worth diffing against the PDF — but by design it's an `INSERT`/`DELETE` on `role_capability`, no migration and no deploy.
+- **`song.slug` is `NOT NULL` and unique per band**, while today's `discography.json` has songs with no slug (`song-title-dev`, `dev-dev`). Phase 4 has to generate slugs on import and handle collisions.
 
 ---
 
