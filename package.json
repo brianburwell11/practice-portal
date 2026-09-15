@@ -15,7 +15,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed:gen": "tsx scripts/gen-seed-migration.ts",
     "db:verify": "tsx scripts/gen-seed-migration.ts --check && tsx scripts/verify-db.ts",
-    "db:verify:remote": "tsx scripts/gen-seed-migration.ts --check && tsx scripts/verify-db.ts --url"
+    "db:verify:remote": "tsx scripts/gen-seed-migration.ts --check && tsx scripts/verify-db.ts --url",
+    "smoke:media": "tsx scripts/mscz-smoke.ts"
   },
   "dependencies": {
     "@radix-ui/react-slider": "^1.3.6",

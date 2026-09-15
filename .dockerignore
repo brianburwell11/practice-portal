@@ -1,0 +1,9 @@
+node_modules
+dist
+docs/dist
+docs/node_modules
+.git
+.env
+.env.*
+.claude
+*.log
