@@ -87,7 +87,7 @@ Verified against real R2 with real `ffmpeg` and MuseScore 4: 22 steps / 47 asser
 
 Schema first, before any server code, because the roles design constrains it. Memberships, invites, and revocable grants all need transactional storage — this is what rules out JSON-in-R2 as source of truth.
 
-- [ ] Provision Postgres (Fly Postgres or Neon). **Blocked** — needs an account; everything below is verified without it.
+- [x] Provision Postgres — **Neon free tier**. Unblocked 2026-09-14; see *Where it runs* below.
 - [x] Pick a migration tool and a query layer (Drizzle fits the existing TypeScript/Zod setup well).
 - [x] Write the initial schema:
 
@@ -225,12 +225,32 @@ scripts/verify-db.ts            applies migrations to PGlite and asserts behavio
 |---|---|
 | `npm run db:generate` | regenerate SQL after editing `schema.ts` |
 | `npm run db:seed:gen` | regenerate `0002` after editing `capabilities.ts` |
-| `npm run db:verify` | offline: seed file is current + all migrations apply + 44 assertions |
+| `npm run db:verify` | offline: seed file is current + all migrations apply + 46 assertions |
+| `npm run db:verify:remote` | the same 46 assertions against `DATABASE_URL` — the post-deploy smoke test |
 | `npm run db:migrate` | apply to a real database (needs `DATABASE_URL`) |
 
 Verification runs against **PGlite** — Postgres 18.3 compiled to WASM, in-process, with the real `citext` extension and Drizzle's real migrator. So "migrations run clean" is checked on every machine with no server and no cloud account, and the same harness will carry Phase 6's authorization tests.
 
-**44 assertions pass**: migrations apply and re-apply idempotently, all 13 tables exist and nothing extra, the 16 capabilities and 5 roles come back by query, every role's bundle matches, `citext` makes email case-insensitively unique, every check constraint rejects bad input, and deleting a band cascades songs/memberships/grants/user state while `audit_log` survives with `band_id` nulled.
+**46 assertions pass**, offline and against Neon: migrations apply and re-apply idempotently, all 13 tables exist and nothing extra, the 16 capabilities and 5 roles come back by query, every role's bundle matches, `citext` makes email case-insensitively unique, every check constraint rejects bad input, and deleting a band cascades songs/memberships/grants/user state while `audit_log` survives with `band_id` nulled.
+
+The same script runs either backend: `--url` swaps PGlite for `postgres.js` and points at a real database, so "is this instance actually migrated and seeded" is checkable, which applying migrations alone does not prove. Every mutating assertion runs in a transaction that is always rolled back, and `rejects()` uses savepoints so an expected error doesn't poison the run — pointing it at a database leaves no rows behind, and a final check proves it. The cascade assertions read *global* row counts, so they skip themselves with a notice if the tenant tables aren't empty.
+
+### Where it runs
+
+**Neon free tier**, project `practice-portal`, region **`us-east-2`** (Ohio). $0/month, no card, scale-to-zero after 5 minutes idle — which is what makes it pair with an auto-stopping Fly machine rather than fighting it.
+
+| Free-plan limit | Headroom at our scale |
+|---|---|
+| 0.5 GB storage per project | A fully tapped song config is ~30 KB (half of it `tapMap`), and media stays in R2. 500 songs ≈ 15 MB, ~3% of the cap. |
+| 100 CU-hours/month | Only burned while a query is in flight; idle costs nothing. |
+| 100 projects | Production and staging are both free (Phase 11 wants a staging environment). |
+
+Two decisions that constrain later phases:
+
+- **Use the direct connection string, not the pooled one.** Neon's pooled endpoint is PgBouncer in transaction mode, and `postgres.js` issues prepared statements by default — that combination produces alternating `prepared statement "s1" already exists` / `does not exist` errors under load, and would force `prepare: false` in `server/db/client.ts`. We run one long-lived server with its own pool (`max: 10`), which is the case direct connections are for. If Phase 4 ever moves reads to an edge runtime, swap to `@neondatabase/serverless` at that same boundary instead.
+- **Region `us-east-2` pins the Fly region.** Phase 3 should deploy to `ord` (Chicago) or `iad` (Ashburn) so the API isn't a continent away from its database. Changing a Neon project's region means recreating the project.
+
+The failure mode to watch: exceeding a monthly free limit **suspends compute until the next billing month** rather than billing you. Good for a hobby budget, bad for uptime — Phase 11's uptime checks should cover it.
 
 ### Divergences from the SQL sketch above
 
@@ -253,13 +273,78 @@ Each of these is a deliberate change, not a transcription slip:
 ## Phase 3 — The server and its container
 
 - [ ] Scaffold the API server (Hono or Fastify — both are light and TypeScript-native) mounting the Phase 1 core handlers.
-- [ ] Write the `Dockerfile`: Node 22 base, then `ffmpeg` and **MuseScore** installed in the image. MuseScore needs Qt and a virtual display — expect `xvfb-run` plus a headless-friendly invocation, and budget real time for this step. It is the least predictable part of the whole plan.
-- [ ] Verify in-container: `ffmpeg -version`, and an actual `.mscz` → `.mxl` conversion of a real file from the repo.
+- [x] Write the `Dockerfile`: Node 22 base, then `ffmpeg` and **MuseScore** installed in the image. MuseScore needs Qt and a virtual display — `xvfb-run` confirmed mandatory. Four distinct failures to get through; see below.
+- [x] Verify in-container: `ffmpeg -version`, and an actual `.mscz` → `.mxl` conversion of a real file from the repo. **Green on both arm64 and amd64.**
 - [ ] Add a `/healthz` endpoint and a smoke-test script.
-- [ ] Deploy to Fly.io with a volume for scratch space; wire R2 credentials as Fly secrets.
+- [ ] Deploy to Fly.io with a volume for scratch space; wire R2 credentials and `DATABASE_URL` as Fly secrets. Use `ord` or `iad` to sit near the `us-east-2` Neon project.
 - [ ] Keep the API on a subdomain (`api.<domain>`) with the SPA still on Cloudflare Pages.
 
 **Exit criteria**: deployed container converts a real `.mscz` and transcodes a real stem, driven by curl. Still no auth — not yet public-facing.
+
+### What landed — the container
+
+**14/14 pass on `linux/arm64` and `linux/amd64`**, plus 14/14 natively on macOS. Headless `.mscz` → `.mxl` works: 0.4s native arm64, 1.5s amd64 under emulation (real Fly hardware will be faster). Measure, note and part counts match the macOS-produced `Wiggle.mxl` on every platform.
+
+This was the load-bearing assumption of the whole plan — *Host: Node in Docker on Fly.io*, with "Workers-only would force dropping server-side `.mscz`" as the consequence if wrong. It holds.
+
+```
+Dockerfile              node:22-bookworm-slim + ffmpeg + MuseScore 4.7.5
+.dockerignore
+scripts/mscz-smoke.ts   exercises the real code paths, not `mscore` directly
+```
+
+Two facts drove the image, both worth not rediscovering later:
+
+- **MuseScore ships as an AppImage, and AppImages want FUSE**, which containers don't have. So it's extracted at build time (`--appimage-extract`) and `AppRun` is invoked directly.
+- **MuseScore 4 dropped `-platform offscreen`.** It worked in MuseScore 3; in 4 the CLI needs a real X display even to convert a file. Every invocation goes through `xvfb-run`. This is the single most likely thing to break, and there's no way around it short of dropping server-side `.mscz`.
+
+MuseScore publishes **both x86_64 and aarch64 AppImages**, so the image builds natively on an Apple Silicon laptop *and* on Fly's amd64 machines — the spike doesn't have to run under emulation. The arch is selected from `TARGETARCH`.
+
+`scripts/mscz-smoke.ts` calls `resolveMscoreBin()` and `convertScore()` rather than shelling out, because the question isn't "does MuseScore run" but "does *our* code work in this image" — including the `-v` probe, which must exit 0, and the tolerate-crash-on-exit logic from commit `3ad3c65`. It also runs a synthetic stem through `ffprobe` → `measureLoudness` → `transcodeToOpus`, so no audio needs committing.
+
+**Baseline: 14/14 pass on macOS** (MuseScore 4 local install, conversion in 0.7s). The `.mxl` comparison is structural — measure, note and part counts against the committed `Wiggle.mxl` — because MXL is a zip and zips embed timestamps, so byte-for-byte would fail for uninteresting reasons.
+
+### Four failures, in the order they appeared
+
+Each of these is cheap once you know it and expensive when you don't.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `npm ci` → `sh: 1: git: not found`, exit 127 | `package.json`'s `prepare` script is `git config core.hooksPath .hooks` | `npm pkg delete scripts.prepare` before `npm ci` — narrower than installing git, and leaves every other lifecycle script running |
+| A wall of ``version `GLIBC_2.38' not found`` | MuseScore 4.7.5 needs glibc 2.38 / GLIBCXX 3.4.32; **bookworm ships 2.36** | Base image → `node:22-trixie-slim` (glibc 2.41) |
+| `xvfb-run: error: xauth command not found`, exit 3 | `xvfb-run` shells out to `xauth` | Install `xauth` alongside `xvfb` |
+| `error while loading shared libraries: libgpg-error.so.0` | The AppImage bundles `libgcrypt` but not its `libgpg-error` dependency | Install `libgpg-error0` |
+
+Debian 13 renamed two packages in the time64 transition: `libglib2.0-0` → `libglib2.0-0t64` and `libasound2` → `libasound2t64`. Everything else in the Qt list kept its name.
+
+Two more worth knowing:
+
+- **Qt warns the `C` locale isn't UTF-8** and silently switches to `C.UTF-8`. Score titles and part names carry accented characters, so `LANG=C.UTF-8` is set explicitly rather than left to that fallback.
+- **`ldd` across the whole bundle finds every missing library in one pass**, instead of rebuilding once per error:
+  ```bash
+  LD_LIBRARY_PATH=/opt/musescore/lib sh -c '{ ldd /opt/musescore/bin/mscore4portable; for f in /opt/musescore/lib/*.so*; do ldd "$f"; done; } 2>/dev/null | grep "not found" | awk "{print \$1}" | sort -u'
+  ```
+  It reported exactly two: `libgpg-error.so.0` (fatal) and `libpipewire-0.3.so.0` (has an AppRun fallback).
+
+### Why the image is two stages
+
+The amd64 build failed where arm64 succeeded: `Exec format error`, exit 126. `--appimage-extract` means *executing* the AppImage's runtime, which is **static-pie** linked — and QEMU user-mode emulation cannot exec static-pie binaries. Ordinary dynamically-linked amd64 binaries (`apt`, `curl`) emulate fine; this one can't. So a cross-arch build cannot self-extract.
+
+A type-2 AppImage is just a squashfs archive appended to an ELF runtime, so stage 1 computes where the ELF ends (`readelf -h`, then `shoff + shentsize × shnum`) and `unsquashfs`es from that offset — no execution at all. That stage runs on `$BUILDPLATFORM`, so it isn't emulated either, and `binutils`/`squashfs-tools` stay out of the runtime image.
+
+**Do not find the offset by grepping for the `hsqs` magic bytes.** On the x86_64 AppImage the real payload starts at 944632, but `grep -abo hsqs` also matches at 194183 — a byte coincidence inside the runtime. The `readelf` arithmetic is authoritative; the `hsqs` check is an assertion on it, not a search for it.
+
+To reproduce:
+
+```bash
+docker build -t practice-portal-api .
+docker run --rm -v "$PWD/docs/public/xml-sample:/fixtures:ro" \
+  -e FIXTURES_DIR=/fixtures practice-portal-api npx tsx scripts/mscz-smoke.ts
+```
+
+Both arches build from the same Dockerfile; add `--platform linux/amd64` for the Fly target.
+
+**Still open in Phase 3**: the Hono entrypoint, `/healthz`, and the Fly deploy itself. The container's media toolchain is no longer a risk.
 
 ---
 
