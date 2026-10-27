@@ -385,7 +385,7 @@ The container's media toolchain is no longer a risk.
 - [x] Verify: row counts match file counts, and a diff of `config` jsonb against the source JSON is empty for every song. Runs inside the import's own transaction, so a mismatch rolls the whole import back.
 - [x] Serve reads from the API with ETag and cache headers. **Diverged:** `GET /api/data/<R2 key>` mirrors the R2 layout rather than `/api/bands/:slug/songs/:slug/config` — see below. `no-cache` + ETag, same as R2; Cloudflare in front is still open.
 - [x] Keep Postgres in step while the admin still writes R2: every R2 JSON write, delete and copy is mirrored (dev, when `DATABASE_URL` is set).
-- [ ] Deploy with `DATABASE_URL` as a Fly secret; `check-data-parity --url https://practice-portal.fly.dev` shows 0 differences.
+- [x] Deploy with `DATABASE_URL` as a Fly secret; `check-data-parity --url https://practice-portal.fly.dev` shows 0 differences. Live 2026-10-27: 308 documents, 0 differences; smoke 23/23; `/api/data` answers in 0.15–0.3 s warm, on par with R2.
 - [x] Dual-read period: keep the R2 JSON files in place, untouched, as a rollback path. They're still the admin's write target, so they stay current; rolling back is a rebuild without `VITE_DATA_SOURCE=api`.
 
 **Exit criteria**: the SPA runs entirely off API reads, with R2 JSON still present but unread.
