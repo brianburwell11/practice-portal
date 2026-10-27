@@ -272,14 +272,43 @@ Each of these is a deliberate change, not a transcription slip:
 
 ## Phase 3 — The server and its container
 
-- [ ] Scaffold the API server (Hono or Fastify — both are light and TypeScript-native) mounting the Phase 1 core handlers.
+- [x] Scaffold the API server mounting the Phase 1 core handlers. **Plain `node:http`, not Hono or Fastify** — see *What landed — the server*.
 - [x] Write the `Dockerfile`: Node 22 base, then `ffmpeg` and **MuseScore** installed in the image. MuseScore needs Qt and a virtual display — `xvfb-run` confirmed mandatory. Four distinct failures to get through; see below.
 - [x] Verify in-container: `ffmpeg -version`, and an actual `.mscz` → `.mxl` conversion of a real file from the repo. **Green on both arm64 and amd64.**
-- [ ] Add a `/healthz` endpoint and a smoke-test script.
-- [ ] Deploy to Fly.io with a volume for scratch space; wire R2 credentials and `DATABASE_URL` as Fly secrets. Use `ord` or `iad` to sit near the `us-east-2` Neon project.
-- [ ] Keep the API on a subdomain (`api.<domain>`) with the SPA still on Cloudflare Pages.
+- [x] Add a `/healthz` endpoint and a smoke-test script.
+- [ ] Deploy to Fly.io (`fly.toml` written, region `ord`). Read-only mode needs no secrets and no volume; R2 credentials, `DATABASE_URL` and a scratch volume come with writes.
+- [x] Build the image locally once (`docker build --build-arg VITE_R2_PUBLIC_URL=...`). arm64, 2026-10-27: `smoke:server --url` 15/15 against the container, `mscz-smoke` 0 failures, 2.42 GB. amd64 still unbuilt — `fly deploy` builds it remotely.
+- [ ] ~~Keep the API on a subdomain (`api.<domain>`) with the SPA still on Cloudflare Pages.~~ Superseded for now: the server serves the SPA itself. Revisit when sessions need a cookie domain (Phase 5).
 
 **Exit criteria**: deployed container converts a real `.mscz` and transcodes a real stem, driven by curl. Still no auth — not yet public-facing.
+
+### What landed — the server
+
+**The site runs on a server, unchanged, and the server is read-only.** Decided 2026-10-27: host first, accounts after. Phase 5 needs a deployed server to build against anyway (cookies, magic-link emails), and Phase 5 also depends on Phase 4 — so "accounts first" would have meant Phases 4 and 5 with nothing hosted.
+
+```
+server/main.ts                 entrypoint: /healthz, /api/* (all refused), SPA
+server/adapters/nodeApi.ts     Node req/res ↔ core, shared with the Vite plugin
+server/adapters/staticFiles.ts dist/ with SPA fallback, gzip, ETag, immutable assets/
+scripts/server-smoke.ts        npm run smoke:server [-- --url https://...]
+fly.toml                       ord, auto-stop, /healthz check, no secrets
+```
+
+Why read-only is free: **the public site never calls `/api`.** Registry, band, song config, lyrics, notes, setlists and media are all fetched straight from the R2 public URL; every `/api` call comes from an admin control, and the admin UI isn't in the production bundle. So the server refuses every `/api` route with a 403 *before reading the body*, needs no R2 credentials or `DATABASE_URL`, and admin keeps working exactly as before via `npm run dev`. Reads are refused too: the one GET route, band storage, runs a full R2 listing — unauthenticated, that leaks bucket layout and lets anyone run up R2 operations once credentials are set.
+
+That gate (`server/main.ts`) is the only thing between the internet and an unauthenticated write API. **Do not loosen it before Phase 6**; the smoke test asserts it on every run.
+
+Decisions worth knowing:
+
+- **`node:http`, not Hono.** The core already has its own router (`server/core/router.ts`), and `nodeRequest.ts` already speaks `IncomingMessage`. A framework would have been a second router in front of the first. Revisit if middleware piles up in Phase 5.
+- **The Vite plugin shrank again.** Its request → core → response logic moved to `server/adapters/nodeApi.ts`, so dev and production run the same adapter; the plugin is now ~25 lines.
+- **Bundled with esbuild, `--packages=external`.** `dist-server/server.js` is ~37 KB; `node_modules` stays in the image (it's there for `mscz-smoke.ts` anyway).
+- **The image is now three stages.** The new `web` stage runs `npm run build && npm run build:server` on `$BUILDPLATFORM`. `VITE_R2_PUBLIC_URL` is a **build arg**, baked into the bundle — it's public, and `.env` is dockerignored.
+- **The SPA is served from the same origin**, rather than Pages + `api.` subdomain. One deploy, no CORS. Cloudflare can still sit in front for caching.
+
+Verified locally: `npm run build`, then `npm run smoke:server`, 16/16 — healthz, SPA root, deep-link fallback, immutable hashed assets, missing asset → 404 (not `index.html`), path traversal refused, storage read and five write routes → 403, unknown `/api` → 404.
+
+Security pass (2026-10-27): no `.env`, `.git` or credential values anywhere in the image or its history; the bundle carries only `VITE_R2_PUBLIC_URL`. Encoded `../`, null bytes, `/.env` and absolute-form request targets all fall back to `index.html` or 404 — nothing from the filesystem. The container runs as an unprivileged `app` user (uid 10001) with `/app` read-only to it. Also checked gzip, ETag → 304, and that the Vite dev server still routes the API.
 
 ### What landed — the container
 
@@ -326,7 +355,7 @@ Two more worth knowing:
   ```
   It reported exactly two: `libgpg-error.so.0` (fatal) and `libpipewire-0.3.so.0` (has an AppRun fallback).
 
-### Why the image is two stages
+### Why MuseScore gets its own stage
 
 The amd64 build failed where arm64 succeeded: `Exec format error`, exit 126. `--appimage-extract` means *executing* the AppImage's runtime, which is **static-pie** linked — and QEMU user-mode emulation cannot exec static-pie binaries. Ordinary dynamically-linked amd64 binaries (`apt`, `curl`) emulate fine; this one can't. So a cross-arch build cannot self-extract.
 
@@ -344,7 +373,7 @@ docker run --rm -v "$PWD/docs/public/xml-sample:/fixtures:ro" \
 
 Both arches build from the same Dockerfile; add `--platform linux/amd64` for the Fly target.
 
-**Still open in Phase 3**: the Hono entrypoint, `/healthz`, and the Fly deploy itself. The container's media toolchain is no longer a risk.
+The container's media toolchain is no longer a risk.
 
 ---
 
