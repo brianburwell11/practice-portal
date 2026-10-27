@@ -383,8 +383,10 @@ The container's media toolchain is no longer a risk.
 - [x] Walk `bands.json` → each `band.json` → each song `config.json` → each setlist, validating every record against the existing Zod schemas on the way in. Schema violations should fail loudly rather than be coerced. Lyrics and notes too — the plan's walk missed them.
 - [x] Media stays exactly where it is. Only JSON moves; store R2 object keys as references.
 - [x] Verify: row counts match file counts, and a diff of `config` jsonb against the source JSON is empty for every song. Runs inside the import's own transaction, so a mismatch rolls the whole import back.
-- [ ] Serve reads from the API with ETag and cache headers (`GET /api/bands/:slug/songs/:slug/config`), Cloudflare caching in front.
-- [ ] Dual-read period: keep the R2 JSON files in place, untouched, as a rollback path.
+- [x] Serve reads from the API with ETag and cache headers. **Diverged:** `GET /api/data/<R2 key>` mirrors the R2 layout rather than `/api/bands/:slug/songs/:slug/config` — see below. `no-cache` + ETag, same as R2; Cloudflare in front is still open.
+- [x] Keep Postgres in step while the admin still writes R2: every R2 JSON write, delete and copy is mirrored (dev, when `DATABASE_URL` is set).
+- [ ] Deploy with `DATABASE_URL` as a Fly secret; `check-data-parity --url https://practice-portal.fly.dev` shows 0 differences.
+- [x] Dual-read period: keep the R2 JSON files in place, untouched, as a rollback path. They're still the admin's write target, so they stay current; rolling back is a rebuild without `VITE_DATA_SOURCE=api`.
 
 **Exit criteria**: the SPA runs entirely off API reads, with R2 JSON still present but unread.
 
@@ -409,7 +411,32 @@ Decisions, each forced by something in the data or the UI:
 - **Every band imported `public`.** The column defaults to `private`, but every band is publicly readable today; private is Phase 7's job.
 - **The source JSON is stored, not Zod's output.** `songConfigSchema` defaults `beatOffset` and strips unknown keys; storing the parse result would have produced a diff.
 
-**Postgres is now a snapshot, not the source of truth.** Admin edits via `npm run dev` still write only to R2, and nothing reads the database yet. It goes stale with the first edit. That's acceptable until the remaining two items land, but re-importing means deleting the imported bands first — the script refuses to overwrite by design.
+**Postgres was a snapshot at import time.** Admin edits via `npm run dev` wrote only to R2 until the mirror below landed. Re-importing means deleting the imported bands first — the script refuses to overwrite by design.
+
+
+### What landed — reads from Postgres
+
+```
+server/core/documents.ts        R2 key ↔ rows: readDocument, mirrorWrite, mirrorDelete
+server/core/handlers/data.ts    GET /api/data/<key> — the one route marked public
+src/utils/url.ts                dataUrl(): /api/data when VITE_DATA_SOURCE=api, else R2
+scripts/check-data-parity.ts    every document, R2 vs API, --url <server>
+scripts/verify-mirror.ts        admin flows replayed through the mirror, offline
+```
+
+**The API mirrors the R2 layout instead of the planned slug routes.** `/api/data/dirty-chai/songs/discography.json` returns what R2 returns at `dirty-chai/songs/discography.json`. The SPA's only change is the base URL of 20 JSON fetches — no new shapes, no new 404 handling — which is what "don't change the website" needed. Slug-addressed routes can come with Phase 5, when something other than the SPA consumes them.
+
+**Item documents are stored; index documents are built.** A song's config, lyrics and notes, each setlist, and each band are jsonb in their row and come back verbatim. `registry.json`, `discography.json` and `setlists/index.json` are never stored — built on read. Checked before relying on it: across all 6 bands every registry, discography and setlist-index entry is a pure function of its item file, except one discography entry with a trailing space in the artist that its config doesn't have. Writes to an index carry only order, kept in `position`.
+
+**Parity: 308 documents compared, 0 differences** against a local server on Neon — every band, discography, config, lyrics and notes file (including the 404s for songs that have none), setlist index and setlist.
+
+**Dev writes mirror into Postgres.** `server/core/r2.ts` takes a `JsonMirror`; the Vite plugin registers it when `DATABASE_URL` is set. Handlers are untouched. Three things the replay test (`verify-mirror.ts`, 25 checks) caught or pinned down:
+
+- **Renames collide on slug.** `renameSong` writes the new config *before* deleting the old one, and `SetlistModal` saves the new setlist id before deleting the old — R2 tolerates two holders of a slug for a moment, the unique constraint didn't. Last writer now takes the slug and the other row drops to one built from its own id. Reads build slugs from the documents, so the SPA sees no difference.
+- **Copies mirror from the destination.** A rename deletes the old config (and with it the row) before copying lyrics and notes across, so a copy re-reads what R2 now holds at the target.
+- **Mirror failures are logged as well as thrown.** Several handlers wrap R2 deletes in a bare `catch {}`; a swallowed mirror error would leave Postgres silently stale. If Neon is down mid-edit, R2 has the change and the admin sees an error — run `check-data-parity` to see the drift.
+
+**Rollback** is a build flag: the Docker image sets `VITE_DATA_SOURCE=api`; without it the bundle reads R2 exactly as before (the default build contains no `/api/data` reference). GitHub Pages and `npm run dev` don't set it.
 
 ---
 
