@@ -1,9 +1,12 @@
 /**
  * Prove the container's media toolchain works, through the real code paths.
  *
- *   FIXTURES_DIR=docs/public/xml-sample npx tsx scripts/mscz-smoke.ts   # on your Mac
+ *   npm run smoke:media                                # on your Mac (tsx)
  *   docker run --rm -v "$PWD/docs/public/xml-sample:/fixtures:ro" \
- *     -e FIXTURES_DIR=/fixtures practice-portal-api npx tsx scripts/mscz-smoke.ts
+ *     -e FIXTURES_DIR=/fixtures practice-portal node dist-server/mscz-smoke.js
+ *
+ * The image has no tsx or TypeScript sources (production deps only), so the
+ * Dockerfile bundles this file with `npm run build:smoke`.
  *
  * This deliberately calls resolveMscoreBin() and convertScore() rather than
  * shelling out to `mscore` directly: the thing we need to know is whether the

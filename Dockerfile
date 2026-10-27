@@ -18,6 +18,10 @@
 # Build for the host arch when spiking locally; build amd64 for Fly:
 #   docker build --build-arg VITE_R2_PUBLIC_URL=... -t practice-portal .
 #   docker build --platform linux/amd64 --build-arg VITE_R2_PUBLIC_URL=... -t practice-portal .
+#
+# Then prove the media toolchain (ffmpeg + .mscz conversion) inside it:
+#   docker run --rm -v "$PWD/docs/public/xml-sample:/fixtures:ro" \
+#     -e FIXTURES_DIR=/fixtures practice-portal node dist-server/mscz-smoke.js
 
 # ---------------------------------------------------------------- stage 1
 # Unpack the MuseScore AppImage. Runs on the BUILD platform, not the target:
@@ -62,6 +66,31 @@ RUN set -eux; \
     test -x /opt/musescore/AppRun; \
     rm /tmp/musescore.AppImage
 
+# Drop what headless .mscz → .mxl never touches (~270 MB of 569 MB). Each
+# removal was checked against scripts/mscz-smoke.ts, and the converted
+# MusicXML is byte-identical (bar the encoding date) to the untrimmed build.
+#
+#   appimageupdatetool.AppDir   self-updater, 132 MB
+#   share/.../sound             MS Basic soundfont — playback only, 49 MB
+#   share/.../locale, translations   UI and Qt translations, 54 MB
+#   qml                         the GUI's QML modules, 19 MB
+#   share/.../templates, autobotscripts, plugins, extensions, wallpapers,
+#   share/doc                   new-score templates, UI test scripts, examples
+#
+# Do NOT remove the top-level `plugins/`: those are Qt's plugins, including
+# platforms/libqxcb.so — without it mscore can't open the Xvfb display and
+# even `mscore -v` fails. Kept also: bin, lib, fallback (AppRun's libjack /
+# libnss3 / libpipewire fallbacks), share/.../tables, styles, workspaces.
+RUN set -eux; \
+    cd /opt/musescore; \
+    ms_share="share/mscore4portable-4.7"; \
+    test -d "${ms_share}"; \
+    rm -rf appimageupdatetool.AppDir qml translations share/doc \
+      "${ms_share}/sound" "${ms_share}/locale" "${ms_share}/templates" \
+      "${ms_share}/autobotscripts" "${ms_share}/plugins" "${ms_share}/extensions" \
+      "${ms_share}/wallpapers"; \
+    test -f plugins/platforms/libqxcb.so
+
 # ---------------------------------------------------------------- stage 2
 # Build the SPA and bundle the server. Pure JS output, so like stage 1 this
 # runs on the BUILD platform — no QEMU for a cross-arch build.
@@ -84,7 +113,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm pkg delete scripts.prepare && npm ci
 COPY . .
-RUN npm run build && npm run build:server
+# build:smoke bundles scripts/mscz-smoke.ts next to the server, so the runtime
+# image can prove its media toolchain with plain `node` — no tsx, no sources.
+RUN npm run build && npm run build:server && npm run build:smoke
 
 # ---------------------------------------------------------------- stage 3
 # Debian 13 (trixie), NOT bookworm. MuseScore 4.7.5 links against GLIBC_2.38
@@ -150,21 +181,24 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 # `prepare` is `git config core.hooksPath .hooks` — local dev-hook setup that
 # has no meaning here, and there's no git in this image. Dropping just that one
-# script is narrower than installing git, and leaves every other lifecycle
-# script (esbuild's native postinstall) running normally.
-RUN npm pkg delete scripts.prepare && npm ci
-
-COPY tsconfig.json tsconfig.node.json ./
-COPY server ./server
-COPY scripts ./scripts
+# script is narrower than installing git.
+#
+# Production dependencies only. dist-server/server.js is bundled with
+# --packages=external, so everything it imports at runtime (drizzle-orm,
+# postgres, zod, busboy, @aws-sdk/*) must be in `dependencies`, not
+# `devDependencies` — a misfiled one surfaces as ERR_MODULE_NOT_FOUND at boot.
+# --omit=optional drops @electric-sql/pglite (26 MB), which drizzle-orm pulls
+# in as an optional peer; the server only uses drizzle-orm/postgres-js.
+RUN npm pkg delete scripts.prepare && npm ci --omit=dev --omit=optional && npm cache clean --force
 
 COPY --from=web /app/dist ./dist
 COPY --from=web /app/dist-server ./dist-server
 
 # Read-only server: the SPA plus GET API routes. ffmpeg and MuseScore are
-# unused until writes are enabled (Phase 6), but stay in the image so
-# scripts/mscz-smoke.ts keeps proving the toolchain on the deployed arch.
-# dist-server/server.js keeps node_modules external, hence the npm ci above.
+# unused until writes are enabled (Phase 6), but stay in the image so the
+# bundled media smoke test keeps proving the toolchain on the deployed arch:
+#   docker run --rm -v "$PWD/docs/public/xml-sample:/fixtures:ro" \
+#     -e FIXTURES_DIR=/fixtures practice-portal node dist-server/mscz-smoke.js
 ENV PORT=8080 NODE_ENV=production
 EXPOSE 8080
 # App files stay root-owned and read-only to the process; it only writes to
