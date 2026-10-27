@@ -12,7 +12,9 @@
  * Discography is compared per song, not as an array: the API orders it by
  * import, R2 by insertion, and the UI sorts by title either way.
  *
- * Read-only on both sides; needs no credentials.
+ * Read-only on both sides; needs no credentials. It reads the API signed
+ * out, so a Members-only band answers 401 — reported as skipped, not as a
+ * difference, since R2 still serves it publicly until Phase 7.
  */
 import dotenv from 'dotenv';
 
@@ -85,8 +87,18 @@ async function compareDiscography(key: string): Promise<{ id: string }[]> {
 
 async function main(): Promise<void> {
   console.log(`R2:  ${r2}\nAPI: ${api}/api/data\n`);
-  const registry = await compare('registry.json');
+  const registry = await fetchDoc(`${r2}/registry.json`);
+  const apiRegistry = await fetchDoc(`${api}/api/data/registry.json`);
+  checked++;
+  const apiIds = new Set((apiRegistry.body as { bands: { id: string }[] }).bands.map((b) => b.id));
+  const skipped: string[] = [];
   for (const band of (registry.body as { bands: { id: string }[] }).bands) {
+    if (!apiIds.has(band.id)) {
+      const probe = await fetchDoc(`${api}/api/data/${band.id}/band.json`);
+      if (probe.status === 401) { skipped.push(band.id); continue; }
+      diffs.push(`registry.json: ${band.id} is in R2 but not served by the API (${probe.status})`);
+      continue;
+    }
     await compare(`${band.id}/band.json`);
     const songs = await compareDiscography(`${band.id}/songs/discography.json`);
     for (const s of songs) {
@@ -102,6 +114,12 @@ async function main(): Promise<void> {
   const missing = await fetchDoc(`${api}/api/data/no-such-band/band.json`);
   if (missing.status !== 404) diffs.push(`unknown band: API ${missing.status}, expected 404`);
 
+  // The registry itself, minus Members-only bands, must match entry for entry.
+  const visible = (registry.body as { bands: { id: string }[] }).bands.filter((b) => !skipped.includes(b.id));
+  if (canonical({ bands: visible }) !== canonical(apiRegistry.body)) {
+    diffs.push(`registry.json: content differs\n    R2:  ${canonical({ bands: visible }).slice(0, 200)}\n    API: ${canonical(apiRegistry.body).slice(0, 200)}`);
+  }
+  for (const id of skipped) console.log(`skip  ${id}: Members only (API 401 signed out, as intended)`);
   for (const n of notes) console.log(`note  ${n}`);
   for (const d of diffs) console.log(`DIFF  ${d}`);
   console.log(`\n${checked} documents compared, ${diffs.length} difference(s)`);
