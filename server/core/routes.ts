@@ -16,7 +16,19 @@ import {
   rebuildRegistry,
   uploadBandLogo,
 } from './handlers/bands';
+import { googleCallback, googleStart, logout, me } from './handlers/auth';
 import { readData } from './handlers/data';
+import {
+  acceptInvite,
+  createInvite,
+  listMembers,
+  previewInvite,
+  removeMember,
+  revokeInvite,
+  setMemberRole,
+  setVisibility,
+  transferOwnership,
+} from './handlers/members';
 import { deleteSetlist, saveSetlist } from './handlers/setlists';
 import {
   deleteSong,
@@ -38,6 +50,115 @@ import {
 import type { RouteDef } from './types';
 
 export const routes: RouteDef[] = [
+  // --- Members and invites (Phase 5). Any signed-in user may call these;
+  // each handler checks the caller's capability in the band.
+  {
+    name: 'member.list',
+    method: 'GET',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/members$/,
+    signedIn: true,
+    handler: listMembers,
+  },
+  {
+    name: 'member.role.set',
+    method: 'PUT',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/members\/(?<userId>[^/]+)$/,
+    body: 'json',
+    signedIn: true,
+    handler: setMemberRole,
+  },
+  {
+    name: 'member.remove',
+    method: 'DELETE',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/members\/(?<userId>[^/]+)$/,
+    signedIn: true,
+    handler: removeMember,
+  },
+  {
+    name: 'band.transfer',
+    method: 'POST',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/transfer$/,
+    body: 'json',
+    signedIn: true,
+    handler: transferOwnership,
+  },
+  {
+    name: 'band.visibility',
+    method: 'PUT',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/visibility$/,
+    body: 'json',
+    signedIn: true,
+    handler: setVisibility,
+  },
+  {
+    name: 'invite.create',
+    method: 'POST',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/invites$/,
+    body: 'json',
+    signedIn: true,
+    handler: createInvite,
+  },
+  {
+    name: 'invite.revoke',
+    method: 'DELETE',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/invites\/(?<inviteId>[^/]+)$/,
+    signedIn: true,
+    handler: revokeInvite,
+  },
+  {
+    // Public: the token is the authorization, and the page shows the band
+    // name before asking anyone to sign in.
+    name: 'invite.preview',
+    method: 'GET',
+    pattern: /^\/api\/invites\/(?<token>[A-Za-z0-9_-]+)$/,
+    public: true,
+    handler: previewInvite,
+  },
+  {
+    name: 'invite.accept',
+    method: 'POST',
+    pattern: /^\/api\/invites\/(?<token>[A-Za-z0-9_-]+)\/accept$/,
+    signedIn: true,
+    handler: acceptInvite,
+  },
+
+  // --- Accounts (Phase 5). Public: they're how you stop being anonymous.
+  {
+    name: 'auth.google.start',
+    method: 'GET',
+    pattern: /^\/api\/auth\/google\/start$/,
+    public: true,
+    handler: googleStart,
+    errorStatus: 500,
+    errorMessage: 'Sign-in unavailable',
+  },
+  {
+    name: 'auth.google.callback',
+    method: 'GET',
+    pattern: /^\/api\/auth\/google\/callback$/,
+    public: true,
+    handler: googleCallback,
+    errorStatus: 500,
+    errorMessage: 'Sign-in failed',
+  },
+  {
+    name: 'auth.logout',
+    method: 'POST',
+    pattern: /^\/api\/auth\/logout$/,
+    public: true,
+    handler: logout,
+    errorStatus: 500,
+    errorMessage: 'Sign-out failed',
+  },
+  {
+    name: 'auth.me',
+    method: 'GET',
+    pattern: /^\/api\/me$/,
+    public: true,
+    handler: me,
+    errorStatus: 500,
+    errorMessage: 'Lookup failed',
+  },
   {
     // The JSON documents R2 serves publicly today, from Postgres (Phase 4).
     name: 'data.read',

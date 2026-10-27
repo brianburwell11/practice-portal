@@ -123,6 +123,16 @@ async function run(): Promise<void> {
   const writeData = await request('PUT', '/api/data/registry.json', '{}');
   check('PUT /api/data → refused', writeData.status === 403 || writeData.status === 404, `got ${writeData.status}`);
 
+  // Phase 5: accounts. Signed out, /api/me answers; member routes ask for sign-in.
+  const me = await request('GET', '/api/me');
+  check('GET /api/me signed out → user null', me.status === 200 && JSON.parse(me.body).user === null, `got ${me.status} ${me.body.slice(0, 80)}`);
+  const roster = await request('GET', '/api/bands/dev/members');
+  check('member routes need sign-in → 401', roster.status === 401, `got ${roster.status}`);
+  const badInvite = await request('GET', '/api/invites/not-a-real-token');
+  check('unknown invite → 404', badInvite.status === 404, `got ${badInvite.status}`);
+  const invitePage = await request('GET', '/invite/anything');
+  check('GET /invite/<token> → SPA', invitePage.status === 200 && invitePage.body === root.body, `got ${invitePage.status}`);
+
   const unknown = await request('GET', '/api/nope');
   check('unknown /api route → 404 JSON', unknown.status === 404 && /json/.test(String(unknown.headers['content-type'])), `got ${unknown.status}`);
 }

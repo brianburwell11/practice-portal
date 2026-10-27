@@ -17,10 +17,29 @@ export interface UploadedFile {
   path: string;
 }
 
+/** Who is calling. Resolved by the adapter from the session cookie. */
+export interface Actor {
+  kind: 'user';
+  userId: string;
+  email: string;
+  /** Hash of the session token, so sign-out can end exactly this session. */
+  sessionHash: string;
+}
+
 export interface CoreRequest {
   /** Named captures from the route pattern. Untrusted — treat as client input. */
   params: Record<string, string>;
   query: URLSearchParams;
+  /** Request cookies, by name. */
+  cookies: Record<string, string>;
+  /**
+   * `https://host[:port]` as the browser addressed this server. Used to build
+   * OAuth redirect URIs; Google rejects any it wasn't configured with, so a
+   * spoofed Host header can't redirect a sign-in elsewhere.
+   */
+  origin: string;
+  /** The signed-in user, or undefined for an anonymous request. */
+  actor?: Actor;
   /** Parsed JSON body. Present when the route declares `body: 'json'`. */
   body?: unknown;
   /** Uploads. Present when the route declares `body: 'multipart'`. */
@@ -35,13 +54,16 @@ export interface CoreRequest {
 
 export interface CoreResponse {
   status: number;
+  /** Serialized as JSON. Omitted for redirects. */
   body: unknown;
+  /** Extra response headers — `Location` for a redirect, `Set-Cookie`. */
+  headers?: Record<string, string | string[]>;
 }
 
 export type CoreHandler = (req: CoreRequest) => Promise<CoreResponse>;
 
 /** Everything known about a request before its body has been read. */
-export type RouteTarget = Pick<CoreRequest, 'params' | 'query'>;
+export type RouteTarget = Pick<CoreRequest, 'params' | 'query' | 'cookies' | 'origin' | 'actor'>;
 
 /** The parts of a `CoreRequest` that only exist once the body is read. */
 export type RequestBody = Pick<CoreRequest, 'body' | 'files' | 'tmpDir'>;
@@ -64,6 +86,11 @@ export interface RouteDef {
    * capability per route.
    */
   public?: boolean;
+  /**
+   * Available on gated hosts to any signed-in user; anonymous callers get a
+   * 401. The handler still checks what this particular user may do.
+   */
+  signedIn?: boolean;
   /** How the adapter should read the body. Defaults to `'none'`. */
   body?: 'none' | 'json' | 'multipart';
   /** Enforced by the adapter while parsing a multipart body. */

@@ -29,9 +29,11 @@ const PORT = Number(process.env.PORT ?? 8080);
 const STATIC_DIR = process.env.STATIC_DIR ?? 'dist';
 
 const handleApi = createApiHandler({
-  gate: (route) => route.public
-    ? undefined
-    : { status: 403, body: { error: 'This server is read-only' } },
+  gate: (route, actor) => {
+    if (route.public) return undefined;
+    if (route.signedIn) return actor ? undefined : { status: 401, body: { error: 'Sign in required' } };
+    return { status: 403, body: { error: 'This server is read-only' } };
+  },
 });
 const handleStatic = createStaticHandler(STATIC_DIR);
 

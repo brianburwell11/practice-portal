@@ -20,10 +20,11 @@
  * Bands are addressed by `band.legacy_id` and songs by `song.media_prefix`,
  * because every R2 key is built from those ids and media doesn't move.
  */
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, or, sql } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { db as defaultDb } from '../db/client';
 import * as schema from '../db/schema';
+import { HttpError } from './http';
 import { r2PublicUrl } from './r2';
 
 export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
@@ -70,13 +71,24 @@ function toKey(url: string): string {
 
 type BandRow = typeof schema.band.$inferSelect;
 
-/** Only what R2 serves publicly today: imported or mirrored, public, live. */
-async function findBand(d: Db, legacyId: string): Promise<BandRow | undefined> {
+/**
+ * A live band the viewer may read: any Public band, or a Members-only band
+ * they own or belong to. A Members-only band refuses everyone else — 401 when
+ * signed out, so the SPA can offer sign-in; 403 when signed in but not a
+ * member. Unknown bands are null (404), as in R2.
+ */
+async function findBand(d: Db, legacyId: string, viewerId: string | undefined): Promise<BandRow | null> {
   const [row] = await d.select().from(schema.band).where(and(
     eq(schema.band.legacyId, legacyId),
-    eq(schema.band.visibility, 'public'),
     isNull(schema.band.deletedAt),
   ));
+  if (!row) return null;
+  if (row.visibility === 'public') return row;
+  if (!viewerId) throw new HttpError(401, 'Sign in to view this band');
+  if (row.ownerUserId === viewerId) return row;
+  const [m] = await d.select({ role: schema.membership.role }).from(schema.membership)
+    .where(and(eq(schema.membership.bandId, row.id), eq(schema.membership.userId, viewerId)));
+  if (!m) throw new HttpError(403, "You're not a member of this band");
   return row;
 }
 
@@ -94,15 +106,29 @@ const setlistById = (bandId: string, id: string) => and(liveSetlists(bandId), sq
 
 /**
  * The document at `key`, built from Postgres — or null where R2 would 404.
- * Never throws for an unknown or malformed key; that's a 404 too.
+ * An unknown or malformed key is a 404 too. `viewerId` is the signed-in
+ * user, if any: Members-only bands are visible to their members alone.
  */
-export async function readDocument(key: string, d: Db = defaultDb() as unknown as Db): Promise<unknown | null> {
+export async function readDocument(
+  key: string,
+  d: Db = defaultDb() as unknown as Db,
+  viewerId?: string,
+): Promise<unknown | null> {
   const k = parseKey(key);
   if (!k) return null;
 
   if (k.kind === 'registry') {
+    // Public bands, plus Members-only bands the viewer owns or belongs to.
+    const visible = viewerId
+      ? or(
+        eq(schema.band.visibility, 'public'),
+        eq(schema.band.ownerUserId, viewerId),
+        sql`exists (select 1 from ${schema.membership} where ${schema.membership.bandId} = ${schema.band.id}
+                    and ${schema.membership.userId} = ${viewerId})`,
+      )
+      : eq(schema.band.visibility, 'public');
     const bands = await d.select().from(schema.band)
-      .where(and(eq(schema.band.visibility, 'public'), isNull(schema.band.deletedAt), sql`${schema.band.legacyId} is not null`))
+      .where(and(visible, isNull(schema.band.deletedAt), sql`${schema.band.legacyId} is not null`))
       .orderBy(asc(schema.band.position), asc(schema.band.createdAt));
     return {
       bands: bands.map((b) => {
@@ -115,7 +141,7 @@ export async function readDocument(key: string, d: Db = defaultDb() as unknown a
     };
   }
 
-  const band = await findBand(d, k.band);
+  const band = await findBand(d, k.band, viewerId);
   if (!band) return null;
 
   switch (k.kind) {
