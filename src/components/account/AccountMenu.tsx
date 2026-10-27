@@ -58,10 +58,12 @@ export function AccountMenu({ bandId }: Props) {
         {banner}
         <a
           href={signInHref()}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-gray-800 text-sm font-medium shadow hover:bg-gray-100"
+          aria-label="Sign in with Google"
+          className="inline-flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-white text-gray-800 text-sm font-medium shadow hover:bg-gray-100 shrink-0"
         >
           <GoogleMark />
-          Sign in
+          {/* Just the G on phones, where the header is already full. */}
+          <span className="hidden sm:inline">Sign in</span>
         </a>
       </>
     );

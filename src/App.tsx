@@ -142,11 +142,14 @@ export default function App() {
               heading
             );
           })()}
-          <SetlistDropdown />
           <div className="w-full order-last flex justify-center md:w-auto md:order-none md:absolute md:left-1/2 md:-translate-x-1/2">
             <SetlistNav />
           </div>
-          <div className="ml-auto pl-3">
+          {/* One right-aligned group. Two separate ml-auto items would split
+              the free space and push the setlist picker behind the centered
+              song picker. */}
+          <div className="ml-auto flex items-center gap-3">
+            <SetlistDropdown />
             <AccountMenu bandId={currentBand?.id} />
           </div>
         </header>
