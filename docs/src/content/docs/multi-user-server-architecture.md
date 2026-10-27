@@ -276,7 +276,7 @@ Each of these is a deliberate change, not a transcription slip:
 - [x] Write the `Dockerfile`: Node 22 base, then `ffmpeg` and **MuseScore** installed in the image. MuseScore needs Qt and a virtual display — `xvfb-run` confirmed mandatory. Four distinct failures to get through; see below.
 - [x] Verify in-container: `ffmpeg -version`, and an actual `.mscz` → `.mxl` conversion of a real file from the repo. **Green on both arm64 and amd64.**
 - [x] Add a `/healthz` endpoint and a smoke-test script.
-- [ ] Deploy to Fly.io (`fly.toml` written, region `ord`). Read-only mode needs no secrets and no volume; R2 credentials, `DATABASE_URL` and a scratch volume come with writes.
+- [x] Deploy to Fly.io — live at `https://practice-portal.fly.dev` since 2026-10-27, one `shared-cpu-1x`/512 MB machine in `ord` (`fly deploy --ha=false`), `smoke:server --url` 16/16 against it. Read-only mode needs no secrets and no volume; R2 credentials, `DATABASE_URL` and a scratch volume come with writes.
 - [x] Build the image locally once (`docker build --build-arg VITE_R2_PUBLIC_URL=...`). arm64, 2026-10-27: `smoke:server --url` 15/15 against the container, `mscz-smoke` 0 failures, 2.42 GB. amd64 still unbuilt — `fly deploy` builds it remotely.
 - [ ] ~~Keep the API on a subdomain (`api.<domain>`) with the SPA still on Cloudflare Pages.~~ Superseded for now: the server serves the SPA itself. Revisit when sessions need a cookie domain (Phase 5).
 
