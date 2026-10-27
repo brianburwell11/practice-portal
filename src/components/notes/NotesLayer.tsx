@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCan } from '../../store/sessionStore';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
@@ -14,7 +15,6 @@ import {
 } from '../../store/personalNotesStore';
 import type { Note } from '../../audio/types';
 
-const ADMIN = import.meta.env.DEV;
 const FADE_IN_MS = 250;
 
 /** Pixels to nudge the first sticky right of the waveform's left edge so
@@ -98,6 +98,9 @@ interface VisibleEntry {
 }
 
 export function NotesLayer() {
+  // Band notes are editable by whoever may edit song content; everyone else
+  // sees them read-only and adds personal notes instead.
+  const ADMIN = useCan('song.content.write');
   const position = useTransportStore((s) => s.position);
   const adminNotes = useNotesStore((s) => s.notes);
   const adminDirty = useNotesStore((s) => s.dirty);
@@ -150,7 +153,7 @@ export function NotesLayer() {
     }
     return out.sort((a, b) => a.note.time - b.note.time);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminNotes, adminDirty, personalNotes, personalDirty, position]);
+  }, [adminNotes, adminDirty, personalNotes, personalDirty, position, ADMIN]);
 
   // Track the waveform's left edge so the first sticky lines up with the
   // focused-lyric reading point (waveform.left + FOCUS_LEFT_NUDGE_PX).

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { HelpModal } from '../components/HelpModal';
+import { useBandStore } from '../store/bandStore';
+import { useSessionStore } from '../store/sessionStore';
 
 type DropdownId = 'bands' | 'songs' | 'setlists' | null;
 
@@ -9,12 +11,6 @@ interface Props {
   hasBand?: boolean;
   hasSong?: boolean;
   hasSetlist?: boolean;
-  /**
-   * The signed-in user is an Owner or Manager of this band. Shows the Band
-   * menu (with just Members & sharing) outside dev, where the rest of the
-   * admin isn't in the bundle.
-   */
-  canManageMembers?: boolean;
   onManageMembers?: () => void;
   onEditBand?: () => void;
   onDeleteBand?: () => void;
@@ -28,6 +24,16 @@ interface Props {
   onCopySetlist?: () => void;
   onDeleteSetlist?: () => void;
   onViewAllSetlists?: () => void;
+}
+
+interface MenuEntry {
+  label: string;
+  /** You hold the capability. */
+  show: boolean;
+  /** Something is selected for it to act on. */
+  enabled: boolean;
+  danger?: boolean;
+  onClick?: () => void;
 }
 
 function MenuItem({
@@ -63,7 +69,6 @@ export function AdminRibbon({
   hasBand,
   hasSong,
   hasSetlist,
-  canManageMembers,
   onManageMembers,
   onEditBand,
   onDeleteBand,
@@ -97,85 +102,81 @@ export function AdminRibbon({
 
   const close = () => setOpen(null);
 
+  // What you can do here, from the session. Hiding a control is UX only —
+  // the server checks every request on its own.
+  const bandId = useBandStore((st) => st.currentBand?.id);
+  const caps = useSessionStore((st) => st.bands.find((b) => b.id === bandId)?.capabilities);
+  const can = (c: string) => !!caps?.includes(c);
+
+  const allMenus: { id: Exclude<DropdownId, null>; label: string; items: MenuEntry[] }[] = [
+    {
+      id: 'bands',
+      label: 'Band',
+      items: [
+        { label: 'Edit Band', show: can('band.settings'), enabled: !!hasBand, onClick: onEditBand },
+        { label: 'Members & Sharing', show: can('member.invite'), enabled: !!hasBand, onClick: onManageMembers },
+        { label: 'Delete Band', show: can('band.delete'), enabled: !!hasBand, danger: true, onClick: onDeleteBand },
+      ],
+    },
+    {
+      id: 'songs',
+      label: 'Songs',
+      items: [
+        { label: 'Add Song', show: can('song.create'), enabled: true, onClick: onAddSong },
+        { label: 'Edit Song', show: can('song.content.write'), enabled: !!hasSong, onClick: onEditSong },
+        { label: 'TapMap Editor', show: can('song.timing.write'), enabled: !!hasSong, onClick: onTapMapEditor },
+        { label: 'Lyrics Editor', show: can('song.content.write'), enabled: !!hasSong, onClick: onLyricsEditor },
+        { label: 'Delete Song', show: can('song.delete'), enabled: !!hasSong, danger: true, onClick: onDeleteSong },
+      ],
+    },
+    {
+      id: 'setlists',
+      label: 'Setlists',
+      items: [
+        { label: 'Add Setlist', show: can('setlist.write'), enabled: true, onClick: onAddSetlist },
+        { label: 'Edit Setlist', show: can('setlist.write'), enabled: !!hasSetlist, onClick: onEditSetlist },
+        { label: 'Copy Setlist', show: can('setlist.write'), enabled: !!hasSetlist, onClick: onCopySetlist },
+        { label: 'Delete Setlist', show: can('setlist.write'), enabled: !!hasSetlist, danger: true, onClick: onDeleteSetlist },
+        { label: 'View All Setlists', show: can('setlist.write'), enabled: true, onClick: onViewAllSetlists },
+      ],
+    },
+  ];
+  // Controls you can't use are hidden, not greyed out; a menu with nothing in it goes too.
+  const menus = allMenus
+    .map((m) => ({ ...m, items: m.items.filter((i) => i.show) }))
+    .filter((m) => m.items.length > 0);
+
   return (
     <div
       ref={ribbonRef}
       className="px-4 py-1.5 border-b flex items-center gap-3 min-h-[33px]"
       style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
     >
-      {/* Band dropdown — the full menu in dev; in production only for
-          Owners and Managers, and only the item they can use there. */}
-      {(import.meta.env.DEV || canManageMembers) && (
-        <div className="relative">
+      {menus.map((menu) => (
+        <div key={menu.id} className="relative">
           <button
-            onClick={() => toggle('bands')}
+            onClick={() => toggle(menu.id)}
             className="text-xs text-gray-500 hover:text-gray-300"
           >
-            Band <span className="text-base">▾</span>
+            {menu.label} <span className="text-base">▾</span>
           </button>
-          {open === 'bands' && (
+          {open === menu.id && (
             <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-              {import.meta.env.DEV && (
-                <MenuItem label="Edit Band" enabled={!!hasBand} onClick={() => { close(); onEditBand?.(); }} />
-              )}
-              <MenuItem
-                label="Members & Sharing"
-                enabled={!!hasBand && !!canManageMembers}
-                onClick={() => { close(); onManageMembers?.(); }}
-              />
-              {import.meta.env.DEV && (
-                <MenuItem label="Delete Band" enabled={!!hasBand} danger onClick={() => { close(); onDeleteBand?.(); }} />
-              )}
+              {menu.items.map((item) => (
+                <MenuItem
+                  key={item.label}
+                  label={item.label}
+                  enabled={item.enabled}
+                  danger={item.danger}
+                  onClick={() => { close(); item.onClick?.(); }}
+                />
+              ))}
             </div>
           )}
         </div>
-      )}
+      ))}
 
-      {import.meta.env.DEV && (
-        <>
-
-          {/* Songs dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => toggle('songs')}
-              className="text-xs text-gray-500 hover:text-gray-300"
-            >
-              Songs <span className="text-base">▾</span>
-            </button>
-            {open === 'songs' && (
-              <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-                <MenuItem label="Add Song" enabled onClick={() => { close(); onAddSong?.(); }} />
-                <MenuItem label="Edit Song" enabled={!!hasSong} onClick={() => { close(); onEditSong?.(); }} />
-                <MenuItem label="TapMap Editor" enabled={!!hasSong} onClick={() => { close(); onTapMapEditor?.(); }} />
-                <MenuItem label="Lyrics Editor" enabled={!!hasSong} onClick={() => { close(); onLyricsEditor?.(); }} />
-                <MenuItem label="Delete Song" enabled={!!hasSong} danger onClick={() => { close(); onDeleteSong?.(); }} />
-              </div>
-            )}
-          </div>
-
-          {/* Setlists dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => toggle('setlists')}
-              className="text-xs text-gray-500 hover:text-gray-300"
-            >
-              Setlists <span className="text-base">▾</span>
-            </button>
-            {open === 'setlists' && (
-              <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-                <MenuItem label="Add Setlist" enabled onClick={() => { close(); onAddSetlist?.(); }} />
-                <MenuItem label="Edit Setlist" enabled={!!hasSetlist} onClick={() => { close(); onEditSetlist?.(); }} />
-                <MenuItem label="Copy Setlist" enabled={!!hasSetlist} onClick={() => { close(); onCopySetlist?.(); }} />
-                <MenuItem label="Delete Setlist" enabled={!!hasSetlist} danger onClick={() => { close(); onDeleteSetlist?.(); }} />
-                <MenuItem label="View All Setlists" enabled onClick={() => { close(); onViewAllSetlists?.(); }} />
-              </div>
-            )}
-          </div>
-
-        </>
-      )}
-
-      {(import.meta.env.DEV || canManageMembers)
+      {menus.length > 0
         && ((setlistNavLinks && setlistNavLinks.length > 0) || (songNavLinks && songNavLinks.length > 0)) && (
         <div className="border-l border-gray-700 h-4" />
       )}

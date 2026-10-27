@@ -1,4 +1,4 @@
-import { StrictMode, lazy, Suspense } from 'react'
+import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
@@ -6,19 +6,9 @@ import App from './App.tsx'
 import { BandApp } from './components/band/BandApp.tsx'
 import { BandPicker } from './components/band/BandPicker.tsx'
 import { InvitePage } from './components/account/InvitePage.tsx'
+import { RequireCan } from './components/account/RequireCan.tsx'
 
-const AddSongWizard = import.meta.env.DEV
-  ? lazy(() => import('./admin/AddSongWizard.tsx'))
-  : null;
-const EditSongPage = import.meta.env.DEV
-  ? lazy(() => import('./admin/EditSongPage.tsx'))
-  : null;
-const AlignSongPage = import.meta.env.DEV
-  ? lazy(() => import('./admin/AlignSongPage.tsx'))
-  : null;
-const NewBandPage = import.meta.env.DEV
-  ? lazy(() => import('./admin/NewBandPage.tsx'))
-  : null;
+import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage } from './admin/lazyPages.ts'
 
 const adminFallback = (
   <div className="min-h-screen bg-gray-900 text-gray-400 p-8">Loading admin...</div>
@@ -32,48 +22,40 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<BandPicker />} />
         <Route path="/invite/:token" element={<InvitePage />} />
-        {NewBandPage && (
+        <Route
+          path="/admin/new-band"
+          element={
+            <Suspense fallback={adminFallback}>
+              <RequireCan need="platformAdmin"><NewBandPage /></RequireCan>
+            </Suspense>
+          }
+        />
+        <Route path="/:bandSlug" element={<BandApp />}>
+          <Route index element={<App />} />
           <Route
-            path="/admin/new-band"
+            path="admin/add-song"
             element={
               <Suspense fallback={adminFallback}>
-                <NewBandPage />
+                <RequireCan need="song.create"><AddSongWizard /></RequireCan>
               </Suspense>
             }
           />
-        )}
-        <Route path="/:bandSlug" element={<BandApp />}>
-          <Route index element={<App />} />
-          {AddSongWizard && (
-            <Route
-              path="admin/add-song"
-              element={
-                <Suspense fallback={adminFallback}>
-                  <AddSongWizard />
-                </Suspense>
-              }
-            />
-          )}
-          {EditSongPage && (
-            <Route
-              path="admin/edit-song/:songId"
-              element={
-                <Suspense fallback={adminFallback}>
-                  <EditSongPage />
-                </Suspense>
-              }
-            />
-          )}
-          {AlignSongPage && (
-            <Route
-              path="admin/align/:songId"
-              element={
-                <Suspense fallback={adminFallback}>
-                  <AlignSongPage />
-                </Suspense>
-              }
-            />
-          )}
+          <Route
+            path="admin/edit-song/:songId"
+            element={
+              <Suspense fallback={adminFallback}>
+                <RequireCan need="song.content.write"><EditSongPage /></RequireCan>
+              </Suspense>
+            }
+          />
+          <Route
+            path="admin/align/:songId"
+            element={
+              <Suspense fallback={adminFallback}>
+                <RequireCan need="song.audio.write"><AlignSongPage /></RequireCan>
+              </Suspense>
+            }
+          />
         </Route>
       </Routes>
     </BrowserRouter>

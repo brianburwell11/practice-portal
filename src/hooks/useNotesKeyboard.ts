@@ -2,14 +2,14 @@ import { useEffect } from 'react';
 import { useTransportStore } from '../store/transportStore';
 import { useNotesStore } from '../store/notesStore';
 import { usePersonalNotesStore } from '../store/personalNotesStore';
-
-const ADMIN = import.meta.env.DEV;
+import { useBandStore } from '../store/bandStore';
+import { useSessionStore } from '../store/sessionStore';
 
 /**
  * `n` shortcut: drop a draft note at the current playhead. Routed to the
- * admin store in dev (saved to R2) or the personal store in production
- * (saved to localStorage). Ignored while typing in inputs/textareas and
- * when no song is loaded.
+ * band's notes (saved for everyone) for those who may edit song content,
+ * otherwise to personal notes (saved in this browser). Ignored while typing
+ * in inputs/textareas and when no song is loaded.
  */
 export function useNotesKeyboard() {
   useEffect(() => {
@@ -22,7 +22,8 @@ export function useNotesKeyboard() {
         (e.target instanceof HTMLElement && e.target.isContentEditable)
       ) return;
       const position = useTransportStore.getState().position;
-      if (ADMIN) {
+      const bandId = useBandStore.getState().currentBand?.id;
+      if (useSessionStore.getState().can(bandId, 'song.content.write')) {
         const { loaded, bandId, songId } = useNotesStore.getState();
         if (!loaded || !bandId || !songId) return;
         e.preventDefault();

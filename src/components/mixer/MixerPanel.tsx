@@ -1,4 +1,5 @@
 import { useMemo, useCallback, useState, useRef } from 'react';
+import { useCan } from '../../store/sessionStore';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
 import { useBandStore } from '../../store/bandStore';
@@ -13,6 +14,8 @@ type SaveState = 'idle' | 'pending' | 'cancelled' | 'saving' | 'saved' | 'error'
 
 export function MixerPanel() {
   const engine = useAudioEngine();
+  // Saving the mix as the song's defaults rewrites its stems.
+  const canSaveMix = useCan('song.audio.write');
   const selectedSong = useSongStore((s) => s.selectedSong);
   const stems = useMixerStore((s) => s.stems);
   const globalSoloActive = useMixerStore((s) => s.globalSoloActive);
@@ -265,7 +268,7 @@ export function MixerPanel() {
             <path d="M12 2a10 10 0 0 1 8.5 4.7l-2.3-.4a1.2 1.2 0 1 0-.4 2.4l4.6.8a1.2 1.2 0 0 0 1.4-1l.8-4.6a1.2 1.2 0 0 0-2.4-.4l-.3 1.8A12 12 0 0 0 0 12a1.2 1.2 0 0 0 2.4 0A9.6 9.6 0 0 1 12 2ZM12 22a10 10 0 0 1-8.5-4.7l2.3.4a1.2 1.2 0 1 0 .4-2.4l-4.6-.8a1.2 1.2 0 0 0-1.4 1l-.8 4.6a1.2 1.2 0 0 0 2.4.4l.3-1.8A12 12 0 0 0 24 12a1.2 1.2 0 0 0-2.4 0A9.6 9.6 0 0 1 12 22Z" />
           </svg>
         </button>
-        {import.meta.env.DEV && (
+        {canSaveMix && (
           <button
             onClick={handleSaveClick}
             className={`flex items-center gap-1.5 text-xs px-2 py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors ${

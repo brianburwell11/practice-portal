@@ -4,9 +4,11 @@ import { useBandStore } from '../../store/bandStore';
 import { bandsManifestSchema } from '../../config/schema';
 import { dataUrl } from '../../utils/url';
 import { AccountMenu } from '../account/AccountMenu';
+import { useSessionStore } from '../../store/sessionStore';
 
 export function BandPicker() {
   const { bandsManifest, setBandsManifest } = useBandStore();
+  const platformAdmin = useSessionStore((s) => s.platformAdmin);
 
   useEffect(() => {
     if (bandsManifest) return;
@@ -58,7 +60,7 @@ export function BandPicker() {
         </div>
       )}
 
-      {import.meta.env.DEV && (
+      {platformAdmin && (
         <div className="mt-8 flex items-center gap-4">
           <Link
             to="/admin/new-band"

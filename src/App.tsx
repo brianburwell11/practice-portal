@@ -29,21 +29,17 @@ import { useNavigate } from 'react-router-dom';
 import { useMixerPersistence } from './hooks/useMixerPersistence';
 
 
-const SetlistModal = import.meta.env.DEV
-  ? lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })))
-  : null;
-const DeleteSetlistModal = import.meta.env.DEV
-  ? lazy(() => import('./admin/DeleteSetlistModal').then((m) => ({ default: m.DeleteSetlistModal })))
-  : null;
-const ViewAllSetlistsModal = import.meta.env.DEV
-  ? lazy(() => import('./admin/ViewAllSetlistsModal').then((m) => ({ default: m.ViewAllSetlistsModal })))
-  : null;
-const EditBandModal = import.meta.env.DEV
-  ? lazy(() => import('./admin/EditBandModal').then((m) => ({ default: m.EditBandModal })))
-  : null;
-const DeleteBandModal = import.meta.env.DEV
-  ? lazy(() => import('./admin/DeleteBandModal').then((m) => ({ default: m.DeleteBandModal })))
-  : null;
+const SetlistModal = lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })));
+const DeleteSetlistModal = lazy(() => import('./admin/DeleteSetlistModal').then((m) => ({ default: m.DeleteSetlistModal })));
+const ViewAllSetlistsModal = lazy(() => import('./admin/ViewAllSetlistsModal').then((m) => ({ default: m.ViewAllSetlistsModal })));
+const EditBandModal = lazy(() => import('./admin/EditBandModal').then((m) => ({ default: m.EditBandModal })));
+const DeleteBandModal = lazy(() => import('./admin/DeleteBandModal').then((m) => ({ default: m.DeleteBandModal })));
+
+/** Capabilities that come with something to manage — beyond reading and playing. */
+const ADMIN_CAPABILITIES = new Set([
+  'band.settings', 'band.delete', 'member.invite', 'song.create', 'song.content.write',
+  'song.timing.write', 'song.audio.write', 'song.score.write', 'song.delete', 'setlist.write',
+]);
 
 export default function App() {
   const engine = useCreateEngine();
@@ -68,8 +64,11 @@ export default function App() {
   const [showViewAllSetlistsModal, setShowViewAllSetlistsModal] = useState(false);
   const [showEditBandModal, setShowEditBandModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
-  const myRole = useSessionStore((s) => s.roleIn(currentBand?.id));
-  const canManageMembers = myRole === 'owner' || myRole === 'manager';
+  // Anything to manage here? Decides whether a Member sees the admin ribbon
+  // at all (they don't — their screen is the public one). UX only.
+  const myCaps = useSessionStore((s) => s.bands.find((b) => b.id === currentBand?.id)?.capabilities);
+  const canManage = !!myCaps?.some((c) => ADMIN_CAPABILITIES.has(c));
+  const canEditContent = !!myCaps?.includes('song.content.write');
   const [showDeleteBandModal, setShowDeleteBandModal] = useState(false);
   // Mobile-only toggle: shows the master volume/speed sliders + mixer panel below the lyrics.
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
@@ -155,15 +154,14 @@ export default function App() {
           <MembersModal bandId={currentBand.id} bandName={currentBand.name} onClose={() => setShowMembersModal(false)} />
         )}
 
-        {/* Admin toolbar (dev: full admin + nav links; prod: nav links only) */}
-        {import.meta.env.DEV ? (
+        {/* Admin toolbar: menus for what you may do here, plus nav links */}
+        {(canManage || activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length) ? (
           <AdminRibbon
             setlistNavLinks={activeSetlist?.navLinks}
             songNavLinks={selectedSong?.navLinks}
             hasBand={!!currentBand}
             hasSong={!!selectedSong}
             hasSetlist={!!activeSetlist}
-            canManageMembers={canManageMembers}
             onManageMembers={() => setShowMembersModal(true)}
             onEditBand={() => {
               if (lyricsEditorOpen) {
@@ -208,17 +206,7 @@ export default function App() {
             onDeleteSetlist={() => setShowDeleteSetlistModal(true)}
             onViewAllSetlists={() => setShowViewAllSetlistsModal(true)}
           />
-        ) : (
-          (activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length || canManageMembers) ? (
-            <AdminRibbon
-              setlistNavLinks={activeSetlist?.navLinks}
-              songNavLinks={selectedSong?.navLinks}
-              hasBand={!!currentBand}
-              canManageMembers={canManageMembers}
-              onManageMembers={() => setShowMembersModal(true)}
-            />
-          ) : null
-        )}
+        ) : null}
 
         {/* Song loader (headless — runs effects only) */}
         <SongList />
@@ -255,7 +243,7 @@ export default function App() {
           <MarkerEditorModal />
         ) : lyricsEditorOpen ? (
           <LyricsEditorModal />
-        ) : showEditBandModal && EditBandModal && currentBand ? (
+        ) : showEditBandModal && currentBand ? (
           <Suspense fallback={null}>
             <EditBandModal band={currentBand} onClose={() => setShowEditBandModal(false)} />
           </Suspense>
@@ -272,7 +260,7 @@ export default function App() {
           onClose={() => setShowDeleteModal(false)}
         />
       )}
-      {showSetlistModal && SetlistModal && (
+      {showSetlistModal && (
         <Suspense fallback={null}>
           <SetlistModal
             setlistId={editSetlistId}
@@ -281,7 +269,7 @@ export default function App() {
           />
         </Suspense>
       )}
-      {showDeleteSetlistModal && DeleteSetlistModal && activeSetlist && (
+      {showDeleteSetlistModal && activeSetlist && (
         <Suspense fallback={null}>
           <DeleteSetlistModal
             setlistId={activeSetlist.id}
@@ -290,14 +278,14 @@ export default function App() {
           />
         </Suspense>
       )}
-      {showViewAllSetlistsModal && ViewAllSetlistsModal && (
+      {showViewAllSetlistsModal && (
         <Suspense fallback={null}>
           <ViewAllSetlistsModal
             onClose={() => setShowViewAllSetlistsModal(false)}
           />
         </Suspense>
       )}
-      {showDeleteBandModal && DeleteBandModal && currentBand && (
+      {showDeleteBandModal && currentBand && (
         <Suspense fallback={null}>
           <DeleteBandModal band={currentBand} onClose={() => setShowDeleteBandModal(false)} />
         </Suspense>
@@ -305,7 +293,7 @@ export default function App() {
       {selectedSong?.videos && selectedSong.videos.length > 0 && (
         <YouTubeMiniPlayerStack
           videos={selectedSong.videos}
-          admin={import.meta.env.DEV}
+          admin={canEditContent}
           bandId={currentBand?.id}
         />
       )}
