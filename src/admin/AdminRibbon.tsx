@@ -9,6 +9,13 @@ interface Props {
   hasBand?: boolean;
   hasSong?: boolean;
   hasSetlist?: boolean;
+  /**
+   * The signed-in user is an Owner or Manager of this band. Shows the Band
+   * menu (with just Members & sharing) outside dev, where the rest of the
+   * admin isn't in the bundle.
+   */
+  canManageMembers?: boolean;
+  onManageMembers?: () => void;
   onEditBand?: () => void;
   onDeleteBand?: () => void;
   onAddSong?: () => void;
@@ -56,6 +63,8 @@ export function AdminRibbon({
   hasBand,
   hasSong,
   hasSetlist,
+  canManageMembers,
+  onManageMembers,
   onEditBand,
   onDeleteBand,
   onAddSong,
@@ -94,23 +103,36 @@ export function AdminRibbon({
       className="px-4 py-1.5 border-b flex items-center gap-3 min-h-[33px]"
       style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
     >
+      {/* Band dropdown — the full menu in dev; in production only for
+          Owners and Managers, and only the item they can use there. */}
+      {(import.meta.env.DEV || canManageMembers) && (
+        <div className="relative">
+          <button
+            onClick={() => toggle('bands')}
+            className="text-xs text-gray-500 hover:text-gray-300"
+          >
+            Band <span className="text-base">▾</span>
+          </button>
+          {open === 'bands' && (
+            <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+              {import.meta.env.DEV && (
+                <MenuItem label="Edit Band" enabled={!!hasBand} onClick={() => { close(); onEditBand?.(); }} />
+              )}
+              <MenuItem
+                label="Members & Sharing"
+                enabled={!!hasBand && !!canManageMembers}
+                onClick={() => { close(); onManageMembers?.(); }}
+              />
+              {import.meta.env.DEV && (
+                <MenuItem label="Delete Band" enabled={!!hasBand} danger onClick={() => { close(); onDeleteBand?.(); }} />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {import.meta.env.DEV && (
         <>
-          {/* Band dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => toggle('bands')}
-              className="text-xs text-gray-500 hover:text-gray-300"
-            >
-              Band <span className="text-base">▾</span>
-            </button>
-            {open === 'bands' && (
-              <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-                <MenuItem label="Edit Band" enabled={!!hasBand} onClick={() => { close(); onEditBand?.(); }} />
-                <MenuItem label="Delete Band" enabled={!!hasBand} danger onClick={() => { close(); onDeleteBand?.(); }} />
-              </div>
-            )}
-          </div>
 
           {/* Songs dropdown */}
           <div className="relative">
@@ -150,10 +172,12 @@ export function AdminRibbon({
             )}
           </div>
 
-          {((setlistNavLinks && setlistNavLinks.length > 0) || (songNavLinks && songNavLinks.length > 0)) && (
-            <div className="border-l border-gray-700 h-4" />
-          )}
         </>
+      )}
+
+      {(import.meta.env.DEV || canManageMembers)
+        && ((setlistNavLinks && setlistNavLinks.length > 0) || (songNavLinks && songNavLinks.length > 0)) && (
+        <div className="border-l border-gray-700 h-4" />
       )}
 
       {setlistNavLinks?.map((link, i) => (

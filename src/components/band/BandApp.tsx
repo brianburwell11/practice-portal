@@ -5,6 +5,8 @@ import { useSongStore } from '../../store/songStore';
 import { useSetlistStore } from '../../store/setlistStore';
 import { bandConfigSchema, bandsManifestSchema } from '../../config/schema';
 import { dataUrl } from '../../utils/url';
+import { signInHref, useSessionStore } from '../../store/sessionStore';
+import { AccountMenu, GoogleMark } from '../account/AccountMenu';
 
 export function BandApp() {
   const { bandSlug } = useParams<{ bandSlug: string }>();
@@ -26,6 +28,8 @@ export function BandApp() {
     if (!bandsManifest || !bandSlug) return;
     const indexEntry = bandsManifest.bands.find((b) => b.route === bandSlug);
     if (!indexEntry) {
+      // A Members-only band is missing from the registry for anyone who
+      // isn't a member, so "not found" might mean "not for you".
       setCurrentBand(null);
       setError(`Band not found: ${bandSlug}`);
       return;
@@ -83,11 +87,7 @@ export function BandApp() {
   }, [currentBand]);
 
   if (error) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-red-400 p-8">
-        {error}
-      </div>
-    );
+    return <BandUnavailable error={error} />;
   }
 
   if (!currentBand) {
@@ -99,4 +99,47 @@ export function BandApp() {
   }
 
   return <Outlet />;
+}
+
+/**
+ * Where accounts exist, a band missing from the registry may be Members-only
+ * rather than nonexistent — offer sign-in instead of a bare "not found".
+ */
+function BandUnavailable({ error }: { error: string }) {
+  const { available, loaded, user, load } = useSessionStore();
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (!loaded || !available || !error.startsWith('Band not found')) {
+    return <div className="min-h-screen bg-gray-900 text-red-400 p-8">{loaded ? error : null}</div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center p-6">
+      <div className="absolute top-4 right-4"><AccountMenu /></div>
+      <div className="max-w-sm text-center space-y-4">
+        {user ? (
+          <>
+            <h1 className="text-xl font-semibold">Band not found</h1>
+            <p className="text-sm text-gray-400">
+              It doesn’t exist, or it’s Members only and {user.email} isn’t a member. Ask the band for an invite link.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-xl font-semibold">This band may be Members only</h1>
+            <p className="text-sm text-gray-400">Sign in to see it if you’re a member.</p>
+            <a
+              href={signInHref()}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white text-gray-800 font-medium hover:bg-gray-100"
+            >
+              <GoogleMark />
+              Sign in with Google
+            </a>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useBandStore } from '../../store/bandStore';
 import { bandsManifestSchema } from '../../config/schema';
 import { dataUrl } from '../../utils/url';
+import { AccountMenu } from '../account/AccountMenu';
 
 export function BandPicker() {
   const { bandsManifest, setBandsManifest } = useBandStore();
@@ -17,6 +18,9 @@ export function BandPicker() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-8">
+      <div className="absolute top-4 right-4">
+        <AccountMenu />
+      </div>
       <h1 className="text-3xl font-bold mb-2">Practice Portal</h1>
       <p className="text-gray-400 mb-10">Select your band to get started.</p>
 

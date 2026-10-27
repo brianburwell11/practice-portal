@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import { BandApp } from './components/band/BandApp.tsx'
 import { BandPicker } from './components/band/BandPicker.tsx'
+import { InvitePage } from './components/account/InvitePage.tsx'
 
 const AddSongWizard = import.meta.env.DEV
   ? lazy(() => import('./admin/AddSongWizard.tsx'))
@@ -30,6 +31,7 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter basename={basename}>
       <Routes>
         <Route path="/" element={<BandPicker />} />
+        <Route path="/invite/:token" element={<InvitePage />} />
         {NewBandPage && (
           <Route
             path="/admin/new-band"

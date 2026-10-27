@@ -14,6 +14,9 @@ import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal'
 import { LyricsEditorModal } from './components/lyrics-editor/LyricsEditorModal';
 import { DeleteSongModal } from './components/song-select/DeleteSongModal';
 import { AdminRibbon } from './admin/AdminRibbon';
+import { AccountMenu } from './components/account/AccountMenu';
+import { MembersModal } from './components/account/MembersModal';
+import { useSessionStore } from './store/sessionStore';
 import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useLyricsEditorStore } from './store/lyricsEditorStore';
 import { usePanelMinimizeStore } from './store/panelMinimizeStore';
@@ -64,6 +67,9 @@ export default function App() {
   const [showDeleteSetlistModal, setShowDeleteSetlistModal] = useState(false);
   const [showViewAllSetlistsModal, setShowViewAllSetlistsModal] = useState(false);
   const [showEditBandModal, setShowEditBandModal] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const myRole = useSessionStore((s) => s.roleIn(currentBand?.id));
+  const canManageMembers = myRole === 'owner' || myRole === 'manager';
   const [showDeleteBandModal, setShowDeleteBandModal] = useState(false);
   // Mobile-only toggle: shows the master volume/speed sliders + mixer panel below the lyrics.
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
@@ -141,7 +147,13 @@ export default function App() {
           <div className="w-full order-last flex justify-center md:w-auto md:order-none md:absolute md:left-1/2 md:-translate-x-1/2">
             <SetlistNav />
           </div>
+          <div className="ml-auto pl-3">
+            <AccountMenu bandId={currentBand?.id} />
+          </div>
         </header>
+        {showMembersModal && currentBand && (
+          <MembersModal bandId={currentBand.id} bandName={currentBand.name} onClose={() => setShowMembersModal(false)} />
+        )}
 
         {/* Admin toolbar (dev: full admin + nav links; prod: nav links only) */}
         {import.meta.env.DEV ? (
@@ -151,6 +163,8 @@ export default function App() {
             hasBand={!!currentBand}
             hasSong={!!selectedSong}
             hasSetlist={!!activeSetlist}
+            canManageMembers={canManageMembers}
+            onManageMembers={() => setShowMembersModal(true)}
             onEditBand={() => {
               if (lyricsEditorOpen) {
                 const dirty = useLyricsEditorStore.getState().dirty;
@@ -195,8 +209,14 @@ export default function App() {
             onViewAllSetlists={() => setShowViewAllSetlistsModal(true)}
           />
         ) : (
-          (activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length) ? (
-            <AdminRibbon setlistNavLinks={activeSetlist?.navLinks} songNavLinks={selectedSong?.navLinks} />
+          (activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length || canManageMembers) ? (
+            <AdminRibbon
+              setlistNavLinks={activeSetlist?.navLinks}
+              songNavLinks={selectedSong?.navLinks}
+              hasBand={!!currentBand}
+              canManageMembers={canManageMembers}
+              onManageMembers={() => setShowMembersModal(true)}
+            />
           ) : null
         )}
 
