@@ -36,6 +36,7 @@
     "scripts/verify-auth.ts",
     "scripts/verify-members.ts",
     "scripts/verify-access.ts",
-    "scripts/verify-writes.ts"
+    "scripts/verify-writes.ts",
+    "scripts/sync-r2-registry.ts"
   ]
 }

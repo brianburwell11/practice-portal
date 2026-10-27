@@ -8,12 +8,15 @@
  * Needs a server with DATABASE_URL and R2 credentials. Creates throwaway
  * users and two throwaway Members-only bands (so nothing shows on the public
  * site), writes real R2 objects under their prefixes, and deletes all of it
- * — rows, audit entries and R2 objects — in `finally`.
+ * — rows, audit entries and R2 objects — in `finally`. Saving band settings
+ * copies registry.json to R2 with the throwaway bands in it, so cleanup
+ * rewrites that copy from Postgres once they're gone.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import dotenv from 'dotenv';
 import postgres from 'postgres';
 import { r2DeleteKey, r2ListKeys } from '../server/core/r2';
+import { syncRegistry } from './sync-r2-registry';
 
 dotenv.config();
 
@@ -173,6 +176,8 @@ async function main(): Promise<void> {
     await sql`delete from audit_log where band_id in (select id from band where legacy_id like ${TAG + '%'}) or actor_id = any(${ids})`;
     await sql`delete from band where legacy_id like ${TAG + '%'}`;
     await sql`delete from app_user where id = any(${ids})`;
+    const { removed } = await syncRegistry(false);
+    console.log(`cleanup: R2 registry.json rewritten from Postgres (removed ${removed.join(', ') || 'nothing'})`);
     const [{ left }] = await sql`select count(*)::int left from app_user where email like ${TAG + '%'}`;
     const r2Left = (await r2ListKeys(`${TAG}`)).length;
     console.log(`\ncleanup: ${left} test user(s), ${r2Left} R2 object(s) left`);
