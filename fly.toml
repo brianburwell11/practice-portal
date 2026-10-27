@@ -1,0 +1,37 @@
+# Fly.io config for the read-only server (Phase 3).
+#
+#   fly launch --no-deploy --copy-config   # first time: claims the app name
+#   fly deploy
+#   npm run smoke:server -- --url https://<app>.fly.dev
+#
+# No secrets: read-only mode never touches R2 credentials or the database.
+# They become Fly secrets (fly secrets set ...) when writes come back in Phase 6.
+
+app = "practice-portal"
+# Next to the us-east-2 Neon project — see the plan's "Where it runs".
+primary_region = "ord"
+kill_signal = "SIGTERM"
+kill_timeout = "10s"
+
+[build]
+  [build.args]
+    # Public bucket URL, baked into the SPA bundle at build time.
+    VITE_R2_PUBLIC_URL = "https://pub-9e583788dafa4ce193a3eee1987d93b6.r2.dev"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

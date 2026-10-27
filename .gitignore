@@ -29,3 +29,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Standalone server bundle (npm run build:server)
+dist-server

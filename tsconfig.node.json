@@ -28,6 +28,7 @@
     "drizzle.config.ts",
     "server",
     "scripts/gen-seed-migration.ts",
-    "scripts/verify-db.ts"
+    "scripts/verify-db.ts",
+    "scripts/server-smoke.ts"
   ]
 }

@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 #
-# Phase 3 runtime image: Node + the two native binaries the API shells out to.
+# Phase 3 runtime image: the read-only server (SPA + API core), plus the two
+# native binaries the API shells out to.
 #
 #   ffmpeg     — ffprobe, two-pass loudnorm, Opus transcode (server/core/media/ffmpeg.ts)
 #   MuseScore  — .mscz → .mxl                               (server/core/media/musescore.ts)
@@ -15,8 +16,8 @@
 #      invocation goes through xvfb-run. This is not optional.
 #
 # Build for the host arch when spiking locally; build amd64 for Fly:
-#   docker build -t practice-portal-api .
-#   docker build --platform linux/amd64 -t practice-portal-api .
+#   docker build --build-arg VITE_R2_PUBLIC_URL=... -t practice-portal .
+#   docker build --platform linux/amd64 --build-arg VITE_R2_PUBLIC_URL=... -t practice-portal .
 
 # ---------------------------------------------------------------- stage 1
 # Unpack the MuseScore AppImage. Runs on the BUILD platform, not the target:
@@ -62,6 +63,26 @@ RUN set -eux; \
     rm /tmp/musescore.AppImage
 
 # ---------------------------------------------------------------- stage 2
+# Build the SPA and bundle the server. Pure JS output, so like stage 1 this
+# runs on the BUILD platform — no QEMU for a cross-arch build.
+#
+# VITE_R2_PUBLIC_URL is baked into the bundle at build time (the browser reads
+# every config and media file straight from that public bucket URL), so it is
+# a build arg, not a runtime secret. .env is dockerignored on purpose.
+FROM --platform=$BUILDPLATFORM node:22-trixie-slim AS web
+
+ARG VITE_R2_PUBLIC_URL
+RUN test -n "${VITE_R2_PUBLIC_URL}" \
+    || { echo "VITE_R2_PUBLIC_URL build arg is required" >&2; exit 1; }
+ENV VITE_R2_PUBLIC_URL=${VITE_R2_PUBLIC_URL}
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm pkg delete scripts.prepare && npm ci
+COPY . .
+RUN npm run build && npm run build:server
+
+# ---------------------------------------------------------------- stage 3
 # Debian 13 (trixie), NOT bookworm. MuseScore 4.7.5 links against GLIBC_2.38
 # and GLIBCXX_3.4.32; bookworm ships glibc 2.36 and fails at load with a wall
 # of "version `GLIBC_2.38' not found". Trixie is glibc 2.41. Not arch-specific
@@ -113,7 +134,12 @@ ENV HOME=/home/app \
     XDG_RUNTIME_DIR=/tmp/runtime \
     MUSESCORE_BIN=/usr/local/bin/mscore \
     QT_QPA_PLATFORM=xcb
-RUN mkdir -p /home/app /tmp/runtime && chmod 700 /tmp/runtime
+# Run as an unprivileged user. MuseScore and xvfb parse untrusted uploads
+# once writes return, so a compromise there shouldn't come with root.
+RUN useradd --system --uid 10001 --home-dir /home/app --shell /usr/sbin/nologin app \
+    && mkdir -p /home/app /tmp/runtime \
+    && chown app:app /home/app /tmp/runtime \
+    && chmod 700 /tmp/runtime
 
 WORKDIR /app
 
@@ -128,7 +154,16 @@ COPY tsconfig.json tsconfig.node.json ./
 COPY server ./server
 COPY scripts ./scripts
 
-# No server entrypoint yet — Phase 3's Hono app lands here and this becomes
-# `CMD ["node", "dist/server.js"]`. Until then the image exists to prove the
-# media toolchain works, via scripts/mscz-smoke.ts.
-CMD ["node", "--version"]
+COPY --from=web /app/dist ./dist
+COPY --from=web /app/dist-server ./dist-server
+
+# Read-only server: the SPA plus GET API routes. ffmpeg and MuseScore are
+# unused until writes are enabled (Phase 6), but stay in the image so
+# scripts/mscz-smoke.ts keeps proving the toolchain on the deployed arch.
+# dist-server/server.js keeps node_modules external, hence the npm ci above.
+ENV PORT=8080 NODE_ENV=production
+EXPOSE 8080
+# App files stay root-owned and read-only to the process; it only writes to
+# $HOME, $XDG_RUNTIME_DIR and os.tmpdir().
+USER app
+CMD ["node", "dist-server/server.js"]
