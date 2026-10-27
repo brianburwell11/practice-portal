@@ -131,7 +131,7 @@ check('all migrations applied', true);
 const applied = await conn.query<{ hash: string }>(
   'select hash from drizzle.__drizzle_migrations order by created_at',
 );
-check('migration journal has 4 entries', applied.length === 4, `found ${applied.length}`);
+check('migration journal has 5 entries', applied.length === 5, `found ${applied.length}`);
 
 // Re-running must be a no-op, not an error — this is what a redeploy does.
 await conn.migrate('./server/db/migrations');
@@ -145,7 +145,7 @@ const tables = (await conn.query<{ table_name: string }>(
 )).map((r) => r.table_name);
 const expected = [
   'app_user', 'audit_log', 'band', 'capability', 'grant_link', 'invite',
-  'membership', 'org', 'role', 'role_capability', 'setlist', 'song',
+  'membership', 'org', 'role', 'role_capability', 'session', 'setlist', 'song',
   'user_song_state',
 ];
 for (const t of expected) check(`table ${t}`, tables.includes(t));
@@ -155,7 +155,11 @@ check('no unexpected tables', tables.length === expected.length, tables.join(', 
 const columns = new Set((await conn.query<{ c: string }>(
   "select table_name || '.' || column_name as c from information_schema.columns where table_schema='public'",
 )).map((r) => r.c));
-for (const c of ['band.legacy_id', 'band.position', 'setlist.position', 'song.lyrics', 'song.notes']) {
+// ...and the Phase 5 account columns (migration 0004).
+for (const c of [
+  'band.legacy_id', 'band.position', 'setlist.position', 'song.lyrics', 'song.notes',
+  'app_user.google_sub', 'app_user.avatar_url', 'invite.accepted_by', 'invite.revoked_at', 'invite.created_at',
+]) {
   check(`column ${c}`, columns.has(c));
 }
 
@@ -203,7 +207,7 @@ check('member CANNOT setlist.write', (await conn.query<{ n: number }>(
 // These insert fixtures and assert global row counts, so they need an empty
 // database. Everything here runs in a transaction that is always rolled back.
 
-const TENANT_TABLES = ['app_user', 'band', 'song', 'membership', 'grant_link', 'user_song_state', 'audit_log'];
+const TENANT_TABLES = ['app_user', 'band', 'song', 'membership', 'grant_link', 'user_song_state', 'audit_log', 'session'];
 const occupied: string[] = [];
 for (const t of TENANT_TABLES) {
   const n = (await conn.query<{ n: number }>(`select count(*)::int n from ${t}`))[0].n;
@@ -267,6 +271,19 @@ if (occupied.length) {
        values ('33333333-3333-3333-3333-333333333333','setlist','44444444-4444-4444-4444-444444444444','h2',
                now() + interval '7 days','11111111-1111-1111-1111-111111111111')
        returning capabilities`))[0].capabilities.join(',') === 'song.read');
+
+    // Phase 5: one account per Google identity; sessions die with their user.
+    await conn.exec(`update app_user set google_sub='g-owner' where id='11111111-1111-1111-1111-111111111111'`);
+    await rejects('google_sub is unique', conn,
+      `update app_user set google_sub='g-owner' where id='22222222-2222-2222-2222-222222222222'`, /unique|duplicate/i);
+    await conn.exec(`insert into session (token_hash, user_id, expires_at) values
+      ('s1','22222222-2222-2222-2222-222222222222', now() + interval '30 days')`);
+    await conn.exec(`insert into app_user (id, email) values ('55555555-5555-5555-5555-555555555555','gone@example.com')`);
+    await conn.exec(`insert into session (token_hash, user_id, expires_at) values
+      ('s2','55555555-5555-5555-5555-555555555555', now() + interval '30 days')`);
+    await conn.exec(`delete from app_user where id='55555555-5555-5555-5555-555555555555'`);
+    check('deleting a user deletes their sessions', (await conn.query<{ n: number }>(
+      `select count(*)::int n from session where token_hash='s2'`))[0].n === 0);
 
     console.log('\n--- tenant cascade');
     await conn.exec(`insert into user_song_state (user_id, song_id, state) values

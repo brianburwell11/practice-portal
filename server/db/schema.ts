@@ -47,8 +47,31 @@ export const appUser = pgTable('app_user', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: citext('email').notNull().unique(),
   displayName: text('display_name'),
+  /**
+   * Google's stable account id (the ID token's `sub`). Email can change on a
+   * Google account; `sub` can't, so it's what sign-in matches on. Null for a
+   * user who has never signed in — e.g. the owner created by the R2 import,
+   * who is linked by verified email on first sign-in.
+   */
+  googleSub: text('google_sub').unique(),
+  avatarUrl: text('avatar_url'),
   createdAt: createdAt(),
 });
+
+/**
+ * A signed-in browser. The cookie holds a random token; only its SHA-256 is
+ * stored, so a database leak doesn't hand out live sessions. Expiry is
+ * absolute — sliding sessions never end for a device left signed in.
+ */
+export const session = pgTable('session', {
+  tokenHash: text('token_hash').primaryKey(),
+  userId: uuid('user_id').notNull().references(() => appUser.id, { onDelete: 'cascade' }),
+  createdAt: createdAt(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('session_user_idx').on(t.userId),
+]);
 
 export interface BandColors {
   primary: string;
@@ -194,13 +217,17 @@ export const userSongState = pgTable('user_song_state', {
 export const invite = pgTable('invite', {
   id: uuid('id').primaryKey().defaultRandom(),
   bandId: uuid('band_id').notNull().references(() => band.id, { onDelete: 'cascade' }),
+  /** When set, only a Google account with this verified email can accept. */
   email: citext('email'),
   role: text('role').notNull().references(() => role.key),
   /** Only the hash is stored; the token itself exists solely in the emailed link. */
   tokenHash: text('token_hash').notNull().unique(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  acceptedBy: uuid('accepted_by').references(() => appUser.id),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdBy: uuid('created_by').notNull().references(() => appUser.id),
+  createdAt: createdAt(),
 }, (t) => [
   index('invite_band_idx').on(t.bandId),
 ]);
