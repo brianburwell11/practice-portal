@@ -29,6 +29,7 @@
     "server",
     "scripts/gen-seed-migration.ts",
     "scripts/verify-db.ts",
-    "scripts/server-smoke.ts"
+    "scripts/server-smoke.ts",
+    "scripts/import-r2-to-postgres.ts"
   ]
 }

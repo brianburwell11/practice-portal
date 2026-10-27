@@ -63,7 +63,15 @@ export const band = pgTable('band', {
   // it later would be a migration across every table.
   orgId: uuid('org_id').references(() => org.id),
   slug: text('slug').notNull().unique(),
+  /**
+   * The pre-Postgres band id (`z17zqzxv`, `dev`). Every R2 key for this band
+   * starts with it, and media doesn't move, so it outlives the import. Null
+   * for bands created after Phase 4.
+   */
+  legacyId: text('legacy_id').unique(),
   name: text('name').notNull(),
+  /** Order in the band picker — `registry.json` order, which the UI shows as-is. */
+  position: integer('position').notNull().default(0),
   colors: jsonb('colors').$type<BandColors>().notNull(),
   /** R2 object key, not a public URL — Phase 7 serves it behind a capability check. */
   logoKey: text('logo_key'),
@@ -134,6 +142,13 @@ export const song = pgTable('song', {
   artist: text('artist').notNull(),
   /** Validated by `songConfigSchema` before it ever reaches this column. */
   config: jsonb('config').notNull(),
+  /** `lyricsDataSchema`. Null when the song has no lyrics file. */
+  lyrics: jsonb('lyrics'),
+  /**
+   * `notesDataSchema` — the band's timestamp notes, written by admins.
+   * Personal notes are a different thing and live in `user_song_state`.
+   */
+  notes: jsonb('notes'),
   /**
    * R2 prefix holding this song's audio and score objects, e.g.
    * `dev/songs/8xDKlqH`. Media does not move in Phase 4, so the legacy
@@ -153,6 +168,8 @@ export const setlist = pgTable('setlist', {
   bandId: uuid('band_id').notNull().references(() => band.id, { onDelete: 'cascade' }),
   slug: text('slug').notNull(),
   name: text('name').notNull(),
+  /** Order in the band's setlist menu — `setlists/index.json` order, shown as-is. */
+  position: integer('position').notNull().default(0),
   config: jsonb('config').notNull(),
   createdAt: createdAt(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),

@@ -131,7 +131,7 @@ check('all migrations applied', true);
 const applied = await conn.query<{ hash: string }>(
   'select hash from drizzle.__drizzle_migrations order by created_at',
 );
-check('migration journal has 3 entries', applied.length === 3, `found ${applied.length}`);
+check('migration journal has 4 entries', applied.length === 4, `found ${applied.length}`);
 
 // Re-running must be a no-op, not an error — this is what a redeploy does.
 await conn.migrate('./server/db/migrations');
@@ -150,6 +150,14 @@ const expected = [
 ];
 for (const t of expected) check(`table ${t}`, tables.includes(t));
 check('no unexpected tables', tables.length === expected.length, tables.join(', '));
+
+// Columns the Phase 4 R2 import writes (migration 0003).
+const columns = new Set((await conn.query<{ c: string }>(
+  "select table_name || '.' || column_name as c from information_schema.columns where table_schema='public'",
+)).map((r) => r.c));
+for (const c of ['band.legacy_id', 'band.position', 'setlist.position', 'song.lyrics', 'song.notes']) {
+  check(`column ${c}`, columns.has(c));
+}
 
 // -------------------------------------------------------- capability catalog
 
