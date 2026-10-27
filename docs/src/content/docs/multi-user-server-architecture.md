@@ -460,7 +460,7 @@ scripts/verify-mirror.ts        admin flows replayed through the mirror, offline
 - [x] Migration 0004; `verify-db` covers the new tables and constraints. Applied to Neon.
 
 ### 5b — Google sign-in
-- [ ] Google OAuth client (Brian, in Google Cloud Console): redirect URIs `https://practice-portal.fly.dev/api/auth/google/callback` and `https://localhost:5173/api/auth/google/callback`.
+- [x] Google OAuth client (Brian, in Google Cloud Console): redirect URIs `https://practice-portal.fly.dev/api/auth/google/callback` and `https://localhost:5173/api/auth/google/callback`.
 - [x] `/api/auth/google/start` → Google with state, nonce and PKCE (S256), held in a short-lived httpOnly cookie.
 - [x] `/api/auth/google/callback` → exchange the code, require `email_verified`, upsert the user by `google_sub`. An existing user with the same verified email (the imported owner) is linked, not duplicated.
 - [x] Session cookie `pp_session`: httpOnly, Secure, SameSite=Lax, 30-day absolute expiry, new token on every sign-in. Non-GET requests carrying it must come from our own Origin.
@@ -520,7 +520,7 @@ If sign-in fails with `redirect_uri_mismatch`, the URI in step 3 doesn't match w
 - [x] Members panel (roster and invites) for Owner and Manager.
 
 ### 5g — Ship
-- [ ] Fly secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`; deploy.
+- [x] Fly secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`; deploy. Live 2026-10-27: sign-in enabled with the right `redirect_uri`; smoke 27/27; `verify-members --url` 41/41 against Fly; parity 270/0 with the two Members-only bands skipped. Local dev and Fly share the Neon database, so visibility set while testing locally is live too.
 
 **Exit criteria**: a second real person opens an invite link, signs in with Google, appears in the roster with the right role, and can see a members-only band that a signed-out visitor can't.
 
