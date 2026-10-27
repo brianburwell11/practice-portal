@@ -61,9 +61,14 @@ function resolveFile(root: string, pathname: string): Resolved | null {
   }
 }
 
-/** A path whose last segment has an extension is a file request, not a route. */
+/**
+ * Whether a missing path was a request for a static file rather than a client
+ * route. A bare dot isn't enough: band routes can contain one (`zenzi.music`),
+ * so only Vite's output directory and extensions we actually serve count.
+ */
 function looksLikeFile(pathname: string): boolean {
-  return path.extname(pathname) !== '';
+  if (pathname.startsWith('/assets/')) return true;
+  return path.extname(pathname).toLowerCase() in CONTENT_TYPES;
 }
 
 const gzipCache = new Map<string, Buffer>();

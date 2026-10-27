@@ -69,6 +69,10 @@ async function run(): Promise<void> {
   const deep = await request('GET', '/some-band');
   check('GET /some-band → SPA fallback', deep.status === 200 && deep.body === root.body, `got ${deep.status}`);
 
+  // Band routes can contain a dot (Zenzi's is `zenzi.music`) — still a route.
+  const dotted = await request('GET', '/zenzi.music');
+  check('GET /zenzi.music → SPA fallback', dotted.status === 200 && dotted.body === root.body, `got ${dotted.status}`);
+
   const asset = root.body.match(/src="(\/assets\/[^"]+\.js)"/)?.[1];
   check('index.html references a JS asset', !!asset);
   if (asset) {
