@@ -4,14 +4,8 @@ import {
   notesDataSchema,
 } from '../../../src/config/schema';
 import { HttpError, ok } from '../http';
-import {
-  isNoSuchKey,
-  r2CopyKey,
-  r2DeleteKey,
-  r2ListKeys,
-  r2ReadJson,
-  r2WriteJson,
-} from '../r2';
+import { isNoSuchKey, r2ListKeys } from '../r2';
+import { copyObject, deleteObject, readJson, writeJson } from '../store';
 import { updateSetlistEntries } from '../setlistEntries';
 import type { CoreRequest, CoreResponse } from '../types';
 
@@ -28,14 +22,14 @@ interface Discography {
 export async function saveSongConfig(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, songId } = req.params;
   const validated = songConfigSchema.parse(req.body);
-  await r2WriteJson(`${bandId}/songs/${songId}/config.json`, validated);
+  await writeJson(`${bandId}/songs/${songId}/config.json`, validated);
   return ok();
 }
 
 export async function saveSongLyrics(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, songId } = req.params;
   const validated = lyricsDataSchema.parse(req.body);
-  await r2WriteJson(`${bandId}/songs/${songId}/lyrics.json`, validated);
+  await writeJson(`${bandId}/songs/${songId}/lyrics.json`, validated);
   return ok();
 }
 
@@ -45,12 +39,12 @@ export async function saveSongNotes(req: CoreRequest): Promise<CoreResponse> {
   const key = `${bandId}/songs/${songId}/notes.json`;
   if (validated.notes.length === 0) {
     try {
-      await r2DeleteKey(key);
+      await deleteObject(key);
     } catch {
       // already absent — fine
     }
   } else {
-    await r2WriteJson(key, validated);
+    await writeJson(key, validated);
   }
   return ok();
 }
@@ -65,7 +59,7 @@ export async function renameSong(req: CoreRequest): Promise<CoreResponse> {
   }
 
   // Conflict check against R2 discography
-  const discography = await r2ReadJson<Discography>(`${bandId}/songs/discography.json`);
+  const discography = await readJson<Discography>(`${bandId}/songs/discography.json`);
   if (discography.songs.some((s) => s.id === newId)) {
     throw new HttpError(409, `Song ID "${newId}" already exists`);
   }
@@ -81,28 +75,34 @@ export async function renameSong(req: CoreRequest): Promise<CoreResponse> {
     );
   }
 
-  // 1. Copy song config to new key on R2
+  // 1. The config under its new id. The old one is deleted last: deleting a
+  //    config deletes the song's row, and its lyrics and notes with it, so
+  //    they have to be copied across first.
+  const oldConfigKey = `${bandId}/songs/${oldId}/config.json`;
   try {
-    const oldConfig = await r2ReadJson<{ id: string }>(`${bandId}/songs/${oldId}/config.json`);
+    const oldConfig = await readJson<{ id: string }>(oldConfigKey);
     oldConfig.id = newId;
-    await r2WriteJson(`${bandId}/songs/${newId}/config.json`, oldConfig);
-    await r2DeleteKey(`${bandId}/songs/${oldId}/config.json`);
-  } catch {
+    await writeJson(`${bandId}/songs/${newId}/config.json`, oldConfig);
+  } catch (err) {
+    if (!isNoSuchKey(err)) throw err;
     // config may not exist yet
   }
 
-  // 2. Copy audio stems from old prefix to new prefix
+  // 2. Everything else under the old prefix — stems, score, lyrics, notes.
+  //    Copies happen now; the deletes wait for the commit (see store.ts).
   const oldAudioPrefix = `${bandId}/songs/${oldId}/`;
   const newAudioPrefix = `${bandId}/songs/${newId}/`;
   const audioKeys = await r2ListKeys(oldAudioPrefix);
 
   for (const key of audioKeys) {
+    if (key === oldConfigKey) continue; // already written, with the new id
     const filename = key.slice(oldAudioPrefix.length);
-    await r2CopyKey(key, `${newAudioPrefix}${filename}`);
+    await copyObject(key, `${newAudioPrefix}${filename}`);
   }
   for (const key of audioKeys) {
-    await r2DeleteKey(key);
+    if (key !== oldConfigKey) await deleteObject(key);
   }
+  await deleteObject(oldConfigKey);
 
   // 3. Update discography.json
   const entry = discography.songs.find((s) => s.id === oldId);
@@ -112,7 +112,7 @@ export async function renameSong(req: CoreRequest): Promise<CoreResponse> {
       entry.audioBasePath = entry.audioBasePath.replace(`songs/${oldId}`, `songs/${newId}`);
     }
   }
-  await r2WriteJson(`${bandId}/songs/discography.json`, discography);
+  await writeJson(`${bandId}/songs/discography.json`, discography);
 
   // 4. Update songId in any setlists
   await updateSetlistEntries(bandId, (e) =>
@@ -129,7 +129,7 @@ export async function deleteSong(req: CoreRequest): Promise<CoreResponse> {
 
   // 1. Delete song config from R2
   try {
-    await r2DeleteKey(`${bandId}/songs/${songId}/config.json`);
+    await deleteObject(`${bandId}/songs/${songId}/config.json`);
   } catch {
     // config may not exist
   }
@@ -137,14 +137,14 @@ export async function deleteSong(req: CoreRequest): Promise<CoreResponse> {
   // 2. Delete audio stems from R2
   const audioKeys = await r2ListKeys(`${bandId}/songs/${songId}/`);
   for (const key of audioKeys) {
-    await r2DeleteKey(key);
+    await deleteObject(key);
   }
 
   // 3. Remove from discography.json
   try {
-    const discography = await r2ReadJson<Discography>(`${bandId}/songs/discography.json`);
+    const discography = await readJson<Discography>(`${bandId}/songs/discography.json`);
     discography.songs = discography.songs.filter((s) => s.id !== songId);
-    await r2WriteJson(`${bandId}/songs/discography.json`, discography);
+    await writeJson(`${bandId}/songs/discography.json`, discography);
   } catch {
     // discography may not exist
   }
@@ -170,7 +170,7 @@ export async function deleteSongFile(req: CoreRequest): Promise<CoreResponse> {
   if (!filename || filename.includes('/') || filename.includes('..')) {
     throw new HttpError(400, 'Invalid filename');
   }
-  await r2DeleteKey(`${bandId}/songs/${songId}/${filename}`);
+  await deleteObject(`${bandId}/songs/${songId}/${filename}`);
   return ok();
 }
 
@@ -180,7 +180,7 @@ export async function upsertDiscographyEntry(req: CoreRequest): Promise<CoreResp
 
   let discography: Discography;
   try {
-    discography = await r2ReadJson<Discography>(`${bandId}/songs/discography.json`);
+    discography = await readJson<Discography>(`${bandId}/songs/discography.json`);
   } catch (err) {
     // Only treat missing-object as empty discography. Re-throw
     // transient/network errors so we never wipe an existing file.
@@ -191,8 +191,12 @@ export async function upsertDiscographyEntry(req: CoreRequest): Promise<CoreResp
     }
   }
 
-  const exists = discography.songs.some((s) => s.id === entry.id);
-  if (exists && !overwrite) {
+  // Since Phase 6b the discography is built from the song configs, so the
+  // wizard's own song — config saved a moment ago — is already listed when
+  // this runs. Only a *different* song under the same id is a conflict.
+  const existing = discography.songs.find((s) => s.id === entry.id);
+  const sameSong = existing && existing.title === entry.title && existing.artist === entry.artist;
+  if (existing && !sameSong && !overwrite) {
     throw new HttpError(
       409,
       `Song id "${entry.id}" already exists. Delete it first or pick a different title/artist.`,
@@ -203,6 +207,6 @@ export async function upsertDiscographyEntry(req: CoreRequest): Promise<CoreResp
   discography.songs = discography.songs.filter((s) => s.id !== entry.id);
   discography.songs.push(entry);
 
-  await r2WriteJson(`${bandId}/songs/discography.json`, discography);
+  await writeJson(`${bandId}/songs/discography.json`, discography);
   return ok();
 }

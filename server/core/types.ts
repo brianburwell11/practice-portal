@@ -70,6 +70,8 @@ export type RequestBody = Pick<CoreRequest, 'body' | 'files' | 'tmpDir'>;
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
+import type { Access } from './access';
+
 export interface RouteDef {
   /**
    * Stable identifier for the route. Used in logs today; Phase 6 hangs the
@@ -79,18 +81,21 @@ export interface RouteDef {
   method: HttpMethod;
   /** Matched against the pathname only. Named groups become `CoreRequest.params`. */
   pattern: RegExp;
+  /** Who may call this route. Required — see `access.ts`. */
+  access: Access;
+  /** A finer check from the path alone; runs before any upload is read. */
+  authorizePath?: (target: RouteTarget) => Promise<void>;
+  /** A finer check that needs the parsed JSON body. */
+  authorizeBody?: (req: CoreRequest) => Promise<void>;
   /**
-   * Readable without authentication, by anyone — so only for data that is
-   * already public. Hosts that gate the API (`server/main.ts`) let these
-   * through and refuse everything else. Phase 6 replaces this with a required
-   * capability per route.
+   * What a write route changes — required on every non-GET route:
+   *   'documents'  JSON documents: one Postgres transaction with its audit
+   *                row, R2 copied after commit (store.ts)
+   *   'media'      R2 objects only; audited once it succeeds, outside any
+   *                transaction (a transcode takes minutes)
+   *   'self'       manages its own transaction and audit (members, auth)
    */
-  public?: boolean;
-  /**
-   * Available on gated hosts to any signed-in user; anonymous callers get a
-   * 401. The handler still checks what this particular user may do.
-   */
-  signedIn?: boolean;
+  writes?: 'documents' | 'media' | 'self';
   /** How the adapter should read the body. Defaults to `'none'`. */
   body?: 'none' | 'json' | 'multipart';
   /** Enforced by the adapter while parsing a multipart body. */

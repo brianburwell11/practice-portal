@@ -1,4 +1,5 @@
-import { and, eq, isNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { isPlatformAdmin } from '../access';
 import { db } from '../../db/client';
 import * as schema from '../../db/schema';
 import { clearCookie, setCookie } from '../auth/cookies';
@@ -135,13 +136,26 @@ export async function me(req: CoreRequest): Promise<CoreResponse> {
     .where(and(eq(schema.membership.userId, userId), isNull(schema.band.deletedAt)));
 
   const ownedIds = new Set(owned.map((b) => b.id));
+  const bands = [
+    ...owned.map((b) => ({ ...b, role: 'owner' })),
+    ...joined.filter((b) => !ownedIds.has(b.id)),
+  ];
+
+  // Each band's capabilities, from the same role tables the server enforces
+  // with, so the UI shows exactly the controls a request would be allowed.
+  const roles = [...new Set(bands.map((b) => b.role))];
+  const grants = roles.length
+    ? await db().select({ role: schema.roleCapability.roleKey, cap: schema.roleCapability.capabilityKey })
+      .from(schema.roleCapability).where(inArray(schema.roleCapability.roleKey, roles))
+    : [];
+  const capsByRole = new Map<string, string[]>();
+  for (const g of grants) capsByRole.set(g.role, [...(capsByRole.get(g.role) ?? []), g.cap]);
+
   return json({
     signInEnabled,
     user,
-    bands: [
-      ...owned.map((b) => ({ ...b, role: 'owner' })),
-      ...joined.filter((b) => !ownedIds.has(b.id)),
-    ],
+    platformAdmin: isPlatformAdmin(req.actor),
+    bands: bands.map((b) => ({ ...b, capabilities: (capsByRole.get(b.role) ?? []).sort() })),
   });
 }
 

@@ -1,4 +1,4 @@
-import { r2ListKeys, r2ReadJson, r2WriteJson } from './r2';
+import { listSetlistKeys, readJson, writeJson } from './store';
 
 export interface SetlistEntry {
   type: string;
@@ -15,12 +15,11 @@ export type SetlistEntryTransform = (entry: SetlistEntry) => SetlistEntry | null
  * when a song is renamed or deleted.
  */
 export async function updateSetlistEntries(bandId: string, transform: SetlistEntryTransform): Promise<void> {
-  const allKeys = await r2ListKeys(`${bandId}/setlists/`);
-  const setlistKeys = allKeys.filter((k) => k.endsWith('.json') && !k.endsWith('/index.json'));
+  const setlistKeys = await listSetlistKeys(bandId);
 
   for (const key of setlistKeys) {
     try {
-      const setlist = await r2ReadJson<{ entries?: SetlistEntry[] }>(key);
+      const setlist = await readJson<{ entries?: SetlistEntry[] }>(key);
       if (!Array.isArray(setlist.entries)) continue;
 
       const updated = setlist.entries
@@ -29,7 +28,7 @@ export async function updateSetlistEntries(bandId: string, transform: SetlistEnt
 
       if (updated.length !== setlist.entries.length || JSON.stringify(updated) !== JSON.stringify(setlist.entries)) {
         setlist.entries = updated;
-        await r2WriteJson(key, setlist);
+        await writeJson(key, setlist);
       }
     } catch {
       // skip setlists that can't be read

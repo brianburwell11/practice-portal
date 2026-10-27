@@ -2,15 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { bandConfigSchema } from '../../../src/config/schema';
 import { HttpError, json, ok } from '../http';
-import {
-  r2DeleteKey,
-  r2ListKeys,
-  r2PublicUrl,
-  r2PutFile,
-  r2ReadJson,
-  r2StorageBytes,
-  r2WriteJson,
-} from '../r2';
+import { r2ListKeys, r2PublicUrl, r2PutFile, r2StorageBytes } from '../r2';
+import { deleteObject, readJson, writeJson } from '../store';
 import type { CoreRequest, CoreResponse } from '../types';
 
 /** Slim per-band entry stored in `registry.json`. */
@@ -63,7 +56,7 @@ function slimEntry(band: BandConfig): RegistryEntry {
  */
 async function readRegistry(): Promise<{ registry: Registry; existed: boolean }> {
   try {
-    const registry = await r2ReadJson<Registry>('registry.json');
+    const registry = await readJson<Registry>('registry.json');
     registry.bands = registry.bands ?? [];
     return { registry, existed: true };
   } catch {
@@ -95,7 +88,7 @@ export async function putBand(req: CoreRequest): Promise<CoreResponse> {
   }
 
   // 1. Write the authoritative per-band file.
-  await r2WriteJson(`${bandId}/band.json`, validated);
+  await writeJson(`${bandId}/band.json`, validated);
 
   // 2. Upsert the slim entry in registry.json.
   const { registry, existed } = await readRegistry();
@@ -105,14 +98,14 @@ export async function putBand(req: CoreRequest): Promise<CoreResponse> {
     .filter((b) => b.id !== bandId)
     .map(stripLegacyFields);
   registry.bands.push(slimEntry(validated));
-  await r2WriteJson('registry.json', registry);
+  await writeJson('registry.json', registry);
 
   // 3. Seed blank setlists index for a new band.
   if (isNewBand) {
     try {
-      await r2ReadJson<unknown>(`${bandId}/setlists/index.json`);
+      await readJson<unknown>(`${bandId}/setlists/index.json`);
     } catch {
-      await r2WriteJson(`${bandId}/setlists/index.json`, { setlists: [] });
+      await writeJson(`${bandId}/setlists/index.json`, { setlists: [] });
     }
   }
 
@@ -127,7 +120,7 @@ export async function deleteBand(req: CoreRequest): Promise<CoreResponse> {
     const keys = await r2ListKeys(`${bandId}/`);
     for (const key of keys) {
       try {
-        await r2DeleteKey(key);
+        await deleteObject(key);
       } catch {
         // individual key failure shouldn't abort the cascade
       }
@@ -138,11 +131,11 @@ export async function deleteBand(req: CoreRequest): Promise<CoreResponse> {
 
   // 2. Remove band from registry.json (and strip any legacy songIds fields)
   try {
-    const registry = await r2ReadJson<Registry>('registry.json');
+    const registry = await readJson<Registry>('registry.json');
     registry.bands = (registry.bands ?? [])
       .filter((b) => b.id !== bandId)
       .map(stripLegacyFields);
-    await r2WriteJson('registry.json', registry);
+    await writeJson('registry.json', registry);
   } catch {
     // registry may not exist
   }
@@ -155,36 +148,3 @@ export async function bandStorage(req: CoreRequest): Promise<CoreResponse> {
   return json({ totalBytes, objectCount });
 }
 
-/** (Re)build the slim `registry.json` from the per-band `band.json` files. */
-export async function rebuildRegistry(): Promise<CoreResponse> {
-  const { registry: oldRegistry } = await readRegistry();
-
-  const bandIds: string[] = Array.from(new Set(oldRegistry.bands.map((b) => b.id)));
-  const slim: RegistryEntry[] = [];
-
-  for (const id of bandIds) {
-    let full: BandConfig;
-    try {
-      full = await r2ReadJson<BandConfig>(`${id}/band.json`);
-    } catch {
-      // Seed band.json from the old (pre-split) registry entry if it
-      // still has full color data. After this runs once, subsequent
-      // rebuilds read straight from band.json.
-      const old = oldRegistry.bands.find((b) => b.id === id) as (RegistryEntry & { colors?: BandConfig['colors'] }) | undefined;
-      if (!old?.colors) continue;
-      full = {
-        id: old.id,
-        name: old.name,
-        route: old.route,
-        colors: old.colors,
-      };
-      if (old.logo) full.logo = old.logo;
-      await r2WriteJson(`${id}/band.json`, full);
-    }
-
-    slim.push(slimEntry(full));
-  }
-
-  await r2WriteJson('registry.json', { bands: slim });
-  return ok({ count: slim.length });
-}

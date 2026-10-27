@@ -77,13 +77,16 @@ type BandRow = typeof schema.band.$inferSelect;
  * signed out, so the SPA can offer sign-in; 403 when signed in but not a
  * member. Unknown bands are null (404), as in R2.
  */
-async function findBand(d: Db, legacyId: string, viewerId: string | undefined): Promise<BandRow | null> {
+/** Skip the visibility check: the caller is already authorized for the band. */
+const UNCHECKED = Symbol('unchecked');
+
+async function findBand(d: Db, legacyId: string, viewerId: string | undefined | typeof UNCHECKED): Promise<BandRow | null> {
   const [row] = await d.select().from(schema.band).where(and(
     eq(schema.band.legacyId, legacyId),
     isNull(schema.band.deletedAt),
   ));
   if (!row) return null;
-  if (row.visibility === 'public') return row;
+  if (row.visibility === 'public' || viewerId === UNCHECKED) return row;
   if (!viewerId) throw new HttpError(401, 'Sign in to view this band');
   if (row.ownerUserId === viewerId) return row;
   const [m] = await d.select({ role: schema.membership.role }).from(schema.membership)
@@ -114,12 +117,27 @@ export async function readDocument(
   d: Db = defaultDb() as unknown as Db,
   viewerId?: string,
 ): Promise<unknown | null> {
+  return read(key, d, viewerId);
+}
+
+/**
+ * `readDocument` without the Members-only check, for write handlers that
+ * read-modify-write documents of a band they're already authorized in.
+ * Never expose its result to a route that hasn't checked access.
+ */
+export async function readDocumentUnchecked(key: string, d: Db): Promise<unknown | null> {
+  return read(key, d, UNCHECKED);
+}
+
+async function read(key: string, d: Db, viewerId: string | undefined | typeof UNCHECKED): Promise<unknown | null> {
   const k = parseKey(key);
   if (!k) return null;
 
   if (k.kind === 'registry') {
     // Public bands, plus Members-only bands the viewer owns or belongs to.
-    const visible = viewerId
+    const visible = viewerId === UNCHECKED
+      ? undefined
+      : viewerId
       ? or(
         eq(schema.band.visibility, 'public'),
         eq(schema.band.ownerUserId, viewerId),
@@ -230,10 +248,17 @@ const songLegacyId = (r: { mediaPrefix?: string | null }) => r.mediaPrefix!.spli
 const setlistLegacyId = (r: { config: unknown }) => (r.config as { id: string }).id;
 
 /**
- * Apply an R2 JSON write to Postgres. Called after the R2 write succeeds.
- * Keys outside the document layout are ignored.
+ * Apply a JSON document write to Postgres — the write itself since Phase 6b
+ * (`store.ts`), with R2 getting a copy after commit. Keys outside the
+ * document layout are ignored. `actorId` owns a band it creates and is
+ * recorded as a new song's uploader.
  */
-export async function mirrorWrite(key: string, data: unknown, d: Db = defaultDb() as unknown as Db): Promise<void> {
+export async function mirrorWrite(
+  key: string,
+  data: unknown,
+  d: Db = defaultDb() as unknown as Db,
+  opts: { actorId?: string } = {},
+): Promise<void> {
   const k = parseKey(key);
   if (!k) return;
 
@@ -261,11 +286,12 @@ export async function mirrorWrite(key: string, data: unknown, d: Db = defaultDb(
         await tx.update(schema.band).set(values).where(eq(schema.band.id, existing.id));
         return;
       }
-      // A band created through the dev admin. Until Phase 5 there's exactly
-      // one admin, who already owns the imported bands.
-      const [owner] = await tx.select({ id: schema.band.ownerUserId }).from(schema.band)
+      // A new band belongs to whoever created it (a site admin; see access.ts).
+      // Without one — a script — it falls back to the oldest band's owner.
+      const [fallback] = opts.actorId ? [] : await tx.select({ id: schema.band.ownerUserId }).from(schema.band)
         .orderBy(asc(schema.band.createdAt)).limit(1);
-      if (!owner) throw new Error(`Can't mirror new band ${k.band}: no existing band to take an owner from`);
+      const owner = opts.actorId ? { id: opts.actorId } : fallback;
+      if (!owner) throw new Error(`Can't create band ${k.band}: no owner`);
       const [{ next }] = await tx.select({ next: sql<number>`coalesce(max(${schema.band.position}) + 1, 0)` }).from(schema.band);
       await tx.insert(schema.band).values({
         ...values, legacyId: k.band, ownerUserId: owner.id, visibility: 'public', position: next,
@@ -300,7 +326,7 @@ export async function mirrorWrite(key: string, data: unknown, d: Db = defaultDb(
           } else {
             await tx.insert(schema.song).values({
               bandId: band.id, slug: c.slug ?? k.song, title: c.title, artist: c.artist,
-              config: data, mediaPrefix, uploadedBy: band.ownerUserId,
+              config: data, mediaPrefix, uploadedBy: opts.actorId ?? band.ownerUserId,
             });
           }
           return;
@@ -340,7 +366,7 @@ export async function mirrorWrite(key: string, data: unknown, d: Db = defaultDb(
   });
 }
 
-/** Apply an R2 delete to Postgres. Deleting what isn't there is a no-op, as in R2. */
+/** Apply a document delete to Postgres. Deleting what isn't there is a no-op, as in R2. */
 export async function mirrorDelete(key: string, d: Db = defaultDb() as unknown as Db): Promise<void> {
   const k = parseKey(key);
   if (!k || k.kind === 'registry' || k.kind === 'discography' || k.kind === 'setlistIndex') return;

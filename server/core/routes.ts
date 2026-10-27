@@ -5,17 +5,23 @@
  * mirrors the order the routes were checked in when they lived inside the Vite
  * middleware, so precedence is unchanged.
  *
- * Phase 6 adds a required capability to each entry and a test that asserts no
- * write route is missing one — which is why the surface lives here rather than
- * being spread across handler files.
+ * Every entry declares `access` (see access.ts); the router enforces it on
+ * every host, and scripts/verify-access.ts fails on an entry without one —
+ * which is why the surface lives here rather than spread across handler files.
  */
 import {
   bandStorage,
   deleteBand,
   putBand,
-  rebuildRegistry,
   uploadBandLogo,
 } from './handlers/bands';
+import {
+  authorizeBandPut,
+  authorizeConfigSave,
+  authorizeDiscographyUpsert,
+  authorizeLogo,
+  authorizePresign,
+} from './access';
 import { googleCallback, googleStart, logout, me } from './handlers/auth';
 import { readData } from './handlers/data';
 import {
@@ -54,107 +60,115 @@ export const routes: RouteDef[] = [
   // each handler checks the caller's capability in the band.
   {
     name: 'member.list',
+    access: 'member.invite',
     method: 'GET',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/members$/,
-    signedIn: true,
     handler: listMembers,
   },
   {
     name: 'member.role.set',
+    writes: 'self',
+    access: 'member.role.set',
     method: 'PUT',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/members\/(?<userId>[^/]+)$/,
     body: 'json',
-    signedIn: true,
     handler: setMemberRole,
   },
   {
     name: 'member.remove',
+    writes: 'self',
+    access: 'signedIn',
     method: 'DELETE',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/members\/(?<userId>[^/]+)$/,
-    signedIn: true,
     handler: removeMember,
   },
   {
     name: 'band.transfer',
+    writes: 'self',
+    access: 'band.transfer',
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/transfer$/,
     body: 'json',
-    signedIn: true,
     handler: transferOwnership,
   },
   {
     name: 'band.visibility',
+    writes: 'self',
+    access: 'band.publish',
     method: 'PUT',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/visibility$/,
     body: 'json',
-    signedIn: true,
     handler: setVisibility,
   },
   {
     name: 'invite.create',
+    writes: 'self',
+    access: 'member.invite',
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/invites$/,
     body: 'json',
-    signedIn: true,
     handler: createInvite,
   },
   {
     name: 'invite.revoke',
+    writes: 'self',
+    access: 'member.invite',
     method: 'DELETE',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/invites\/(?<inviteId>[^/]+)$/,
-    signedIn: true,
     handler: revokeInvite,
   },
   {
     // Public: the token is the authorization, and the page shows the band
     // name before asking anyone to sign in.
     name: 'invite.preview',
+    access: 'public',
     method: 'GET',
     pattern: /^\/api\/invites\/(?<token>[A-Za-z0-9_-]+)$/,
-    public: true,
     handler: previewInvite,
   },
   {
     name: 'invite.accept',
+    writes: 'self',
+    access: 'signedIn',
     method: 'POST',
     pattern: /^\/api\/invites\/(?<token>[A-Za-z0-9_-]+)\/accept$/,
-    signedIn: true,
     handler: acceptInvite,
   },
 
   // --- Accounts (Phase 5). Public: they're how you stop being anonymous.
   {
     name: 'auth.google.start',
+    access: 'public',
     method: 'GET',
     pattern: /^\/api\/auth\/google\/start$/,
-    public: true,
     handler: googleStart,
     errorStatus: 500,
     errorMessage: 'Sign-in unavailable',
   },
   {
     name: 'auth.google.callback',
+    access: 'public',
     method: 'GET',
     pattern: /^\/api\/auth\/google\/callback$/,
-    public: true,
     handler: googleCallback,
     errorStatus: 500,
     errorMessage: 'Sign-in failed',
   },
   {
     name: 'auth.logout',
+    writes: 'self',
+    access: 'public',
     method: 'POST',
     pattern: /^\/api\/auth\/logout$/,
-    public: true,
     handler: logout,
     errorStatus: 500,
     errorMessage: 'Sign-out failed',
   },
   {
     name: 'auth.me',
+    access: 'public',
     method: 'GET',
     pattern: /^\/api\/me$/,
-    public: true,
     handler: me,
     errorStatus: 500,
     errorMessage: 'Lookup failed',
@@ -162,15 +176,18 @@ export const routes: RouteDef[] = [
   {
     // The JSON documents R2 serves publicly today, from Postgres (Phase 4).
     name: 'data.read',
+    access: 'public',
     method: 'GET',
     pattern: /^\/api\/data\/(?<key>[^?#]+\.json)$/,
-    public: true,
     handler: readData,
     errorStatus: 500,
     errorMessage: 'Read failed',
   },
   {
     name: 'song.config.write',
+    writes: 'documents',
+    access: 'signedIn',
+    authorizeBody: authorizeConfigSave,
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/config$/,
     body: 'json',
@@ -180,6 +197,8 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'song.lyrics.write',
+    writes: 'documents',
+    access: 'song.content.write',
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/lyrics$/,
     body: 'json',
@@ -189,6 +208,8 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'song.notes.write',
+    writes: 'documents',
+    access: 'song.content.write',
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/notes$/,
     body: 'json',
@@ -198,6 +219,8 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'song.rename',
+    writes: 'documents',
+    access: 'song.content.write',
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/rename$/,
     body: 'json',
@@ -207,6 +230,9 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'band.logo.write',
+    writes: 'media',
+    access: 'signedIn',
+    authorizePath: authorizeLogo,
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/logo$/,
     body: 'multipart',
@@ -216,6 +242,8 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'song.audio.transcode',
+    writes: 'media',
+    access: 'song.audio.write',
     method: 'POST',
     pattern: /^\/api\/r2\/transcode-upload\/(?<bandId>[^/]+)\/(?<songId>[^/]+)$/,
     body: 'multipart',
@@ -226,6 +254,8 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'song.score.convert',
+    writes: 'media',
+    access: 'song.score.write',
     method: 'POST',
     pattern: /^\/api\/r2\/mscz-convert-upload\/(?<bandId>[^/]+)\/(?<songId>[^/]+)$/,
     body: 'multipart',
@@ -237,6 +267,9 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'song.audio.presign',
+    writes: 'media',
+    access: 'signedIn',
+    authorizeBody: authorizePresign,
     method: 'POST',
     pattern: /^\/api\/r2\/presign$/,
     body: 'json',
@@ -246,15 +279,8 @@ export const routes: RouteDef[] = [
     errorMessage: 'Presign failed',
   },
   {
-    name: 'registry.rebuild',
-    method: 'POST',
-    pattern: /^\/api\/registry\/rebuild$/,
-    handler: rebuildRegistry,
-    errorStatus: 500,
-    errorMessage: 'Rebuild failed',
-  },
-  {
     name: 'band.storage.read',
+    access: 'band.settings',
     method: 'GET',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/storage$/,
     handler: bandStorage,
@@ -263,6 +289,9 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'band.settings.write',
+    writes: 'documents',
+    access: 'signedIn',
+    authorizePath: authorizeBandPut,
     method: 'PUT',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)$/,
     body: 'json',
@@ -272,6 +301,8 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'band.delete',
+    writes: 'documents',
+    access: 'band.delete',
     method: 'DELETE',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)$/,
     handler: deleteBand,
@@ -280,6 +311,9 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'song.discography.write',
+    writes: 'documents',
+    access: 'signedIn',
+    authorizeBody: authorizeDiscographyUpsert,
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/discography$/,
     body: 'json',
@@ -289,6 +323,8 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'song.delete',
+    writes: 'documents',
+    access: 'song.delete',
     method: 'DELETE',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)$/,
     handler: deleteSong,
@@ -297,6 +333,8 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'song.file.delete',
+    writes: 'media',
+    access: 'song.score.write',
     method: 'DELETE',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/file\/(?<filename>[^/]+)$/,
     handler: deleteSongFile,
@@ -305,6 +343,8 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'setlist.write',
+    writes: 'documents',
+    access: 'setlist.write',
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/setlists\/(?<setlistId>[^/]+)$/,
     body: 'json',
@@ -314,6 +354,8 @@ export const routes: RouteDef[] = [
   },
   {
     name: 'setlist.delete',
+    writes: 'documents',
+    access: 'setlist.write',
     method: 'DELETE',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/setlists\/(?<setlistId>[^/]+)$/,
     handler: deleteSetlist,

@@ -1,3 +1,5 @@
+import { authorizeAccess } from './access';
+import { auditWrite, inRequestTransaction } from './store';
 import { HttpError, errorMessage } from './http';
 import { routes } from './routes';
 import type { CoreResponse, HttpMethod, RequestBody, RouteDef, RouteTarget } from './types';
@@ -36,8 +38,19 @@ export async function runRoute(
   loadBody: () => Promise<RequestBody>,
 ): Promise<CoreResponse> {
   try {
+    // Authorization first: an anonymous caller learns nothing, not even
+    // whether R2 is configured, and no upload is read before it passes.
+    await authorizeAccess(route.access, target);
+    await route.authorizePath?.(target);
     route.precheck?.(target);
-    return await route.handler({ ...target, ...(await loadBody()) });
+    const req = { ...target, ...(await loadBody()) };
+    await route.authorizeBody?.(req);
+    if (route.writes === 'documents') {
+      return await inRequestTransaction(route, req.params, req.actor, () => route.handler(req));
+    }
+    const response = await route.handler(req);
+    if (route.writes === 'media' && response.status < 400) await auditWrite(route, req.params, req.actor);
+    return response;
   } catch (err) {
     if (err instanceof HttpError) {
       return { status: err.status, body: { error: err.message } };

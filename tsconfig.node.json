@@ -34,6 +34,8 @@
     "scripts/check-data-parity.ts",
     "scripts/verify-mirror.ts",
     "scripts/verify-auth.ts",
-    "scripts/verify-members.ts"
+    "scripts/verify-members.ts",
+    "scripts/verify-access.ts",
+    "scripts/verify-writes.ts"
   ]
 }

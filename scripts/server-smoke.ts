@@ -5,7 +5,7 @@
  *   npm run smoke:server -- --url https://...  # checks a deployed instance
  *
  * Needs `npm run build && npm run build:server` first when run locally.
- * Asserts the read-only contract as well as the happy path: a write that
+ * Asserts that signed-out writes are refused as well as the happy path: a write that
  * gets through here would be a write anyone on the internet can make.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -87,19 +87,24 @@ async function run(): Promise<void> {
   const traversal = await request('GET', '/%2e%2e/package.json');
   check('path traversal refused', traversal.status === 404 && !traversal.body.includes('"name"'), `got ${traversal.status}`);
 
-  // Every API route is refused, reads included — see server/main.ts.
+  // Signed out, every write — and the storage read — is refused before it
+  // touches anything (Phase 6: routes declare access, the router enforces it).
   const writes: [string, string, string?][] = [
     ['GET', '/api/bands/smoke/storage'],
     ['POST', '/api/bands/smoke/songs/smoke/config', '{}'],
-    ['POST', '/api/registry/rebuild'],
+    ['POST', '/api/bands/smoke/songs/smoke/lyrics', '{}'],
+    ['POST', '/api/bands/smoke/setlists/smoke', '{}'],
+    ['POST', '/api/r2/presign', '{}'],
     ['PUT', '/api/bands/smoke', '{}'],
     ['DELETE', '/api/bands/smoke'],
     ['DELETE', '/api/bands/smoke/songs/smoke'],
   ];
   for (const [method, path, body] of writes) {
     const res = await request(method, path, body);
-    check(`${method} ${path} → 403 read-only`, res.status === 403, `got ${res.status} ${res.body}`);
+    check(`signed out: ${method} ${path} → 401`, res.status === 401, `got ${res.status} ${res.body}`);
   }
+  const retired = await request('POST', '/api/registry/rebuild');
+  check('retired registry/rebuild → 404', retired.status === 404, `got ${retired.status}`);
 
   // Phase 4: the JSON documents, from Postgres. Public by design.
   const registry = await request('GET', '/api/data/registry.json');

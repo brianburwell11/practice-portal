@@ -101,20 +101,11 @@ async function loadBody(
   }
 }
 
-export interface ApiHandlerOptions {
-  /**
-   * Gate a matched route before anything else happens. Return a response to
-   * refuse it — the body is never read, so a refused upload costs nothing.
-   * Phase 6's capability check replaces this.
-   */
-  gate?: (route: RouteDef, actor: Actor | undefined) => CoreResponse | undefined;
-}
-
 /**
  * Returns a handler that resolves `true` if it answered the request, or
  * `false` if no route matched and the caller should fall through.
  */
-export function createApiHandler({ gate }: ApiHandlerOptions = {}) {
+export function createApiHandler() {
   return async (req: IncomingMessage, res: ServerResponse): Promise<boolean> => {
     const [pathname, search = ''] = (req.url ?? '').split('?');
     const matched = matchRoute(req.method ?? '', pathname);
@@ -135,11 +126,6 @@ export function createApiHandler({ gate }: ApiHandlerOptions = {}) {
     }
 
     const actor = await resolveActor(cookies);
-    const refused = gate?.(route, actor);
-    if (refused) {
-      sendJson(res, refused);
-      return true;
-    }
 
     const query = new URLSearchParams(search);
     const tmpDir = route.body === 'multipart'
