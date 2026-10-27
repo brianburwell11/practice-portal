@@ -302,7 +302,7 @@ Decisions worth knowing:
 
 - **`node:http`, not Hono.** The core already has its own router (`server/core/router.ts`), and `nodeRequest.ts` already speaks `IncomingMessage`. A framework would have been a second router in front of the first. Revisit if middleware piles up in Phase 5.
 - **The Vite plugin shrank again.** Its request → core → response logic moved to `server/adapters/nodeApi.ts`, so dev and production run the same adapter; the plugin is now ~25 lines.
-- **Bundled with esbuild, `--packages=external`.** `dist-server/server.js` is ~37 KB; `node_modules` stays in the image (it's there for `mscz-smoke.ts` anyway).
+- **Bundled with esbuild, `--packages=external`.** `dist-server/server.js` is ~37 KB; `node_modules` stays in the image, production dependencies only (`npm ci --omit=dev --omit=optional`). Everything the bundle imports at runtime — `drizzle-orm`, `postgres`, `zod`, `busboy`, `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner` — must therefore live in `dependencies`; a misfiled one fails at boot with `ERR_MODULE_NOT_FOUND`. `mscz-smoke.ts` is bundled the same way (`npm run build:smoke` → `dist-server/mscz-smoke.js`), so the image needs neither `tsx` nor TypeScript sources.
 - **The image is now three stages.** The new `web` stage runs `npm run build && npm run build:server` on `$BUILDPLATFORM`. `VITE_R2_PUBLIC_URL` is a **build arg**, baked into the bundle — it's public, and `.env` is dockerignored.
 - **The SPA is served from the same origin**, rather than Pages + `api.` subdomain. One deploy, no CORS. Cloudflare can still sit in front for caching.
 
@@ -366,12 +366,21 @@ A type-2 AppImage is just a squashfs archive appended to an ELF runtime, so stag
 To reproduce:
 
 ```bash
-docker build -t practice-portal-api .
+docker build --build-arg VITE_R2_PUBLIC_URL=... -t practice-portal .
 docker run --rm -v "$PWD/docs/public/xml-sample:/fixtures:ro" \
-  -e FIXTURES_DIR=/fixtures practice-portal-api npx tsx scripts/mscz-smoke.ts
+  -e FIXTURES_DIR=/fixtures practice-portal node dist-server/mscz-smoke.js
 ```
 
 Both arches build from the same Dockerfile; add `--platform linux/amd64` for the Fly target.
+
+### Trimming the image
+
+2.42 GB → 1.51 GB on arm64 (2026-10-27). Two cuts:
+
+- **MuseScore, 569 MB → 299 MB.** Stage 1 deletes what headless conversion never touches: `appimageupdatetool.AppDir` (the self-updater, 132 MB), the soundfont (`share/mscore4portable-4.7/sound`, 49 MB), UI and Qt translations (`share/.../locale`, `translations`), the GUI's `qml` modules, and `share/.../{templates,autobotscripts,plugins,extensions,wallpapers}` plus `share/doc`. Checked empirically: `mscz-smoke` 0 failures, and the converted MusicXML is byte-identical (bar the encoding date) to the untrimmed build.
+- **`node_modules`, 311 MB → 82 MB**, from production-only install (above).
+
+**Do not delete the top-level `plugins/`.** Those aren't MuseScore plugins, they're Qt's — including `platforms/libqxcb.so`. Without it `mscore` can't attach to the Xvfb display, even `mscore -v` fails, and `resolveMscoreBin()` returns `null`. Deliberately kept, though not needed for the Wiggle fixture: `share/.../tables` (instrument and chord data, 13 MB) and `fallback` (AppRun's libjack/libnss3/libpipewire fallbacks).
 
 The container's media toolchain is no longer a risk.
 
@@ -530,6 +539,38 @@ If sign-in fails with `redirect_uri_mismatch`, the URI in step 3 doesn't match w
 
 ## Phase 6 — Authorization on every write
 
+**Revised 2026-10-27: done together with Phase 8**, as one round with one goal — *Managers and Editors edit songs from the live site, safely*. Phase 6 alone changes nothing visible; Phase 8 alone would be unsafe. Decisions:
+
+| Decision | Choice | Why |
+|---|---|---|
+| Source of truth | **Postgres first.** Each request's writes and its audit row commit in one transaction; R2 JSON gets a copy after commit. | "Audit in the same transaction" needs it, and a failed mirror can no longer leave the two out of step. The R2 copy keeps GitHub Pages and rollback working. |
+| Dev | **Same rules as live.** `npm run dev` requires sign-in and enforces roles. | Closes the hole where anyone on the Wi-Fi could edit while dev ran (`host: true`). |
+| MuseScore | **Trim it.** Keep `.mscz` uploads; delete the ~260 MB conversion never touches (AppImage updater 132 MB, soundfont 49 MB, translations 54 MB, templates/plugins/test scripts ~25 MB) and prune dev-only `node_modules`. | MuseScore has no standalone converter — `mscore -o` is the whole app, headless. A separate converter machine stays an option for Phase 9. |
+| New bands | **Platform admins only** (`ADMIN_EMAILS`) until quotas and billing exist. | Creating a band means storage someone pays for. |
+
+### 6a — Every route declares who may call it
+- [x] `RouteDef.access`: `public`, `signedIn`, `platformAdmin`, or a capability. Enforced in the core router, so dev and Fly share one check. No declaration → refused. Authorization runs before any precheck or upload is read.
+- [x] Song config saves resolve their capability from what changed: timing (`tapMap`, `tempoMap`, `timeSignatureMap`, `markers`, offsets) → `song.timing.write`; stems → `song.audio.write`; score → `song.score.write`; the rest → `song.content.write`. A new song needs only `song.create`.
+- [x] A test enumerates the route table and fails on any route without a declaration. `verify-access.ts`: also unknown capabilities, capability routes with no band in the path, public writes, and write routes that don't declare what they write.
+- [x] The band comes from the path, and the capability is checked against that same band — nothing a handler touches is outside it.
+
+### 6b — Postgres first
+- [x] A request-scoped transaction: every JSON document a handler reads comes from Postgres, every write goes to Postgres, and R2 copies are queued until commit. `store.ts`, on AsyncLocalStorage. Media: copy before commit, delete after.
+- [x] One `audit_log` row per write request, in that transaction: route, band, actor, target. Media routes are audited after success instead — a transcode shouldn't hold a transaction open for minutes.
+- [x] Handlers move off `r2ReadJson`/`r2WriteJson` for JSON documents; media stays on R2 as-is.
+- [x] `registry/rebuild` retires — the registry is built from rows on read.
+
+### 6c — Dev requires sign-in
+- [x] The Vite plugin enforces the same access rules; without `DATABASE_URL` it refuses writes rather than running open. The dev write mirror is gone with it.
+
+### 6d — Prove it
+- [x] An Editor is refused deleting a song and editing timing; a signed-out request changes nothing; a member of one band can't write to another. `verify-writes.ts --url`: 36 checks through a server, Postgres and R2, cleaned up after.
+- [x] Parity stays 0 against R2 copies written after commit.
+
+### The original Phase 6 list
+
+Kept for reference; 6a–6d above are how each item gets done. `can()` already exists from Phase 5.
+
 - [ ] Implement `can(actor, capability, bandId)` resolving through membership → role → capability bundle, with grant-links handled as a separate actor kind.
 - [ ] Wrap every core handler with its required capability. Default deny: a handler with no declared capability must fail closed, not open.
 - [ ] Add a test that enumerates the route table and asserts every write route declares a capability — this is the check that stops the surface from drifting as features get added.
@@ -556,10 +597,25 @@ If sign-in fails with `redirect_uri_mismatch`, the URI in step 3 doesn't match w
 
 ## Phase 8 — Admin UI in production
 
-- [ ] Replace every `import.meta.env.DEV` gate with capability checks driven by the session. Affected: `src/main.tsx`, `src/App.tsx`, `src/admin/AdminRibbon.tsx`, `src/components/band/BandPicker.tsx`, `src/components/mixer/MixerPanel.tsx`, `src/components/notes/NotesLayer.tsx`, `src/hooks/useNotesKeyboard.ts`.
-- [ ] Keep admin routes lazy-loaded, so Members don't download the wizard bundle.
-- [ ] Treat client-side gating as UX only — the server is the enforcement boundary.
-- [ ] Empty and unauthorized states: what a Member sees where an Editor sees a control.
+- [x] Replace every `import.meta.env.DEV` gate with capability checks driven by the session. Affected: `src/main.tsx`, `src/App.tsx`, `src/admin/AdminRibbon.tsx`, `src/components/band/BandPicker.tsx`, `src/components/mixer/MixerPanel.tsx`, `src/components/notes/NotesLayer.tsx`, `src/hooks/useNotesKeyboard.ts`.
+- [x] Keep admin routes lazy-loaded, so Members don't download the wizard bundle.
+- [x] Treat client-side gating as UX only — the server is the enforcement boundary.
+- [x] Empty and unauthorized states: what a Member sees where an Editor sees a control.
+
+### 8a — The session knows what you can do
+- [x] `/api/me` returns each band's capabilities, read from the role tables, so the UI gates on the same data the server enforces. Plus `platformAdmin`.
+
+### 8b — Gates
+- [x] Each `import.meta.env.DEV` gate above becomes a capability check: Songs menu items by `song.create` / `song.content.write` / `song.timing.write` / `song.delete`; Setlists by `setlist.write`; Edit Band by `band.settings`; Delete Band by `band.delete`; New Band by platform admin; mixer save and band notes by their capabilities. None remain in `src/`. Admin pages sit behind `RequireCan` and stay code-split.
+- [x] Controls you can't use are hidden, not shown disabled — a Member's screen looks like today's public site.
+
+### 8c — Uploads in production
+- [ ] Fly secrets: R2 write credentials.
+- [ ] R2 CORS allows `https://practice-portal.fly.dev` for presigned `PUT` (score uploads go straight from the browser to R2).
+- [ ] Machine size and timeouts that survive a multi-stem transcode; measure a real one.
+- [x] The trimmed image: MuseScore without updater, soundfont, translations, templates, plugins; production-only `node_modules`. `mscz-smoke` and `smoke:server` still pass. 2.42 GB → 1.51 GB (arm64). Qt's own `plugins/platforms` must stay — without it even `mscore -v` fails.
+
+**Two bugs the end-to-end tests caught on the way:** the Add Song wizard saves the config and then adds the discography entry without `overwrite`, which Postgres-first turned into a 409 — the discography is built from configs, so the song is already listed; only a *different* song under the same id conflicts now. And a song rename deleted the old config (and with it the row's lyrics) before copying them across; it now copies first and deletes last.
 
 **Exit criteria**: a Manager can prep a song entirely from the hosted site, no laptop involved.
 
