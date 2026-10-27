@@ -4,7 +4,7 @@ import { useBandStore } from '../../store/bandStore';
 import { useSongStore } from '../../store/songStore';
 import { useSetlistStore } from '../../store/setlistStore';
 import { bandConfigSchema, bandsManifestSchema } from '../../config/schema';
-import { r2Url } from '../../utils/url';
+import { dataUrl } from '../../utils/url';
 
 export function BandApp() {
   const { bandSlug } = useParams<{ bandSlug: string }>();
@@ -14,7 +14,7 @@ export function BandApp() {
   // Load bands manifest
   useEffect(() => {
     if (bandsManifest) return;
-    fetch(r2Url('registry.json'))
+    fetch(dataUrl('registry.json'))
       .then((r) => r.json())
       .then((data) => setBandsManifest(bandsManifestSchema.parse(data)))
       .catch((err) => setError(String(err)));
@@ -40,7 +40,7 @@ export function BandApp() {
     prevBandIdRef.current = indexEntry.id;
 
     let cancelled = false;
-    fetch(r2Url(`${indexEntry.id}/band.json`))
+    fetch(dataUrl(`${indexEntry.id}/band.json`))
       .then((r) => {
         if (!r.ok) throw new Error(`band.json fetch failed (${r.status})`);
         return r.json();

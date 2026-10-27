@@ -16,6 +16,7 @@ import {
   rebuildRegistry,
   uploadBandLogo,
 } from './handlers/bands';
+import { readData } from './handlers/data';
 import { deleteSetlist, saveSetlist } from './handlers/setlists';
 import {
   deleteSong,
@@ -37,6 +38,16 @@ import {
 import type { RouteDef } from './types';
 
 export const routes: RouteDef[] = [
+  {
+    // The JSON documents R2 serves publicly today, from Postgres (Phase 4).
+    name: 'data.read',
+    method: 'GET',
+    pattern: /^\/api\/data\/(?<key>[^?#]+\.json)$/,
+    public: true,
+    handler: readData,
+    errorStatus: 500,
+    errorMessage: 'Read failed',
+  },
   {
     name: 'song.config.write',
     method: 'POST',

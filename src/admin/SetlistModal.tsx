@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
-import { r2Url } from '../utils/url';
+import { dataUrl } from '../utils/url';
 import { getCamelotStyle, getCamelotHue, toCamelotCode } from '../utils/camelot';
 import { slugify, cleanSlugInput } from '../utils/deriveId';
 import { dedupeSlug } from '../utils/dedupeSlug';
@@ -168,8 +168,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     const sourceId = setlistId ?? copyFromSetlistId;
     if (!sourceId || !currentBand) return;
     setLoading(true);
-    const r2Base = import.meta.env.VITE_R2_PUBLIC_URL;
-    fetch(`${r2Base}/${currentBand.id}/setlists/${sourceId}.json`)
+    fetch(dataUrl(`${currentBand.id}/setlists/${sourceId}.json`))
       .then((r) => r.json())
       .then((data: SetlistConfig) => {
         if (!isCopy) {
@@ -207,7 +206,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
       await Promise.all(
         availableSongs.map(async (song) => {
           try {
-            const res = await fetch(r2Url(`${bandId}/songs/${song.id}/config.json`));
+            const res = await fetch(dataUrl(`${bandId}/songs/${song.id}/config.json`));
             const config = await res.json();
             results.push([song.id, { key: config.key ?? '', durationSeconds: config.durationSeconds ?? 0, tags: config.tags ?? [] }]);
           } catch {

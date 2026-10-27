@@ -53,6 +53,39 @@ export function assertR2Configured(): { r2: S3Client; bucket: string } {
   return { r2, bucket };
 }
 
+// --- Postgres mirror ---
+
+/**
+ * Receives every successful JSON write, delete and copy, so Postgres can stay
+ * in step while R2 is still where the admin writes (Phase 4). Registered by
+ * the host — the Vite plugin, when `DATABASE_URL` is set — so this module
+ * never imports the database.
+ */
+export interface JsonMirror {
+  write(key: string, data: unknown): Promise<void>;
+  delete(key: string): Promise<void>;
+}
+
+let mirror: JsonMirror | undefined;
+
+export function setJsonMirror(m: JsonMirror | undefined): void {
+  mirror = m;
+}
+
+/**
+ * Run a mirror step. A failure is logged as well as thrown: several handlers
+ * wrap R2 deletes in a bare `catch {}`, and a swallowed mirror error would
+ * leave Postgres silently stale.
+ */
+async function mirrored(what: string, step: () => Promise<void>): Promise<void> {
+  try {
+    await step();
+  } catch (err) {
+    console.error(`[r2 → postgres] ${what} succeeded in R2 but failed to mirror:`, err);
+    throw err;
+  }
+}
+
 // --- JSON read/write helpers ---
 
 /**
@@ -76,11 +109,13 @@ export async function r2WriteJson(key: string, data: unknown, cacheControl = 'no
     ContentType: 'application/json',
     CacheControl: cacheControl,
   }));
+  if (mirror) await mirrored(`write ${key}`, () => mirror!.write(key, data));
 }
 
 export async function r2DeleteKey(key: string): Promise<void> {
   const { r2, bucket } = requireR2();
   await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  if (mirror && key.endsWith('.json')) await mirrored(`delete ${key}`, () => mirror!.delete(key));
 }
 
 export async function r2PutFile(key: string, body: Buffer, contentType: string, cacheControl: string): Promise<void> {
@@ -101,6 +136,11 @@ export async function r2CopyKey(fromKey: string, toKey: string): Promise<void> {
     CopySource: `${bucket}/${fromKey}`,
     Key: toKey,
   }));
+  // Mirror the copy's contents as R2 now holds them: a song rename deletes the
+  // old config (and so its Postgres row) before it copies the lyrics across.
+  if (mirror && toKey.endsWith('.json')) {
+    await mirrored(`copy ${fromKey} → ${toKey}`, async () => mirror!.write(toKey, await r2ReadJson(toKey)));
+  }
 }
 
 export async function r2ListKeys(prefix: string): Promise<string[]> {

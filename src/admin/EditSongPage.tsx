@@ -7,7 +7,7 @@ import { getAudioInfo } from './utils/audioConvert';
 import { uploadFileWithProgress, uploadFormWithProgress } from './utils/uploadWithProgress';
 import { prepareSheetMusicUpload } from './utils/sheetMusic';
 import { SheetMusicUploader } from './SheetMusicUploader';
-import { r2Url } from '../utils/url';
+import { dataUrl } from '../utils/url';
 import { slugify } from '../utils/deriveId';
 import { dedupeSlug } from '../utils/dedupeSlug';
 import { generateId } from '../utils/generateId';
@@ -124,7 +124,7 @@ export default function EditSongPage() {
     if (!songId || !currentBand) { if (!songId) setLoadError('No song ID in URL'); return; }
     (async () => {
       try {
-        const configRes = await fetch(r2Url(`${currentBand.id}/songs/${songId}/config.json`));
+        const configRes = await fetch(dataUrl(`${currentBand.id}/songs/${songId}/config.json`));
         if (!configRes.ok) { setLoadError(`Song "${songId}" config not found`); return; }
         const config = songConfigSchema.parse(await configRes.json());
         dispatch({ type: 'INIT', config });

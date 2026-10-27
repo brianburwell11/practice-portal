@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { songConfigSchema } from '../config/schema';
 import type { SongConfig } from '../audio/types';
-import { r2Url } from '../utils/url';
+import { dataUrl, r2Url } from '../utils/url';
 import { useBandStore } from '../store/bandStore';
 import { AlignmentCanvas, type AlignmentCanvasStem } from './components/AlignmentCanvas';
 
@@ -41,7 +41,7 @@ export default function AlignSongPage() {
 
     (async () => {
       try {
-        const configRes = await fetch(r2Url(`${currentBand.id}/songs/${songId}/config.json`));
+        const configRes = await fetch(dataUrl(`${currentBand.id}/songs/${songId}/config.json`));
         if (!configRes.ok) {
           throw new Error(`Song "${songId}" config not found (${configRes.status})`);
         }

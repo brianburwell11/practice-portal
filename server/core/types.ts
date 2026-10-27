@@ -57,6 +57,13 @@ export interface RouteDef {
   method: HttpMethod;
   /** Matched against the pathname only. Named groups become `CoreRequest.params`. */
   pattern: RegExp;
+  /**
+   * Readable without authentication, by anyone — so only for data that is
+   * already public. Hosts that gate the API (`server/main.ts`) let these
+   * through and refuse everything else. Phase 6 replaces this with a required
+   * capability per route.
+   */
+  public?: boolean;
   /** How the adapter should read the body. Defaults to `'none'`. */
   body?: 'none' | 'json' | 'multipart';
   /** Enforced by the adapter while parsing a multipart body. */

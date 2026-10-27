@@ -30,6 +30,8 @@
     "scripts/gen-seed-migration.ts",
     "scripts/verify-db.ts",
     "scripts/server-smoke.ts",
-    "scripts/import-r2-to-postgres.ts"
+    "scripts/import-r2-to-postgres.ts",
+    "scripts/check-data-parity.ts",
+    "scripts/verify-mirror.ts"
   ]
 }

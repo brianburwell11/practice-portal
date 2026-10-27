@@ -2,14 +2,14 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useBandStore } from '../../store/bandStore';
 import { bandsManifestSchema } from '../../config/schema';
-import { r2Url } from '../../utils/url';
+import { dataUrl } from '../../utils/url';
 
 export function BandPicker() {
   const { bandsManifest, setBandsManifest } = useBandStore();
 
   useEffect(() => {
     if (bandsManifest) return;
-    fetch(r2Url('registry.json'))
+    fetch(dataUrl('registry.json'))
       .then((r) => r.json())
       .then((data) => setBandsManifest(bandsManifestSchema.parse(data)))
       .catch(console.error);

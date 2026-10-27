@@ -75,6 +75,10 @@ ARG VITE_R2_PUBLIC_URL
 RUN test -n "${VITE_R2_PUBLIC_URL}" \
     || { echo "VITE_R2_PUBLIC_URL build arg is required" >&2; exit 1; }
 ENV VITE_R2_PUBLIC_URL=${VITE_R2_PUBLIC_URL}
+# Read JSON documents from this server's /api/data (Postgres) rather than R2.
+# Media still comes straight from R2. Other builds (GitHub Pages, dev) leave
+# this unset and keep reading R2.
+ENV VITE_DATA_SOURCE=api
 
 WORKDIR /app
 COPY package.json package-lock.json ./

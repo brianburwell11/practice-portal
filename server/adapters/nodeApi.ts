@@ -5,6 +5,7 @@
  * It does one job: turn an `IncomingMessage` into a `CoreRequest`, hand it to
  * the matched route, and write the `CoreResponse` back.
  */
+import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { matchRoute, runRoute } from '../core/router';
 import type { CoreResponse, RequestBody, RouteDef } from '../core/types';
@@ -19,6 +20,25 @@ export function sendJson(res: ServerResponse, { status, body }: CoreResponse): v
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(body));
+}
+
+/**
+ * A successful read, revalidated on every use — the same `no-cache` R2 sets
+ * on its JSON — with an ETag so an unchanged document costs a 304, not a body.
+ */
+function sendCacheableJson(req: IncomingMessage, res: ServerResponse, { status, body }: CoreResponse): void {
+  const text = JSON.stringify(body);
+  const etag = `"${createHash('sha1').update(text).digest('base64url')}"`;
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('ETag', etag);
+  if (req.headers['if-none-match'] === etag) {
+    res.statusCode = 304;
+    res.end();
+    return;
+  }
+  res.statusCode = status;
+  res.end(text);
 }
 
 /**
@@ -72,9 +92,14 @@ export function createApiHandler({ gate }: ApiHandlerOptions = {}) {
       : undefined;
 
     try {
-      sendJson(res, await runRoute(route, { params, query }, () =>
+      const response = await runRoute(route, { params, query }, () =>
         loadBody(req, route, tmpDir),
-      ));
+      );
+      if (route.method === 'GET' && response.status === 200) {
+        sendCacheableJson(req, res, response);
+      } else {
+        sendJson(res, response);
+      }
     } finally {
       if (tmpDir) removeScratchDir(tmpDir);
     }

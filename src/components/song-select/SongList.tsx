@@ -5,7 +5,7 @@ import { useBandStore } from '../../store/bandStore';
 import { useSetlistStore } from '../../store/setlistStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { songManifestSchema, songConfigSchema, setlistConfigSchema } from '../../config/schema';
-import { r2Url } from '../../utils/url';
+import { dataUrl, r2Url } from '../../utils/url';
 import { loadMixerState } from '../../utils/mixerStorage';
 import { useLyricsStore } from '../../store/lyricsStore';
 import { useNotesStore } from '../../store/notesStore';
@@ -44,7 +44,7 @@ export function useSongLoader() {
 
     try {
       const bandId = currentBand?.id;
-      const configUrl = r2Url(`${bandId}/songs/${entry.id}/config.json`);
+      const configUrl = dataUrl(`${bandId}/songs/${entry.id}/config.json`);
       const res = await fetch(configUrl);
       const configData = await res.json();
       const config = songConfigSchema.parse(configData);
@@ -57,13 +57,13 @@ export function useSongLoader() {
       setSelectedSong(config);
 
       // Load lyrics (non-blocking)
-      fetch(r2Url(`${bandId}/songs/${entry.id}/lyrics.json`))
+      fetch(dataUrl(`${bandId}/songs/${entry.id}/lyrics.json`))
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => useLyricsStore.getState().setLyrics(data?.lines ?? []))
         .catch(() => useLyricsStore.getState().setLyrics([]));
 
       // Load timestamp notes (non-blocking)
-      fetch(r2Url(`${bandId}/songs/${entry.id}/notes.json`))
+      fetch(dataUrl(`${bandId}/songs/${entry.id}/notes.json`))
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => useNotesStore.getState().load(bandId!, entry.id, data?.notes ?? []))
         .catch(() => useNotesStore.getState().load(bandId!, entry.id, []));
@@ -156,7 +156,7 @@ export function SongList() {
 
   useEffect(() => {
     if (!currentBand) return;
-    fetch(r2Url(`${currentBand.id}/songs/discography.json`))
+    fetch(dataUrl(`${currentBand.id}/songs/discography.json`))
       .then((r) => r.json())
       .then((data) => {
         const parsed = songManifestSchema.parse(data);
@@ -172,7 +172,7 @@ export function SongList() {
     if (!currentBand) return;
     const r2Base = import.meta.env.VITE_R2_PUBLIC_URL;
     if (!r2Base) return;
-    fetch(`${r2Base}/${currentBand.id}/setlists/index.json`)
+    fetch(dataUrl(`${currentBand.id}/setlists/index.json`))
       .then((r) => {
         if (!r.ok) throw new Error('No setlists');
         return r.json();
@@ -223,7 +223,7 @@ export function SongList() {
     const tryLoad = async () => {
       for (const id of candidateIds) {
         try {
-          const r = await fetch(`${r2Base}/${currentBand.id}/setlists/${id}.json`);
+          const r = await fetch(dataUrl(`${currentBand.id}/setlists/${id}.json`));
           if (!r.ok) continue;
           const data = await r.json();
           const config = setlistConfigSchema.parse(data);
@@ -389,9 +389,8 @@ export function SetlistDropdown() {
       history.replaceState(null, '', url.pathname + url.search + url.hash);
       return;
     }
-    const r2Base = import.meta.env.VITE_R2_PUBLIC_URL;
     try {
-      const res = await fetch(`${r2Base}/${currentBand.id}/setlists/${setlistId}.json`);
+      const res = await fetch(dataUrl(`${currentBand.id}/setlists/${setlistId}.json`));
       const data: SetlistConfig = setlistConfigSchema.parse(await res.json());
       setActiveSetlist(data);
       const url = new URL(window.location.href);

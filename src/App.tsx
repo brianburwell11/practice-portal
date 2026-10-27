@@ -18,7 +18,7 @@ import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useLyricsEditorStore } from './store/lyricsEditorStore';
 import { usePanelMinimizeStore } from './store/panelMinimizeStore';
 import { useLyricsStore } from './store/lyricsStore';
-import { r2Url } from './utils/url';
+import { dataUrl } from './utils/url';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
 import { useSetlistStore } from './store/setlistStore';
@@ -182,7 +182,7 @@ export default function App() {
                 closeMarkerEditor();
               }
               setShowEditBandModal(false);
-              fetch(r2Url(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`))
+              fetch(dataUrl(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`))
                 .then((r) => (r.ok ? r.json() : { lines: [] }))
                 .then((data) => openLyricsEditor(data.lines ?? []))
                 .catch(() => openLyricsEditor([]));

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBandStore } from '../store/bandStore';
 import { bandsManifestSchema } from '../config/schema';
-import { r2Url } from '../utils/url';
+import { dataUrl } from '../utils/url';
 import { generateUniqueBandId } from '../utils/bandId';
 import { dedupeSlug } from '../utils/dedupeSlug';
 import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
@@ -51,7 +51,7 @@ export default function NewBandPage() {
       applyBands(bandsManifest.bands);
       return;
     }
-    fetch(r2Url('registry.json'))
+    fetch(dataUrl('registry.json'))
       .then((r) => r.json())
       .then((data) => {
         const parsed = bandsManifestSchema.parse(data);

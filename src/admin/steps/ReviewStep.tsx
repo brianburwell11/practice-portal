@@ -5,7 +5,7 @@ import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
 import { uploadFileWithProgress, uploadFormWithProgress } from '../utils/uploadWithProgress';
 import { prepareSheetMusicUpload } from '../utils/sheetMusic';
-import { r2Url } from '../../utils/url';
+import { dataUrl } from '../../utils/url';
 import { useBandStore } from '../../store/bandStore';
 import { slugify } from '../../utils/deriveId';
 
@@ -33,7 +33,7 @@ export function ReviewStep({ state, dispatch }: Props) {
 
     try {
       // Resolve band first so we can use bandId in all subsequent calls
-      const bandsRes = await fetch(r2Url('registry.json'));
+      const bandsRes = await fetch(dataUrl('registry.json'));
       const bandsData = await bandsRes.json();
       const band = bandsData.bands.find((b: any) => b.route === bandSlug);
       const bandId = band?.id ?? '';
@@ -44,7 +44,7 @@ export function ReviewStep({ state, dispatch }: Props) {
       // a backstop, but by then the stems are already on R2.)
       let collision = false;
       try {
-        const discRes = await fetch(r2Url(`${bandId}/songs/discography.json`));
+        const discRes = await fetch(dataUrl(`${bandId}/songs/discography.json`));
         if (discRes.ok) {
           const disc = await discRes.json();
           collision = Array.isArray(disc?.songs) && disc.songs.some((s: any) => s.id === state.id);

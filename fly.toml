@@ -4,8 +4,8 @@
 #   fly deploy
 #   npm run smoke:server -- --url https://<app>.fly.dev
 #
-# No secrets: read-only mode never touches R2 credentials or the database.
-# They become Fly secrets (fly secrets set ...) when writes come back in Phase 6.
+# One secret: DATABASE_URL (fly secrets set), for /api/data. R2 credentials
+# stay off this server until writes come back in Phase 6.
 
 app = "practice-portal"
 # Next to the us-east-2 Neon project — see the plan's "Where it runs".
@@ -17,6 +17,10 @@ kill_timeout = "10s"
   [build.args]
     # Public bucket URL, baked into the SPA bundle at build time.
     VITE_R2_PUBLIC_URL = "https://pub-9e583788dafa4ce193a3eee1987d93b6.r2.dev"
+
+[env]
+  # Rebuilds media URLs (logos, audioBasePath) inside /api/data documents.
+  R2_PUBLIC_URL = "https://pub-9e583788dafa4ce193a3eee1987d93b6.r2.dev"
 
 [http_service]
   internal_port = 8080

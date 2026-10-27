@@ -101,6 +101,28 @@ async function run(): Promise<void> {
     check(`${method} ${path} → 403 read-only`, res.status === 403, `got ${res.status} ${res.body}`);
   }
 
+  // Phase 4: the JSON documents, from Postgres. Public by design.
+  const registry = await request('GET', '/api/data/registry.json');
+  const bands = registry.status === 200 ? (JSON.parse(registry.body) as { bands?: unknown[] }).bands : undefined;
+  check('GET /api/data/registry.json → bands', Array.isArray(bands) && bands.length > 0, `got ${registry.status} ${registry.body.slice(0, 120)}`);
+  check('data is revalidated, with an ETag', registry.headers['cache-control'] === 'no-cache' && !!registry.headers.etag);
+  if (registry.headers.etag) {
+    const again = await new Promise<number>((resolve, reject) => {
+      const url = new URL(base);
+      (url.protocol === 'https:' ? https : http).get(
+        { host: url.hostname, port: url.port, path: '/api/data/registry.json', headers: { 'If-None-Match': registry.headers.etag! } },
+        (res) => { res.resume(); resolve(res.statusCode ?? 0); },
+      ).on('error', reject);
+    });
+    check('unchanged data → 304', again === 304, `got ${again}`);
+  }
+  const noBand = await request('GET', '/api/data/no-such-band/band.json');
+  check('unknown document → 404', noBand.status === 404, `got ${noBand.status}`);
+  const notDoc = await request('GET', '/api/data/registry.txt');
+  check('non-JSON key → 404', notDoc.status === 404, `got ${notDoc.status}`);
+  const writeData = await request('PUT', '/api/data/registry.json', '{}');
+  check('PUT /api/data → refused', writeData.status === 403 || writeData.status === 404, `got ${writeData.status}`);
+
   const unknown = await request('GET', '/api/nope');
   check('unknown /api route → 404 JSON', unknown.status === 404 && /json/.test(String(unknown.headers['content-type'])), `got ${unknown.status}`);
 }
@@ -108,7 +130,8 @@ async function run(): Promise<void> {
 async function main(): Promise<void> {
   let child: ChildProcess | undefined;
   if (!remote) {
-    child = spawn(process.execPath, ['dist-server/server.js'], {
+    // .env supplies DATABASE_URL and R2_PUBLIC_URL for the /api/data checks.
+    child = spawn(process.execPath, ['--env-file-if-exists=.env', 'dist-server/server.js'], {
       env: { ...process.env, PORT: String(PORT) },
       stdio: ['ignore', 'ignore', 'inherit'],
     });

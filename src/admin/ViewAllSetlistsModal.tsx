@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useBandStore } from '../store/bandStore';
 import { useSetlistStore } from '../store/setlistStore';
-import { r2Url } from '../utils/url';
+import { dataUrl } from '../utils/url';
 import { DeleteSetlistModal } from './DeleteSetlistModal';
 import type { SetlistConfig } from '../audio/types';
 
@@ -37,7 +37,7 @@ export function ViewAllSetlistsModal({ onClose }: Props) {
         const bandId = currentBand.id;
         const setlistConfigs = await Promise.all(
           index.map(async (entry) => {
-            const res = await fetch(r2Url(`${bandId}/setlists/${entry.id}.json`));
+            const res = await fetch(dataUrl(`${bandId}/setlists/${entry.id}.json`));
             if (!res.ok) return null;
             return (await res.json()) as SetlistConfig;
           }),
@@ -53,7 +53,7 @@ export function ViewAllSetlistsModal({ onClose }: Props) {
         await Promise.all(
           [...songIds].map(async (songId) => {
             try {
-              const res = await fetch(r2Url(`${bandId}/songs/${songId}/config.json`));
+              const res = await fetch(dataUrl(`${bandId}/songs/${songId}/config.json`));
               if (!res.ok) return;
               const cfg = await res.json();
               songDurations.set(songId, cfg.durationSeconds ?? 0);
