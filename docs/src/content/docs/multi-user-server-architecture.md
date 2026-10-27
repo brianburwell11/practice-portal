@@ -442,14 +442,89 @@ scripts/verify-mirror.ts        admin flows replayed through the mirror, offline
 
 ## Phase 5 — Accounts, memberships, invites
 
-- [ ] Pick auth. **Magic links** are the recommendation — no passwords to store or reset, and band members are an email-reachable audience. Add Google OAuth later if signup friction shows up.
-- [ ] Sessions as httpOnly, Secure, SameSite=Lax cookies scoped to the API subdomain. Rotate on login, and set a sensible absolute expiry.
-- [ ] Invite flow: Manager creates an invite → emailed link → acceptance creates the `membership` row. Store only the token hash.
-- [ ] Roster UI: list members, change roles, remove members.
-- [ ] Ownership transfer as a first-class action (Owner only), plus **multiple Managers allowed** so a band isn't locked out when the Owner stops answering texts.
-- [ ] Rate-limit magic-link requests and invite creation.
+**Revised 2026-10-27: Google sign-in only, invite links you send yourself.** That drops magic links and with them any email-sending service. Decisions:
 
-**Exit criteria**: a second real person can sign in, appear in a band roster, and see only bands they belong to.
+| Decision | Choice | Why |
+|---|---|---|
+| Sign-in | Google only | One button, no passwords, no email service. People without a Google account wait for a second method. |
+| Sharing | Invite links, optionally locked to an email | You copy the link and text it. Locking it to an address stops a forwarded link being used by someone else. |
+| Visibility | Per band: Public or Members-only, set by the Owner | Every existing band stays Public, so nothing changes for visitors until a band is flipped. Owner-only because the catalog gives `band.publish` to the Owner alone. |
+| Scope | Accounts + sharing | Editing on the hosted site stays Phases 6 and 8. |
+
+**Members-only is partial until Phase 7.** It hides the band in the app on Fly, but the band's JSON and media are still on the public R2 URL, and the GitHub Pages build reads R2 directly. The UI says so wherever the setting appears.
+
+### 5a — Schema
+- [x] `app_user`: `google_sub` (unique), `display_name` from Google, `avatar_url`.
+- [x] `session`: token hash, user, created/expires/last-seen. Only the hash is stored.
+- [x] `invite`: `revoked_at`, `accepted_by`. `email` (already there) is the optional lock. Plus `created_at`.
+- [x] Migration 0004; `verify-db` covers the new tables and constraints. Applied to Neon.
+
+### 5b — Google sign-in
+- [ ] Google OAuth client (Brian, in Google Cloud Console): redirect URIs `https://practice-portal.fly.dev/api/auth/google/callback` and `https://localhost:5173/api/auth/google/callback`.
+- [x] `/api/auth/google/start` → Google with state, nonce and PKCE (S256), held in a short-lived httpOnly cookie.
+- [x] `/api/auth/google/callback` → exchange the code, require `email_verified`, upsert the user by `google_sub`. An existing user with the same verified email (the imported owner) is linked, not duplicated.
+- [x] Session cookie `pp_session`: httpOnly, Secure, SameSite=Lax, 30-day absolute expiry, new token on every sign-in. Non-GET requests carrying it must come from our own Origin.
+- [x] `POST /api/auth/logout`, `GET /api/me` (user plus their bands and roles).
+- [x] The core learns about the caller: `CoreRequest.actor`, resolved from the cookie by the adapter.
+
+
+#### Setting up Google sign-in
+
+About five minutes in the [Google Cloud Console](https://console.cloud.google.com/). Nothing here costs money.
+
+1. **Create a project**, or reuse one, e.g. "Practice Portal". Use the project picker at the top of the console.
+2. **Set up the consent screen.** Open **Google Auth Platform** (older consoles call it **APIs & Services → OAuth consent screen**).
+   - **Audience:** External.
+   - **App name** and **support email:** anything sensible. Band members see the name on Google's account chooser.
+   - **Scopes:** only the defaults — `openid`, `email`, `profile`. Adding anything else triggers Google's review.
+   - **Publish the app** once it's set up. Left in *Testing*, only accounts you list as test users can sign in. These basic scopes publish without review.
+3. **Create the client.** Go to **Clients** (or **APIs & Services → Credentials**) → **Create OAuth client**.
+   - **Application type:** Web application.
+   - **Authorized redirect URIs** — exactly these two, no trailing slash:
+     - `https://practice-portal.fly.dev/api/auth/google/callback`
+     - `https://localhost:5173/api/auth/google/callback`
+   - Leave **Authorized JavaScript origins** empty; the flow is server-side.
+4. **Copy the Client ID and Client secret into `.env`** (it's gitignored):
+   ```
+   GOOGLE_CLIENT_ID=…apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=…
+   ```
+5. **Try it locally:** `VITE_DATA_SOURCE=api npm run dev`, open `https://localhost:5173`, and sign in from the button in the band header. The flag makes local reads go through `/api/data`, so Members-only bands behave as they will on Fly.
+6. **Give Fly the same two values**, read from `.env` so they never appear on screen, then deploy:
+   ```
+   grep -E '^GOOGLE_CLIENT_(ID|SECRET)=' .env | fly secrets import --stage -a practice-portal
+   fly deploy --ha=false
+   ```
+
+If sign-in fails with `redirect_uri_mismatch`, the URI in step 3 doesn't match what the browser used — check the scheme (`https`), host, port, and that there's no trailing slash. A custom domain later needs its own redirect URI added here.
+
+### 5c — Invites
+- [x] Owner and Manager create an invite: role, optional email lock, single use, 7-day expiry. Only the token hash is stored.
+- [x] List and revoke pending invites.
+- [x] `/invite/<token>` page: sign in with Google, then join. A locked invite rejects a different Google account and says which address it expects.
+- [x] Rate-limit invite creation. 20 per user per hour, in memory.
+
+### 5d — Roster
+- [x] List members with role and join date; change roles; remove members.
+- [x] Multiple Managers allowed. Nobody can remove or demote the Owner. Nobody grants or changes a role above their own.
+- [x] Ownership transfer, Owner only, to an existing member. The old Owner stays on as a Manager.
+- [x] These checks run through `can(actor, capability, band)` against the role tables, the first slice of Phase 6. Every change writes an `audit_log` row in the same transaction.
+
+### 5e — Members-only bands
+- [x] Visibility toggle for the Owner, with the R2 caveat beside it.
+- [x] `/api/data` serves a members-only band only to its members; the registry lists it only for them.
+- [x] Signed-out visitors to a members-only band get a "sign in to view" page instead of "not found".
+
+### 5f — UI
+- [x] Sign-in button and account menu, in the production bundle. Hidden where `/api/me` says sign-in isn't configured, and on static hosts.
+- [x] Members panel (roster and invites) for Owner and Manager.
+
+### 5g — Ship
+- [ ] Fly secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`; deploy.
+
+**Exit criteria**: a second real person opens an invite link, signs in with Google, appears in the roster with the right role, and can see a members-only band that a signed-out visitor can't.
+
+**Tests:** `verify-auth.ts` (24 offline: claims, PKCE, state, open redirects); `verify-members.ts --url` (41 against a server and Neon, with throwaway users and band, all cleaned up); `server-smoke.ts` 27; parity still 308/0. The UI is built but not yet driven in a browser — that needs the Google client.
 
 ---
 
