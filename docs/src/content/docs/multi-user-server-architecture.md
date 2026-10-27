@@ -379,14 +379,37 @@ The container's media toolchain is no longer a risk.
 
 ## Phase 4 — Migrate R2 JSON into Postgres
 
-- [ ] Write `scripts/import-r2-to-postgres.ts` with a `--dry-run` flag, following the pattern already established in `scripts/migrate-config-to-r2.ts`.
-- [ ] Walk `bands.json` → each `band.json` → each song `config.json` → each setlist, validating every record against the existing Zod schemas on the way in. Schema violations should fail loudly rather than be coerced.
-- [ ] Media stays exactly where it is. Only JSON moves; store R2 object keys as references.
-- [ ] Verify: row counts match file counts, and a diff of `config` jsonb against the source JSON is empty for every song.
+- [x] Write `scripts/import-r2-to-postgres.ts` with a `--dry-run` flag, following the pattern already established in `scripts/migrate-config-to-r2.ts`. Also `--pglite`, a full rehearsal against a throwaway in-process database.
+- [x] Walk `bands.json` → each `band.json` → each song `config.json` → each setlist, validating every record against the existing Zod schemas on the way in. Schema violations should fail loudly rather than be coerced. Lyrics and notes too — the plan's walk missed them.
+- [x] Media stays exactly where it is. Only JSON moves; store R2 object keys as references.
+- [x] Verify: row counts match file counts, and a diff of `config` jsonb against the source JSON is empty for every song. Runs inside the import's own transaction, so a mismatch rolls the whole import back.
 - [ ] Serve reads from the API with ETag and cache headers (`GET /api/bands/:slug/songs/:slug/config`), Cloudflare caching in front.
 - [ ] Dual-read period: keep the R2 JSON files in place, untouched, as a rollback path.
 
 **Exit criteria**: the SPA runs entirely off API reads, with R2 JSON still present but unread.
+
+### What landed — the import
+
+**Imported into Neon on 2026-10-27: 6 bands, 93 songs (40 with lyrics, 16 with band notes), 10 setlists.** Every record passed its Zod schema with nothing coerced, and every stored jsonb value equals its source file. Owner of all six: `brianburwell11@gmail.com`.
+
+```
+server/db/migrations/0003_import_columns.sql   band.legacy_id, band.position, setlist.position, song.lyrics, song.notes
+scripts/import-r2-to-postgres.ts                --pglite | --dry-run | (commit); --owner <email> required
+```
+
+Order of operations that worked: `--pglite` rehearsal → `db:migrate` + `db:verify:remote` → `--dry-run` against Neon (then confirmed 0 rows) → real run → a second run refuses with `already imported`.
+
+Decisions, each forced by something in the data or the UI:
+
+- **Slugs come from what the URL already uses**, so no link changes. 4 songs had no slug; `SongList` already falls back to the song id for the URL hash, so that's the slug (`abba-mashup-dirty-chai`). 3 setlists had none; the URL uses the id minus `setlist-`, so that's the slug (`guitar-subs`). Collisions abort the run — there were none.
+- **Band slug is the route verbatim**, dot and all (`zenzi.music`). It is not held to `[a-z0-9-]+`.
+- **`band.legacy_id`** keeps the old id (`z17zqzxv`). Every R2 key for the band starts with it, and media doesn't move.
+- **`position` on band and setlist.** The band picker and setlist menu show file order as-is; without a column, the DB would lose it. Songs need none — `SongList` sorts by title.
+- **`song.lyrics` and `song.notes` jsonb.** The schema had nowhere to put them. Band notes only; personal notes stay `user_song_state`'s job.
+- **Every band imported `public`.** The column defaults to `private`, but every band is publicly readable today; private is Phase 7's job.
+- **The source JSON is stored, not Zod's output.** `songConfigSchema` defaults `beatOffset` and strips unknown keys; storing the parse result would have produced a diff.
+
+**Postgres is now a snapshot, not the source of truth.** Admin edits via `npm run dev` still write only to R2, and nothing reads the database yet. It goes stale with the first edit. That's acceptable until the remaining two items land, but re-importing means deleting the imported bands first — the script refuses to overwrite by design.
 
 ---
 
