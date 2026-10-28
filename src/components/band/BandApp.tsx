@@ -8,19 +8,53 @@ import { dataUrl } from '../../utils/url';
 import { signInHref, useSessionStore } from '../../store/sessionStore';
 import { AccountMenu, GoogleMark } from '../account/AccountMenu';
 
+/**
+ * A band's guest link is the band's own address plus `?guest=<token>`. Open it
+ * (the server sets the `pp_guest` cookie), then reload without the token, so
+ * every document is fetched again as a guest and the address bar is clean.
+ * Resolves to an error message if the link can't be opened.
+ */
+async function openGuestLink(token: string): Promise<string> {
+  const res = await fetch(`/api/guest/${encodeURIComponent(token)}`, { method: 'POST' }).catch(() => null);
+  const data = await res?.json().catch(() => ({}));
+  if (!res?.ok) return data?.error ?? 'This guest link isn’t valid';
+  const params = new URLSearchParams(window.location.search);
+  params.delete('guest');
+  const qs = params.toString();
+  // The token decides the band, so a link made before a route rename still lands right.
+  window.location.replace(`/${data.band.slug}${qs ? `?${qs}` : ''}${window.location.hash}`);
+  return new Promise(() => {}); // the page is going away
+}
+
 export function BandApp() {
   const { bandSlug } = useParams<{ bandSlug: string }>();
   const { bandsManifest, setBandsManifest, setCurrentBand } = useBandStore();
   const [error, setError] = useState<string | null>(null);
+  const [guestToken] = useState(() => new URLSearchParams(window.location.search).get('guest'));
+  const [guestError, setGuestError] = useState<string | null>(null);
+  const guestPending = !!guestToken && guestError === null;
+
+  // A guest link: open it before anything else loads.
+  useEffect(() => {
+    if (!guestToken) return;
+    openGuestLink(guestToken).then((message) => {
+      // It didn't open — drop the token from the address bar and carry on as before.
+      const params = new URLSearchParams(window.location.search);
+      params.delete('guest');
+      const qs = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+      setGuestError(message);
+    });
+  }, [guestToken]);
 
   // Load bands manifest
   useEffect(() => {
-    if (bandsManifest) return;
+    if (bandsManifest || guestPending) return;
     fetch(dataUrl('registry.json'))
       .then((r) => r.json())
       .then((data) => setBandsManifest(bandsManifestSchema.parse(data)))
       .catch((err) => setError(String(err)));
-  }, [bandsManifest, setBandsManifest]);
+  }, [bandsManifest, setBandsManifest, guestPending]);
 
   // Resolve the slim index entry, then fetch the full band.json.
   const prevBandIdRef = useRef<string | null>(null);
@@ -87,10 +121,10 @@ export function BandApp() {
   }, [currentBand]);
 
   if (error) {
-    return <BandUnavailable error={error} />;
+    return <BandUnavailable error={error} guestError={guestError} />;
   }
 
-  if (!currentBand) {
+  if (!currentBand || guestPending) {
     return (
       <div className="min-h-screen bg-gray-900 text-gray-400 p-8">
         Loading...
@@ -105,7 +139,7 @@ export function BandApp() {
  * Where accounts exist, a band missing from the registry may be Members-only
  * rather than nonexistent — offer sign-in instead of a bare "not found".
  */
-function BandUnavailable({ error }: { error: string }) {
+function BandUnavailable({ error, guestError }: { error: string; guestError: string | null }) {
   const { available, loaded, user, load } = useSessionStore();
   useEffect(() => {
     load();
@@ -119,6 +153,7 @@ function BandUnavailable({ error }: { error: string }) {
     <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center p-6">
       <div className="absolute top-4 right-4"><AccountMenu /></div>
       <div className="max-w-sm text-center space-y-4">
+        {guestError && <p className="text-sm text-amber-300">{guestError}</p>}
         {user ? (
           <>
             <h1 className="text-xl font-semibold">Band not found</h1>

@@ -18,6 +18,21 @@ interface PendingInvite {
   expiresAt: string;
 }
 
+/** The band's "anyone with the link" guest link, as the server reports it. */
+interface GuestLink {
+  url: string;
+  /** Null: never expires. */
+  expiresAt: string | null;
+  expired: boolean;
+  lastUsedAt: string | null;
+}
+
+/** `YYYY-MM-DD` in local time, for a date input. */
+function toDateInput(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 interface Roster {
   band: { visibility: 'public' | 'private' };
   you: { userId: string; role: BandRole };
@@ -67,11 +82,17 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
   const [newLink, setNewLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  /** Undefined while loading; null when the link is off. */
+  const [guestLink, setGuestLink] = useState<GuestLink | null | undefined>(undefined);
+  const [guestCopied, setGuestCopied] = useState(false);
+
   const base = `/api/bands/${encodeURIComponent(bandId)}`;
 
   const refresh = useCallback(async () => {
     try {
-      setRoster(await api('GET', `${base}/members`));
+      const [members, guest] = await Promise.all([api('GET', `${base}/members`), api('GET', `${base}/guest-link`)]);
+      setRoster(members);
+      setGuestLink(guest.link);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -111,6 +132,18 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
     await navigator.clipboard.writeText(newLink);
     setCopied(true);
   };
+
+  const copyGuestLink = async () => {
+    if (!guestLink) return;
+    await navigator.clipboard.writeText(guestLink.url);
+    setGuestCopied(true);
+  };
+
+  /** `date` is a date input's value; empty means never expire. The link lasts through that day. */
+  const setGuestExpiry = (date: string) => run(async () => {
+    const expiresAt = date ? new Date(`${date}T23:59:59`).toISOString() : null;
+    setGuestLink((await api('PUT', `${base}/guest-link`, { expiresAt })).link);
+  });
 
   const changeVisibility = (v: 'public' | 'private') => run(() => api('PUT', `${base}/visibility`, { visibility: v }));
 
@@ -261,6 +294,88 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {/* --- Guest link (Owner and Manager) */}
+        {grantable.length > 0 && guestLink !== undefined && (
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-gray-300">Guest link</h3>
+            <p className="text-xs text-gray-500">
+              Anyone with the link can play this band’s songs and setlists — read-only, no account needed. Good for
+              subs. Reset it to cut off everyone who has the current one.
+              {visibility === 'public' && ' This band is Public, so the link only matters if you make it Members only.'}
+            </p>
+            {guestLink === null ? (
+              <button
+                onClick={() => run(async () => setGuestLink((await api('POST', `${base}/guest-link`, {})).link))}
+                disabled={busy}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm font-medium text-white"
+              >
+                Turn on guest link
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input readOnly value={guestLink.url} onFocus={(e) => e.target.select()} className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs font-mono" />
+                  <button onClick={copyGuestLink} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs">
+                    {guestCopied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                {guestLink.expired && (
+                  <p className="text-xs text-amber-400/90">
+                    This link expired on {new Date(guestLink.expiresAt!).toLocaleDateString()}. Change or clear the
+                    expiry to bring it back, or reset it.
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                  <label htmlFor="guest-expiry">Expires</label>
+                  <input
+                    id="guest-expiry"
+                    type="date"
+                    value={guestLink.expiresAt ? toDateInput(guestLink.expiresAt) : ''}
+                    min={toDateInput(new Date().toISOString())}
+                    disabled={busy}
+                    onChange={(e) => setGuestExpiry(e.target.value)}
+                    className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs"
+                  />
+                  {guestLink.expiresAt ? (
+                    <button onClick={() => setGuestExpiry('')} disabled={busy} className="text-gray-400 hover:text-white">
+                      Never expire
+                    </button>
+                  ) : (
+                    <span>never</span>
+                  )}
+                  <span className="ml-auto">
+                    {guestLink.lastUsedAt ? `Last opened ${new Date(guestLink.lastUsedAt).toLocaleString()}` : 'Not opened yet'}
+                  </span>
+                </div>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => window.confirm('Reset the guest link? Everyone with the current link loses access, and you’ll need to send the new one.')
+                      && run(async () => {
+                        setGuestLink((await api('POST', `${base}/guest-link`, { expiresAt: guestLink.expired ? null : guestLink.expiresAt })).link);
+                        setGuestCopied(false);
+                      })}
+                    disabled={busy}
+                    className="text-xs text-gray-300 hover:text-white"
+                  >
+                    Reset link
+                  </button>
+                  <button
+                    onClick={() => window.confirm('Turn off the guest link? Everyone using it loses access.')
+                      && run(async () => {
+                        await api('DELETE', `${base}/guest-link`);
+                        setGuestLink(null);
+                      })}
+                    disabled={busy}
+                    className="text-xs text-red-400 hover:text-red-300"
+                  >
+                    Turn off
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         )}
 

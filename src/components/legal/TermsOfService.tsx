@@ -35,6 +35,7 @@ export function TermsOfService() {
       <Section title="Bands and roles">
         <p>Each band has an Owner, and may have Managers, Editors and Members. What you can do in a band depends on your role. The Owner and Managers decide who belongs to the band, what role they have, and whether the band is Public or Members only, and they can change or remove the band’s content. The Owner can hand ownership to another member.</p>
         <p>Invite links let anyone who has one join the band with the role it grants, unless it’s locked to one email address. Share them with care.</p>
+        <p>A band’s guest link lets anyone who has it play the band’s songs and setlists, read-only and without an account, until the band resets or turns it off. Anyone you give it to can pass it on, so reset it if it reaches people it shouldn’t.</p>
       </Section>
 
       <Section title="Your content">

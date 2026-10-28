@@ -29,6 +29,11 @@ body {
   }
 }
 
+/* A status notice that fades away on its own (App's `notice`). */
+@keyframes fade-out {
+  to { opacity: 0; }
+}
+
 /* Brief pulse on a sticky note when the playhead crosses its timestamp.
    Color is themed via the `--pulse-rgb` custom property on the sticky. */
 @keyframes note-pulse {

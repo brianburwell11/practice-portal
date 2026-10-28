@@ -20,6 +20,14 @@ export interface SessionBand {
   capabilities: string[];
 }
 
+/** A band's guest link opened on this device (Phase 10): read access to that band. */
+export interface GuestAccess {
+  /** `id` is the legacy band id, as in `SessionBand`. */
+  band: { id: string; slug: string; name: string };
+  /** Null: no expiry. */
+  expiresAt: string | null;
+}
+
 interface SessionState {
   /**
    * Whether this deployment has accounts at all. False on static hosts
@@ -32,8 +40,13 @@ interface SessionState {
   bands: SessionBand[];
   /** In ADMIN_EMAILS: may create bands. */
   platformAdmin: boolean;
+  /** Guest links opened on this device, signed in or not. */
+  guest: GuestAccess[];
   load: () => Promise<void>;
   signOut: () => Promise<void>;
+  /** Forget every guest link on this device. */
+  leaveGuest: () => Promise<void>;
+  guestIn: (bandId: string | undefined) => GuestAccess | null;
   roleIn: (bandId: string | undefined) => BandRole | null;
   /**
    * UX only — whether to show a control. The server checks every request
@@ -50,16 +63,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   user: null,
   bands: [],
   platformAdmin: false,
+  guest: [],
 
   load: () => {
     inflight ??= fetch('/api/me')
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { signInEnabled?: boolean; user: SessionUser | null; bands: SessionBand[]; platformAdmin?: boolean } | null) => {
+      .then((data: {
+        signInEnabled?: boolean; user: SessionUser | null; bands: SessionBand[]; platformAdmin?: boolean; guest?: GuestAccess[];
+      } | null) => {
         set({
           available: !!data?.signInEnabled,
           user: data?.user ?? null,
           bands: data?.bands ?? [],
           platformAdmin: !!data?.platformAdmin,
+          guest: data?.guest ?? [],
           loaded: true,
         });
       })
@@ -73,6 +90,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // Reload so every cached band list and document is refetched as anonymous.
     window.location.reload();
   },
+
+  leaveGuest: async () => {
+    await fetch('/api/guest', { method: 'DELETE' });
+    // A Members-only band reached through the link is no longer readable.
+    window.location.assign('/');
+  },
+
+  guestIn: (bandId) => get().guest.find((g) => g.band.id === bandId) ?? null,
 
   roleIn: (bandId) => get().bands.find((b) => b.id === bandId)?.role ?? null,
 

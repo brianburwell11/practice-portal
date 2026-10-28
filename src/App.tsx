@@ -41,6 +41,29 @@ const ADMIN_CAPABILITIES = new Set([
   'song.timing.write', 'song.audio.write', 'song.score.write', 'song.delete', 'setlist.write',
 ]);
 
+/**
+ * Copy the band's guest link, opening on `setlistSlug`. The link is the band's
+ * one "anyone with the link" link, so this only works once it's turned on.
+ */
+async function copyGuestLink(bandId: string, setlistSlug: string, say: (msg: string) => void): Promise<void> {
+  try {
+    const res = await fetch(`/api/bands/${encodeURIComponent(bandId)}/guest-link`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+    if (!data.link) {
+      say('The guest link is off. Turn it on in Band → Members & Sharing first.');
+      return;
+    }
+    // The link already carries `?guest=`.
+    await navigator.clipboard.writeText(`${data.link.url}&setlist=${encodeURIComponent(setlistSlug)}`);
+    say(data.link.expired
+      ? 'Copied — but the guest link has expired. Change its expiry in Members & Sharing.'
+      : 'Guest link to this setlist copied. Anyone with it can play the band’s songs.');
+  } catch (err) {
+    say(`Couldn’t copy the guest link: ${(err as Error).message}`);
+  }
+}
+
 export default function App() {
   const engine = useCreateEngine();
   useMixerPersistence();
@@ -64,6 +87,7 @@ export default function App() {
   const [showViewAllSetlistsModal, setShowViewAllSetlistsModal] = useState(false);
   const [showEditBandModal, setShowEditBandModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   // Anything to manage here? Decides whether a Member sees the admin ribbon
   // at all (they don't — their screen is the public one). UX only.
   const myCaps = useSessionStore((s) => s.bands.find((b) => b.id === currentBand?.id)?.capabilities);
@@ -208,6 +232,7 @@ export default function App() {
             onCopySetlist={() => { if (activeSetlist) { setEditSetlistId(undefined); setCopySetlistId(activeSetlist.id); setShowSetlistModal(true); } }}
             onDeleteSetlist={() => setShowDeleteSetlistModal(true)}
             onViewAllSetlists={() => setShowViewAllSetlistsModal(true)}
+            onCopyGuestLink={() => { if (currentBand && activeSetlist) copyGuestLink(currentBand.id, activeSetlist.slug ?? activeSetlist.id, setNotice); }}
           />
         ) : null}
 
@@ -302,6 +327,16 @@ export default function App() {
       )}
       <MinimizedRibbon />
       <UndoToast />
+      {notice && (
+        <div
+          key={notice}
+          role="status"
+          onAnimationEnd={() => setNotice(null)}
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] max-w-sm w-[calc(100%-2rem)] bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-sm text-gray-100 shadow-xl animate-[fade-out_0.4s_ease-in_4s_forwards]"
+        >
+          {notice}
+        </div>
+      )}
     </AudioEngineContext.Provider>
   );
 }

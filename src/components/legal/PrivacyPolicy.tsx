@@ -28,19 +28,20 @@ export function PrivacyPolicy() {
 
       <Section title="What we collect">
         <p><span className="text-gray-100">When you sign in with Google.</span> Your Google account ID, email address, name and profile photo address. We ask Google only for basic profile access (“openid”, “email” and “profile”); we can’t see your Gmail, Drive, contacts or anything else in your Google account.</p>
-        <p><span className="text-gray-100">Band membership.</span> Which bands you belong to, your role in each (Owner, Manager, Editor or Member) and when you joined. If you create an invite link, we keep its role, expiry date and — if you lock it to one person — that person’s email address.</p>
+        <p><span className="text-gray-100">Band membership.</span> Which bands you belong to, your role in each (Owner, Manager, Editor or Member) and when you joined. If you create an invite link, we keep its role, expiry date and — if you lock it to one person — that person’s email address. If a band turns on its guest link, we keep the link, its expiry date if it has one, and when it was last opened — not who opened it.</p>
         <p><span className="text-gray-100">What bands add.</span> Audio, sheet music, lyrics, band notes, setlists, song details, YouTube links, and a band’s name, logo, colors and website. We record who added a song, and keep a log of changes — who did what, and when — so a band can see its own history.</p>
         <p><span className="text-gray-100">Server logs.</span> Like most websites, our server records each request it answers: the page or file asked for, the time, and whether it succeeded. Our hosting provider may also record your IP address.</p>
         <p><span className="text-gray-100">Kept only on your device.</span> Personal notes, your mixer settings and a few display preferences are saved in your browser’s storage. They never leave your device and we never see them. Clearing your browser’s site data deletes them.</p>
       </Section>
 
       <Section title="Cookies">
-        <p>We set two cookies, both only after you choose to sign in:</p>
+        <p>We set three cookies, each only after you do something that needs it:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li><code className="text-gray-100">pp_session</code> keeps you signed in. It lasts 30 days, or until you sign out.</li>
           <li><code className="text-gray-100">pp_oauth</code> exists for up to 10 minutes while you sign in with Google, to make sure the sign-in that comes back is the one you started.</li>
+          <li><code className="text-gray-100">pp_guest</code> is set when you open a band’s guest link, so this device can keep playing that band’s songs without an account. It holds the guest links you’ve opened and lasts a year; it stops working for a band as soon as that band resets or turns off its link, and “Leave on this device” removes it.</li>
         </ul>
-        <p>Neither can be read by scripts on the page, and neither is used for tracking. When you open a song that has YouTube videos, the embedded YouTube player may set its own cookies under Google’s policies.</p>
+        <p>None can be read by scripts on the page, and none is used for tracking. When you open a song that has YouTube videos, the embedded YouTube player may set its own cookies under Google’s policies.</p>
       </Section>
 
       <Section title="How we use it">
@@ -79,6 +80,7 @@ export function PrivacyPolicy() {
           <li>Your account and memberships: until you ask us to delete your account.</li>
           <li>Sign-in sessions: 30 days at most; signing out ends yours immediately.</li>
           <li>Invite links: they stop working after 7 days or once used; the record of them stays with the band’s history.</li>
+          <li>Guest links: they work until the band resets or turns them off, or until an expiry date the band sets. After that the link itself is erased; a record that it existed stays with the band’s history.</li>
           <li>Band content and its change history: as long as the band keeps it.</li>
           <li>Server logs: kept only briefly by our hosting provider.</li>
         </ul>
@@ -95,7 +97,7 @@ export function PrivacyPolicy() {
       </Section>
 
       <Section title="Security">
-        <p>The site is served only over HTTPS. Sign-in sessions and invite links are stored only as one-way hashes, and every change is checked against the person’s role in the band. No system is perfectly secure, but we take reasonable steps to protect what you share with us.</p>
+        <p>The site is served only over HTTPS. Sign-in sessions and invite links are stored only as one-way hashes. A band’s guest link is stored as-is so its Owners and Managers can copy it again; it gives read-only access, which the band can end at any time. Every change is checked against the person’s role in the band. No system is perfectly secure, but we take reasonable steps to protect what you share with us.</p>
       </Section>
 
       <Section title="Children">

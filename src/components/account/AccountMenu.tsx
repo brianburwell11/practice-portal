@@ -9,9 +9,10 @@ interface Props {
 /**
  * Sign-in button, or the signed-in user's avatar and menu. Renders nothing
  * where accounts don't exist (static hosting, or no Google client configured).
+ * A sub here through a guest link gets a "Guest" chip beside sign-in.
  */
 export function AccountMenu({ bandId }: Props) {
-  const { available, loaded, user, load, signOut, roleIn } = useSessionStore();
+  const { available, loaded, user, load, signOut, roleIn, guestIn, leaveGuest } = useSessionStore();
   const [open, setOpen] = useState(false);
   // Google sends errors back as ?signin_error=… — show it once.
   const [signInError, setSignInError] = useState<string | null>(
@@ -50,22 +51,46 @@ export function AccountMenu({ bandId }: Props) {
     </div>
   );
 
-  if (!loaded || !available) return banner || null;
+  const guest = guestIn(bandId);
+  const until = guest?.expiresAt && new Date(guest.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  if (!loaded || (!available && !guest)) return banner || null;
 
   if (!user) {
     return (
-      <>
+      <div ref={ref} className="relative flex items-center gap-2">
         {banner}
-        <a
-          href={signInHref()}
-          aria-label="Sign in with Google"
-          className="inline-flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-white text-gray-800 text-sm font-medium shadow hover:bg-gray-100 shrink-0"
-        >
-          <GoogleMark />
-          {/* Just the G on phones, where the header is already full. */}
-          <span className="hidden sm:inline">Sign in</span>
-        </a>
-      </>
+        {guest && (
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="px-2.5 py-1 rounded-full bg-gray-700 hover:bg-gray-600 text-xs text-gray-200 shrink-0"
+            aria-expanded={open}
+          >
+            Guest{until && <span className="hidden sm:inline"> · until {until}</span>}
+          </button>
+        )}
+        {guest && open && (
+          <div className="absolute right-0 top-full mt-2 w-64 z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-2 text-sm text-gray-200">
+            <p className="px-4 py-2 text-gray-400">
+              A link from {guest.band.name} lets this device play its songs{until ? ` until ${until}` : ''}.
+            </p>
+            <button onClick={() => leaveGuest()} className="w-full text-left px-4 py-2 hover:bg-gray-800">
+              Leave on this device
+            </button>
+          </div>
+        )}
+        {available && (
+          <a
+            href={signInHref()}
+            aria-label="Sign in with Google"
+            className="inline-flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-white text-gray-800 text-sm font-medium shadow hover:bg-gray-100 shrink-0"
+          >
+            <GoogleMark />
+            {/* Just the G on phones, where the header is already full. */}
+            <span className="hidden sm:inline">Sign in</span>
+          </a>
+        )}
+      </div>
     );
   }
 
@@ -88,7 +113,13 @@ export function AccountMenu({ bandId }: Props) {
             <div className="font-medium truncate">{user.name ?? user.email}</div>
             <div className="text-gray-400 truncate">{user.email}</div>
             {role && <div className="mt-1 text-xs text-gray-500">{ROLE_LABELS[role]} of this band</div>}
+            {!role && guest && <div className="mt-1 text-xs text-gray-500">Guest of this band{until && ` until ${until}`}</div>}
           </div>
+          {!role && guest && (
+            <button onClick={() => leaveGuest()} className="w-full text-left px-4 py-2 hover:bg-gray-800">
+              Leave guest access
+            </button>
+          )}
           <button onClick={() => signOut()} className="w-full text-left px-4 py-2 hover:bg-gray-800">
             Sign out
           </button>

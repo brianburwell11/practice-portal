@@ -24,6 +24,8 @@ interface Props {
   onCopySetlist?: () => void;
   onDeleteSetlist?: () => void;
   onViewAllSetlists?: () => void;
+  /** Copy the band's guest link, opening on the current setlist. */
+  onCopyGuestLink?: () => void;
 }
 
 interface MenuEntry {
@@ -82,6 +84,7 @@ export function AdminRibbon({
   onCopySetlist,
   onDeleteSetlist,
   onViewAllSetlists,
+  onCopyGuestLink,
 }: Props) {
   const [open, setOpen] = useState<DropdownId>(null);
   const [showHelp, setShowHelp] = useState(false);
@@ -138,6 +141,7 @@ export function AdminRibbon({
         { label: 'Copy Setlist', show: can('setlist.write'), enabled: !!hasSetlist, onClick: onCopySetlist },
         { label: 'Delete Setlist', show: can('setlist.write'), enabled: !!hasSetlist, danger: true, onClick: onDeleteSetlist },
         { label: 'View All Setlists', show: can('setlist.write'), enabled: true, onClick: onViewAllSetlists },
+        { label: 'Copy Guest Link', show: can('member.invite'), enabled: !!hasSetlist, onClick: onCopyGuestLink },
       ],
     },
   ];
