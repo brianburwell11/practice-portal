@@ -38,6 +38,23 @@ interface GuestLink {
   lastUsedAt: string | null;
 }
 
+function CopyIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
 /** `YYYY-MM-DD` in local time, for a date input. */
 function toDateInput(iso: string): string {
   const d = new Date(iso);
@@ -91,6 +108,8 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
   const [inviteRole, setInviteRole] = useState<BandRole>('member');
   const [inviteEmail, setInviteEmail] = useState('');
   const [newLink, setNewLink] = useState<string | null>(null);
+  /** Who the last invite was emailed to, if it was. */
+  const [emailedTo, setEmailedTo] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const [requests, setRequests] = useState<AccessRequest[]>([]);
@@ -138,6 +157,7 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
   const createInvite = () => run(async () => {
     const res = await api('POST', `${base}/invites`, { role: inviteRole, email: inviteEmail.trim() || undefined });
     setNewLink(res.url);
+    setEmailedTo(res.emailed ? res.email : null);
     setCopied(false);
     setInviteEmail('');
   });
@@ -146,6 +166,7 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
     if (!newLink) return;
     await navigator.clipboard.writeText(newLink);
     setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const copyGuestLink = async () => {
@@ -252,20 +273,27 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
                 disabled={busy}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm font-medium text-white"
               >
-                Create link
+                Send invite
               </button>
             </div>
             <p className="text-xs text-gray-500">
               {ROLE_HINTS[inviteRole]}. The link works once and expires in 7 days.
-              {' '}With an email, only that Google account can use it.
             </p>
             {newLink && (
-              <div className="bg-gray-800 border border-gray-700 rounded p-3 space-y-2">
-                <div className="text-xs text-gray-400">Send this link yourself — it won’t be shown again:</div>
-                <div className="flex gap-2">
-                  <input readOnly value={newLink} onFocus={(e) => e.target.select()} className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs font-mono" />
-                  <button onClick={copyLink} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs">
-                    {copied ? 'Copied' : 'Copy'}
+              <div className="space-y-1">
+                <div className="text-xs text-gray-400">
+                  {emailedTo ? `Emailed to ${emailedTo}. The link, in case it doesn’t arrive:` : 'Send this link yourself:'}
+                </div>
+                <div className="group flex items-center gap-2 bg-gray-800 border border-gray-700 rounded px-3 py-2">
+                  <span className="flex-1 min-w-0 truncate font-mono text-xs text-gray-200 select-all" title={newLink}>{newLink}</span>
+                  {/* Shown on hover (always on touch screens, which can't hover). */}
+                  <button
+                    onClick={copyLink}
+                    aria-label={copied ? 'Copied' : 'Copy link'}
+                    title={copied ? 'Copied' : 'Copy link'}
+                    className={`shrink-0 focus-visible:opacity-100 transition-opacity ${copied ? 'text-green-400' : 'text-gray-400 hover:text-white sm:opacity-0 sm:group-hover:opacity-100'}`}
+                  >
+                    {copied ? <CheckIcon /> : <CopyIcon />}
                   </button>
                 </div>
               </div>

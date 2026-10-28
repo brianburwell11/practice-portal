@@ -28,7 +28,7 @@ export function PrivacyPolicy() {
 
       <Section title="What we collect">
         <p><span className="text-gray-100">When you sign in with Google.</span> Your Google account ID, email address, name and profile photo address. We ask Google only for basic profile access (“openid”, “email” and “profile”); we can’t see your Gmail, Drive, contacts or anything else in your Google account.</p>
-        <p><span className="text-gray-100">Band membership.</span> Which bands you belong to, your role in each (Owner, Manager, Editor or Member) and when you joined. If you create an invite link, we keep its role, expiry date and — if you lock it to one person — that person’s email address. If a band turns on its guest link, we keep the link, its expiry date if it has one, and when it was last opened — not who opened it.</p>
+        <p><span className="text-gray-100">Band membership.</span> Which bands you belong to, your role in each (Owner, Manager, Editor or Member) and when you joined. If you create an invite link, we keep its role, expiry date and — if you lock it to one person — that person’s email address, and we email them the link on your behalf. If a band turns on its guest link, we keep the link, its expiry date if it has one, and when it was last opened — not who opened it.</p>
         <p><span className="text-gray-100">Requests to join.</span> If you ask to join a Members-only band, we keep your request, the message you wrote (if any), and whether it was approved or declined.</p>
         <p><span className="text-gray-100">What bands add.</span> Audio, sheet music, lyrics, band notes, setlists, song details, YouTube links, and a band’s name, logo, colors and website. We record who added a song, and keep a log of changes — who did what, and when — so a band can see its own history.</p>
         <p><span className="text-gray-100">Server logs.</span> Like most websites, our server records each request it answers: the page or file asked for, the time, and whether it succeeded. Our hosting provider may also record your IP address.</p>
@@ -73,7 +73,7 @@ export function PrivacyPolicy() {
           <li><span className="text-gray-100">Neon</span> — hosts our database (accounts, memberships, band and song data).</li>
           <li><span className="text-gray-100">Cloudflare</span> — stores uploaded files and runs our domain’s DNS.</li>
           <li><span className="text-gray-100">Google</span> — provides “Sign in with Google”, and the YouTube player for songs with videos.</li>
-          <li><span className="text-gray-100">Resend</span> — sends the site’s emails, such as requests to join a band and their answers.</li>
+          <li><span className="text-gray-100">Resend</span> — sends the site’s emails, such as invites and requests to join a band and their answers.</li>
         </ul>
         <p>These services store data in the United States.</p>
       </Section>
