@@ -87,8 +87,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   signOut: async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
-    // Reload so every cached band list and document is refetched as anonymous.
-    window.location.reload();
+    // A full load of the home page, so every cached band list and document is
+    // refetched as anonymous — and a Members-only band isn't left on screen.
+    window.location.assign('/');
   },
 
   leaveGuest: async () => {
