@@ -67,9 +67,17 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
   handleStatic(req, res);
 }
 
-/** A request path fit for the logs: guest-link tokens don't expire on their own, so mask them. */
+/**
+ * A request path fit for the logs: guest-link and invite tokens are secrets
+ * that work for whoever holds them, so mask them.
+ */
 function loggable(url = ''): string {
-  return url.replace(/([?&]guest=)[^&#]+/, '$1…').replace(/^(\/api\/guest\/)[^/?#]+/, '$1…');
+  return url
+    .replace(/([?&]guest=)[^&#]+/, '$1…')
+    .replace(/^(\/api\/guest\/|\/api\/invites\/|\/invite\/)[^/?#]+/, '$1…')
+    // Sign-in carries where to go next, which may be an invite or guest link.
+    .replace(/(next=%2Finvite%2F)[^&#]+/i, '$1…')
+    .replace(/(guest%3D)[^&#%]+/i, '$1…');
 }
 
 const server = http.createServer((req, res) => {
