@@ -37,6 +37,8 @@
     "scripts/verify-members.ts",
     "scripts/verify-access.ts",
     "scripts/verify-writes.ts",
-    "scripts/sync-r2-registry.ts"
+    "scripts/sync-r2-registry.ts",
+    "scripts/measure-transcode.ts",
+    "scripts/verify-guests.ts"
   ]
 }
