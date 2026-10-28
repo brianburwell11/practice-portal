@@ -724,6 +724,7 @@ A signed-in non-member who finds a Members-only band can ask to join, instead of
 - [x] `GET /api/access/:slug` (public: name and logo; signed in, also where you stand), `POST /api/access/:slug` (signed in), `GET /api/bands/:bandId/access-requests`, `POST …/access-requests/:id/approve|decline` (`member.invite`). Audited.
 - [x] UI: the Request Access card, *Asking to join* in Members & Sharing, `?requests=1`.
 - [x] Privacy policy: requests, the email to the Owner, Resend as a processor, retention.
+- [x] **Invites are emailed too** (2026-10-28): an invite locked to an address emails that address the link — from the inviter's name, Reply-To the inviter, naming band and role. The link is still shown, labelled as emailed, in case it doesn't arrive. An invite with no address emails nobody. Covered in `verify-requests.ts` (61/61).
 - [x] `scripts/verify-requests.ts --url … --mock-resend <port>`: who can ask and see; the owner's email (recipient, sender, Reply-To, escaped message, link); decline, the 7-day wait, approve, membership; one band's managers can't decide another band's requests; audit. **54/54** on 2026-10-28 against a scratch Postgres with a stand-in Resend; also run without a key (emails logged, requests unaffected). `verify-guests`, `verify-members`, `verify-db` still pass.
 - [ ] **Set up Resend** (Brian):
   1. Create a Resend account; **Domains → Add domain** → `practiceportal.app`.
