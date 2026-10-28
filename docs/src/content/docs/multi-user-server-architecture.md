@@ -621,10 +621,13 @@ Kept for reference; 6a–6d above are how each item gets done. `can()` already e
 ### 8c — Uploads in production
 - [x] Fly secrets: R2 write credentials. `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` are set (2026-10-28).
 - [x] R2 CORS allows `https://practice-portal.fly.dev` and `https://practiceportal.app` for presigned `PUT` (score uploads go straight from the browser to R2). Checked 2026-10-28 with browser-style preflights: both get `204` with `GET, HEAD, PUT`; an unknown origin gets `403`.
-- [ ] Machine size and timeouts that survive a multi-stem transcode; measure a real one. `scripts/measure-transcode.ts --url https://practiceportal.app` uploads synthesized stems (default 6 × 4 min, 24-bit WAV) as a throwaway band, times the request, and polls `/healthz` alongside. Things to watch:
-  - Node's default `server.requestTimeout` is 300 s, measured from the start of the request — upload *and* every stem's transcode have to fit inside it.
-  - Stems transcode one after another with synchronous `ffmpeg` calls (loudnorm is two passes), so the event loop is blocked for the whole run: other requests and Fly's `/healthz` check (5 s timeout) stall until it's done.
-  - Uploads land in `os.tmpdir()` on the root filesystem; there's no volume.
+- [ ] Machine size and timeouts that survive a multi-stem transcode. **Measured 2026-10-28 — it doesn't, yet.** `scripts/measure-transcode.ts --url https://practiceportal.app` with 6 × 4-minute 24-bit stems (415 MB) on the 1 GB `shared-cpu-1x`:
+  - **Over 5 minutes.** The script's client gave up at 300 s, and Node's own `server.requestTimeout` is also 300 s, so the Add Song wizard can't upload a song this size.
+  - **It took the site down.** ffmpeg ran synchronously, so the server answered nobody: Fly's health check failed at 21:08 and its proxy found no healthy machine at 21:12. It recovered on its own when ffmpeg finished, about ten minutes in all. No R2 objects were left behind.
+  - **Don't rerun the script against production** until uploads are a background job (Phase 9).
+- [x] **ffmpeg and MuseScore no longer block the server.** `server/core/media/run.ts` spawns them asynchronously. Locally, 13 s of transcoding a 5-minute stem: `/healthz` answered 65 times, worst 40 ms. This doesn't shorten a transcode; the 5-minute limit still needs Phase 9.
+- [x] **…and run without a shell.** `ffprobe` and the Opus transcode built shell strings with the upload's filename in quotes, so a crafted name like `$(…).wav` would have run as a command for anyone with `song.audio.write`. Now every argument is passed as-is; a file named `$(touch /tmp/…).wav` transcodes and nothing runs.
+- [x] Request logs mask invite tokens (`/invite/…`, `/api/invites/…`, and in sign-in's `next=`), as they already did guest tokens.
 - [x] The trimmed image: MuseScore without updater, soundfont, translations, templates, plugins; production-only `node_modules`. `mscz-smoke` and `smoke:server` still pass. 2.42 GB → 1.51 GB (arm64). Qt's own `plugins/platforms` must stay — without it even `mscore -v` fails.
 
 **Two bugs the end-to-end tests caught on the way:** the Add Song wizard saves the config and then adds the discography entry without `overwrite`, which Postgres-first turned into a 409 — the discography is built from configs, so the song is already listed; only a *different* song under the same id conflicts now. And a song rename deleted the old config (and with it the row's lyrics) before copying them across; it now copies first and deletes last.
@@ -635,17 +638,49 @@ Kept for reference; 6a–6d above are how each item gets done. `can()` already e
 
 ## Phase 9 — Async prep pipeline
 
-Song prep takes minutes and shells out to native binaries. It cannot run inside a request.
+Song prep takes minutes and shells out to native binaries. It cannot run inside a request — measured 2026-10-28: 6 × 4-minute stems took over 5 minutes and, before ffmpeg went async, took the site down (Phase 8c).
 
-- [ ] Add a job queue (Postgres-backed is plenty at this scale — `pgboss`, or a simple `job` table with `SKIP LOCKED`; no Redis needed yet).
-- [ ] Job types: `transcode_stem`, `normalize_loudness`, `convert_score`, `probe_duration`.
-- [ ] Direct-to-R2 uploads via presigned PUT so large raw WAV/FLAC never proxies through the API.
-- [ ] Job status endpoint plus progress UI in the wizard; the existing `StemsStep` and `ReviewStep` need real progress states.
-- [ ] Retries with backoff, a dead-letter state, and per-band concurrency caps so one big upload can't starve everyone.
-- [ ] Address `TODO.md` #9 properly: orphan cleanup for failed partial uploads, which becomes much more likely with strangers uploading.
-- [ ] Enforce per-band storage quotas at upload time.
+**Decided 2026-10-28:**
 
-**Exit criteria**: a non-technical band member uploads raw WAVs and a `.mscz` from a browser and gets a working song.
+| Decision | Choice | Why |
+|---|---|---|
+| Where transcodes run | **A worker inside the existing server, one job at a time**, taking jobs from a Postgres `job` table (`FOR UPDATE SKIP LOCKED`). | No new services or machines. Uploads queue up instead of fighting over one shared CPU. Can move to its own machine later. |
+| How stems arrive | **Straight from the browser to R2** with presigned PUTs (as scores already do). The worker fetches each raw file, transcodes it, uploads the `.opus`, and deletes the raw file. | A 400 MB upload never passes through Fly, holds a request open, or fills the machine's disk. |
+| What the uploader sees | **The wizard waits on its last step**, with upload progress and then per-stem transcode progress, and saves the song once every stem is done. A failed stem shows its error with Retry. | Simplest flow; nothing half-saved. The cost: keep the tab open until it's done. |
+| Machine | **Unchanged** (1 GB `shared-cpu-1x`). | With a queue, slow only means a song takes longer to be ready. Revisit with real timings. |
+
+### 9a — Schema
+- [ ] Migration: `job` — kind (`transcode_stem`), band, payload (raw key, target name, normalize), status (`uploading` → `queued` → `running` → `done` | `failed`), attempts, progress (0–1), error, timestamps, `locked_at` for a stuck-job sweep. Index on `(status, created_at)`.
+
+### 9b — Uploads straight to R2
+- [ ] `POST /api/bands/:bandId/songs/:songId/stems` `{ files: [{ name, size }], normalize }` (`song.audio.write`): one job per stem in `uploading`, a presigned PUT each to `_incoming/<jobId>/<name>`. Random, short-lived keys; size capped per file.
+- [ ] `POST …/stems/queue` `{ jobIds }`: the browser's uploads are done; check each raw object exists, then mark the jobs `queued`.
+- [ ] `GET …/stems?jobs=…`: status, progress and error per job — what the wizard polls.
+- [ ] R2 CORS already allows browser `PUT` from both origins (8c).
+
+### 9c — The worker
+- [ ] Started with the server: claims the oldest `queued` job (`SKIP LOCKED`), one at a time, and checks for more every couple of seconds when idle.
+- [ ] Per stem: stream the raw file from R2 to scratch disk; probe; loudness pass; transcode to Opus with `ffmpeg -progress`, writing progress to the row; upload `<stemId>.opus` to the song's prefix; delete the raw file and the scratch copy.
+- [ ] Failures: up to 2 retries, then `failed` with the error. A job left `running` by a restart or deploy goes back to `queued` after a timeout.
+- [ ] Deploys: on SIGTERM the worker stops claiming jobs; the one in progress is retried after the restart.
+- [ ] Sweep: delete `_incoming/` objects and `job` rows older than a day.
+
+### 9d — UI
+- [ ] Add Song wizard (`ReviewStep`): upload each stem to R2 with progress, queue them, poll, and show per-stem state (waiting / transcoding n% / done / failed + Retry). Save the config once every stem is done.
+- [ ] Edit Song's stem replacement does the same.
+- [ ] Retire `POST /api/r2/transcode-upload` once neither uses it.
+- [ ] `.mscz` conversion stays a request: about 2 s, and no longer blocking (8c).
+
+### 9e — Prove it
+- [ ] A test script against a scratch Postgres plus a local S3 stand-in (MinIO in Docker), so nothing touches R2: upload, queue, transcode, progress, failure and retry, a restart mid-job, cleanup, and that one band can't queue or read another band's jobs.
+- [ ] Production: rerun `measure-transcode.ts` (rewritten for the new flow): 6 × 4-minute stems finish, and `/healthz` stays fast throughout.
+
+### Later
+- [ ] Per-band concurrency caps, once more than a few bands upload.
+- [ ] Per-band storage quotas at upload time.
+- [ ] `TODO.md` #9: orphan cleanup for songs abandoned mid-wizard.
+
+**Exit criteria**: a non-technical band member uploads raw WAVs and a `.mscz` from a browser and gets a working song — and the site stays up while it's prepared.
 
 ---
 
