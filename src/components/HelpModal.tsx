@@ -67,17 +67,17 @@ export function HelpModal({ onClose }: Props) {
           <span>If you can't hear audio, check that your phone isn't on silent.</span>
         </div>
 
-        {/* Feedback */}
+        {/* Support */}
         <div className="pt-2 border-t border-gray-700 flex justify-center">
           <a
-            href="mailto:brianburwell11@gmail.com?subject=Practice%20Portal%20Feedback"
+            href="mailto:support@practiceportal.app?subject=Practice%20Portal%20Support"
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-200 transition-colors"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="4" width="20" height="16" rx="2" />
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
             </svg>
-            Submit Feedback
+            Contact Support
           </a>
         </div>
       </div>
