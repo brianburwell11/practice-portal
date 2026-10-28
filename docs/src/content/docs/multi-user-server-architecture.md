@@ -701,8 +701,8 @@ Built and type-checked; not yet used in a browser.
 ### 10d — Prove it
 - [x] `scripts/verify-guests.ts --url`: who may manage the link; a guest reads a Members-only band's registry entry, band, songs and setlists; one band's link opens no other band — every document kind (band, discography, config, lyrics, notes, setlist index, setlist) of a second band with its own live link and of a third that never had one refuses it (401, or 403 when signed in), as do their link, roster and write routes, the registry and `/api/me`, and a forged cookie; a guest can't write or see the link; expiry ends access and clearing it restores the same link; Reset cuts off old holders and the new link works; turning off ends access; one device holds two bands' links. Throwaway users and bands, cleaned up. **86/86** on 2026-10-28, twice, against a local server on a scratch Postgres (Docker `postgres:17`, all migrations applied) with R2 writes disabled; `verify-db`, `verify-members` and `verify-access` pass there too.
 - [x] Apply migration 0005 to Neon (`npm run db:migrate`) — done 2026-10-28.
-- [ ] Deploy.
-- [ ] By hand: turn the link on for a Members-only band, open a setlist's guest link in a private window, play a song, reset, reload.
+- [x] Deploy. Live 2026-10-28; `smoke:server --url https://practiceportal.app` passes, and `/api/me` reports `guest`.
+- [x] By hand: turn the link on for a Members-only band, open a setlist's guest link in a private window, play a song, reset, reload. Done in dev, 2026-10-28.
 
 **Exit criteria**: a sub opens a link with no account, plays Friday's setlist, and loses access when the link is reset, turned off, or expires.
 
