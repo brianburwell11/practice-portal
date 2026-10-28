@@ -11,6 +11,9 @@
  *   STATIC_DIR     SPA build directory (default ./dist)
  *   DATABASE_URL   Postgres, for /api/data
  *   R2_PUBLIC_URL  rebuilds media URLs inside /api/data documents
+ *   CANONICAL_HOST the one public hostname (practiceportal.app). Requests
+ *                  for any other public hostname — practice-portal.fly.dev,
+ *                  www — get a 308 to it. Unset: no redirects.
  */
 import http from 'node:http';
 import { createApiHandler, sendJson } from './adapters/nodeApi';
@@ -25,11 +28,32 @@ const STATIC_DIR = process.env.STATIC_DIR ?? 'dist';
 const handleApi = createApiHandler();
 const handleStatic = createStaticHandler(STATIC_DIR);
 
+const CANONICAL_HOST = process.env.CANONICAL_HOST?.trim().toLowerCase() || undefined;
+
+/**
+ * Hostnames to send to CANONICAL_HOST. Only names we serve publicly: Fly's
+ * health checks and internal traffic arrive by IP or *.internal and must not
+ * be redirected. One address means one sign-in — sessions are per hostname.
+ */
+function redirectsToCanonical(host: string | undefined): boolean {
+  if (!CANONICAL_HOST || !host) return false;
+  const name = host.split(':')[0].toLowerCase();
+  return name !== CANONICAL_HOST && (name.endsWith('.fly.dev') || name === `www.${CANONICAL_HOST}`);
+}
+
 async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const pathname = (req.url ?? '/').split('?')[0];
 
   if (pathname === '/healthz') {
     sendJson(res, { status: 200, body: { status: 'ok' } });
+    return;
+  }
+
+  // 308 keeps the method and body, so a stray POST isn't turned into a GET.
+  if (redirectsToCanonical(req.headers.host)) {
+    res.statusCode = 308;
+    res.setHeader('Location', `https://${CANONICAL_HOST}${req.url ?? '/'}`);
+    res.end();
     return;
   }
 

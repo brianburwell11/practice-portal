@@ -282,6 +282,15 @@ Each of these is a deliberate change, not a transcription slip:
 
 **Exit criteria**: deployed container converts a real `.mscz` and transcodes a real stem, driven by curl. Still no auth — not yet public-facing.
 
+
+### Custom domain — practiceportal.app (2026-10-28)
+
+- **`https://practiceportal.app` is production.** Registered with Cloudflare; DNS in the same account as R2. `A`/`AAAA` for `@` and `www` point at the app's Fly addresses (`66.241.124.147`, `2a09:8280:1::1d1:2292:0`), **DNS only** — an orange-cloud proxy would stop Fly issuing its Let's Encrypt certificates (`fly certs add` for both names).
+- **One address.** `CANONICAL_HOST=practiceportal.app` (fly.toml) sends `practice-portal.fly.dev` and `www.practiceportal.app` a 308 to it, path and query kept. Sessions are per hostname, so one address means one sign-in. `/healthz`, Fly's internal names and bare IPs are never redirected. Unset, nothing redirects — which is how the code shipped before the domain resolved.
+- **Google sign-in** has `https://practiceportal.app/api/auth/google/callback` as a redirect URI and `practiceportal.app` as an authorized domain. **R2 CORS** allows the new origin for score uploads.
+- **GitHub Pages stays** as a read-only fallback reading R2.
+- A new `.app` registration took a while to appear at the registry (NXDOMAIN at the `.app` nameservers, then NOERROR with no records, then resolving). While checking, the local resolver kept serving stale answers and direct queries to Cloudflare's nameservers came back REFUSED — DNS-over-HTTPS (`cloudflare-dns.com/dns-query`, `dns.google/resolve`) gave the true picture.
+
 ### What landed — the server
 
 **The site runs on a server, unchanged, and the server is read-only.** Decided 2026-10-27: host first, accounts after. Phase 5 needs a deployed server to build against anyway (cookies, magic-link emails), and Phase 5 also depends on Phase 4 — so "accounts first" would have meant Phases 4 and 5 with nothing hosted.
