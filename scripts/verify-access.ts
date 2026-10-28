@@ -54,7 +54,9 @@ const names = routes.map((r) => r.name);
 check('route names are unique', new Set(names).size === names.length);
 const signedInOnly = routes.filter((r) => r.access === 'signedIn' && !r.authorizePath && !r.authorizeBody).map((r) => r.name);
 check('signedIn-only routes are the expected few (their handlers check the rest)',
-  JSON.stringify(signedInOnly.sort()) === JSON.stringify(['invite.accept', 'member.remove']), signedInOnly.join(', '));
+  // Asking to join is open to anyone signed in: that's who asks.
+  JSON.stringify(signedInOnly.sort()) === JSON.stringify(['access.request', 'invite.accept', 'member.remove']),
+  signedInOnly.join(', '));
 
 console.log('\n--- what a song config save needs');
 const base = {

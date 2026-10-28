@@ -43,6 +43,13 @@
       "when": 1793214183139,
       "tag": "0005_guest_links",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793217479290,
+      "tag": "0006_access_requests",
+      "breakpoints": true
     }
   ]
 }

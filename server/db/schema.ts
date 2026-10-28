@@ -234,6 +234,27 @@ export const invite = pgTable('invite', {
 ]);
 
 /**
+ * A signed-in non-member asking to join a Members-only band. The Owner is
+ * emailed; an Owner or Manager approves (joins as Member) or declines, and the
+ * requester is emailed either way. One pending request per person per band.
+ */
+export const accessRequest = pgTable('access_request', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  bandId: uuid('band_id').notNull().references(() => band.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => appUser.id, { onDelete: 'cascade' }),
+  /** Optional note to the band, as typed. */
+  message: text('message'),
+  status: text('status').notNull().default('pending'),
+  createdAt: createdAt(),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  decidedBy: uuid('decided_by').references(() => appUser.id, { onDelete: 'set null' }),
+}, (t) => [
+  check('access_request_status_check', sql`${t.status} in ('pending','approved','declined')`),
+  index('access_request_band_idx').on(t.bandId),
+  uniqueIndex('access_request_one_pending').on(t.bandId, t.userId).where(sql`${t.status} = 'pending'`),
+]);
+
+/**
  * Guest access for subs and deps: needs no account, consumes no seat.
  *
  * Phase 10 uses `scope = 'band'`: one "anyone with the link" link per band,

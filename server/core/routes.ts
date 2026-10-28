@@ -43,6 +43,12 @@ import {
   setVisibility,
   transferOwnership,
 } from './handlers/members';
+import {
+  decideAccessRequest,
+  getAccess,
+  listAccessRequests,
+  requestAccess,
+} from './handlers/requests';
 import { deleteSetlist, saveSetlist } from './handlers/setlists';
 import {
   deleteSong,
@@ -141,6 +147,40 @@ export const routes: RouteDef[] = [
     method: 'POST',
     pattern: /^\/api\/invites\/(?<token>[A-Za-z0-9_-]+)\/accept$/,
     handler: acceptInvite,
+  },
+
+  // --- Asking to join a Members-only band. Anyone may see which band lives
+  // at an address; any signed-in user may ask; Owners and Managers answer.
+  {
+    name: 'access.get',
+    access: 'public',
+    method: 'GET',
+    pattern: /^\/api\/access\/(?<slug>[^/]+)$/,
+    handler: getAccess,
+  },
+  {
+    name: 'access.request',
+    writes: 'self',
+    access: 'signedIn',
+    method: 'POST',
+    pattern: /^\/api\/access\/(?<slug>[^/]+)$/,
+    body: 'json',
+    handler: requestAccess,
+  },
+  {
+    name: 'access_request.list',
+    access: 'member.invite',
+    method: 'GET',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/access-requests$/,
+    handler: listAccessRequests,
+  },
+  {
+    name: 'access_request.decide',
+    writes: 'self',
+    access: 'member.invite',
+    method: 'POST',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/access-requests\/(?<requestId>[^/]+)\/(?<decision>approve|decline)$/,
+    handler: decideAccessRequest,
   },
 
   // --- The band's guest link (Phase 10). Owners and Managers manage it; the

@@ -131,7 +131,7 @@ check('all migrations applied', true);
 const applied = await conn.query<{ hash: string }>(
   'select hash from drizzle.__drizzle_migrations order by created_at',
 );
-check('migration journal has 6 entries', applied.length === 6, `found ${applied.length}`);
+check('migration journal has 7 entries', applied.length === 7, `found ${applied.length}`);
 
 // Re-running must be a no-op, not an error — this is what a redeploy does.
 await conn.migrate('./server/db/migrations');
@@ -144,7 +144,7 @@ const tables = (await conn.query<{ table_name: string }>(
   "select table_name from information_schema.tables where table_schema='public' order by table_name",
 )).map((r) => r.table_name);
 const expected = [
-  'app_user', 'audit_log', 'band', 'capability', 'grant_link', 'invite',
+  'access_request', 'app_user', 'audit_log', 'band', 'capability', 'grant_link', 'invite',
   'membership', 'org', 'role', 'role_capability', 'session', 'setlist', 'song',
   'user_song_state',
 ];
@@ -208,7 +208,7 @@ check('member CANNOT setlist.write', (await conn.query<{ n: number }>(
 // These insert fixtures and assert global row counts, so they need an empty
 // database. Everything here runs in a transaction that is always rolled back.
 
-const TENANT_TABLES = ['app_user', 'band', 'song', 'membership', 'grant_link', 'user_song_state', 'audit_log', 'session'];
+const TENANT_TABLES = ['app_user', 'band', 'song', 'membership', 'grant_link', 'user_song_state', 'audit_log', 'session', 'access_request'];
 const occupied: string[] = [];
 for (const t of TENANT_TABLES) {
   const n = (await conn.query<{ n: number }>(`select count(*)::int n from ${t}`))[0].n;
@@ -286,6 +286,17 @@ if (occupied.length) {
     check('a revoked band link makes room for its replacement', (await conn.query<{ n: number }>(
       "select count(*)::int n from grant_link where scope='band'"))[0].n === 2);
 
+    // Access requests: one pending per person per band; any number decided.
+    const request = (status = 'pending') => `insert into access_request (band_id, user_id, message, status) values
+      ('33333333-3333-3333-3333-333333333333','22222222-2222-2222-2222-222222222222','hi','${status}')`;
+    await conn.exec(request());
+    await rejects('only one pending access request per person per band', conn, request(), /access_request_one_pending|unique|duplicate/i);
+    await conn.exec(request('declined'));
+    await conn.exec(request('declined'));
+    check('decided requests pile up freely', (await conn.query<{ n: number }>(
+      "select count(*)::int n from access_request where status='declined'"))[0].n === 2);
+    await rejects('access_request.status check', conn, request('maybe'), /access_request_status_check/i);
+
     // Phase 5: one account per Google identity; sessions die with their user.
     await conn.exec(`update app_user set google_sub='g-owner' where id='11111111-1111-1111-1111-111111111111'`);
     await rejects('google_sub is unique', conn,
@@ -303,7 +314,7 @@ if (occupied.length) {
     await conn.exec(`insert into user_song_state (user_id, song_id, state) values
       ('22222222-2222-2222-2222-222222222222','44444444-4444-4444-4444-444444444444','{"loopStart":4}')`);
     await conn.exec("delete from band where slug='dev'");
-    for (const t of ['song', 'membership', 'grant_link', 'user_song_state']) {
+    for (const t of ['song', 'membership', 'grant_link', 'user_song_state', 'access_request']) {
       check(`deleting a band cascades ${t}`, (await conn.query<{ n: number }>(
         `select count(*)::int n from ${t}`))[0].n === 0);
     }
