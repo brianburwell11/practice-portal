@@ -706,6 +706,38 @@ Built and type-checked; not yet used in a browser.
 
 **Exit criteria**: a sub opens a link with no account, plays Friday's setlist, and loses access when the link is reset, turned off, or expires.
 
+### Requests to join (2026-10-28)
+
+A signed-in non-member who finds a Members-only band can ask to join, instead of hitting "Band not found".
+
+| Decision | Choice | Why |
+|---|---|---|
+| Who can ask | **Signed-in people only.** Signed out, the page shows the band and offers sign-in "to see it if you're a member, or to ask to join", and comes back here after. | A request needs a name and an address to answer. |
+| What they see | **The band's name and logo**, signed in or out, and when signed in an optional message (500 characters). | They found the address on purpose. The cost: anyone can confirm a Members-only band exists at a route. |
+| Who's emailed | **The Owner**, from `do-not-reply@practiceportal.app` via **Resend**, with the requester as Reply-To and a button to Members & Sharing (`?requests=1` opens it). | |
+| Answering | **In the app.** Members & Sharing → *Asking to join*: Approve (joins as Member) or Decline, for Owners and Managers (`member.invite`). The requester is emailed either way. | One click instead of making and sending an invite link. |
+| Limits | One pending request per person per band; after a decline, 7 days before asking again; 5 requests per person per hour. | |
+| Email failures | **Never undo the request.** It's saved first; a failed or unconfigured send is logged, and the request still shows in Members & Sharing. Without `RESEND_API_KEY` (dev, tests) every email is logged instead. | |
+
+- [x] Migration 0006: `access_request` (band, user, message, status, decided at/by); one pending per person per band. `verify-db` covers it.
+- [x] `server/core/email.ts`: Resend's `POST /emails` over `fetch`, no SDK. Names and messages are HTML-escaped. `RESEND_API_URL` points tests at a stand-in.
+- [x] `GET /api/access/:slug` (public: name and logo; signed in, also where you stand), `POST /api/access/:slug` (signed in), `GET /api/bands/:bandId/access-requests`, `POST …/access-requests/:id/approve|decline` (`member.invite`). Audited.
+- [x] UI: the Request Access card, *Asking to join* in Members & Sharing, `?requests=1`.
+- [x] Privacy policy: requests, the email to the Owner, Resend as a processor, retention.
+- [x] `scripts/verify-requests.ts --url … --mock-resend <port>`: who can ask and see; the owner's email (recipient, sender, Reply-To, escaped message, link); decline, the 7-day wait, approve, membership; one band's managers can't decide another band's requests; audit. **54/54** on 2026-10-28 against a scratch Postgres with a stand-in Resend; also run without a key (emails logged, requests unaffected). `verify-guests`, `verify-members`, `verify-db` still pass.
+- [ ] **Set up Resend** (Brian):
+  1. Create a Resend account; **Domains → Add domain** → `practiceportal.app`.
+  2. Add the DNS records Resend lists (DKIM and SPF; it may suggest DMARC too) in Cloudflare, each **DNS only** (grey cloud), then **Verify** in Resend.
+  3. **API Keys → Create**, sending access only, limited to `practiceportal.app`.
+  4. `fly secrets set RESEND_API_KEY=re_…` (restarts the app). Done 2026-10-28; rotate it, since that key was typed on a command line.
+  5. For dev, add `RESEND_API_KEY=` to `.env` — note dev and production share Neon, so a dev request emails the real Owner.
+
+**Dev reads through the API now.** `.env` sets `VITE_DATA_SOURCE=api`, so `npm run dev` reads bands from Postgres like production. Without it, localhost reads the R2 copies, where no band is Members-only, and none of the above can be tried.
+- [x] Apply migration 0006 to Neon (`npm run db:migrate`) — done 2026-10-28.
+- [ ] Deploy.
+- [ ] By hand: from a second Google account, ask to join a Members-only band; check the Owner's email (Reply-To, button); approve; the second account gets the email and the band.
+
+
 ---
 
 ## Phase 11 — Personal layer, safety rails, ops
