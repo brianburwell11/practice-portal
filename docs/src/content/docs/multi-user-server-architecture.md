@@ -1,6 +1,6 @@
 ---
 title: "Multi-User Server Architecture — Phased Plan"
-description: "Turning the practice portal from a localhost-admin SPA into a hosted multi-band product: extracting the write API out of the Vite plugin, moving config into Postgres, adding accounts, four band roles plus expiring sub links, private media, and a server-side song-prep pipeline."
+description: "Turning the practice portal from a localhost-admin SPA into a hosted multi-band product: extracting the write API out of the Vite plugin, moving config into Postgres, adding accounts, four band roles plus a guest link for subs, private media, and a server-side song-prep pipeline."
 pubDate: "Jul 27 2026"
 tags: ["architecture", "backend", "auth", "permissions", "infrastructure", "plan"]
 ---
@@ -619,9 +619,12 @@ Kept for reference; 6a–6d above are how each item gets done. `can()` already e
 - [x] Controls you can't use are hidden, not shown disabled — a Member's screen looks like today's public site.
 
 ### 8c — Uploads in production
-- [ ] Fly secrets: R2 write credentials.
-- [ ] R2 CORS allows `https://practice-portal.fly.dev` for presigned `PUT` (score uploads go straight from the browser to R2).
-- [ ] Machine size and timeouts that survive a multi-stem transcode; measure a real one.
+- [x] Fly secrets: R2 write credentials. `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` are set (2026-10-28).
+- [x] R2 CORS allows `https://practice-portal.fly.dev` and `https://practiceportal.app` for presigned `PUT` (score uploads go straight from the browser to R2). Checked 2026-10-28 with browser-style preflights: both get `204` with `GET, HEAD, PUT`; an unknown origin gets `403`.
+- [ ] Machine size and timeouts that survive a multi-stem transcode; measure a real one. `scripts/measure-transcode.ts --url https://practiceportal.app` uploads synthesized stems (default 6 × 4 min, 24-bit WAV) as a throwaway band, times the request, and polls `/healthz` alongside. Things to watch:
+  - Node's default `server.requestTimeout` is 300 s, measured from the start of the request — upload *and* every stem's transcode have to fit inside it.
+  - Stems transcode one after another with synchronous `ffmpeg` calls (loudnorm is two passes), so the event loop is blocked for the whole run: other requests and Fly's `/healthz` check (5 s timeout) stall until it's done.
+  - Uploads land in `os.tmpdir()` on the root filesystem; there's no volume.
 - [x] The trimmed image: MuseScore without updater, soundfont, translations, templates, plugins; production-only `node_modules`. `mscz-smoke` and `smoke:server` still pass. 2.42 GB → 1.51 GB (arm64). Qt's own `plugins/platforms` must stay — without it even `mscore -v` fails.
 
 **Two bugs the end-to-end tests caught on the way:** the Add Song wizard saves the config and then adds the discography entry without `overwrite`, which Postgres-first turned into a 409 — the discography is built from configs, so the song is already listed; only a *different* song under the same id conflicts now. And a song rename deleted the old config (and with it the row's lyrics) before copying them across; it now copies first and deletes last.
@@ -650,14 +653,58 @@ Song prep takes minutes and shells out to native binaries. It cannot run inside 
 
 The feature most likely to matter to working bands, and confirmed as a real need.
 
-- [ ] Create/revoke UI: pick a setlist, set an expiry, get a link.
-- [ ] Grant-link resolution as its own actor kind — no account, capabilities strictly limited to reading and playing the scoped setlist.
-- [ ] Default expiry on the order of days, hard maximum enforced server-side.
-- [ ] Optional download toggle, defaulting to off.
-- [ ] Show last-used time in the UI, and support one-click revoke.
-- [ ] Guests still get a private layer keyed to their link session, so a sub can take their own notes.
+**Decided 2026-10-28 — one link per band, like Google Drive's "anyone with the link".** A first pass built a labelled, expiring link per sub; it was replaced the same day, before shipping, by this simpler model:
 
-**Exit criteria**: a sub opens a link with no account, plays Friday's setlist, and loses access when it expires or is revoked.
+| Decision | Choice | Why |
+|---|---|---|
+| How many links | **One per band.** Off, or on; **Reset** replaces it with a new one and everyone holding the old one is cut off. | Hand the same link to the whole pool of subs; Reset is the one big switch if it gets around. |
+| Who manages it | **Owner and Manager** — the `member.invite` capability. | The people who already hand out access. |
+| Copy again later | **Any time.** Members & sharing always shows the current link. | Drive-like. The cost: the token is stored as well as its hash, so a database read exposes a live link — acceptable for read-only access that Reset kills at once. A turned-off or reset link has its token erased. |
+| Expiry | **Optional.** None by default; set or clear an end date at any time without changing the link. | A tour or residency can end on its own; a standing pool of subs doesn't need it. |
+| What a guest sees | **The whole band, read-only** — every song and setlist, the same reads a Member gets. | |
+| Link format | **The band's own address**: `practiceportal.app/<band>?guest=<token>`, the token **16 letters and digits** (~95 bits). | Reads as the band's page. Short enough to read out, with no trailing punctuation for a chat app to clip; at 10,000 live links and 1,000 guesses a second, a hit would take on the order of 10¹⁴ years. Sessions and invites keep 32 random bytes — nobody types those. |
+| Setlists | **Copy Guest Link** in the Setlists menu copies the band link plus `&setlist=<slug>`, so a sub lands on Friday's set. | Same token: resetting the band link kills these too. |
+| Devices | **Any device.** Opening the link sets a cookie on that device. | Laptop at home, phone at the gig. |
+| Download toggle | **Not built.** No one has audio download yet; `grant_link.capabilities` stays `{song.read}`. | |
+| Sub's own notes | **Already there.** Personal notes live in the browser's localStorage, account or not. | |
+
+**How it works.** The link is `https://practiceportal.app/<band>?guest=<token>`. The band page sees `guest=` and, before loading anything else, calls `POST /api/guest/<token>`, which checks the link and adds the token to an httpOnly `pp_guest` cookie (a device can hold several bands' links). The page then reloads without the token, keeping any `setlist=`; the token, not the route, picks the band, so a link made before a route rename still lands right. A link that can't be opened says why, above the usual "sign in to view". The server's request log masks guest tokens, since a link may never expire. On every request the server reads that cookie and treats a live link as read access to its band. A guest isn't an `Actor`: every write route needs a signed-in user, so guests are refused writes by the rules already there. Signed-in users can hold a guest link too.
+
+**What happens to old links.** Reset and Turn off set `revoked_at` and erase the stored token; the row stays as history (the audit log points at it) and still lets the server say "turned off" instead of "not valid". An expired link isn't turned off: changing or clearing its expiry brings the same link back. Rows go only when their band is deleted.
+
+Members-only bands are where this matters; on a Public band the link is just a shortcut. Until Phase 7, a Members-only band's audio is still reachable by direct R2 URL — same caveat as today.
+
+### 10a — Schema
+- [x] Migration 0005: `grant_link.token` (nullable — erased when turned off), `created_at`, `expires_at` nullable, `scope` may be `'band'`, and a partial unique index allowing one live band link per band. `verify-db` covers it, including the second-live-link rejection.
+
+### 10b — Server
+- [x] `GET /api/bands/:bandId/guest-link` → the link (URL, expiry, expired, last opened), or `null` when off. `member.invite`.
+- [x] `POST …/guest-link` `{ expiresAt? }` — turn on, or reset. Old link revoked and new one created in one transaction; two resets at once → 409. Same hourly rate limit as invites. Audited.
+- [x] `PUT …/guest-link` `{ expiresAt }` — set or clear the expiry, same link. Audited.
+- [x] `DELETE …/guest-link` — turn off. Audited.
+- [x] `POST /api/guest/:token` (public) — check the link, set `pp_guest`, return the band. Turned off, expired or unknown → a clear message.
+- [x] `DELETE /api/guest` — leave: clear `pp_guest` on this device.
+- [x] Resolve `pp_guest` on every request; `last_used_at` written at most every five minutes.
+- [x] `/api/data` and the registry accept guest access to Members-only bands; responses to a request with `pp_guest` are `Cache-Control: private`.
+- [x] `/api/me` reports the device's guest links, signed in or not.
+- [x] Request logs mask guest tokens (`?guest=…`, `/api/guest/…`).
+
+### 10c — UI
+
+Built and type-checked; not yet used in a browser.
+
+- [x] The band page opens `?guest=<token>`, reloads without it (keeping `setlist=`), or says why it can't.
+- [x] Members & sharing → **Guest link**: Turn on; then the link with Copy, an expiry date (or never), last opened, Reset link, Turn off.
+- [x] Setlists menu → **Copy Guest Link**, for Owners and Managers, with a notice when the link is off or expired.
+- [x] A guest sees a "Guest" chip (with the expiry date, if any) and Leave in place of the account menu's band list.
+
+### 10d — Prove it
+- [x] `scripts/verify-guests.ts --url`: who may manage the link; a guest reads a Members-only band's registry entry, band, songs and setlists; one band's link opens no other band — every document kind (band, discography, config, lyrics, notes, setlist index, setlist) of a second band with its own live link and of a third that never had one refuses it (401, or 403 when signed in), as do their link, roster and write routes, the registry and `/api/me`, and a forged cookie; a guest can't write or see the link; expiry ends access and clearing it restores the same link; Reset cuts off old holders and the new link works; turning off ends access; one device holds two bands' links. Throwaway users and bands, cleaned up. **86/86** on 2026-10-28, twice, against a local server on a scratch Postgres (Docker `postgres:17`, all migrations applied) with R2 writes disabled; `verify-db`, `verify-members` and `verify-access` pass there too.
+- [x] Apply migration 0005 to Neon (`npm run db:migrate`) — done 2026-10-28.
+- [ ] Deploy.
+- [ ] By hand: turn the link on for a Members-only band, open a setlist's guest link in a private window, play a song, reset, reload.
+
+**Exit criteria**: a sub opens a link with no account, plays Friday's setlist, and loses access when the link is reset, turned off, or expires.
 
 ---
 
