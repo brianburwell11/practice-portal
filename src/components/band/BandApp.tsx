@@ -5,8 +5,9 @@ import { useSongStore } from '../../store/songStore';
 import { useSetlistStore } from '../../store/setlistStore';
 import { bandConfigSchema, bandsManifestSchema } from '../../config/schema';
 import { dataUrl } from '../../utils/url';
-import { signInHref, useSessionStore } from '../../store/sessionStore';
-import { AccountMenu, GoogleMark } from '../account/AccountMenu';
+import { useSessionStore } from '../../store/sessionStore';
+import { AccountMenu } from '../account/AccountMenu';
+import { RequestAccess } from '../account/RequestAccess';
 
 /**
  * A band's guest link is the band's own address plus `?guest=<token>`. Open it
@@ -121,7 +122,7 @@ export function BandApp() {
   }, [currentBand]);
 
   if (error) {
-    return <BandUnavailable error={error} guestError={guestError} />;
+    return <BandUnavailable slug={bandSlug ?? ''} error={error} guestError={guestError} />;
   }
 
   if (!currentBand || guestPending) {
@@ -139,7 +140,7 @@ export function BandApp() {
  * Where accounts exist, a band missing from the registry may be Members-only
  * rather than nonexistent — offer sign-in instead of a bare "not found".
  */
-function BandUnavailable({ error, guestError }: { error: string; guestError: string | null }) {
+function BandUnavailable({ slug, error, guestError }: { slug: string; error: string; guestError: string | null }) {
   const { available, loaded, user, load } = useSessionStore();
   useEffect(() => {
     load();
@@ -154,26 +155,16 @@ function BandUnavailable({ error, guestError }: { error: string; guestError: str
       <div className="absolute top-4 right-4"><AccountMenu /></div>
       <div className="max-w-sm text-center space-y-4">
         {guestError && <p className="text-sm text-amber-300">{guestError}</p>}
-        {user ? (
-          <>
-            <h1 className="text-xl font-semibold">Band not found</h1>
-            <p className="text-sm text-gray-400">
-              It doesn’t exist, or it’s Members only and {user.email} isn’t a member. Ask the band for an invite link.
-            </p>
-          </>
-        ) : (
-          <>
-            <h1 className="text-xl font-semibold">This band may be Members only</h1>
-            <p className="text-sm text-gray-400">Sign in to see it if you’re a member.</p>
-            <a
-              href={signInHref()}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white text-gray-800 font-medium hover:bg-gray-100"
-            >
-              <GoogleMark />
-              Sign in with Google
-            </a>
-          </>
-        )}
+        <RequestAccess
+          slug={slug}
+          user={user}
+          fallback={
+            <>
+              <h1 className="text-xl font-semibold">Band not found</h1>
+              <p className="text-sm text-gray-400">There’s no band at this address.</p>
+            </>
+          }
+        />
       </div>
     </div>
   );

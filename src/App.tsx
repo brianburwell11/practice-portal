@@ -93,6 +93,19 @@ export default function App() {
   const myCaps = useSessionStore((s) => s.bands.find((b) => b.id === currentBand?.id)?.capabilities);
   const canManage = !!myCaps?.some((c) => ADMIN_CAPABILITIES.has(c));
   const canEditContent = !!myCaps?.includes('song.content.write');
+  const canInvite = !!myCaps?.includes('member.invite');
+
+  // An access-request email links here with ?requests=1: Members & Sharing
+  // opens once the session says you may, and the address is tidied.
+  const [fromRequestsLink, setFromRequestsLink] = useState(() => new URLSearchParams(window.location.search).has('requests'));
+  const membersOpen = showMembersModal || (fromRequestsLink && canInvite);
+  useEffect(() => {
+    if (!fromRequestsLink || !canInvite) return;
+    const params = new URLSearchParams(window.location.search);
+    params.delete('requests');
+    const qs = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+  }, [fromRequestsLink, canInvite]);
   const [showDeleteBandModal, setShowDeleteBandModal] = useState(false);
   // Mobile-only toggle: shows the master volume/speed sliders + mixer panel below the lyrics.
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
@@ -177,8 +190,12 @@ export default function App() {
             <AccountMenu bandId={currentBand?.id} />
           </div>
         </header>
-        {showMembersModal && currentBand && (
-          <MembersModal bandId={currentBand.id} bandName={currentBand.name} onClose={() => setShowMembersModal(false)} />
+        {membersOpen && currentBand && (
+          <MembersModal
+            bandId={currentBand.id}
+            bandName={currentBand.name}
+            onClose={() => { setShowMembersModal(false); setFromRequestsLink(false); }}
+          />
         )}
 
         {/* Admin toolbar: menus for what you may do here, plus nav links */}

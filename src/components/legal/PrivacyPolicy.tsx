@@ -29,6 +29,7 @@ export function PrivacyPolicy() {
       <Section title="What we collect">
         <p><span className="text-gray-100">When you sign in with Google.</span> Your Google account ID, email address, name and profile photo address. We ask Google only for basic profile access (“openid”, “email” and “profile”); we can’t see your Gmail, Drive, contacts or anything else in your Google account.</p>
         <p><span className="text-gray-100">Band membership.</span> Which bands you belong to, your role in each (Owner, Manager, Editor or Member) and when you joined. If you create an invite link, we keep its role, expiry date and — if you lock it to one person — that person’s email address. If a band turns on its guest link, we keep the link, its expiry date if it has one, and when it was last opened — not who opened it.</p>
+        <p><span className="text-gray-100">Requests to join.</span> If you ask to join a Members-only band, we keep your request, the message you wrote (if any), and whether it was approved or declined.</p>
         <p><span className="text-gray-100">What bands add.</span> Audio, sheet music, lyrics, band notes, setlists, song details, YouTube links, and a band’s name, logo, colors and website. We record who added a song, and keep a log of changes — who did what, and when — so a band can see its own history.</p>
         <p><span className="text-gray-100">Server logs.</span> Like most websites, our server records each request it answers: the page or file asked for, the time, and whether it succeeded. Our hosting provider may also record your IP address.</p>
         <p><span className="text-gray-100">Kept only on your device.</span> Personal notes, your mixer settings and a few display preferences are saved in your browser’s storage. They never leave your device and we never see them. Clearing your browser’s site data deletes them.</p>
@@ -49,6 +50,7 @@ export function PrivacyPolicy() {
           <li>To sign you in and keep you signed in.</li>
           <li>To show you the bands you belong to and let you do what your role allows.</li>
           <li>To show band members who else is in the band (Owners and Managers see members’ names and email addresses).</li>
+          <li>To pass on a request to join: the band’s Owner gets an email with your name, email address and message, and can reply to you directly. Owners and Managers see it in the app too. We email you when the band answers.</li>
           <li>To keep the site running and secure — for example, to investigate errors or misuse.</li>
         </ul>
         <p>We don’t use your information for advertising, and we don’t sell it.</p>
@@ -71,6 +73,7 @@ export function PrivacyPolicy() {
           <li><span className="text-gray-100">Neon</span> — hosts our database (accounts, memberships, band and song data).</li>
           <li><span className="text-gray-100">Cloudflare</span> — stores uploaded files and runs our domain’s DNS.</li>
           <li><span className="text-gray-100">Google</span> — provides “Sign in with Google”, and the YouTube player for songs with videos.</li>
+          <li><span className="text-gray-100">Resend</span> — sends the site’s emails, such as requests to join a band and their answers.</li>
         </ul>
         <p>These services store data in the United States.</p>
       </Section>
@@ -81,6 +84,7 @@ export function PrivacyPolicy() {
           <li>Sign-in sessions: 30 days at most; signing out ends yours immediately.</li>
           <li>Invite links: they stop working after 7 days or once used; the record of them stays with the band’s history.</li>
           <li>Guest links: they work until the band resets or turns them off, or until an expiry date the band sets. After that the link itself is erased; a record that it existed stays with the band’s history.</li>
+          <li>Requests to join: kept with the band’s history after they’re answered. They’re deleted with your account or the band.</li>
           <li>Band content and its change history: as long as the band keeps it.</li>
           <li>Server logs: kept only briefly by our hosting provider.</li>
         </ul>

@@ -18,6 +18,17 @@ interface PendingInvite {
   expiresAt: string;
 }
 
+/** Someone signed in asking to join. */
+interface AccessRequest {
+  id: string;
+  userId: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  message: string | null;
+  createdAt: string;
+}
+
 /** The band's "anyone with the link" guest link, as the server reports it. */
 interface GuestLink {
   url: string;
@@ -82,6 +93,7 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
   const [newLink, setNewLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const [requests, setRequests] = useState<AccessRequest[]>([]);
   /** Undefined while loading; null when the link is off. */
   const [guestLink, setGuestLink] = useState<GuestLink | null | undefined>(undefined);
   const [guestCopied, setGuestCopied] = useState(false);
@@ -90,9 +102,12 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
 
   const refresh = useCallback(async () => {
     try {
-      const [members, guest] = await Promise.all([api('GET', `${base}/members`), api('GET', `${base}/guest-link`)]);
+      const [members, guest, pending] = await Promise.all([
+        api('GET', `${base}/members`), api('GET', `${base}/guest-link`), api('GET', `${base}/access-requests`),
+      ]);
       setRoster(members);
       setGuestLink(guest.link);
+      setRequests(pending.requests);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -173,6 +188,44 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
 
         {error && (
           <div className="bg-red-900/30 border border-red-700 rounded p-3 text-sm text-red-300">{error}</div>
+        )}
+
+        {/* --- Access requests */}
+        {requests.length > 0 && (
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-300">Asking to join</h3>
+            <ul className="divide-y divide-gray-800">
+              {requests.map((r) => (
+                <li key={r.id} className="py-2 space-y-1">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={r.name ?? r.email} url={r.avatarUrl} size={28} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm truncate">{r.name ?? r.email}</div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {r.name && `${r.email} · `}{new Date(r.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => run(() => api('POST', `${base}/access-requests/${r.id}/approve`))}
+                      disabled={busy}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-xs font-medium text-white"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => run(() => api('POST', `${base}/access-requests/${r.id}/decline`))}
+                      disabled={busy}
+                      className="text-xs text-red-400 hover:text-red-300"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                  {r.message && <p className="text-sm text-gray-300 whitespace-pre-wrap pl-10">{r.message}</p>}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-gray-500">Approving adds them as a Member. They get an email either way.</p>
+          </section>
         )}
 
         {/* --- Invite */}
