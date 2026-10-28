@@ -734,7 +734,7 @@ A signed-in non-member who finds a Members-only band can ask to join, instead of
 
 **Dev reads through the API now.** `.env` sets `VITE_DATA_SOURCE=api`, so `npm run dev` reads bands from Postgres like production. Without it, localhost reads the R2 copies, where no band is Members-only, and none of the above can be tried.
 - [x] Apply migration 0006 to Neon (`npm run db:migrate`) — done 2026-10-28.
-- [ ] Deploy.
+- [x] Deploy. Live 2026-10-28: `smoke:server --url https://practiceportal.app` passes; `/api/access/dirtychaignv` signed out gives Dirty Chai's name and logo and nothing else; an unknown address is 404; asking signed out is 401.
 - [ ] By hand: from a second Google account, ask to join a Members-only band; check the Owner's email (Reply-To, button); approve; the second account gets the email and the band.
 
 
