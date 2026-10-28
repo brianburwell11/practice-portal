@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RESERVED_ROUTES, isReservedRoute } from '../config/reservedRoutes';
 import { useBandStore } from '../store/bandStore';
 import { dedupeSlug } from '../utils/dedupeSlug';
 import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
@@ -77,12 +78,16 @@ export function EditBandModal({ band, onClose }: Props) {
 
   const takenRoutes = useMemo(
     () =>
-      new Set(
-        (bandsManifest?.bands ?? []).filter((b) => b.id !== band.id).map((b) => b.route),
-      ),
+      new Set([
+        ...(bandsManifest?.bands ?? []).filter((b) => b.id !== band.id).map((b) => b.route),
+        ...RESERVED_ROUTES,
+      ]),
     [bandsManifest, band.id],
   );
-  const routeCollides = !!draft.route && takenRoutes.has(nameToSlug(draft.route));
+  // A band already on a reserved route keeps it; it just can't move to one.
+  const routeReserved = !!draft.route && draft.route !== band.route && isReservedRoute(draft.route);
+  const routeCollides = !!draft.route && draft.route !== band.route
+    && (routeReserved || takenRoutes.has(nameToSlug(draft.route)));
 
   const updateDraft = (updates: Partial<BandConfig>) => {
     setDraft((d) => ({ ...d, ...updates }));
@@ -155,6 +160,10 @@ export function EditBandModal({ band, onClose }: Props) {
     );
     if (dupeRoute) {
       setError(`Route "${draft.route}" is already taken`);
+      return;
+    }
+    if (draft.route !== band.route && isReservedRoute(draft.route)) {
+      setError(`Route "${draft.route}" is reserved for the site`);
       return;
     }
 
@@ -258,7 +267,9 @@ export function EditBandModal({ band, onClose }: Props) {
               />
             </div>
             {routeCollides && (
-              <p className="text-xs text-red-400">This route is already taken by another band.</p>
+              <p className="text-xs text-red-400">
+                {routeReserved ? 'This route is reserved for the site.' : 'This route is already taken by another band.'}
+              </p>
             )}
           </label>
         </div>

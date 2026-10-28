@@ -9,6 +9,9 @@
  * write public. Also pins how a song config save maps what changed to the
  * capabilities it needs.
  */
+import fs from 'node:fs';
+import dotenv from 'dotenv';
+import { IN_USE_ROUTES, isReservedRoute } from '../src/config/reservedRoutes';
 import { CAPABILITIES, type Capability } from '../server/db/capabilities';
 import { configSaveCapabilities, isCapabilityAccess } from '../server/core/access';
 import { routes } from '../server/core/routes';
@@ -71,6 +74,33 @@ check('videos added → content', same(caps({ ...base, videos: [{ id: 'v' }] }),
 check('title + tapMap → content and timing', same(caps({ ...base, title: 'X', tapMap: [] }), ['song.content.write', 'song.timing.write']));
 check('key order alone is not a change', same(caps(JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(base).reverse())))), ['song.content.write']));
 check('removing a field counts', same(caps(Object.fromEntries(Object.entries(base).filter(([k]) => k !== 'tapMap'))), ['song.timing.write']));
+
+console.log('\n--- reserved band routes');
+// Every top-level path the site serves must be reserved, or a band could take it.
+const spaPaths = [...fs.readFileSync('src/main.tsx', 'utf8').matchAll(/path="\/([^/":]+)/g)].map((m) => m[1]);
+const serverPaths = [...fs.readFileSync('server/main.ts', 'utf8').matchAll(/pathname === '\/([^/']+)'/g)].map((m) => m[1]);
+const publicFiles = fs.readdirSync('public');
+for (const p of new Set([...spaPaths, ...serverPaths, ...publicFiles, ...IN_USE_ROUTES])) {
+  check(`/${p} is reserved`, isReservedRoute(p));
+}
+check('the SPA router was actually read', spaPaths.includes('invite') && spaPaths.includes('admin'), spaPaths.join(','));
+check('matching ignores case', isReservedRoute('API') && isReservedRoute(' Privacy '));
+check('dot- and underscore-prefixed routes are reserved', isReservedRoute('.well-known') && isReservedRoute('_next'));
+check('a dotted band route is fine', !isReservedRoute('zenzi.music'));
+check('an empty route is not "reserved" (it\'s invalid, separately)', !isReservedRoute(''));
+
+// …and no band already uses one. Reads the live band list when it can.
+dotenv.config({ quiet: true } as dotenv.DotenvConfigOptions);
+const r2 = (process.env.VITE_R2_PUBLIC_URL ?? process.env.R2_PUBLIC_URL)?.replace(/\/$/, '');
+const registry = r2
+  ? await fetch(`${r2}/registry.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null) as { bands: { route: string }[] } | null
+  : null;
+if (registry) {
+  const clash = registry.bands.map((b) => b.route).filter(isReservedRoute);
+  check(`no current band route is reserved (${registry.bands.length} bands)`, clash.length === 0, clash.join(', '));
+} else {
+  console.log('skip  current band routes (no R2 URL or offline)');
+}
 
 console.log(`\n===== ${failures} failure(s) =====`);
 process.exit(failures ? 1 : 0);

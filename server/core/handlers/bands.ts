@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { isReservedRoute } from '../../../src/config/reservedRoutes';
 import { bandConfigSchema } from '../../../src/config/schema';
 import { HttpError, json, ok } from '../http';
-import { r2ListKeys, r2PublicUrl, r2PutFile, r2StorageBytes } from '../r2';
+import { isNoSuchKey, r2ListKeys, r2PublicUrl, r2PutFile, r2StorageBytes } from '../r2';
 import { deleteObject, readJson, writeJson } from '../store';
 import type { CoreRequest, CoreResponse } from '../types';
 
@@ -85,6 +86,20 @@ export async function putBand(req: CoreRequest): Promise<CoreResponse> {
 
   if (validated.id !== bandId) {
     throw new HttpError(400, `URL band id "${bandId}" doesn't match body id "${validated.id}"`);
+  }
+
+  // A route the site keeps for its own pages can't be claimed — by a new
+  // band, or by renaming one. A band already sitting on one keeps it.
+  if (isReservedRoute(validated.route)) {
+    let currentRoute: string | undefined;
+    try {
+      currentRoute = (await readJson<{ route: string }>(`${bandId}/band.json`)).route;
+    } catch (err) {
+      if (!isNoSuchKey(err)) throw err;
+    }
+    if (currentRoute !== validated.route) {
+      throw new HttpError(400, `"${validated.route}" is reserved for the site — pick another route`);
+    }
   }
 
   // 1. Write the authoritative per-band file.

@@ -138,6 +138,9 @@ async function main(): Promise<void> {
     const band = { id: BAND, name: 'Renamed Band', route: BAND, colors: JSON.parse(colors) };
     check('editor is refused band settings', (await call(editor, 'PUT', `/api/bands/${BAND}`, band)).status === 403);
     check('owner changes band settings', (await call(owner, 'PUT', `/api/bands/${BAND}`, band)).status === 200);
+    const reserved = await call(owner, 'PUT', `/api/bands/${BAND}`, { ...band, route: 'Privacy' });
+    check('a reserved route is refused, any case', reserved.status === 400 && String(reserved.json.error).includes('reserved'), JSON.stringify(reserved.json));
+    check('saving with the band’s own route still works', (await call(owner, 'PUT', `/api/bands/${BAND}`, band)).status === 200);
     check('a non-admin can’t create a band', (await call(owner, 'PUT', `/api/bands/${TAG}-new`, { ...band, id: `${TAG}-new`, route: `${TAG}-new` })).status === 403);
 
     console.log('\n--- one band can’t reach another');

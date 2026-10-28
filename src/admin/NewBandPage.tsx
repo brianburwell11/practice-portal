@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RESERVED_ROUTES, isReservedRoute } from '../config/reservedRoutes';
 import { useBandStore } from '../store/bandStore';
 import { bandsManifestSchema } from '../config/schema';
 import { dataUrl } from '../utils/url';
@@ -69,8 +70,10 @@ export default function NewBandPage() {
     setDraft((d) => ({ ...d, colors: { ...d.colors, [key]: value } }));
   };
 
-  const takenRoutes = useMemo(() => new Set(bands.map((b) => b.route)), [bands]);
-  const routeCollides = routeDirty && !!draft.route && takenRoutes.has(nameToSlug(draft.route));
+  // Reserved names count as taken, so the suggested route skips them too.
+  const takenRoutes = useMemo(() => new Set([...bands.map((b) => b.route), ...RESERVED_ROUTES]), [bands]);
+  const routeReserved = routeDirty && !!draft.route && isReservedRoute(draft.route);
+  const routeCollides = routeDirty && !!draft.route && (routeReserved || takenRoutes.has(nameToSlug(draft.route)));
 
   const handleNameChange = (name: string) => {
     const updates: Partial<BandConfig> = { name };
@@ -113,6 +116,10 @@ export default function NewBandPage() {
     }
     if (bands.some((b) => b.route === draft.route)) {
       setError(`Route "${draft.route}" is already taken`);
+      return;
+    }
+    if (isReservedRoute(draft.route)) {
+      setError(`Route "${draft.route}" is reserved for the site`);
       return;
     }
 
@@ -215,7 +222,9 @@ export default function NewBandPage() {
             />
           </div>
           {routeCollides && (
-            <p className="mt-1 text-xs text-red-400">This route is already taken by another band.</p>
+            <p className="mt-1 text-xs text-red-400">
+              {routeReserved ? 'This route is reserved for the site.' : 'This route is already taken by another band.'}
+            </p>
           )}
         </label>
 
