@@ -131,7 +131,7 @@ check('all migrations applied', true);
 const applied = await conn.query<{ hash: string }>(
   'select hash from drizzle.__drizzle_migrations order by created_at',
 );
-check('migration journal has 5 entries', applied.length === 5, `found ${applied.length}`);
+check('migration journal has 6 entries', applied.length === 6, `found ${applied.length}`);
 
 // Re-running must be a no-op, not an error — this is what a redeploy does.
 await conn.migrate('./server/db/migrations');
@@ -155,10 +155,11 @@ check('no unexpected tables', tables.length === expected.length, tables.join(', 
 const columns = new Set((await conn.query<{ c: string }>(
   "select table_name || '.' || column_name as c from information_schema.columns where table_schema='public'",
 )).map((r) => r.c));
-// ...and the Phase 5 account columns (migration 0004).
+// ...the Phase 5 account columns (migration 0004), and Phase 10's guest links (0005).
 for (const c of [
   'band.legacy_id', 'band.position', 'setlist.position', 'song.lyrics', 'song.notes',
   'app_user.google_sub', 'app_user.avatar_url', 'invite.accepted_by', 'invite.revoked_at', 'invite.created_at',
+  'grant_link.token', 'grant_link.created_at',
 ]) {
   check(`column ${c}`, columns.has(c));
 }
@@ -246,7 +247,7 @@ if (occupied.length) {
       "update band set visibility='unlisted'", /band_visibility_check/i);
     await rejects('grant_link.scope check', conn,
       `insert into grant_link (band_id, scope, target_id, token_hash, expires_at, created_by) values
-         ('33333333-3333-3333-3333-333333333333','band','33333333-3333-3333-3333-333333333333','h1',now(),
+         ('33333333-3333-3333-3333-333333333333','org','33333333-3333-3333-3333-333333333333','h1',now(),
           '11111111-1111-1111-1111-111111111111')`,
       /grant_link_scope_check/i);
     await rejects('audit_log.actor_kind check', conn,
@@ -271,6 +272,19 @@ if (occupied.length) {
        values ('33333333-3333-3333-3333-333333333333','setlist','44444444-4444-4444-4444-444444444444','h2',
                now() + interval '7 days','11111111-1111-1111-1111-111111111111')
        returning capabilities`))[0].capabilities.join(',') === 'song.read');
+
+    // Phase 10: one live "anyone with the link" link per band, expiry optional.
+    const bandLink = (hash: string) => `insert into grant_link (band_id, scope, target_id, token, token_hash, created_by)
+       values ('33333333-3333-3333-3333-333333333333','band','33333333-3333-3333-3333-333333333333','t-${hash}','${hash}',
+               '11111111-1111-1111-1111-111111111111')`;
+    await conn.exec(bandLink('h3'));
+    check('a band link needs no expiry', (await conn.query<{ n: number }>(
+      "select count(*)::int n from grant_link where token_hash='h3' and expires_at is null"))[0].n === 1);
+    await rejects('only one live band link per band', conn, bandLink('h4'), /grant_link_one_live_band_link|unique|duplicate/i);
+    await conn.exec("update grant_link set revoked_at = now() where token_hash='h3'");
+    await conn.exec(bandLink('h5'));
+    check('a revoked band link makes room for its replacement', (await conn.query<{ n: number }>(
+      "select count(*)::int n from grant_link where scope='band'"))[0].n === 2);
 
     // Phase 5: one account per Google identity; sessions die with their user.
     await conn.exec(`update app_user set google_sub='g-owner' where id='11111111-1111-1111-1111-111111111111'`);

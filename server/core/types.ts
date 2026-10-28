@@ -40,6 +40,11 @@ export interface CoreRequest {
   origin: string;
   /** The signed-in user, or undefined for an anonymous request. */
   actor?: Actor;
+  /**
+   * Live guest links this device holds (`pp_guest`), signed in or not. Read
+   * access to their bands only — never consulted by a write.
+   */
+  guests?: GuestGrant[];
   /** Parsed JSON body. Present when the route declares `body: 'json'`. */
   body?: unknown;
   /** Uploads. Present when the route declares `body: 'multipart'`. */
@@ -63,7 +68,7 @@ export interface CoreResponse {
 export type CoreHandler = (req: CoreRequest) => Promise<CoreResponse>;
 
 /** Everything known about a request before its body has been read. */
-export type RouteTarget = Pick<CoreRequest, 'params' | 'query' | 'cookies' | 'origin' | 'actor'>;
+export type RouteTarget = Pick<CoreRequest, 'params' | 'query' | 'cookies' | 'origin' | 'actor' | 'guests'>;
 
 /** The parts of a `CoreRequest` that only exist once the body is read. */
 export type RequestBody = Pick<CoreRequest, 'body' | 'files' | 'tmpDir'>;
@@ -71,6 +76,7 @@ export type RequestBody = Pick<CoreRequest, 'body' | 'files' | 'tmpDir'>;
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 import type { Access } from './access';
+import type { GuestGrant } from './auth/guests';
 
 export interface RouteDef {
   /**

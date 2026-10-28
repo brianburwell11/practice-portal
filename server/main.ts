@@ -67,11 +67,16 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
   handleStatic(req, res);
 }
 
+/** A request path fit for the logs: guest-link tokens don't expire on their own, so mask them. */
+function loggable(url = ''): string {
+  return url.replace(/([?&]guest=)[^&#]+/, '$1…').replace(/^(\/api\/guest\/)[^/?#]+/, '$1…');
+}
+
 const server = http.createServer((req, res) => {
   const started = performance.now();
   res.on('finish', () => {
     const ms = (performance.now() - started).toFixed(1);
-    console.log(`${req.method} ${req.url} ${res.statusCode} ${ms}ms`);
+    console.log(`${req.method} ${loggable(req.url)} ${res.statusCode} ${ms}ms`);
   });
 
   handle(req, res).catch((err) => {

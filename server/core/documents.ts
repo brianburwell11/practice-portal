@@ -20,7 +20,7 @@
  * Bands are addressed by `band.legacy_id` and songs by `song.media_prefix`,
  * because every R2 key is built from those ids and media doesn't move.
  */
-import { and, asc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { db as defaultDb } from '../db/client';
 import * as schema from '../db/schema';
@@ -72,21 +72,32 @@ function toKey(url: string): string {
 type BandRow = typeof schema.band.$inferSelect;
 
 /**
- * A live band the viewer may read: any Public band, or a Members-only band
- * they own or belong to. A Members-only band refuses everyone else — 401 when
- * signed out, so the SPA can offer sign-in; 403 when signed in but not a
- * member. Unknown bands are null (404), as in R2.
+ * Who is reading: the signed-in user, if any, and the bands this device holds
+ * live guest links to (`band.id` uuids).
  */
+export interface Viewer {
+  userId?: string;
+  guestBandIds?: string[];
+}
+
 /** Skip the visibility check: the caller is already authorized for the band. */
 const UNCHECKED = Symbol('unchecked');
 
-async function findBand(d: Db, legacyId: string, viewerId: string | undefined | typeof UNCHECKED): Promise<BandRow | null> {
+/**
+ * A live band the viewer may read: any Public band, or a Members-only band
+ * they own, belong to, or hold a guest link for. A Members-only band refuses
+ * everyone else — 401 when signed out, so the SPA can offer sign-in; 403 when
+ * signed in but not a member. Unknown bands are null (404), as in R2.
+ */
+async function findBand(d: Db, legacyId: string, viewer: Viewer | typeof UNCHECKED): Promise<BandRow | null> {
   const [row] = await d.select().from(schema.band).where(and(
     eq(schema.band.legacyId, legacyId),
     isNull(schema.band.deletedAt),
   ));
   if (!row) return null;
-  if (row.visibility === 'public' || viewerId === UNCHECKED) return row;
+  if (row.visibility === 'public' || viewer === UNCHECKED) return row;
+  if (viewer.guestBandIds?.includes(row.id)) return row;
+  const viewerId = viewer.userId;
   if (!viewerId) throw new HttpError(401, 'Sign in to view this band');
   if (row.ownerUserId === viewerId) return row;
   const [m] = await d.select({ role: schema.membership.role }).from(schema.membership)
@@ -109,15 +120,15 @@ const setlistById = (bandId: string, id: string) => and(liveSetlists(bandId), sq
 
 /**
  * The document at `key`, built from Postgres — or null where R2 would 404.
- * An unknown or malformed key is a 404 too. `viewerId` is the signed-in
- * user, if any: Members-only bands are visible to their members alone.
+ * An unknown or malformed key is a 404 too. Members-only bands are visible
+ * to their members and to guest-link holders alone.
  */
 export async function readDocument(
   key: string,
   d: Db = defaultDb() as unknown as Db,
-  viewerId?: string,
+  viewer: Viewer = {},
 ): Promise<unknown | null> {
-  return read(key, d, viewerId);
+  return read(key, d, viewer);
 }
 
 /**
@@ -129,22 +140,24 @@ export async function readDocumentUnchecked(key: string, d: Db): Promise<unknown
   return read(key, d, UNCHECKED);
 }
 
-async function read(key: string, d: Db, viewerId: string | undefined | typeof UNCHECKED): Promise<unknown | null> {
+async function read(key: string, d: Db, viewer: Viewer | typeof UNCHECKED): Promise<unknown | null> {
   const k = parseKey(key);
   if (!k) return null;
 
   if (k.kind === 'registry') {
-    // Public bands, plus Members-only bands the viewer owns or belongs to.
-    const visible = viewerId === UNCHECKED
+    // Public bands, plus Members-only bands the viewer owns, belongs to, or
+    // holds a guest link for.
+    const visible = viewer === UNCHECKED
       ? undefined
-      : viewerId
-      ? or(
+      : or(
         eq(schema.band.visibility, 'public'),
-        eq(schema.band.ownerUserId, viewerId),
-        sql`exists (select 1 from ${schema.membership} where ${schema.membership.bandId} = ${schema.band.id}
-                    and ${schema.membership.userId} = ${viewerId})`,
-      )
-      : eq(schema.band.visibility, 'public');
+        ...(viewer.userId ? [
+          eq(schema.band.ownerUserId, viewer.userId),
+          sql`exists (select 1 from ${schema.membership} where ${schema.membership.bandId} = ${schema.band.id}
+                      and ${schema.membership.userId} = ${viewer.userId})`,
+        ] : []),
+        ...(viewer.guestBandIds?.length ? [inArray(schema.band.id, viewer.guestBandIds)] : []),
+      );
     const bands = await d.select().from(schema.band)
       .where(and(visible, isNull(schema.band.deletedAt), sql`${schema.band.legacyId} is not null`))
       .orderBy(asc(schema.band.position), asc(schema.band.createdAt));
@@ -159,7 +172,7 @@ async function read(key: string, d: Db, viewerId: string | undefined | typeof UN
     };
   }
 
-  const band = await findBand(d, k.band, viewerId);
+  const band = await findBand(d, k.band, viewer);
   if (!band) return null;
 
   switch (k.kind) {

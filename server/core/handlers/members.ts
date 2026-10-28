@@ -22,23 +22,26 @@ import type { Actor, CoreRequest, CoreResponse } from '../types';
 
 export const INVITE_TTL_DAYS = 7;
 
-/** At most this many invites per user per hour — links are cheap to mint and to spray. */
+/**
+ * At most this many invites and guest links, together, per user per hour —
+ * links are cheap to mint and to spray.
+ */
 const INVITE_RATE = { max: 20, windowMs: 60 * 60 * 1000 };
 const recentInvites = new Map<string, number[]>();
 
-function rateLimitInvites(userId: string): void {
+export function rateLimitInvites(userId: string): void {
   const now = Date.now();
   const recent = (recentInvites.get(userId) ?? []).filter((t) => now - t < INVITE_RATE.windowMs);
   if (recent.length >= INVITE_RATE.max) {
-    throw new HttpError(429, 'Too many invites in the last hour — try again later');
+    throw new HttpError(429, 'Too many links in the last hour — try again later');
   }
   recent.push(now);
   recentInvites.set(userId, recent);
 }
 
-type Tx = Parameters<Parameters<ReturnType<typeof db>['transaction']>[0]>[0];
+export type Tx = Parameters<Parameters<ReturnType<typeof db>['transaction']>[0]>[0];
 
-async function audit(tx: Tx, band: BandRef, actor: Actor, action: string, target: string, diff?: unknown): Promise<void> {
+export async function audit(tx: Tx, band: BandRef, actor: Actor, action: string, target: string, diff?: unknown): Promise<void> {
   await tx.insert(schema.auditLog).values({
     bandId: band.id, actorId: actor.userId, actorKind: 'user', action, target, diff: diff ?? null,
   });
@@ -274,7 +277,7 @@ export async function acceptInvite(req: CoreRequest): Promise<CoreResponse> {
     }
 
     const [band] = await tx.select().from(schema.band).where(eq(schema.band.id, invite.bandId));
-    const ref: BandRef = { id: band.id, legacyId: band.legacyId, name: band.name, ownerUserId: band.ownerUserId, visibility: band.visibility };
+    const ref: BandRef = { id: band.id, legacyId: band.legacyId, slug: band.slug, name: band.name, ownerUserId: band.ownerUserId, visibility: band.visibility };
     const isOwner = band.ownerUserId === actor.userId;
     const [existing] = await tx.select({ role: schema.membership.role }).from(schema.membership)
       .where(and(eq(schema.membership.bandId, band.id), eq(schema.membership.userId, actor.userId)));

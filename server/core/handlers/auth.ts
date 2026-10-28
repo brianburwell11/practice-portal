@@ -4,6 +4,7 @@ import { db } from '../../db/client';
 import * as schema from '../../db/schema';
 import { clearCookie, setCookie } from '../auth/cookies';
 import { beginSignIn, finishSignIn, type GoogleIdentity, type PendingSignIn } from '../auth/google';
+import { guestView } from '../auth/guests';
 import { createSession, deleteSession, SESSION_COOKIE, SESSION_TTL_SECONDS } from '../auth/sessions';
 import { HttpError, json, ok } from '../http';
 import type { CoreRequest, CoreResponse } from '../types';
@@ -117,7 +118,9 @@ export async function logout(req: CoreRequest): Promise<CoreResponse> {
 export async function me(req: CoreRequest): Promise<CoreResponse> {
   // Lets the SPA hide the sign-in button on a server without Google configured.
   const signInEnabled = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-  if (!req.actor) return json({ signInEnabled, user: null, bands: [] });
+  // Guest links this device holds, signed in or not.
+  const guest = (req.guests ?? []).map(guestView);
+  if (!req.actor) return json({ signInEnabled, user: null, bands: [], guest });
   const { userId } = req.actor;
   const [user] = await db().select({
     id: schema.appUser.id,
@@ -156,6 +159,7 @@ export async function me(req: CoreRequest): Promise<CoreResponse> {
     user,
     platformAdmin: isPlatformAdmin(req.actor),
     bands: bands.map((b) => ({ ...b, capabilities: (capsByRole.get(b.role) ?? []).sort() })),
+    guest,
   });
 }
 

@@ -19,6 +19,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -233,8 +234,12 @@ export const invite = pgTable('invite', {
 ]);
 
 /**
- * Guest access for subs and deps: scoped to a setlist, time-boxed,
- * individually revocable, consumes no seat, needs no account.
+ * Guest access for subs and deps: needs no account, consumes no seat.
+ *
+ * Phase 10 uses `scope = 'band'`: one "anyone with the link" link per band,
+ * read-only, optionally expiring, replaced by Reset and ended by turning it
+ * off (`revoked_at`). Owners and Managers can copy it again at any time, so
+ * the token is stored as well as its hash; lookups go by the hash.
  *
  * `targetId` is polymorphic on `scope`, so it carries no foreign key.
  */
@@ -244,14 +249,20 @@ export const grantLink = pgTable('grant_link', {
   scope: text('scope').notNull(),
   targetId: uuid('target_id').notNull(),
   capabilities: text('capabilities').array().notNull().default(sql`'{song.read}'`),
+  /** The link's secret, kept so the link can be shown again. Revoked links clear it. */
+  token: text('token'),
   tokenHash: text('token_hash').notNull().unique(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  /** Null: no expiry — it lasts until reset or turned off. */
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdBy: uuid('created_by').notNull().references(() => appUser.id),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  createdAt: createdAt(),
 }, (t) => [
-  check('grant_link_scope_check', sql`${t.scope} in ('setlist','song')`),
+  check('grant_link_scope_check', sql`${t.scope} in ('band','setlist','song')`),
   index('grant_link_band_idx').on(t.bandId),
+  // At most one live band link: Reset revokes the old one in the same transaction.
+  uniqueIndex('grant_link_one_live_band_link').on(t.bandId).where(sql`${t.scope} = 'band' and ${t.revokedAt} is null`),
 ]);
 
 export const auditLog = pgTable('audit_log', {

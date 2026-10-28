@@ -16,6 +16,8 @@ import type { Actor } from '../types';
 export interface BandRef {
   id: string;
   legacyId: string | null;
+  /** The band's route — its address on the site. */
+  slug: string;
   name: string;
   ownerUserId: string;
   visibility: string;
@@ -26,6 +28,7 @@ export async function bandByLegacyId(legacyId: string): Promise<BandRef> {
   const [band] = await db().select({
     id: schema.band.id,
     legacyId: schema.band.legacyId,
+    slug: schema.band.slug,
     name: schema.band.name,
     ownerUserId: schema.band.ownerUserId,
     visibility: schema.band.visibility,

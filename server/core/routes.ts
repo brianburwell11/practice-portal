@@ -25,6 +25,14 @@ import {
 import { googleCallback, googleStart, logout, me } from './handlers/auth';
 import { readData } from './handlers/data';
 import {
+  getGuestLink,
+  leaveGuest,
+  openGuestLink,
+  resetGuestLink,
+  setGuestLinkExpiry,
+  turnOffGuestLink,
+} from './handlers/guests';
+import {
   acceptInvite,
   createInvite,
   listMembers,
@@ -133,6 +141,59 @@ export const routes: RouteDef[] = [
     method: 'POST',
     pattern: /^\/api\/invites\/(?<token>[A-Za-z0-9_-]+)\/accept$/,
     handler: acceptInvite,
+  },
+
+  // --- The band's guest link (Phase 10). Owners and Managers manage it; the
+  // token itself is the authorization to open it.
+  {
+    name: 'guest_link.get',
+    access: 'member.invite',
+    method: 'GET',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/guest-link$/,
+    handler: getGuestLink,
+  },
+  {
+    name: 'guest_link.reset',
+    writes: 'self',
+    access: 'member.invite',
+    method: 'POST',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/guest-link$/,
+    body: 'json',
+    handler: resetGuestLink,
+  },
+  {
+    name: 'guest_link.expiry',
+    writes: 'self',
+    access: 'member.invite',
+    method: 'PUT',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/guest-link$/,
+    body: 'json',
+    handler: setGuestLinkExpiry,
+  },
+  {
+    name: 'guest_link.revoke',
+    writes: 'self',
+    access: 'member.invite',
+    method: 'DELETE',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/guest-link$/,
+    handler: turnOffGuestLink,
+  },
+  {
+    // Public: whoever holds the link may open it. Sets a cookie, nothing else.
+    name: 'guest.open',
+    writes: 'self',
+    access: 'public',
+    method: 'POST',
+    pattern: /^\/api\/guest\/(?<token>[A-Za-z0-9_-]+)$/,
+    handler: openGuestLink,
+  },
+  {
+    name: 'guest.leave',
+    writes: 'self',
+    access: 'public',
+    method: 'DELETE',
+    pattern: /^\/api\/guest$/,
+    handler: leaveGuest,
   },
 
   // --- Accounts (Phase 5). Public: they're how you stop being anonymous.

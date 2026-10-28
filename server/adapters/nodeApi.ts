@@ -8,6 +8,7 @@
 import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { parseCookies } from '../core/auth/cookies';
+import { GUEST_COOKIE, guestTokens, resolveGuests, type GuestGrant } from '../core/auth/guests';
 import { resolveSession, SESSION_COOKIE } from '../core/auth/sessions';
 import { matchRoute, runRoute } from '../core/router';
 import type { Actor, CoreResponse, RequestBody, RouteDef } from '../core/types';
@@ -49,6 +50,17 @@ export function requestOrigin(req: Pick<IncomingMessage, 'headers' | 'socket'>):
   return `${proto}://${typeof host === 'string' && host ? host : 'localhost'}`;
 }
 
+async function resolveGuestCookie(cookies: Record<string, string>): Promise<GuestGrant[]> {
+  const tokens = guestTokens(cookies[GUEST_COOKIE]);
+  if (!tokens.length || !process.env.DATABASE_URL) return [];
+  try {
+    return await resolveGuests(tokens);
+  } catch (err) {
+    console.error('[auth] guest link lookup failed:', err);
+    return [];
+  }
+}
+
 async function resolveActor(cookies: Record<string, string>): Promise<Actor | undefined> {
   const token = cookies[SESSION_COOKIE];
   if (!token || !process.env.DATABASE_URL) return undefined;
@@ -70,7 +82,7 @@ function sendCacheableJson(req: IncomingMessage, res: ServerResponse, { status, 
   const etag = `"${createHash('sha1').update(text).digest('base64url')}"`;
   setHeaders(res, headers);
   res.setHeader('Content-Type', 'application/json');
-  // A signed-in response may differ per person, so no shared cache may keep it.
+  // A signed-in or guest response may differ per person, so no shared cache may keep it.
   res.setHeader('Cache-Control', personal ? 'private, no-cache' : 'no-cache');
   res.setHeader('ETag', etag);
   if (req.headers['if-none-match'] === etag) {
@@ -126,6 +138,7 @@ export function createApiHandler() {
     }
 
     const actor = await resolveActor(cookies);
+    const guests = await resolveGuestCookie(cookies);
 
     const query = new URLSearchParams(search);
     const tmpDir = route.body === 'multipart'
@@ -133,11 +146,11 @@ export function createApiHandler() {
       : undefined;
 
     try {
-      const response = await runRoute(route, { params, query, cookies, origin, actor }, () =>
+      const response = await runRoute(route, { params, query, cookies, origin, actor, guests }, () =>
         loadBody(req, route, tmpDir),
       );
       if (route.method === 'GET' && response.status === 200) {
-        sendCacheableJson(req, res, response, !!cookies[SESSION_COOKIE]);
+        sendCacheableJson(req, res, response, !!(cookies[SESSION_COOKIE] || cookies[GUEST_COOKIE]));
       } else {
         sendJson(res, response);
       }

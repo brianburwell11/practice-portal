@@ -22,8 +22,12 @@ function check(label: string, ok: boolean, detail = ''): void {
   if (!ok) failures++;
 }
 
-/** Writes allowed without signing in. Sign-out has to work for anyone holding a cookie. */
-const PUBLIC_WRITES = new Set(['auth.logout']);
+/**
+ * Writes allowed without signing in. Sign-out has to work for anyone holding a
+ * cookie, and a sub opens or leaves a guest link with no account — both only
+ * set or clear the caller's own cookie.
+ */
+const PUBLIC_WRITES = new Set(['auth.logout', 'guest.open', 'guest.leave']);
 
 console.log(`--- route table (${routes.length} routes)`);
 for (const r of routes) {
