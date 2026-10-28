@@ -7,6 +7,8 @@ import { BandApp } from './components/band/BandApp.tsx'
 import { BandPicker } from './components/band/BandPicker.tsx'
 import { InvitePage } from './components/account/InvitePage.tsx'
 import { RequireCan } from './components/account/RequireCan.tsx'
+import { PrivacyPolicy } from './components/legal/PrivacyPolicy.tsx'
+import { TermsOfService } from './components/legal/TermsOfService.tsx'
 
 import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage } from './admin/lazyPages.ts'
 
@@ -22,6 +24,8 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<BandPicker />} />
         <Route path="/invite/:token" element={<InvitePage />} />
+        <Route path="/legal/privacy" element={<PrivacyPolicy />} />
+        <Route path="/legal/terms" element={<TermsOfService />} />
         <Route
           path="/admin/new-band"
           element={

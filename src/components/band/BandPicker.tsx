@@ -4,6 +4,7 @@ import { useBandStore } from '../../store/bandStore';
 import { bandsManifestSchema } from '../../config/schema';
 import { dataUrl } from '../../utils/url';
 import { AccountMenu } from '../account/AccountMenu';
+import { LegalLinks } from '../legal/LegalPage';
 import { useSessionStore } from '../../store/sessionStore';
 
 export function BandPicker() {
@@ -70,6 +71,8 @@ export function BandPicker() {
           </Link>
         </div>
       )}
+
+      <LegalLinks className="mt-12" />
     </div>
   );
 }

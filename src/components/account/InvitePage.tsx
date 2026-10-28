@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ROLE_LABELS, signInHref, useSessionStore, type BandRole } from '../../store/sessionStore';
 import { GoogleMark } from './AccountMenu';
+import { LegalLinks } from '../legal/LegalPage';
 
 interface Preview {
   band: { id: string; slug: string; name: string };
@@ -109,9 +110,8 @@ export function InvitePage() {
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
-        <Link to="/" className="inline-block text-xs text-gray-500 hover:text-gray-300">
-          Go to Practice Portal
-        </Link>
+        <Link to="/" className="inline-block text-xs text-gray-500 hover:text-gray-300">Go to Practice Portal</Link>
+        <LegalLinks />
       </div>
     </div>
   );
