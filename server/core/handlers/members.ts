@@ -17,6 +17,7 @@ import { db } from '../../db/client';
 import * as schema from '../../db/schema';
 import { bandByLegacyId, isAssignable, requireCan, roleIn, roleRank, type BandRef } from '../auth/can';
 import { hashToken, newToken } from '../auth/sessions';
+import { escapeHtml, htmlEmail, sendEmail } from '../email';
 import { HttpError, json, ok } from '../http';
 import type { Actor, CoreRequest, CoreResponse } from '../types';
 
@@ -195,7 +196,33 @@ export async function createInvite(req: CoreRequest): Promise<CoreResponse> {
     await audit(tx, band, actor, 'invite.create', row.id, { role, email: lock });
     return row.id;
   });
-  return json({ id, url: `${req.origin}/invite/${token}`, role, email: lock, expiresAt });
+  const url = `${req.origin}/invite/${token}`;
+  // An invite locked to an address goes to that address too; the link is
+  // still returned, so it can be sent another way if the email doesn't arrive.
+  const emailed = lock ? await emailInvite(lock, actor, band, role, url) : false;
+  return json({ id, url, role, email: lock, expiresAt, emailed });
+}
+
+async function emailInvite(to: string, actor: Actor, band: BandRef, role: string, url: string): Promise<boolean> {
+  const [inviter] = await db().select({ name: schema.appUser.displayName, email: schema.appUser.email })
+    .from(schema.appUser).where(eq(schema.appUser.id, actor.userId));
+  const who = inviter?.name ?? inviter?.email ?? 'Someone';
+  const as = role[0].toUpperCase() + role.slice(1);
+  return sendEmail({
+    to,
+    replyTo: inviter?.email,
+    subject: `${who} invited you to ${band.name} on Practice Portal`,
+    text: [
+      `${who} invited you to join ${band.name} on Practice Portal, as ${as}.`,
+      `Join here — sign in with Google as ${to}: ${url}`,
+      `The link works once and expires in ${INVITE_TTL_DAYS} days. Reply to this email to write back to ${who}.`,
+    ].join('\n\n'),
+    html: htmlEmail([
+      `<strong>${escapeHtml(who)}</strong> invited you to join <strong>${escapeHtml(band.name)}</strong> on Practice Portal, as ${escapeHtml(as)}.`,
+      `Sign in with Google as ${escapeHtml(to)} to join. The link works once and expires in ${INVITE_TTL_DAYS} days.`,
+      `Reply to this email to write back to ${escapeHtml(who)}.`,
+    ], { label: `Join ${band.name}`, url }),
+  });
 }
 
 /** `DELETE /api/bands/:bandId/invites/:inviteId` */

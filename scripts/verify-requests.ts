@@ -209,6 +209,24 @@ async function main(): Promise<void> {
     check('…and it’s still pending', (await sql`select status from access_request where id = ${elsewhere.id}`)[0]?.status === 'pending');
     check('the other band’s requests aren’t listed here', ((await call(manager, 'GET', requests)).json.requests as unknown[]).length === 0);
 
+    console.log('\n--- invite emails');
+    const invitee = `${TAG}-invitee@example.invalid`;
+    mark = outbox.length;
+    const locked = await call(owner, 'POST', `/api/bands/${BAND}/invites`, { role: 'editor', email: invitee });
+    check('an invite locked to an address', locked.status === 200, JSON.stringify(locked.json));
+    if (mock) {
+      const [mail, extra] = await emailsSince(mark);
+      const b = mail?.body ?? {};
+      check('…is emailed to that address, once', JSON.stringify(b.to) === JSON.stringify([invitee]) && !extra, JSON.stringify(b.to));
+      check('…with the inviter as Reply-To', b.reply_to === owner.email, String(b.reply_to));
+      check('…naming the inviter, band and role', String(b.subject).includes('owner invited you to') && String(b.subject).includes(`Band ${BAND}`) && String(b.text).includes('as Editor'), `${b.subject} / ${b.text}`);
+      check('…carrying the same link the inviter sees', String(b.html).includes(String(locked.json.url)) && String(b.text).includes(String(locked.json.url)));
+      check('…and the server says it was emailed', locked.json.emailed === true);
+    }
+    mark = outbox.length;
+    const open = await call(owner, 'POST', `/api/bands/${BAND}/invites`, { role: 'member' });
+    check('an invite with no address sends nothing', open.status === 200 && open.json.emailed === false && (await emailsSince(mark)).length === 0);
+
     const audit = await sql`select action from audit_log a join band b on b.id = a.band_id where b.legacy_id = ${BAND}`;
     const actions = audit.map((r) => r.action as string);
     check('asking, declining and approving are audited',
