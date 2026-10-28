@@ -2,8 +2,7 @@
  * MuseScore CLI discovery and `.mscz` → `.mxl` conversion.
  */
 import fs from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import { errorMessage } from '../http';
+import { run } from './run';
 
 /**
  * Resolve the MuseScore CLI binary. Honors `MUSESCORE_BIN` env override
@@ -11,7 +10,7 @@ import { errorMessage } from '../http';
  * location. Returns `null` if none of those are runnable, so callers
  * can surface a clear error rather than spawn-failing with ENOENT.
  */
-export function resolveMscoreBin(): string | null {
+export async function resolveMscoreBin(): Promise<string | null> {
   const candidates: string[] = [];
   if (process.env.MUSESCORE_BIN) candidates.push(process.env.MUSESCORE_BIN);
   candidates.push('mscore');
@@ -19,11 +18,9 @@ export function resolveMscoreBin(): string | null {
   for (const bin of candidates) {
     try {
       // `-v` prints version and exits 0 when the binary is reachable.
-      // Suppress all output; we only care about the exit status.
-      execFileSync(bin, ['-v'], { stdio: 'ignore' });
-      return bin;
+      if ((await run(bin, ['-v'], { timeoutMs: 30_000 })).code === 0) return bin;
     } catch {
-      // Try next candidate
+      // Not there — try the next candidate.
     }
   }
   return null;
@@ -39,22 +36,19 @@ export const MSCORE_MISSING_MESSAGE =
  * teardown (exit 134, "mutex lock failed"), so a non-zero exit alone
  * doesn't mean the conversion failed.
  */
-export function convertScore(mscoreBin: string, inputPath: string, outputPath: string): void {
-  let convertErr: unknown = null;
+export async function convertScore(mscoreBin: string, inputPath: string, outputPath: string): Promise<void> {
+  let detail = '';
   try {
-    execFileSync(mscoreBin, ['-o', outputPath, inputPath], {
-      stdio: 'ignore',
-      // MuseScore spins up Qt; give it enough time for a reasonably large
-      // score. 60 s is plenty for the 93-measure Wiggle sample (~1 s in
-      // practice).
-      timeout: 60_000,
-    });
+    // MuseScore spins up Qt; give it enough time for a reasonably large
+    // score. 60 s is plenty for the 93-measure Wiggle sample (~1 s in
+    // practice).
+    const proc = await run(mscoreBin, ['-o', outputPath, inputPath], { timeoutMs: 60_000 });
+    if (proc.code !== 0) detail = `: exit ${proc.code}`;
   } catch (err) {
-    convertErr = err;
+    detail = `: ${(err as Error).message}`;
   }
 
   if (!fs.existsSync(outputPath)) {
-    const detail = convertErr ? `: ${errorMessage(convertErr) ?? convertErr}` : '';
     throw new Error(`MuseScore produced no output file${detail}`);
   }
 }

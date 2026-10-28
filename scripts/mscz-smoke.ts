@@ -69,25 +69,25 @@ const wav = path.join(tmp, 'tone.wav');
 execSync(`ffmpeg -y -v quiet -f lavfi -i "sine=frequency=440:duration=5:sample_rate=48000" -ac 2 "${wav}"`);
 check('generated a 5s stereo test stem', fs.existsSync(wav));
 
-const probe = ffprobe(wav);
+const probe = await ffprobe(wav);
 check('ffprobe reads the stem', probe.channels === 2 && probe.sampleRate === 48000,
   `codec=${probe.codec} ch=${probe.channels} sr=${probe.sampleRate}`);
 
-const loudness = measureLoudness(wav);
+const loudness = await measureLoudness(wav);
 check('two-pass loudnorm pass 1 measures', typeof loudness.input_i === 'string' && !Number.isNaN(parseFloat(loudness.input_i)),
   `input_i=${loudness.input_i}`);
 
 const opus = path.join(tmp, 'tone.opus');
-transcodeToOpus(wav, opus, probe, loudness, true);
+await transcodeToOpus(wav, opus, probe, loudness, true);
 check('transcoded to Opus', fs.existsSync(opus) && fs.statSync(opus).size > 0);
-const opusProbe = ffprobe(opus);
+const opusProbe = await ffprobe(opus);
 check('output is 48 kHz Opus', opusProbe.codec === 'opus' && opusProbe.sampleRate === 48000,
   `codec=${opusProbe.codec} sr=${opusProbe.sampleRate}`);
 
 // --------------------------------------------------------------- MuseScore
 
 console.log('\n--- MuseScore');
-const bin = resolveMscoreBin();
+const bin = await resolveMscoreBin();
 check('resolveMscoreBin() found a runnable binary', bin !== null, MSCORE_MISSING_MESSAGE);
 console.log(`      MUSESCORE_BIN=${process.env.MUSESCORE_BIN ?? '(unset)'}  resolved=${bin ?? 'null'}`);
 
@@ -100,7 +100,7 @@ if (bin && fs.existsSync(input)) {
   const started = Date.now();
   let convertError: unknown = null;
   try {
-    convertScore(bin, input, output);
+    await convertScore(bin, input, output);
   } catch (err) {
     convertError = err;
   }

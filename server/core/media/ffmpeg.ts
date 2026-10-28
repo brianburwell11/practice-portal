@@ -1,9 +1,9 @@
 /**
  * ffmpeg / ffprobe helpers: probing, two-pass `loudnorm` measurement, and
- * Opus transcoding. Shells out to the binaries on PATH — the container in
- * Phase 3 has to ship them.
+ * Opus transcoding. Runs the binaries on PATH — the container in Phase 3 has
+ * to ship them — asynchronously and without a shell (see `run.ts`).
  */
-import { execSync, spawnSync } from 'node:child_process';
+import { run } from './run';
 
 export const TARGET_LUFS = -16;
 
@@ -31,12 +31,10 @@ interface FfprobeStream {
   sample_rate?: string;
 }
 
-export function ffprobe(filePath: string): ProbeResult {
-  const raw = execSync(
-    `ffprobe -v quiet -print_format json -show_streams "${filePath}"`,
-    { encoding: 'utf-8' },
-  );
-  const data = JSON.parse(raw) as { streams?: FfprobeStream[] };
+export async function ffprobe(filePath: string): Promise<ProbeResult> {
+  const proc = await run('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_streams', filePath]);
+  if (proc.code !== 0) throw new Error(`ffprobe failed (exit ${proc.code})`);
+  const data = JSON.parse(proc.stdout) as { streams?: FfprobeStream[] };
   const audio = data.streams?.find((s) => s.codec_type === 'audio');
   if (!audio) throw new Error('No audio stream found');
   return {
@@ -48,14 +46,14 @@ export function ffprobe(filePath: string): ProbeResult {
 }
 
 /** Pass 1 of two-pass loudnorm: measure, don't write. */
-export function measureLoudness(filePath: string): LoudnessInfo {
-  const proc = spawnSync('ffmpeg', [
-    '-i', filePath,
+export async function measureLoudness(filePath: string): Promise<LoudnessInfo> {
+  const proc = await run('ffmpeg', [
+    '-nostats', '-i', filePath,
     '-af', `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:print_format=json`,
     '-f', 'null', '-',
-  ], { encoding: 'utf-8' });
+  ]);
 
-  if (proc.status !== 0) {
+  if (proc.code !== 0) {
     throw new Error(`loudnorm measurement failed: ${proc.stderr?.slice(-500)}`);
   }
 
@@ -67,28 +65,29 @@ export function measureLoudness(filePath: string): LoudnessInfo {
 }
 
 /** Pass 2: transcode to Opus, optionally applying the measured loudnorm. */
-export function transcodeToOpus(
+export async function transcodeToOpus(
   inputPath: string,
   outputPath: string,
   probe: ProbeResult,
   loudness: LoudnessInfo | undefined,
   normalize: boolean,
-): void {
+): Promise<void> {
   const isMono = probe.channels === 1;
   const bitrate = isMono ? '64k' : '128k';
-  const channelFlag = isMono ? '-ac 1' : '';
 
-  let filterFlag: string;
+  let filter: string[];
   if (!normalize) {
-    filterFlag = '';
+    filter = [];
   } else if (loudness && parseFloat(loudness.input_i) <= 0) {
-    filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:measured_I=${loudness.input_i}:measured_TP=${loudness.input_tp}:measured_LRA=${loudness.input_lra}:measured_thresh=${loudness.input_thresh}:offset=${loudness.target_offset}:linear=true`;
+    filter = ['-af', `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:measured_I=${loudness.input_i}:measured_TP=${loudness.input_tp}:measured_LRA=${loudness.input_lra}:measured_thresh=${loudness.input_thresh}:offset=${loudness.target_offset}:linear=true`];
   } else {
-    filterFlag = `-af loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`;
+    filter = ['-af', `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`];
   }
 
-  execSync(
-    `ffmpeg -y -i "${inputPath}" ${filterFlag} -codec:a libopus -b:a ${bitrate} ${channelFlag} -ar 48000 -vbr on "${outputPath}"`,
-    { stdio: 'ignore' },
-  );
+  const proc = await run('ffmpeg', [
+    '-nostats', '-y', '-i', inputPath, ...filter,
+    '-codec:a', 'libopus', '-b:a', bitrate, ...(isMono ? ['-ac', '1'] : []), '-ar', '48000', '-vbr', 'on',
+    outputPath,
+  ]);
+  if (proc.code !== 0) throw new Error(`Opus transcode failed: ${proc.stderr.slice(-500)}`);
 }

@@ -57,12 +57,12 @@ export async function transcodeUpload(req: CoreRequest): Promise<CoreResponse> {
   const fileMap: Record<string, string> = {}; // origName → transcoded name
 
   for (const file of req.files ?? []) {
-    const probe = ffprobe(file.path);
+    const probe = await ffprobe(file.path);
 
     let loudness: LoudnessInfo | undefined;
     if (normalize) {
       try {
-        loudness = measureLoudness(file.path);
+        loudness = await measureLoudness(file.path);
       } catch (err) {
         console.warn(`Loudness measurement failed for ${file.filename}, transcoding without normalization:`, errorMessage(err));
       }
@@ -71,7 +71,7 @@ export async function transcodeUpload(req: CoreRequest): Promise<CoreResponse> {
     const baseName = path.basename(file.filename, path.extname(file.filename));
     const uploadName = `${baseName}.opus`;
     const uploadPath = path.join(tmpDir, `out-${uploadName}`);
-    transcodeToOpus(file.path, uploadPath, probe, loudness, normalize);
+    await transcodeToOpus(file.path, uploadPath, probe, loudness, normalize);
 
     await r2PutFile(
       `${r2Prefix}/${uploadName}`,
@@ -96,7 +96,7 @@ export async function msczConvertUpload(req: CoreRequest): Promise<CoreResponse>
   const { bandId, songId } = req.params;
   const filename = msczTargetFilename(req.query);
 
-  const mscoreBin = resolveMscoreBin();
+  const mscoreBin = await resolveMscoreBin();
   if (!mscoreBin) throw new HttpError(500, MSCORE_MISSING_MESSAGE);
 
   const received = req.files?.[0];
@@ -111,7 +111,7 @@ export async function msczConvertUpload(req: CoreRequest): Promise<CoreResponse>
   }
 
   const outPath = path.join(req.tmpDir!, filename);
-  convertScore(mscoreBin, received.path, outPath);
+  await convertScore(mscoreBin, received.path, outPath);
 
   await r2PutFile(
     `${bandId}/songs/${songId}/${filename}`,
