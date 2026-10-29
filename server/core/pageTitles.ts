@@ -6,8 +6,9 @@
  *
  * Mirrors the titles the React pages set (`usePageTitle`, `BandApp`).
  */
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { guideBySlug } from '../../src/help/guideList';
+import { collectionLabel } from '../../src/utils/collections';
 import { bandPageTitle, previewTitle, SITE_TITLE } from '../../src/utils/pageTitle';
 import { db } from '../db/client';
 import * as schema from '../db/schema';
@@ -62,6 +63,15 @@ export async function pageTitleFor(pathname: string, query: URLSearchParams): Pr
       const [row] = await db().select({ title: schema.song.title }).from(schema.song)
         .where(and(eq(schema.song.bandId, band.id), eq(schema.song.slug, songSlug), isNull(schema.song.deletedAt)));
       return previewTitle(title, row?.title);
+    }
+    // ?tag=<tag>: a collection (a song in it, above, is more specific),
+    // named if any of the band's songs carry it.
+    const tag = query.get('tag');
+    if (tag) {
+      const [row] = await db().select({ id: schema.song.id }).from(schema.song)
+        .where(and(eq(schema.song.bandId, band.id), isNull(schema.song.deletedAt), sql`jsonb_exists(${schema.song.config}->'tags', ${tag})`))
+        .limit(1);
+      return previewTitle(title, row ? collectionLabel(tag) : null);
     }
     return title;
   } catch (err) {

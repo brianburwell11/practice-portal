@@ -209,12 +209,14 @@ async function read(key: string, d: Db, viewer: Viewer | typeof UNCHECKED): Prom
         .orderBy(asc(schema.song.createdAt), asc(schema.song.title));
       return {
         songs: songs.map(({ config, mediaPrefix }) => {
-          const c = config as { id: string; slug?: string; title: string; artist: string };
+          const c = config as { id: string; slug?: string; title: string; artist: string; tags?: string[] };
           const entry: Record<string, unknown> = { id: c.id };
           if (c.slug) entry.slug = c.slug;
           entry.title = c.title;
           entry.artist = c.artist;
           entry.audioBasePath = publicUrl(mediaPrefix!);
+          // Tags are the band's collections in the player.
+          if (c.tags?.length) entry.tags = c.tags;
           return entry;
         }),
       };

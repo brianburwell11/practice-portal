@@ -59,8 +59,8 @@ export const GUIDES: GuideInfo[] = [
   },
   {
     slug: 'setlists',
-    title: 'Setlists',
-    summary: 'Build sets for a gig, filter by key and length, and share them.',
+    title: 'Setlists and collections',
+    summary: 'Build sets for a gig, group songs into collections, and share them.',
     section: 'Managing your band',
   },
   {

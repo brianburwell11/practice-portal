@@ -67,6 +67,7 @@ export function MetadataStep({ state, dispatch }: Props) {
             tags={state.tags}
             onChange={(tags) => dispatch({ type: 'SET_TAGS', tags })}
           />
+          <p className="mt-1 text-xs text-gray-500">Each tag is also a collection the band can browse, like “christmas” or “wedding”.</p>
         </div>
 
         <div>

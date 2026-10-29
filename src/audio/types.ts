@@ -126,6 +126,8 @@ export interface SongManifestEntry {
   title: string;
   artist: string;
   audioBasePath?: string;
+  /** The song's tags, which the player offers as collections. */
+  tags?: string[];
 }
 
 export interface SongManifest {

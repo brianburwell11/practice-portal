@@ -16,7 +16,7 @@ New bands are Members only: their songs are visible to the band's signed-in memb
 - [Keyboard shortcuts](https://practiceportal.app/help/keyboard-shortcuts): every shortcut in the player and the editors
 - [Adding and editing songs](https://practiceportal.app/help/adding-songs): upload stems and sheet music, group parts, change a song later
 - [Timing and lyrics](https://practiceportal.app/help/timing-and-lyrics): mark sections and measures, sync lyrics
-- [Setlists](https://practiceportal.app/help/setlists): build sets for a gig and share them
+- [Setlists and collections](https://practiceportal.app/help/setlists): build sets for a gig, group songs into collections, and share them
 - [Troubleshooting and FAQ](https://practiceportal.app/help/faq): common questions
 - [Privacy Policy](https://practiceportal.app/legal/privacy)
 - [Terms of Service](https://practiceportal.app/legal/terms)

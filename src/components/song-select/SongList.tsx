@@ -7,6 +7,7 @@ import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { songManifestSchema, songConfigSchema, setlistConfigSchema } from '../../config/schema';
 import { dataUrl, r2Url } from '../../utils/url';
 import { loadMixerState } from '../../utils/mixerStorage';
+import { collectionLabel } from '../../utils/collections';
 import { useLyricsStore } from '../../store/lyricsStore';
 import { useNotesStore } from '../../store/notesStore';
 import { toast } from '../../store/dialogStore';
@@ -22,6 +23,7 @@ export function useSongLoader() {
   const setSelectedSong = useSongStore((s) => s.setSelectedSong);
   const setError = useSongStore((s) => s.setError);
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
+  const activeTag = useSetlistStore((s) => s.activeTag);
 
   const filteredSongs = useMemo(() => {
     if (!manifest) return [];
@@ -31,8 +33,10 @@ export function useSongLoader() {
         .map((e) => e.type === 'song' ? manifest.songs.find((s) => s.id === e.songId) : undefined)
         .filter((s): s is SongManifestEntry => !!s);
     }
-    return [...manifest.songs].sort((a, b) => a.title.localeCompare(b.title));
-  }, [manifest, activeSetlist]);
+    // A collection is every song with that tag, A–Z like All Songs.
+    const songs = activeTag ? manifest.songs.filter((s) => s.tags?.includes(activeTag)) : manifest.songs;
+    return [...songs].sort((a, b) => a.title.localeCompare(b.title));
+  }, [manifest, activeSetlist, activeTag]);
 
   const handleSelect = useCallback(async (entry: SongManifestEntry) => {
     if (useSongStore.getState().loading) return;
@@ -191,6 +195,14 @@ export function SongList() {
       .catch(() => setSetlistIndex([]));
   }, [currentBand, setSetlistIndex]);
 
+  // Open the collection in ?tag=, if any. It filters the song list as soon
+  // as the songs arrive; a setlist in the URL wins over it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tag = params.get('tag');
+    if (tag && !params.get('setlist')) useSetlistStore.getState().setActiveTag(tag);
+  }, []);
+
   // Preload setlist from URL ?setlist= parameter. Waits for the
   // setlist index to load so a slug param can be resolved to its
   // opaque id before we try to fetch the JSON — otherwise the
@@ -267,10 +279,12 @@ export function SongList() {
       }
     } else {
       // Look up by slug first (new songs), fall back to id
-      // (legacy songs whose id is already a slug).
-      const entry =
-        filteredSongs.find((s) => s.slug && s.slug === songKey) ??
-        filteredSongs.find((s) => s.id === songKey);
+      // (legacy songs whose id is already a slug). A song outside the open
+      // collection still opens: the link named it.
+      const all = useSongStore.getState().manifest?.songs ?? [];
+      const find = (list: SongManifestEntry[]) =>
+        list.find((s) => s.slug && s.slug === songKey) ?? list.find((s) => s.id === songKey);
+      const entry = find(filteredSongs) ?? find(all);
       if (entry) {
         hasAutoLoaded.current = true;
         handleSelect(entry);
@@ -382,20 +396,49 @@ export function SongSelectDropdown() {
   );
 }
 
+/** A collection's value in the dropdown: `tag:<name>`, so it can't clash with a setlist id. */
+const TAG_PREFIX = 'tag:';
+
+/** The band's collections: each tag on its songs, with how many songs have it. */
+function collectionsOf(songs: SongManifestEntry[]): { tag: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const s of songs) for (const t of new Set(s.tags ?? [])) counts.set(t, (counts.get(t) ?? 0) + 1);
+  return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => a.tag.localeCompare(b.tag));
+}
+
 /** Setlist picker dropdown — rendered inside AudioEngineContext.Provider */
 export function SetlistDropdown() {
   const currentBand = useBandStore((s) => s.currentBand);
   const setlistIndex = useSetlistStore((s) => s.index);
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
   const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);
+  const activeTag = useSetlistStore((s) => s.activeTag);
+  const setActiveTag = useSetlistStore((s) => s.setActiveTag);
+  const manifest = useSongStore((s) => s.manifest);
   const { filteredSongs, handleSelect } = useSongLoader();
+  const collections = useMemo(() => collectionsOf(manifest?.songs ?? []), [manifest]);
 
   const handleSetlistChange = async (setlistId: string) => {
     if (!currentBand) return;
-    if (setlistId === '') {
-      setActiveSetlist(null);
+    if (setlistId.startsWith(TAG_PREFIX)) {
+      // A collection: filter the song list; the song playing stays put.
+      const tag = setlistId.slice(TAG_PREFIX.length);
+      setActiveTag(tag);
       const url = new URL(window.location.href);
       url.searchParams.delete('setlist');
+      url.searchParams.set('tag', tag);
+      const sel = useSongStore.getState().selectedSong;
+      if (sel) url.searchParams.set('song', sel.slug ?? sel.id);
+      url.hash = '';
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
+      return;
+    }
+    if (setlistId === '') {
+      setActiveSetlist(null);
+      setActiveTag(null);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('setlist');
+      url.searchParams.delete('tag');
       const sel = useSongStore.getState().selectedSong;
       if (sel) url.searchParams.set('song', sel.slug ?? sel.id);
       url.hash = '';
@@ -415,6 +458,7 @@ export function SetlistDropdown() {
         data.slug ?? setlistId.replace(/^setlist-/, ''),
       );
       url.searchParams.delete('song');
+      url.searchParams.delete('tag');
       // activeIndex resets to 0 via setActiveSetlist, so first song
       url.hash = '#1';
       history.replaceState(null, '', url.pathname + url.search + url.hash);
@@ -432,19 +476,31 @@ export function SetlistDropdown() {
     prevSetlistId.current = activeSetlist?.id;
   }, [activeSetlist, filteredSongs, handleSelect]);
 
-  if (!setlistIndex || setlistIndex.length === 0) return null;
+  const setlists = setlistIndex ?? [];
+  if (setlists.length === 0 && collections.length === 0) return null;
 
   return (
     <select
       className="ml-auto bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500"
-      value={activeSetlist?.id ?? ''}
+      value={activeSetlist?.id ?? (activeTag ? TAG_PREFIX + activeTag : '')}
       onChange={(e) => handleSetlistChange(e.target.value)}
+      aria-label="Setlist or collection"
     >
       <option value="">All Songs</option>
-      <option disabled>──────────</option>
-      {setlistIndex.map((s) => (
-        <option key={s.id} value={s.id}>{s.name}</option>
-      ))}
+      {setlists.length > 0 && (
+        <optgroup label="Setlists">
+          {setlists.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </optgroup>
+      )}
+      {collections.length > 0 && (
+        <optgroup label="Collections">
+          {collections.map(({ tag, count }) => (
+            <option key={tag} value={TAG_PREFIX + tag}>{collectionLabel(tag)} · {count} {count === 1 ? 'song' : 'songs'}</option>
+          ))}
+        </optgroup>
+      )}
     </select>
   );
 }

@@ -140,6 +140,8 @@ export const songManifestEntrySchema = z.object({
   title: z.string(),
   artist: z.string(),
   audioBasePath: z.string().optional(),
+  /** The song's tags, which the player offers as collections. */
+  tags: z.array(z.string()).optional(),
 });
 
 // A new band has no songs yet, so an empty list is valid.

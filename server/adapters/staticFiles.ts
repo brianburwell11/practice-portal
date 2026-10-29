@@ -159,8 +159,8 @@ async function sendIndex(
   req: IncomingMessage, res: ServerResponse, indexHtml: string, pathname: string, query: URLSearchParams, titler?: PageTitler,
 ): Promise<void> {
   const title = titler ? await titler(pathname, query) : null;
-  // The URL a preview links back to keeps what picks the song or setlist.
-  const kept = new URLSearchParams([...query].filter(([k]) => k === 'setlist' || k === 'song'));
+  // The URL a preview links back to keeps what picks the song, setlist or collection.
+  const kept = new URLSearchParams([...query].filter(([k]) => k === 'setlist' || k === 'song' || k === 'tag'));
   const pageUrl = SITE_URL + encodeURI(pathname) + (kept.size ? `?${kept}` : '');
   const tags = [`<link rel="canonical" href="${attr(SITE_URL + encodeURI(pathname))}" />`];
   if (!indexable(pathname)) tags.push('<meta name="robots" content="noindex" />');

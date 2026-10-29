@@ -69,7 +69,7 @@ export default function StartYourBand() {
       <HelpSection title="Next">
         <Bullets>
           <li><GuideLink slug="practicing-a-song">Practicing a song</GuideLink>: loops, speed, sections and sheet music.</li>
-          <li><GuideLink slug="setlists">Setlists</GuideLink>: put songs in order for a gig.</li>
+          <li><GuideLink slug="setlists">Setlists and collections</GuideLink>: put songs in order for a gig.</li>
         </Bullets>
       </HelpSection>
     </>

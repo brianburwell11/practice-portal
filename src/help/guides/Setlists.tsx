@@ -18,6 +18,22 @@ export default function Setlists() {
         </p>
       </HelpSection>
 
+      <HelpSection title="Collections">
+        <p>
+          A collection is a group of songs in no particular order, like Christmas, Wedding or New songs to learn. Each
+          collection is a tag on the band’s songs: tag a song “christmas” in <Ui>Edit Song</Ui>, and it’s in the
+          Christmas collection. A song can be in as many collections as you like.
+        </p>
+        <p>
+          Collections are listed in the same menu as setlists, under <Ui>Collections</Ui>, with how many songs each
+          has. Choosing one narrows the song menu to those songs, A to Z, and the address shows it, so you can send a
+          bandmate straight to it. Owners, Managers and Editors add songs to collections by tagging them.
+        </p>
+        <Note>
+          When you build a setlist, the filter button can narrow the songs to a collection too: filter by its tag.
+        </Note>
+      </HelpSection>
+
       <HelpSection title="Making a setlist">
         <Steps>
           <li>Open the <Ui>Setlists</Ui> menu and choose <Ui>Add Setlist</Ui>.</li>

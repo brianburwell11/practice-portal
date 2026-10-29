@@ -60,7 +60,7 @@ export default function Faq() {
         </Question>
         <Question q="How do I give a sub access for one gig?">
           <p>
-            Use the band’s guest link, with an expiry date. The <GuideLink slug="setlists">Setlists</GuideLink> guide shows how
+            Use the band’s guest link, with an expiry date. The <GuideLink slug="setlists">Setlists and collections</GuideLink> guide shows how
             to send them straight to a setlist.
           </p>
         </Question>

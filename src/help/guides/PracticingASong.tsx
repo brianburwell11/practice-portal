@@ -11,9 +11,10 @@ export default function PracticingASong() {
 
       <HelpSection title="Picking a song">
         <p>
-          Choose a song from the menu at the top of the band’s page. If the band has setlists, the menu beside it
-          switches between <Ui>All Songs</Ui> and a setlist. In a setlist, <Ui>Previous</Ui> and <Ui>Next</Ui> step
-          through its songs in order.
+          Choose a song from the menu at the top of the band’s page. The menu beside it switches between{' '}
+          <Ui>All Songs</Ui>, a setlist and a collection (see{' '}
+          <GuideLink slug="setlists">Setlists and collections</GuideLink>). In a setlist, <Ui>Previous</Ui> and{' '}
+          <Ui>Next</Ui> step through its songs in order.
         </p>
         <p>
           The address in your browser always points at what you’re playing, so you can copy it and send it to a
