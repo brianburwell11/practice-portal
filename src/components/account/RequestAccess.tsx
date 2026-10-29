@@ -17,9 +17,14 @@ const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month
  * A visitor at a Members-only band they aren't in: the band's name and logo.
  * Signed out, a way to sign in; signed in, a way to ask to join — the Owner is
  * emailed and answers in Members & Sharing. Renders `fallback` when there's no
- * band at this address.
+ * band at this address, as it is; `frame` wraps only the band's own screen.
  */
-export function RequestAccess({ slug, user, fallback }: { slug: string; user: SessionUser | null; fallback: ReactNode }) {
+export function RequestAccess({ slug, user, fallback, frame = (node) => node }: {
+  slug: string;
+  user: SessionUser | null;
+  fallback: ReactNode;
+  frame?: (node: ReactNode) => ReactNode;
+}) {
   const [access, setAccess] = useState<Access | null | undefined>(undefined);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -57,7 +62,7 @@ export function RequestAccess({ slug, user, fallback }: { slug: string; user: Se
   if (access === null || access.band.visibility !== 'private') return <>{fallback}</>;
   const { band, request } = access;
 
-  return (
+  return frame(
     <div className="max-w-sm w-full text-center space-y-4">
       {band.logo && <img src={band.logo} alt="" className="mx-auto max-h-20 max-w-[12rem] object-contain" />}
       <h1 className="text-xl font-semibold">{band.name}</h1>

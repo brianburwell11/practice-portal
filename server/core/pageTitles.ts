@@ -46,7 +46,7 @@ export async function pageTitleFor(pathname: string, query: URLSearchParams): Pr
     if (!first || (second !== undefined && second !== 'admin')) return `Page not found · ${SITE_TITLE}`;
     const [band] = await db().select({ id: schema.band.id, name: schema.band.name }).from(schema.band)
       .where(and(eq(schema.band.slug, first), isNull(schema.band.deletedAt)));
-    if (!band) return SITE_TITLE; // the app shows "Band not found" under the plain title
+    if (!band) return `Page not found · ${SITE_TITLE}`; // the app shows its 404 page
     const title = bandPageTitle(band.name);
     if (second) return title;
 

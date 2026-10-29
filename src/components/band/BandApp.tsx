@@ -8,6 +8,7 @@ import { dataUrl } from '../../utils/url';
 import { useSessionStore } from '../../store/sessionStore';
 import { AccountMenu } from '../account/AccountMenu';
 import { RequestAccess } from '../account/RequestAccess';
+import { NotFound } from '../NotFound';
 import { bandPageTitle } from '../../utils/pageTitle';
 
 /**
@@ -138,8 +139,9 @@ export function BandApp() {
 }
 
 /**
- * Where accounts exist, a band missing from the registry may be Members-only
- * rather than nonexistent — offer sign-in instead of a bare "not found".
+ * A band the registry didn't list. Where accounts exist it may be Members-only
+ * rather than missing: then the screen to sign in or ask to join. A band
+ * that doesn't exist at all gets the site's 404 page.
  */
 function BandUnavailable({ slug, error, guestError }: { slug: string; error: string; guestError: string | null }) {
   const { available, loaded, user, load } = useSessionStore();
@@ -147,26 +149,26 @@ function BandUnavailable({ slug, error, guestError }: { slug: string; error: str
     load();
   }, [load]);
 
-  if (!loaded || !available || !error.startsWith('Band not found')) {
-    return <div className="min-h-screen bg-page text-red-400 p-8">{loaded ? error : null}</div>;
+  if (!loaded) return null;
+  if (!error.startsWith('Band not found')) {
+    return <div className="min-h-screen bg-page text-red-400 p-8">{error}</div>;
   }
+  if (!available) return <NotFound />;
 
   return (
-    <div className="min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
-      <div className="absolute top-4 right-4"><AccountMenu /></div>
-      <div className="max-w-sm text-center space-y-4">
-        {guestError && <p className="text-sm text-amber-300">{guestError}</p>}
-        <RequestAccess
-          slug={slug}
-          user={user}
-          fallback={
-            <>
-              <h1 className="text-xl font-semibold">Band not found</h1>
-              <p className="text-sm text-gray-400">There’s no band at this address.</p>
-            </>
-          }
-        />
-      </div>
-    </div>
+    <RequestAccess
+      slug={slug}
+      user={user}
+      fallback={<NotFound />}
+      frame={(node) => (
+        <div className="min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
+          <div className="absolute top-4 right-4"><AccountMenu /></div>
+          <div className="max-w-sm text-center space-y-4">
+            {guestError && <p className="text-sm text-amber-300">{guestError}</p>}
+            {node}
+          </div>
+        </div>
+      )}
+    />
   );
 }
