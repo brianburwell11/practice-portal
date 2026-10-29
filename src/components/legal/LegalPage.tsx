@@ -1,14 +1,10 @@
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 /** Shared layout for the /legal pages. */
 export function LegalPage({ title, effective, children }: { title: string; effective: string; children: ReactNode }) {
-  useEffect(() => {
-    document.title = `${title} — Practice Portal`;
-    return () => {
-      document.title = 'Practice Portal';
-    };
-  }, [title]);
+  usePageTitle(`${title} · Practice Portal`);
 
   return (
     <div className="min-h-screen bg-page text-gray-300">

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ROLE_LABELS, signInHref, useSessionStore, type BandRole } from '../../store/sessionStore';
 import { GoogleMark } from './AccountMenu';
 import { LegalLinks } from '../legal/LegalPage';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 interface Preview {
   band: { id: string; slug: string; name: string };
@@ -26,6 +27,7 @@ export function InvitePage() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  usePageTitle(preview ? `Join ${preview.band.name} · Practice Portal` : 'Invite · Practice Portal');
 
   useEffect(() => {
     load();

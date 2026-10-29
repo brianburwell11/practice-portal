@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
 import practicePortalMark from '../assets/practice-portal-mark-large.png';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 /** Any address no route matches. */
 export function NotFound() {
+  usePageTitle('Page not found · Practice Portal');
   return (
     <div className="min-h-screen bg-page text-gray-100 flex flex-col items-center justify-center p-8 text-center">
       <img src={practicePortalMark} alt="" className="h-16 w-auto mb-6" />

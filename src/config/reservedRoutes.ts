@@ -24,7 +24,7 @@ const RESERVED = [
   ...IN_USE_ROUTES,
 
   // Web infrastructure and well-known files
-  'robots.txt', 'sitemap', 'sitemap.xml', 'favicon.svg', 'favicon.png', 'manifest.json',
+  'robots.txt', 'sitemap', 'sitemap.xml', 'llms.txt', 'og-image.png', 'favicon.svg', 'favicon.png', 'manifest.json',
   'manifest.webmanifest', 'site.webmanifest', 'sw.js', 'service-worker.js', 'ads.txt', 'app-ads.txt',
   'humans.txt', 'security.txt', 'apple-app-site-association',
   'browserconfig.xml', 'crossdomain.xml', 'feed', 'rss', 'atom', 'cdn', 'static', 'public', 'media',

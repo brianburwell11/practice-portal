@@ -1,0 +1,7 @@
+# Practice Portal. Band pages carry noindex; only the portal's own pages are listed.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /*/admin/
+
+Sitemap: https://practiceportal.app/sitemap.xml

@@ -1,0 +1,15 @@
+# Practice Portal
+
+> A practice tool for bands. Each song is split into stems, one audio file per part, so a musician can solo, mute or turn down any part and play along with the rest of the band. Sheet music and lyrics scroll in time with the audio, the tempo can be slowed without changing pitch, and bands keep set lists for their gigs.
+
+New bands are Members only: their songs are visible to the band's signed-in members and to anyone holding the band's guest link. A band can choose to be Public. Accounts use Google sign-in.
+
+## Pages
+
+- [Home](https://practiceportal.app/): what Practice Portal is, and sign up
+- [Privacy Policy](https://practiceportal.app/legal/privacy)
+- [Terms of Service](https://practiceportal.app/legal/terms)
+
+## Contact
+
+- support@practiceportal.app
