@@ -51,8 +51,10 @@ function MenuItem({
 }) {
   return (
     <button
+      role="menuitem"
       onClick={enabled ? onClick : undefined}
-      className={`block w-full text-left px-3 py-1.5 text-xs whitespace-nowrap ${
+      aria-disabled={!enabled}
+      className={`block w-full text-left px-4 py-2.5 md:py-1.5 text-sm md:text-xs whitespace-nowrap ${
         enabled
           ? danger
             ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700/50'
@@ -90,15 +92,23 @@ export function AdminRibbon({
   const [showHelp, setShowHelp] = useState(false);
   const ribbonRef = useRef<HTMLDivElement>(null);
 
+  // A press anywhere else (mouse, touch or pen) or Escape closes the open menu.
   useEffect(() => {
     if (!open) return;
-    function handleClick(e: MouseEvent) {
+    function handlePointer(e: PointerEvent) {
       if (ribbonRef.current && !ribbonRef.current.contains(e.target as Node)) {
         setOpen(null);
       }
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(null);
+    }
+    document.addEventListener('pointerdown', handlePointer);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointer);
+      document.removeEventListener('keydown', handleKey);
+    };
   }, [open]);
 
   const toggle = (id: DropdownId) => setOpen((prev) => (prev === id ? null : id));
@@ -160,12 +170,14 @@ export function AdminRibbon({
         <div key={menu.id} className="relative">
           <button
             onClick={() => toggle(menu.id)}
-            className="text-xs text-gray-500 hover:text-gray-300"
+            aria-haspopup="menu"
+            aria-expanded={open === menu.id}
+            className="py-1.5 text-sm md:text-xs text-gray-400 md:text-gray-500 hover:text-gray-300"
           >
             {menu.label} <span className="text-base">▾</span>
           </button>
           {open === menu.id && (
-            <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+            <div role="menu" aria-label={menu.label} className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
               {menu.items.map((item) => (
                 <MenuItem
                   key={item.label}
@@ -217,6 +229,7 @@ export function AdminRibbon({
         onClick={() => setShowHelp(true)}
         className="ml-auto w-5 h-5 rounded-full border border-gray-600 text-gray-500 hover:text-gray-300 hover:border-gray-400 flex items-center justify-center text-xs leading-none transition-colors"
         title="Help"
+        aria-label="Help"
       >
         ?
       </button>

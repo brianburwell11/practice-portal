@@ -144,6 +144,13 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
   }, [engine]);
 
   const loopHandlers = useLongPress(handleLoopTap, handleLoopDoubleTap);
+  /** The loop button's tooltip and accessible name. `verb` is click or tap. */
+  const loopLabel = (verb: string) =>
+    loopA !== null && loopB !== null
+      ? `Loop ${formatTime(loopA)} – ${formatTime(loopB)}${loopEnabled ? '' : ' (off)'}. ${verb} to turn ${loopEnabled ? 'off' : 'on'}, long-press to clear.`
+      : loopA !== null
+        ? `Loop starts at ${formatTime(loopA)}. ${verb} to set where it ends.`
+        : 'Set where the loop starts';
 
   const handlePlayPauseTap = useCallback(() => {
     playing ? engine.pause() : engine.play();
@@ -236,7 +243,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
             </svg>
           </span>
           <span className="flex-1">If you can't hear audio, check that your phone isn't on silent.</span>
-          <button onClick={dismissMuteBanner} className="shrink-0 text-yellow-400 hover:text-yellow-200 text-lg leading-none">&times;</button>
+          <button onClick={dismissMuteBanner} aria-label="Dismiss" className="shrink-0 text-yellow-400 hover:text-yellow-200 text-lg leading-none">&times;</button>
         </div>
       )}
       {/* Desktop: controls cluster (buttons + sliders grouped together, shrink-0) */}
@@ -248,6 +255,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
             disabled={disabled}
             onClick={() => engine.stop()}
             title="Stop"
+            aria-label="Stop"
           >
             &#9632;
           </button>
@@ -256,6 +264,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
             disabled={disabled}
             onClick={() => (playing ? engine.pause() : engine.play())}
             title={playing ? 'Pause' : 'Play'}
+            aria-label={playing ? 'Pause' : 'Play'}
           >
             {playing ? '\u2759\u2759' : '\u25B6'}
           </button>
@@ -271,15 +280,9 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
             }`}
             disabled={disabled}
             {...loopHandlers}
-            title={
-              loopA !== null && loopB !== null
-                ? loopEnabled
-                  ? `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} — click to toggle, long-press to clear`
-                  : `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} (disabled) — click to toggle, long-press to clear`
-                : loopA !== null
-                  ? `Loop in: ${formatTime(loopA)} — click to set out point`
-                  : 'Set loop in point'
-            }
+            title={loopLabel('Click')}
+            aria-label={loopLabel('Click')}
+            aria-pressed={loopA !== null && loopB !== null ? loopEnabled : undefined}
           >
             &#x21BB;
           </button>
@@ -437,6 +440,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
           disabled={disabled}
           {...playPauseHandlers}
           title={playing ? 'Pause (long-press to stop)' : 'Play (long-press to stop)'}
+          aria-label={playing ? 'Pause' : 'Play'}
         >
           {playing ? '\u2759\u2759' : '\u25B6'}
         </button>
@@ -452,15 +456,9 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
           }`}
           disabled={disabled}
           {...loopHandlers}
-          title={
-            loopA !== null && loopB !== null
-              ? loopEnabled
-                ? `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} — tap to toggle, long-press to clear`
-                : `Loop: ${formatTime(loopA)} – ${formatTime(loopB)} (disabled) — tap to toggle, long-press to clear`
-              : loopA !== null
-                ? `Loop in: ${formatTime(loopA)} — tap to set out point`
-                : 'Set loop in point'
-          }
+          title={loopLabel('Tap')}
+          aria-label={loopLabel('Tap')}
+          aria-pressed={loopA !== null && loopB !== null ? loopEnabled : undefined}
         >
           &#x21BB;
         </button>
@@ -471,6 +469,8 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
           }`}
           onClick={onToggleSliders}
           title="Mixer & Sliders"
+          aria-label="Mixer and sliders"
+          aria-pressed={showSliders}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="2" y1="14" x2="6" y2="14" />
@@ -486,6 +486,8 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
           }`}
           onClick={() => setShowBookmark(!showBookmark)}
           title="Position & Sections"
+          aria-label="Position and sections"
+          aria-pressed={showBookmark}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
@@ -499,6 +501,8 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
           }`}
           onClick={toggleLyricsMobileVisible}
           title="Lyrics"
+          aria-label="Lyrics"
+          aria-pressed={lyricsMobileVisible}
         >
           <svg className="w-5 h-5" viewBox="0 0 512 512" fill="currentColor">
             <rect x="19.564" y="447.635" transform="matrix(-0.7071 -0.7071 0.7071 -0.7071 -285.559 842.3594)" width="24.231" height="65.371" />

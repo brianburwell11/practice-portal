@@ -10,6 +10,7 @@ import { dedupeSlug } from '../utils/dedupeSlug';
 import { generateId } from '../utils/generateId';
 import { CamelotWheel } from '../components/CamelotWheel';
 import type { SetlistConfig, SetlistEntry, NavLinkConfig } from '../audio/types';
+import { confirmDiscard } from '../store/dialogStore';
 
 /** Legacy setlist ids are prefixed with "setlist-". New-format ids are
  *  opaque base62 (7 chars) with no prefix. Detecting the legacy shape
@@ -445,14 +446,34 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
       : false;
   const canSave = name.trim().length > 0 && songCount > 0 && !saving && !nameCollidesWithSource && !slugCollides;
 
+  // Unsaved edits: what's on screen vs. what was loaded (or the empty form).
+  const snapshot = JSON.stringify({ name, slug, entries, navLinks, desiredLengthSeconds });
+  const latestSnapshot = useRef(snapshot);
+  latestSnapshot.current = snapshot;
+  const baseline = useRef<string | null>(null);
+  useEffect(() => {
+    if (!loading) baseline.current = latestSnapshot.current;
+  }, [loading]);
+  const dirty = baseline.current !== null && snapshot !== baseline.current;
+
+  // A click outside or Escape: ask first if there's anything to lose.
+  const requestClose = async () => {
+    if (saving) return;
+    if (dirty && !(await confirmDiscard('This setlist has unsaved changes.'))) return;
+    onClose();
+  };
+
   // Song numbering: count only songs, not headings
   let songNumber = 0;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
-      onClick={onClose}
-      onKeyDown={(e) => e.stopPropagation()}
+      onClick={requestClose}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Escape') requestClose();
+      }}
     >
       {wheelOpen && (
         <div
@@ -468,6 +489,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
             onClick={() => setWheelOpen(false)}
             className="absolute top-1 right-2 text-gray-500 hover:text-gray-300 text-base leading-none z-10"
             title="Close"
+            aria-label="Close key wheel"
           >
             ×
           </button>
@@ -480,10 +502,13 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
         </div>
       )}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="setlist-modal-title"
         className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold shrink-0 mb-4">
+        <h2 id="setlist-modal-title" className="text-lg font-semibold shrink-0 mb-4">
           {isEdit ? 'Edit Setlist' : 'Create Setlist'}
         </h2>
 
@@ -491,7 +516,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
           <div className="text-sm text-gray-400">Loading...</div>
         ) : (
           <>
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 -mr-2 pr-2">
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none space-y-4">
             {/* Name input */}
             <div>
               <label className="block text-sm text-gray-400 mb-1">Setlist Name</label>

@@ -10,6 +10,8 @@ import { InvitePage } from './components/account/InvitePage.tsx'
 import { RequireCan } from './components/account/RequireCan.tsx'
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy.tsx'
 import { TermsOfService } from './components/legal/TermsOfService.tsx'
+import { NotFound } from './components/NotFound.tsx'
+import { DialogHost } from './components/ui/DialogHost.tsx'
 
 import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage } from './admin/lazyPages.ts'
 
@@ -62,7 +64,9 @@ createRoot(document.getElementById('root')!).render(
             }
           />
         </Route>
+        <Route path="*" element={<NotFound />} />
       </Routes>
+      <DialogHost />
     </BrowserRouter>
   </StrictMode>,
 )

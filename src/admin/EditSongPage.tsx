@@ -22,6 +22,7 @@ import { TagInput } from './TagInput';
 import { SongKeyInput } from './SongKeyInput';
 import { StemColorPicker } from './StemColorPicker';
 import { MixerOrderEditor, shouldShowMixerOrderEditor } from './components/MixerOrderEditor';
+import { confirmDiscard } from '../store/dialogStore';
 
 const groupColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
@@ -142,9 +143,9 @@ export default function EditSongPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [state, newSheetMusicFile]);
 
-  const handleBack = useCallback(() => {
+  const handleBack = useCallback(async () => {
     const dirty = isDirty(state) || !!newSheetMusicFile;
-    if (dirty && !window.confirm('You have unsaved changes. Leave anyway?')) return;
+    if (dirty && !(await confirmDiscard())) return;
     navigate(`/${bandSlug}`);
   }, [state, newSheetMusicFile, navigate, bandSlug]);
 
@@ -517,8 +518,8 @@ export default function EditSongPage() {
         <h1 className="text-lg font-semibold">Edit Song</h1>
         <span className="text-sm text-gray-500 font-mono">{config.id}</span>
         <button
-          onClick={() => {
-            if ((isDirty(state) || newSheetMusicFile) && !window.confirm('You have unsaved edits. Leave anyway?')) return;
+          onClick={async () => {
+            if ((isDirty(state) || newSheetMusicFile) && !(await confirmDiscard())) return;
             navigate(`/${bandSlug}/admin/align/${config.id}`);
           }}
           className="ml-auto text-sm px-3 py-1 bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded text-gray-200"
@@ -1002,8 +1003,8 @@ export default function EditSongPage() {
             </span>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => {
-                  if ((isDirty(state) || newSheetMusicFile) && !window.confirm('You have unsaved edits. Leave anyway?')) return;
+                onClick={async () => {
+                  if ((isDirty(state) || newSheetMusicFile) && !(await confirmDiscard())) return;
                   navigate(`/${bandSlug}#${config.slug ?? config.id}`);
                 }}
                 disabled={state.saving}

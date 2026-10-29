@@ -10,6 +10,7 @@ import { loadMixerState } from '../../utils/mixerStorage';
 import { useLyricsStore } from '../../store/lyricsStore';
 import { useNotesStore } from '../../store/notesStore';
 import { usePersonalNotesStore } from '../../store/personalNotesStore';
+import { toast } from '../../store/dialogStore';
 import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
 
 export function useSongLoader() {
@@ -46,6 +47,7 @@ export function useSongLoader() {
       const bandId = currentBand?.id;
       const configUrl = dataUrl(`${bandId}/songs/${entry.id}/config.json`);
       const res = await fetch(configUrl);
+      if (!res.ok) throw new Error(`config.json: ${res.status}`);
       const configData = await res.json();
       const config = songConfigSchema.parse(configData);
 
@@ -137,7 +139,11 @@ export function useSongLoader() {
         }
       }
     } catch (err) {
-      setError(String(err));
+      console.error(`Loading ${entry.id} failed`, err);
+      const message = `Couldn’t load “${entry.title}”. Check your connection and try again.`;
+      setError(message, entry);
+      // With another song still on screen, the empty state isn't showing.
+      if (useSongStore.getState().selectedSong) toast(message, 'error');
     } finally {
       setLoading(false);
     }
@@ -157,12 +163,18 @@ export function SongList() {
   useEffect(() => {
     if (!currentBand) return;
     fetch(dataUrl(`${currentBand.id}/songs/discography.json`))
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`discography.json: ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         const parsed = songManifestSchema.parse(data);
         setManifest(parsed);
       })
-      .catch((err) => setError(String(err)));
+      .catch((err) => {
+        console.error('Loading the song list failed', err);
+        setError('Couldn’t load this band’s songs. Check your connection and try again.');
+      });
   }, [currentBand, setManifest, setError]);
 
   const setActiveSetlist = useSetlistStore((s) => s.setActiveSetlist);

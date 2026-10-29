@@ -59,6 +59,8 @@ export function GroupStrip({ groupConfig, stemConfigs }: GroupStripProps) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => toggleGroupExpanded(groupConfig.id)}
+            aria-label={`${groupState.expanded ? 'Collapse' : 'Expand'} ${groupConfig.label}`}
+            aria-expanded={groupState.expanded}
             className="text-gray-400 hover:text-gray-200 transition-colors text-xs w-4"
           >
             {groupState.expanded ? '\u25BC' : '\u25B6'}
@@ -84,6 +86,8 @@ export function GroupStrip({ groupConfig, stemConfigs }: GroupStripProps) {
         <div className="flex gap-2">
           <button
             onClick={handleMute}
+            aria-label={`Mute ${groupConfig.label}`}
+            aria-pressed={allMuted ? true : mutedCount > 0 ? 'mixed' : false}
             className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
               mutedCount > 0 ? 'border-red-600' : 'border-transparent'
             } ${
@@ -101,6 +105,8 @@ export function GroupStrip({ groupConfig, stemConfigs }: GroupStripProps) {
           </button>
           <button
             onClick={handleSolo}
+            aria-label={`Solo ${groupConfig.label}`}
+            aria-pressed={allSoloed ? true : soloedCount > 0 ? 'mixed' : false}
             className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
               soloedCount > 0 ? 'border-yellow-500' : 'border-transparent'
             } ${

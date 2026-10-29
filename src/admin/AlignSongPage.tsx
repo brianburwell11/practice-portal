@@ -5,6 +5,7 @@ import type { SongConfig } from '../audio/types';
 import { dataUrl, r2Url } from '../utils/url';
 import { useBandStore } from '../store/bandStore';
 import { AlignmentCanvas, type AlignmentCanvasStem } from './components/AlignmentCanvas';
+import { confirmDiscard } from '../store/dialogStore';
 
 interface LoadedStem {
   id: string;
@@ -158,8 +159,8 @@ export default function AlignSongPage() {
     }
   }, [load, currentBand, songId, navigate, bandSlug]);
 
-  const handleCancel = () => {
-    if (dirty && !window.confirm('Discard alignment changes?')) return;
+  const handleCancel = async () => {
+    if (dirty && !(await confirmDiscard('Your alignment changes haven’t been saved.'))) return;
     navigate(`/${bandSlug}`);
   };
 

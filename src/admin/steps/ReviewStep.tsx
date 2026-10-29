@@ -14,9 +14,13 @@ import { slugify } from '../../utils/deriveId';
 interface Props {
   state: WizardState;
   dispatch: React.Dispatch<WizardAction>;
+  /** The song is saved: nothing left to lose by leaving. */
+  onSaved: () => void;
+  /** Start the wizard over for the next song. */
+  onAddAnother: () => void;
 }
 
-export function ReviewStep({ state, dispatch }: Props) {
+export function ReviewStep({ state, dispatch, onSaved, onAddAnother }: Props) {
   const [result, setResult] = useState<'success' | null>(null);
   /** Per-stem upload and transcode progress, once saving starts. */
   const [stemStates, setStemStates] = useState<StemJobState[] | null>(null);
@@ -118,6 +122,7 @@ export function ReviewStep({ state, dispatch }: Props) {
       throw new Error(err.error || 'Discography update failed');
     }
     setResult('success');
+    onSaved();
   };
 
   /**
@@ -202,12 +207,15 @@ export function ReviewStep({ state, dispatch }: Props) {
           <span className="font-mono text-gray-300">{state.title}</span> by{' '}
           <span className="text-gray-300">{state.artist}</span> has been saved.
         </p>
-        <div className="flex justify-center">
+        <div className="flex justify-center gap-3">
           <button
             onClick={() => navigate(`/${bandSlug}#${slugify(state.slug) || state.id}`)}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
           >
             Open Song
+          </button>
+          <button onClick={onAddAnother} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+            Add another song
           </button>
         </div>
       </div>

@@ -92,12 +92,6 @@ export function MetadataStep({ state, dispatch }: Props) {
             <p className="mt-1 text-xs text-red-400">This URL hash is already taken by another song.</p>
           )}
         </div>
-
-        {state.id && (
-          <div className="text-sm text-gray-500">
-            Song ID: <span className="text-gray-300 font-mono">{state.id}</span>
-          </div>
-        )}
       </div>
 
       <div className="flex justify-end">

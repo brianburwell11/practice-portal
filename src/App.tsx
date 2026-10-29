@@ -8,6 +8,7 @@ import { UndoToast } from './components/notes/UndoToast';
 import { useNotesKeyboard } from './hooks/useNotesKeyboard';
 import { ScrollingScore } from './components/sheet/ScrollingScore';
 import { MixerPanel } from './components/mixer/MixerPanel';
+import { NoSongState } from './components/song-select/NoSongState';
 import { MinimizedRibbon } from './components/MinimizedRibbon';
 import { YouTubeMiniPlayerStack } from './components/youtube/YouTubeMiniPlayerStack';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
@@ -17,6 +18,7 @@ import { AdminRibbon } from './admin/AdminRibbon';
 import { AccountMenu } from './components/account/AccountMenu';
 import { MembersModal } from './components/account/MembersModal';
 import { useSessionStore } from './store/sessionStore';
+import { confirmDiscard, toast } from './store/dialogStore';
 import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useLyricsEditorStore } from './store/lyricsEditorStore';
 import { usePanelMinimizeStore } from './store/panelMinimizeStore';
@@ -42,26 +44,29 @@ const ADMIN_CAPABILITIES = new Set([
   'song.timing.write', 'song.audio.write', 'song.score.write', 'song.delete', 'setlist.write',
 ]);
 
+const LYRICS_UNSAVED = 'You have unsaved lyrics changes.';
+const TAPMAP_UNSAVED = 'You have unsaved tapMap changes.';
+
 /**
  * Copy the band's guest link, opening on `setlistSlug`. The link is the band's
  * one "anyone with the link" link, so this only works once it's turned on.
  */
-async function copyGuestLink(bandId: string, setlistSlug: string, say: (msg: string) => void): Promise<void> {
+async function copyGuestLink(bandId: string, setlistSlug: string): Promise<void> {
   try {
     const res = await fetch(`/api/bands/${encodeURIComponent(bandId)}/guest-link`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
     if (!data.link) {
-      say('The guest link is off. Turn it on in Band → Members & Sharing first.');
+      toast('The guest link is off. Turn it on in Band → Members & Sharing first.');
       return;
     }
     // The link already carries `?guest=`.
     await navigator.clipboard.writeText(`${data.link.url}&setlist=${encodeURIComponent(setlistSlug)}`);
-    say(data.link.expired
-      ? 'Copied — but the guest link has expired. Change its expiry in Members & Sharing.'
+    toast(data.link.expired
+      ? 'Copied, but the guest link has expired. Change its expiry in Members & Sharing.'
       : 'Guest link to this setlist copied. Anyone with it can play the band’s songs.');
   } catch (err) {
-    say(`Couldn’t copy the guest link: ${(err as Error).message}`);
+    toast(`Couldn’t copy the guest link: ${(err as Error).message}`, 'error');
   }
 }
 
@@ -88,7 +93,6 @@ export default function App() {
   const [showViewAllSetlistsModal, setShowViewAllSetlistsModal] = useState(false);
   const [showEditBandModal, setShowEditBandModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   // Anything to manage here? Decides whether a Member sees the admin ribbon
   // at all (they don't — their screen is the public one). UX only.
   const myCaps = useSessionStore((s) => s.bands.find((b) => b.id === currentBand?.id)?.capabilities);
@@ -223,14 +227,14 @@ export default function App() {
             hasSong={!!selectedSong}
             hasSetlist={!!activeSetlist}
             onManageMembers={() => setShowMembersModal(true)}
-            onEditBand={() => {
+            onEditBand={async () => {
               if (lyricsEditorOpen) {
                 const dirty = useLyricsEditorStore.getState().dirty;
-                if (dirty && !window.confirm('You have unsaved lyrics changes. Discard them?')) return;
+                if (dirty && !(await confirmDiscard(LYRICS_UNSAVED))) return;
                 closeLyricsEditor();
               }
               if (markerEditorOpen) {
-                if (markerEditorDirty && !window.confirm('You have unsaved tapMap changes. Discard them?')) return;
+                if (markerEditorDirty && !(await confirmDiscard(TAPMAP_UNSAVED))) return;
                 closeMarkerEditor();
               }
               setShowEditBandModal(true);
@@ -238,19 +242,19 @@ export default function App() {
             onDeleteBand={() => setShowDeleteBandModal(true)}
             onAddSong={() => navigate(`/${bandRoute}/admin/add-song`)}
             onEditSong={() => selectedSong && navigate(`/${bandRoute}/admin/edit-song/${selectedSong.id}`)}
-            onTapMapEditor={() => {
+            onTapMapEditor={async () => {
               if (!selectedSong) return;
               if (lyricsEditorOpen) {
                 const dirty = useLyricsEditorStore.getState().dirty;
-                if (dirty && !window.confirm('You have unsaved lyrics changes. Discard them?')) return;
+                if (dirty && !(await confirmDiscard(LYRICS_UNSAVED))) return;
                 closeLyricsEditor();
               }
               openMarkerEditor(selectedSong.tapMap ?? []);
             }}
-            onLyricsEditor={() => {
+            onLyricsEditor={async () => {
               if (!selectedSong || !currentBand) return;
               if (markerEditorOpen) {
-                if (markerEditorDirty && !window.confirm('You have unsaved tapMap changes. Discard them?')) return;
+                if (markerEditorDirty && !(await confirmDiscard(TAPMAP_UNSAVED))) return;
                 closeMarkerEditor();
               }
               setShowEditBandModal(false);
@@ -265,7 +269,7 @@ export default function App() {
             onCopySetlist={() => { if (activeSetlist) { setEditSetlistId(undefined); setCopySetlistId(activeSetlist.id); setShowSetlistModal(true); } }}
             onDeleteSetlist={() => setShowDeleteSetlistModal(true)}
             onViewAllSetlists={() => setShowViewAllSetlistsModal(true)}
-            onCopyGuestLink={() => { if (currentBand && activeSetlist) copyGuestLink(currentBand.id, activeSetlist.slug ?? activeSetlist.id, setNotice); }}
+            onCopyGuestLink={() => { if (currentBand && activeSetlist) copyGuestLink(currentBand.id, activeSetlist.slug ?? activeSetlist.id); }}
           />
         ) : null}
 
@@ -308,6 +312,8 @@ export default function App() {
           <Suspense fallback={null}>
             <EditBandModal band={currentBand} onClose={() => setShowEditBandModal(false)} />
           </Suspense>
+        ) : !selectedSong ? (
+          <NoSongState onInvite={() => setShowMembersModal(true)} />
         ) : (
           <div className={mobileControlsOpen ? 'contents' : 'hidden md:contents'}>
             <MixerPanel />
@@ -360,16 +366,6 @@ export default function App() {
       )}
       <MinimizedRibbon />
       <UndoToast />
-      {notice && (
-        <div
-          key={notice}
-          role="status"
-          onAnimationEnd={() => setNotice(null)}
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] max-w-sm w-[calc(100%-2rem)] bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-sm text-gray-100 shadow-xl animate-[fade-out_0.4s_ease-in_4s_forwards]"
-        >
-          {notice}
-        </div>
-      )}
     </AudioEngineContext.Provider>
   );
 }

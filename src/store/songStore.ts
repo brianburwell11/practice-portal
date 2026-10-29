@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SongConfig, SongManifest } from '../audio/types';
+import type { SongConfig, SongManifest, SongManifestEntry } from '../audio/types';
 
 interface SongState {
   manifest: SongManifest | null;
@@ -7,11 +7,13 @@ interface SongState {
   loading: boolean;
   loadProgress: { loaded: number; total: number } | null;
   error: string | null;
+  /** The song whose load failed, to retry. Null when it was the song list that failed. */
+  failedSong: SongManifestEntry | null;
   setManifest: (m: SongManifest) => void;
   setSelectedSong: (s: SongConfig | null) => void;
   setLoading: (l: boolean) => void;
   setLoadProgress: (loaded: number, total: number) => void;
-  setError: (e: string | null) => void;
+  setError: (e: string | null, failedSong?: SongManifestEntry | null) => void;
 }
 
 export const useSongStore = create<SongState>((set) => ({
@@ -20,9 +22,10 @@ export const useSongStore = create<SongState>((set) => ({
   loading: false,
   loadProgress: null,
   error: null,
+  failedSong: null,
   setManifest: (manifest) => set({ manifest }),
   setSelectedSong: (selectedSong) => set({ selectedSong }),
   setLoading: (loading) => set({ loading }),
   setLoadProgress: (loaded, total) => set({ loadProgress: { loaded, total } }),
-  setError: (error) => set({ error }),
+  setError: (error, failedSong = null) => set({ error, failedSong }),
 }));

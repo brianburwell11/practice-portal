@@ -7,6 +7,7 @@ import { useLyricsStore } from '../../store/lyricsStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { LYRIC_SECTIONS, isSectionMarker, isInstrumentalAnnotation } from '../../audio/lyricSections';
 import type { LyricsData, LyricsLine } from '../../audio/lyricsTypes';
+import { confirmDialog, confirmDiscard } from '../../store/dialogStore';
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -77,8 +78,8 @@ export function LyricsEditorModal() {
   }, [currentSyncIndex]);
 
   // Close with dirty confirmation
-  const handleClose = useCallback(() => {
-    if (dirty && !window.confirm('You have unsaved changes. Discard them?')) return;
+  const handleClose = useCallback(async () => {
+    if (dirty && !(await confirmDiscard())) return;
     close();
   }, [dirty, close]);
 
@@ -111,7 +112,7 @@ export function LyricsEditorModal() {
       const file = e.target.files?.[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
         const raw = reader.result as string;
         const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         // Drop a single trailing newline but preserve blank lines inside.
@@ -124,7 +125,7 @@ export function LyricsEditorModal() {
           return { text, time: null };
         });
         const hasContent = lines.some((l) => l.text !== '' || l.instrumental);
-        if (hasContent && !window.confirm('Replace existing lyrics?')) return;
+        if (hasContent && !(await confirmDialog({ title: 'Replace the existing lyrics?', confirmLabel: 'Replace', danger: true }))) return;
         importLines(parsed);
       };
       reader.readAsText(file);

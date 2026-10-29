@@ -191,13 +191,8 @@ export function MixerPanel() {
   );
   const minimizePanel = usePanelMinimizeStore((s) => s.minimizePanel);
 
-  if (!selectedSong) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-gray-500">
-        Select a song to get started
-      </div>
-    );
-  }
+  // `NoSongState` (App.tsx) has the screen until a song loads.
+  if (!selectedSong) return null;
 
   return (
     <div className={`flex-1 p-4 overflow-auto ${minimized ? 'md:hidden' : ''}`}>
@@ -223,6 +218,8 @@ export function MixerPanel() {
           <button
             {...(anyMuted ? muteHandlers : {})}
             disabled={!anyMuted}
+            aria-label="Mute group on or off (long-press to clear)"
+            aria-pressed={anyMuted ? globalMuteActive : undefined}
             className={`flex-1 flex items-center justify-center gap-0.5 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
               !anyMuted
                 ? 'bg-gray-800 text-gray-600 border-transparent cursor-default'
@@ -240,6 +237,8 @@ export function MixerPanel() {
           <button
             {...(anySoloed ? soloHandlers : {})}
             disabled={!anySoloed}
+            aria-label="Solo group on or off (long-press to clear)"
+            aria-pressed={anySoloed ? globalSoloActive : undefined}
             className={`flex-1 flex items-center justify-center gap-0.5 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
               !anySoloed
                 ? 'bg-gray-800 text-gray-600 border-transparent cursor-default'

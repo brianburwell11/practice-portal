@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBandStore } from '../../store/bandStore';
 import { bandsManifestSchema } from '../../config/schema';
@@ -16,13 +16,24 @@ export function BandPicker() {
   // Signed out on a server with accounts: what this is, and how to get in.
   const welcome = loaded && available && !user;
 
-  useEffect(() => {
-    if (bandsManifest) return;
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  const loadBands = useCallback(() => {
     fetch(dataUrl('registry.json'))
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`registry.json: ${r.status}`);
+        return r.json();
+      })
       .then((data) => setBandsManifest(bandsManifestSchema.parse(data)))
-      .catch(console.error);
-  }, [bandsManifest, setBandsManifest]);
+      .catch((err) => {
+        console.error('Loading bands failed', err);
+        setLoadFailed(true);
+      });
+  }, [setBandsManifest]);
+
+  useEffect(() => {
+    if (!bandsManifest) loadBands();
+  }, [bandsManifest, loadBands]);
 
   return (
     <div className="min-h-screen bg-page text-gray-100 flex flex-col items-center justify-center p-8">
@@ -39,7 +50,14 @@ export function BandPicker() {
       </h1>
       {welcome && <Welcome />}
 
-      {welcome ? null : !bandsManifest || !loaded ? (
+      {welcome ? null : loadFailed ? (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-gray-300">Couldn’t load your bands. Check your connection and try again.</p>
+          <button onClick={() => { setLoadFailed(false); loadBands(); }} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white">
+            Try again
+          </button>
+        </div>
+      ) : !bandsManifest || !loaded ? (
         <p className="text-gray-500">Loading...</p>
       ) : bands.length > 0 ? (
         <>

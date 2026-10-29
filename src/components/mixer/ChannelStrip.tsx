@@ -66,7 +66,9 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
           <button
             onClick={handleStereoToggle}
             className="shrink-0 flex items-center gap-0.5"
-            title={stemState.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
+            title={stemState.stereo ? 'Stereo. Click for mono.' : 'Mono. Click for stereo.'}
+            aria-label={`${stemConfig.label} stereo`}
+            aria-pressed={stemState.stereo}
           >
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stemConfig.color }} />
             {stemState.stereo && (
@@ -82,6 +84,7 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
             onClick={handleReset}
             className="ml-auto shrink-0 text-gray-500 hover:text-gray-300 transition-colors"
             title="Reset to defaults"
+            aria-label={`Reset ${stemConfig.label} to defaults`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
               <path d="M12 2a10 10 0 0 1 8.5 4.7l-2.3-.4a1.2 1.2 0 1 0-.4 2.4l4.6.8a1.2 1.2 0 0 0 1.4-1l.8-4.6a1.2 1.2 0 0 0-2.4-.4l-.3 1.8A12 12 0 0 0 0 12a1.2 1.2 0 0 0 2.4 0A9.6 9.6 0 0 1 12 2ZM12 22a10 10 0 0 1-8.5-4.7l2.3.4a1.2 1.2 0 1 0 .4-2.4l-4.6-.8a1.2 1.2 0 0 0-1.4 1l-.8 4.6a1.2 1.2 0 0 0 2.4.4l.3-1.8A12 12 0 0 0 24 12a1.2 1.2 0 0 0-2.4 0A9.6 9.6 0 0 1 12 22Z" />
@@ -114,6 +117,8 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
       <div className="flex gap-2">
         <button
           onClick={handleMute}
+          aria-label={`Mute ${stemConfig.label}`}
+          aria-pressed={stemState.muted}
           className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
             stemState.muted && globalMuteActive
               ? 'bg-red-600 text-white border-red-600'
@@ -126,6 +131,8 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
         </button>
         <button
           onClick={handleSolo}
+          aria-label={`Solo ${stemConfig.label}`}
+          aria-pressed={stemState.soloed}
           className={`flex-1 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
             stemState.soloed && globalSoloActive
               ? 'bg-yellow-500 text-gray-900 border-yellow-500'

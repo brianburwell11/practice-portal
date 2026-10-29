@@ -35,11 +35,19 @@ export function AccountMenu({ bandId }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => {
+    // A press anywhere else (mouse, touch or pen) or Escape closes it.
+    const close = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   const banner = signInError && (

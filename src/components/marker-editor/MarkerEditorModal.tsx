@@ -10,6 +10,7 @@ import { buildXscContent } from '../../audio/xscExporter';
 import { buildMusicXmlContent } from '../../audio/musicXmlExporter';
 import { renderStereoDownmix } from '../../audio/mixdown';
 import { encodeWav, interleaveStereo } from '../../admin/utils/audioConvert';
+import { confirmDialog, confirmDiscard } from '../../store/dialogStore';
 
 export function MarkerEditorModal() {
   const {
@@ -102,12 +103,9 @@ export function MarkerEditorModal() {
     }
   };
 
-  const handleClose = () => {
+  const handleClose = async () => {
     if (dirty) {
-      const confirmed = window.confirm(
-        'You have unsaved changes. Discard them?',
-      );
-      if (!confirmed) return;
+      if (!(await confirmDiscard())) return;
     }
     close();
   };
@@ -117,11 +115,11 @@ export function MarkerEditorModal() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const content = reader.result as string;
       const entries = parseXscFile(content);
       if (tapMap.length > 0) {
-        if (!window.confirm('Replace existing tap map?')) return;
+        if (!(await confirmDialog({ title: 'Replace the existing tap map?', confirmLabel: 'Replace', danger: true }))) return;
       }
       importTapMap(entries);
     };
