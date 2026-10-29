@@ -111,7 +111,8 @@ export function BandApp() {
     root.style.setProperty('--band-accent', currentBand.colors.accent);
     root.style.setProperty('--band-bg', currentBand.colors.background);
     root.style.setProperty('--band-text', currentBand.colors.text);
-    document.title = `${currentBand.name} Practice Portal`;
+    // "The Hornets’ Practice Portal", not "The Hornets’s".
+    document.title = `${currentBand.name}${/s$/i.test(currentBand.name) ? '’' : '’s'} Practice Portal`;
     return () => {
       root.style.removeProperty('--band-primary');
       root.style.removeProperty('--band-accent');
