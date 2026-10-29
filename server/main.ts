@@ -19,6 +19,7 @@ import http from 'node:http';
 import { createApiHandler, sendJson } from './adapters/nodeApi';
 import { createStaticHandler } from './adapters/staticFiles';
 import { startWorker, stopWorker } from './core/jobs/worker';
+import { drainEmails } from './core/email';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const STATIC_DIR = process.env.STATIC_DIR ?? 'dist';
@@ -111,7 +112,8 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     console.log(`${signal} received, shutting down`);
     // A job in hand is abandoned; it goes back to the queue once it's stale.
     stopWorker();
-    server.close(() => process.exit(0));
+    // Emails sent in the background still go out before the process ends.
+    server.close(() => void drainEmails().then(() => process.exit(0)));
     setTimeout(() => process.exit(1), 10_000).unref();
   });
 }

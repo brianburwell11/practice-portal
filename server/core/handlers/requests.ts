@@ -12,13 +12,14 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '../../db/client';
 import * as schema from '../../db/schema';
 import { bandByLegacyId, requireCan, roleIn, type BandRef } from '../auth/can';
-import { escapeHtml, htmlEmail, sendEmail } from '../email';
+import { emailLinkOrigin, emailText, escapeHtml, htmlEmail, sendEmailLater } from '../email';
 import { HttpError, json } from '../http';
 import { r2PublicUrl } from '../r2';
 import type { Actor, CoreRequest, CoreResponse } from '../types';
 import { audit } from './members';
 
-const MESSAGE_MAX = 500;
+/** A request's message, which ends up in the Owner's email: short, like a note. */
+const MESSAGE_MAX = 100;
 /** After a decline, how long before the same person may ask again. */
 const RETRY_AFTER_DECLINE_MS = 7 * 24 * 60 * 60 * 1000;
 /** At most this many requests per user per hour, across all bands. */
@@ -104,7 +105,7 @@ export async function requestAccess(req: CoreRequest): Promise<CoreResponse> {
   const raw = (req.body as { message?: unknown } | undefined)?.message;
   if (raw !== undefined && raw !== null && typeof raw !== 'string') throw new HttpError(400, 'message must be text');
   const message = (raw ?? '').trim() || null;
-  if (message && message.length > MESSAGE_MAX) throw new HttpError(400, `Keep the message under ${MESSAGE_MAX} characters`);
+  if (message && message.length > MESSAGE_MAX) throw new HttpError(400, `Keep the message to ${MESSAGE_MAX} characters`);
 
   const { member, request, canRequest, retryAt } = await standing(band, actor);
   if (band.visibility !== 'private') throw new HttpError(400, 'This band is Public — no need to ask');
@@ -132,21 +133,25 @@ export async function requestAccess(req: CoreRequest): Promise<CoreResponse> {
     .from(schema.appUser).where(eq(schema.appUser.id, actor.userId));
   const [owner] = await db().select({ email: schema.appUser.email })
     .from(schema.appUser).where(eq(schema.appUser.id, band.ownerUserId));
-  const who = requester.name ? `${requester.name} (${requester.email})` : requester.email;
-  const url = `${req.origin}/${encodeURIComponent(band.slug)}?requests=1`;
-  const emailed = await sendEmail({
+  // Names and the message are user input: no links, at most 100 characters (emailText).
+  const name = emailText(requester.name);
+  const who = name ? `${name} (${requester.email})` : requester.email;
+  const bandName = emailText(band.name, 'your band');
+  const note = emailText(message);
+  const url = `${emailLinkOrigin(req.origin)}/${encodeURIComponent(band.slug)}?requests=1`;
+  const emailed = sendEmailLater({
     to: owner.email,
     replyTo: requester.email,
-    subject: `${requester.name ?? requester.email} asked to join ${band.name}`,
+    subject: `${name || requester.email} asked to join ${bandName}`,
     text: [
-      `${who} asked to join ${band.name} on Practice Portal.`,
-      ...(message ? [`Their message:\n\n${message}`] : []),
+      `${who} asked to join ${bandName} on Practice Portal.`,
+      ...(note ? [`Their message:\n\n${note}`] : []),
       `Approve or decline in Members & Sharing: ${url}`,
       'Reply to this email to write back to them.',
     ].join('\n\n'),
     html: htmlEmail([
-      `<strong>${escapeHtml(who)}</strong> asked to join <strong>${escapeHtml(band.name)}</strong> on Practice Portal.`,
-      ...(message ? [`Their message:<br><span style="white-space:pre-wrap">${escapeHtml(message)}</span>`] : []),
+      `<strong>${escapeHtml(who)}</strong> asked to join <strong>${escapeHtml(bandName)}</strong> on Practice Portal.`,
+      ...(note ? [`Their message:<br><span style="white-space:pre-wrap">${escapeHtml(note)}</span>`] : []),
       'Reply to this email to write back to them.',
     ], { label: 'Approve or decline', url }),
   });
@@ -203,20 +208,21 @@ export async function decideAccessRequest(req: CoreRequest): Promise<CoreRespons
     return user;
   });
 
-  const url = `${req.origin}/${encodeURIComponent(band.slug)}`;
-  const emailed = await sendEmail(approve ? {
+  const url = `${emailLinkOrigin(req.origin)}/${encodeURIComponent(band.slug)}`;
+  const bandName = emailText(band.name, 'the band');
+  const emailed = sendEmailLater(approve ? {
     to: requester.email,
-    subject: `You’re in: ${band.name}`,
-    text: `Your request to join ${band.name} on Practice Portal was approved. You’re a Member now.\n\nOpen the band: ${url}`,
+    subject: `You’re in: ${bandName}`,
+    text: `Your request to join ${bandName} on Practice Portal was approved. You’re a Member now.\n\nOpen the band: ${url}`,
     html: htmlEmail([
-      `Your request to join <strong>${escapeHtml(band.name)}</strong> on Practice Portal was approved. You’re a Member now.`,
-    ], { label: `Open ${band.name}`, url }),
+      `Your request to join <strong>${escapeHtml(bandName)}</strong> on Practice Portal was approved. You’re a Member now.`,
+    ], { label: `Open ${bandName}`, url }),
   } : {
     to: requester.email,
-    subject: `Your request to join ${band.name}`,
-    text: `Your request to join ${band.name} on Practice Portal wasn’t approved. If you think that’s a mistake, ask someone in the band directly.`,
+    subject: `Your request to join ${bandName}`,
+    text: `Your request to join ${bandName} on Practice Portal wasn’t approved. If you think that’s a mistake, ask someone in the band directly.`,
     html: htmlEmail([
-      `Your request to join <strong>${escapeHtml(band.name)}</strong> on Practice Portal wasn’t approved.`,
+      `Your request to join <strong>${escapeHtml(bandName)}</strong> on Practice Portal wasn’t approved.`,
       'If you think that’s a mistake, ask someone in the band directly.',
     ]),
   });

@@ -11,6 +11,8 @@ import { parseCookies } from '../core/auth/cookies';
 import { GUEST_COOKIE, guestTokens, resolveGuests, type GuestGrant } from '../core/auth/guests';
 import { resolveSession, SESSION_COOKIE } from '../core/auth/sessions';
 import { matchRoute, runRoute } from '../core/router';
+import { clientIp, hit, limitFor } from '../core/rateLimit';
+import { HttpError } from '../core/http';
 import type { Actor, CoreResponse, RequestBody, RouteDef } from '../core/types';
 import {
   makeScratchDir,
@@ -28,6 +30,7 @@ function setHeaders(res: ServerResponse, headers: CoreResponse['headers']): void
 
 export function sendJson(res: ServerResponse, { status, body, headers }: CoreResponse): void {
   res.statusCode = status;
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   setHeaders(res, headers);
   if (status >= 300 && status < 400) {
     res.end();
@@ -82,6 +85,7 @@ function sendCacheableJson(req: IncomingMessage, res: ServerResponse, { status, 
   const etag = `"${createHash('sha1').update(text).digest('base64url')}"`;
   setHeaders(res, headers);
   res.setHeader('Content-Type', 'application/json');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   // A signed-in or guest response may differ per person, so no shared cache may keep it.
   res.setHeader('Cache-Control', personal ? 'private, no-cache' : 'no-cache');
   res.setHeader('ETag', etag);
@@ -94,6 +98,11 @@ function sendCacheableJson(req: IncomingMessage, res: ServerResponse, { status, 
   res.end(text);
 }
 
+/** JSON bodies past this are refused (413). A long song's config with its tapMap is well under. */
+const MAX_JSON_BYTES = 2 * 1024 * 1024;
+/** A multipart route that doesn't set its own limits: one file, 10 MB. */
+const DEFAULT_UPLOAD_LIMITS = { files: 1, fileSize: 10 * 1024 * 1024 };
+
 /**
  * Read the body in whatever shape the route declared. Multipart routes stream
  * into `tmpDir`, which the caller removes once the response is written.
@@ -104,10 +113,16 @@ async function loadBody(
   tmpDir: string | undefined,
 ): Promise<RequestBody> {
   switch (route.body) {
-    case 'json':
-      return { body: JSON.parse(await readBody(req)) };
+    case 'json': {
+      const text = await readBody(req, route.maxBodyBytes ?? MAX_JSON_BYTES);
+      try {
+        return { body: JSON.parse(text) };
+      } catch {
+        throw new HttpError(400, 'Malformed JSON');
+      }
+    }
     case 'multipart':
-      return { files: await readMultipart(req, tmpDir!, route.limits), tmpDir };
+      return { files: await readMultipart(req, tmpDir!, route.limits ?? DEFAULT_UPLOAD_LIMITS), tmpDir };
     default:
       return {};
   }
@@ -126,6 +141,23 @@ export function createApiHandler() {
     const { route, params } = matched;
     const cookies = parseCookies(req.headers.cookie);
     const origin = requestOrigin(req);
+
+    // Rate limits (server/core/rateLimit.ts), before any work is done.
+    const limit = limitFor(route.name, route.method);
+    const { allowed, retryAfter } = hit(limit.name, limit.bucket, clientIp(req));
+    if (!allowed) {
+      res.setHeader('Retry-After', String(retryAfter));
+      if (limit.name === 'auth') {
+        // Sign-in is a page navigation: back to the home page, where the
+        // account menu shows `signin_error` as a banner.
+        const minutes = Math.ceil(retryAfter / 60);
+        const message = `Too many sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+        sendJson(res, { status: 302, body: null, headers: { Location: `/?signin_error=${encodeURIComponent(message)}` } });
+      } else {
+        sendJson(res, { status: 429, body: { error: 'Too many requests. Wait a moment and try again.' } });
+      }
+      return true;
+    }
 
     // Cross-site request forgery: a state-changing request that carries our
     // session cookie must come from our own pages. SameSite=Lax already stops

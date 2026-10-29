@@ -104,8 +104,10 @@ export interface RouteDef {
   writes?: 'documents' | 'media' | 'self';
   /** How the adapter should read the body. Defaults to `'none'`. */
   body?: 'none' | 'json' | 'multipart';
-  /** Enforced by the adapter while parsing a multipart body. */
+  /** Enforced by the adapter while parsing a multipart body. Default: one file, 10 MB. */
   limits?: { files?: number; fileSize?: number };
+  /** Largest JSON body accepted (413 past it). Default 2 MB. */
+  maxBodyBytes?: number;
   /**
    * Validation that must run *before* the body is read: a bad path param,
    * query param, or missing configuration shouldn't cost a 50 MB upload

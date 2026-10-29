@@ -3,10 +3,9 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import '@fontsource/hanken-grotesk/latin-700.css'
 import './index.css'
-import App from './App.tsx'
-import { BandApp } from './components/band/BandApp.tsx'
 import { BandPicker } from './components/band/BandPicker.tsx'
 import { InvitePage } from './components/account/InvitePage.tsx'
+import { EmailUnsubscribe } from './components/account/EmailUnsubscribe.tsx'
 import { RequireCan } from './components/account/RequireCan.tsx'
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy.tsx'
 import { TermsOfService } from './components/legal/TermsOfService.tsx'
@@ -14,10 +13,13 @@ import { NotFound } from './components/NotFound.tsx'
 import { DialogHost } from './components/ui/DialogHost.tsx'
 
 import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage } from './admin/lazyPages.ts'
+import { App, BandApp } from './lazyPages.ts'
 
 const adminFallback = (
   <div className="min-h-screen bg-page text-gray-400 p-8">Loading admin...</div>
 );
+
+const pageFallback = <div className="min-h-screen bg-page" />;
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
 
@@ -27,6 +29,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<BandPicker />} />
         <Route path="/invite/:token" element={<InvitePage />} />
+        <Route path="/email/unsubscribe" element={<EmailUnsubscribe />} />
         <Route path="/legal/privacy" element={<PrivacyPolicy />} />
         <Route path="/legal/terms" element={<TermsOfService />} />
         <Route
@@ -37,8 +40,8 @@ createRoot(document.getElementById('root')!).render(
             </Suspense>
           }
         />
-        <Route path="/:bandSlug" element={<BandApp />}>
-          <Route index element={<App />} />
+        <Route path="/:bandSlug" element={<Suspense fallback={pageFallback}><BandApp /></Suspense>}>
+          <Route index element={<Suspense fallback={null}><App /></Suspense>} />
           <Route
             path="admin/add-song"
             element={

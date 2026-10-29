@@ -151,6 +151,27 @@ export const bandConfigSchema = z.object({
   palette: z.array(z.string()).optional(),
 });
 
+const httpUrl = z.string().max(2048).refine((u) => /^https?:\/\//i.test(u), 'Must start with http:// or https://');
+
+/**
+ * What the server accepts when a band is saved: `bandConfigSchema` with
+ * limits. Reads stay lenient, so an older record never stops a page loading.
+ */
+export const bandConfigWriteSchema = bandConfigSchema.extend({
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'Invalid band id'),
+  name: z.string().trim().min(1).max(80),
+  route: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,59}$/, 'Use letters, numbers, dots, dashes or underscores (at most 60)'),
+  colors: z.object({
+    primary: z.string().max(32),
+    accent: z.string().max(32),
+    background: z.string().max(32),
+    text: z.string().max(32),
+  }),
+  logo: httpUrl.optional(),
+  website: z.union([httpUrl, z.literal('')]).optional(),
+  palette: z.array(z.string().max(32)).max(64).optional(),
+});
+
 export const bandIndexEntrySchema = z.object({
   id: z.string(),
   name: z.string(),

@@ -70,15 +70,25 @@ export async function msczConvertUpload(req: CoreRequest): Promise<CoreResponse>
   return ok({ filename });
 }
 
-/** Presigned PUT URLs so the browser can upload straight to R2. */
+/** A sheet-music file in a song's folder, as the app names them (`wiggle-sooza.mxl`). */
+export const SCORE_FILENAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\.(mxl|musicxml|xml|mscz)$/i;
+const ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** Presigned PUT URLs so the browser can upload a score straight to R2. */
 export async function presignUploads(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, songId, files } = (req.body ?? {}) as {
     bandId?: string;
     songId?: string;
     files?: string[];
   };
-  if (!bandId || !songId || !files?.length) {
+  if (!bandId || !songId || !Array.isArray(files) || !files.length) {
     throw new HttpError(400, 'bandId, songId and files[] required');
+  }
+  // Scores only, and only in the song's folder: stems go through the stem
+  // jobs, and the song's JSON documents are never uploaded directly.
+  if (!ID.test(bandId) || !ID.test(songId) || files.length > 4
+      || !files.every((f) => typeof f === 'string' && SCORE_FILENAME.test(f))) {
+    throw new HttpError(400, 'Only sheet-music files (.mxl, .musicxml, .xml) can be uploaded here');
   }
 
   const r2Prefix = `${bandId}/songs/${songId}`;

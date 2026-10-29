@@ -49,6 +49,7 @@ import {
   listAccessRequests,
   requestAccess,
 } from './handlers/requests';
+import { blockEmail, getEmailBlock } from './handlers/emailBlock';
 import { deleteSetlist, saveSetlist } from './handlers/setlists';
 import { createStemUploads, getStemJobs, queueStemUploads, retryStemJob } from './handlers/stems';
 import {
@@ -139,6 +140,22 @@ export const routes: RouteDef[] = [
     method: 'GET',
     pattern: /^\/api\/invites\/(?<token>[A-Za-z0-9_-]+)$/,
     handler: previewInvite,
+  },
+  {
+    // Public: the invite token in the link is the authorization (handlers/emailBlock.ts).
+    name: 'email.block.get',
+    access: 'public',
+    method: 'GET',
+    pattern: /^\/api\/email\/block$/,
+    handler: getEmailBlock,
+  },
+  {
+    name: 'email.block',
+    writes: 'self',
+    access: 'public',
+    method: 'POST',
+    pattern: /^\/api\/email\/block$/,
+    handler: blockEmail,
   },
   {
     name: 'invite.accept',
@@ -376,6 +393,7 @@ export const routes: RouteDef[] = [
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/logo$/,
     body: 'multipart',
+    limits: { files: 1, fileSize: 5 * 1024 * 1024 },
     handler: uploadBandLogo,
     errorStatus: 400,
     errorMessage: 'Upload failed',

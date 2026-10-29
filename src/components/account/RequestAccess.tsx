@@ -10,7 +10,7 @@ interface Access {
   retryAt: string | null;
 }
 
-const MESSAGE_MAX = 500;
+const MESSAGE_MAX = 100;
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
 
 /**

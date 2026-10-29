@@ -1,3 +1,5 @@
+import { DrizzleQueryError } from 'drizzle-orm';
+import { ZodError } from 'zod';
 import { authorizeAccess } from './access';
 import { auditWrite, inRequestTransaction } from './store';
 import { HttpError, errorMessage } from './http';
@@ -54,6 +56,16 @@ export async function runRoute(
   } catch (err) {
     if (err instanceof HttpError) {
       return { status: err.status, body: { error: err.message } };
+    }
+    // Validation: say what's wrong, briefly.
+    if (err instanceof ZodError) {
+      const issues = err.issues.slice(0, 5).map((i) => `${i.path.join('.') || 'body'}: ${i.message}`);
+      return { status: 400, body: { error: `Invalid request. ${issues.join('; ')}` } };
+    }
+    // A database error's message carries the SQL and its parameters: log it, never send it.
+    if (err instanceof DrizzleQueryError || (err as { name?: string })?.name === 'PostgresError') {
+      console.error(`[${route.name}] database error:`, err);
+      return { status: 500, body: { error: route.errorMessage ?? 'Request failed' } };
     }
     return {
       status: route.errorStatus ?? 500,

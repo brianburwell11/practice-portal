@@ -8,6 +8,7 @@ import { isNoSuchKey, r2ListKeys } from '../r2';
 import { copyObject, deleteObject, readJson, writeJson } from '../store';
 import { updateSetlistEntries } from '../setlistEntries';
 import type { CoreRequest, CoreResponse } from '../types';
+import { SCORE_FILENAME } from './uploads';
 
 interface DiscographyEntry {
   id: string;
@@ -165,10 +166,11 @@ export async function deleteSong(req: CoreRequest): Promise<CoreResponse> {
 export async function deleteSongFile(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, songId } = req.params;
   const filename = decodeURIComponent(req.params.filename);
-  // Reject anything that looks like a path — we only delete
-  // direct children of the song's R2 folder.
-  if (!filename || filename.includes('/') || filename.includes('..')) {
-    throw new HttpError(400, 'Invalid filename');
+  // Only a score file, directly in the song's folder. The route needs just
+  // `song.score.write`, so it must never reach config.json, lyrics or notes:
+  // deleting config.json would delete the song.
+  if (!SCORE_FILENAME.test(filename)) {
+    throw new HttpError(400, 'Only a sheet-music file can be deleted here');
   }
   await deleteObject(`${bandId}/songs/${songId}/${filename}`);
   return ok();

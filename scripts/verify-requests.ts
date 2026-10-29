@@ -222,10 +222,65 @@ async function main(): Promise<void> {
       check('…naming the inviter, band and role', String(b.subject).includes('owner invited you to') && String(b.subject).includes(`Band ${BAND}`) && String(b.text).includes('as Editor'), `${b.subject} / ${b.text}`);
       check('…carrying the same link the inviter sees', String(b.html).includes(String(locked.json.url)) && String(b.text).includes(String(locked.json.url)));
       check('…and the server says it was emailed', locked.json.emailed === true);
+      const headers = (b.headers ?? {}) as Record<string, string>;
+      check('…with one-click unsubscribe headers', /\/api\/email\/block\?token=/.test(headers['List-Unsubscribe'] ?? '')
+        && headers['List-Unsubscribe-Post'] === 'List-Unsubscribe=One-Click', JSON.stringify(headers));
+      check('…and a “Don’t email me again” link', String(b.html).includes('/email/unsubscribe?token=') && String(b.html).includes('Don’t email me again'));
     }
     mark = outbox.length;
     const open = await call(owner, 'POST', `/api/bands/${BAND}/invites`, { role: 'member' });
     check('an invite with no address sends nothing', open.status === 200 && open.json.emailed === false && (await emailsSince(mark)).length === 0);
+
+    console.log('\n--- the block list');
+    const inviteToken = String(locked.json.url).split('/invite/')[1];
+    const blockUrl = `/api/email/block?token=${inviteToken}`;
+    const before = await call(null, 'GET', blockUrl);
+    check('the opt-out link names its address, not yet blocked', before.json.email === invitee && before.json.blocked === false, JSON.stringify(before.json));
+    check('a made-up token is refused', (await call(null, 'POST', `/api/email/block?token=${'x'.repeat(43)}`)).status === 404);
+    const blocked = await call(null, 'POST', blockUrl);
+    check('posting it blocks the address, no sign-in needed', blocked.status === 200 && blocked.json.blocked === true, JSON.stringify(blocked.json));
+    check('…and again is fine', (await call(null, 'POST', blockUrl)).status === 200);
+    mark = outbox.length;
+    const toBlocked = await call(owner, 'POST', `/api/bands/${BAND}/invites`, { role: 'member', email: invitee.toUpperCase() });
+    check('an invite to a blocked address is still made', toBlocked.status === 200 && !!toBlocked.json.url, JSON.stringify(toBlocked.json));
+    check('…but not emailed, and says why', toBlocked.json.emailed === false && toBlocked.json.emailSkipped === 'blocked', JSON.stringify(toBlocked.json));
+    if (mock) check('…and nothing went out', (await emailsSince(mark)).length === 0);
+
+    console.log('\n--- user text in emails');
+    await sql`update app_user set display_name = ${'Owner https://evil.example/x www.spam.example'} where id = ${owner.id}`;
+    await sql`update band set name = ${`Band ${'z'.repeat(120)} bit.ly/free`} where legacy_id = ${BAND}`;
+    mark = outbox.length;
+    const named = await call(owner, 'POST', `/api/bands/${BAND}/invites`, { role: 'member', email: `${TAG}-n1@example.invalid` });
+    check('an invite after renaming is emailed', named.json.emailed === true, JSON.stringify(named.json));
+    if (mock) {
+      const b = (await emailsSince(mark))[0]?.body ?? {};
+      const all = `${b.subject} ${b.text} ${b.html}`;
+      check('…with no links from the names', !/evil|spam|bit\.ly/.test(all), String(b.subject));
+      check('…and the band name cut to 100 characters', String(b.subject).includes('z'.repeat(90)) && !String(b.subject).includes('z'.repeat(100)), String(b.subject));
+    }
+    const kim = await makeUser('kim');
+    users.push(kim);
+    check('a request message over 100 characters is refused', (await call(kim, 'POST', access, { message: 'm'.repeat(101) })).status === 400);
+    mark = outbox.length;
+    check('kim asks with a link in the message', (await call(kim, 'POST', access, { message: 'hi! see https://evil.example/x' })).status === 200);
+    if (mock) {
+      const b = (await emailsSince(mark))[0]?.body ?? {};
+      check('…the Owner’s email keeps the words, not the link', String(b.text).includes('hi! see') && !/evil/.test(`${b.text} ${b.html}`), String(b.text));
+    }
+
+    console.log('\n--- 10 invite emails per band per week');
+    // Emailed so far this week: the first locked invite and the renamed one.
+    mark = outbox.length;
+    const extra: Record<string, unknown>[] = [];
+    for (let i = 2; i <= 9; i++) extra.push((await call(owner, 'POST', `/api/bands/${BAND}/invites`, { role: 'member', email: `${TAG}-w${i}@example.invalid` })).json);
+    check('emails 3 to 10 go out', extra.every((j) => j.emailed === true), JSON.stringify(extra.map((j) => j.emailSkipped)));
+    const eleventh = await call(owner, 'POST', `/api/bands/${BAND}/invites`, { role: 'member', email: `${TAG}-w11@example.invalid` });
+    check('the 11th invite is still made', eleventh.status === 200 && !!eleventh.json.url);
+    check('…but not emailed, and says why', eleventh.json.emailed === false && eleventh.json.emailSkipped === 'weekly-limit', JSON.stringify(eleventh.json));
+    if (mock) check('…so exactly 8 more emails went out', (await emailsSince(mark)).length === 8, String(outbox.length - mark));
+    check('an invite with no address is still fine', (await call(owner, 'POST', `/api/bands/${BAND}/invites`, { role: 'member' })).status === 200);
+    const [{ n }] = await sql`select count(*)::int as n from invite i join band b on b.id = i.band_id where b.legacy_id = ${BAND} and i.emailed_at is not null`;
+    check('Postgres records 10 emailed invites', n === 10, String(n));
 
     const audit = await sql`select action from audit_log a join band b on b.id = a.band_id where b.legacy_id = ${BAND}`;
     const actions = audit.map((r) => r.action as string);
@@ -235,6 +290,7 @@ async function main(): Promise<void> {
     const ids = users.map((u) => u.id);
     await sql`delete from audit_log where band_id in (select id from band where legacy_id like ${TAG + '%'}) or actor_id = any(${ids})`;
     await sql`delete from band where legacy_id like ${TAG + '%'}`;
+    await sql`delete from email_block where email like ${TAG + '%'}`;
     await sql`delete from app_user where id = any(${ids})`;
     const [{ left }] = await sql`select count(*)::int left from app_user where email like ${TAG + '%'}`;
     console.log(`\ncleanup: ${left} test user(s) left`);

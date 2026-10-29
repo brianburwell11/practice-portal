@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isReservedRoute } from '../../../src/config/reservedRoutes';
-import { bandConfigSchema } from '../../../src/config/schema';
+import { bandConfigSchema, bandConfigWriteSchema } from '../../../src/config/schema';
 import { HttpError, json, ok } from '../http';
 import { isNoSuchKey, r2ListKeys, r2PublicUrl, r2PutFile, r2StorageBytes } from '../r2';
 import { deleteObject, readJson, writeJson } from '../store';
@@ -82,7 +82,7 @@ export async function uploadBandLogo(req: CoreRequest): Promise<CoreResponse> {
 /** Upsert a single band: authoritative `band.json` plus its registry entry. */
 export async function putBand(req: CoreRequest): Promise<CoreResponse> {
   const bandId = req.params.bandId;
-  const validated = bandConfigSchema.parse(req.body);
+  const validated = bandConfigWriteSchema.parse(req.body);
 
   if (validated.id !== bandId) {
     throw new HttpError(400, `URL band id "${bandId}" doesn't match body id "${validated.id}"`);

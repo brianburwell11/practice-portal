@@ -230,9 +230,18 @@ export const invite = pgTable('invite', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdBy: uuid('created_by').notNull().references(() => appUser.id),
   createdAt: createdAt(),
+  /** When the invite was emailed. Null: not emailed (no address, the band's weekly limit, or a blocked address). */
+  emailedAt: timestamp('emailed_at', { withTimezone: true }),
 }, (t) => [
   index('invite_band_idx').on(t.bandId),
+  index('invite_band_emailed_idx').on(t.bandId, t.emailedAt),
 ]);
+
+/** Addresses that asked never to be emailed again, from the link in an invite email. */
+export const emailBlock = pgTable('email_block', {
+  email: citext('email').primaryKey(),
+  createdAt: createdAt(),
+});
 
 /**
  * Background work (Phase 9) — today, transcoding one uploaded stem. The

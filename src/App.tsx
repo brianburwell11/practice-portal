@@ -23,7 +23,7 @@ import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useLyricsEditorStore } from './store/lyricsEditorStore';
 import { usePanelMinimizeStore } from './store/panelMinimizeStore';
 import { useLyricsStore } from './store/lyricsStore';
-import { dataUrl } from './utils/url';
+import { dataUrl, safeHref } from './utils/url';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
 import { useSetlistStore } from './store/setlistStore';
@@ -173,29 +173,32 @@ export default function App() {
               />
             </Link>
             {(() => {
-              const heading = currentBand?.logo ? (
+              // The page's one H1: the band's logo (its alt text is the name) or its name.
+              const name = currentBand?.logo ? (
                 <img
                   src={currentBand.logo}
                   alt={currentBand.name}
                   className="h-10 object-contain"
                 />
               ) : (
-                <h1 className="text-lg font-semibold tracking-tight">
-                  {currentBand?.name ?? 'Practice Portal'}
-                </h1>
+                currentBand?.name ?? 'Practice Portal'
               );
-              return currentBand?.website ? (
-                <a
-                  href={currentBand.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={currentBand.website}
-                  className="inline-block origin-left transition-transform hover:scale-105"
-                >
-                  {heading}
-                </a>
-              ) : (
-                heading
+              return (
+                <h1 className={currentBand?.logo ? 'flex' : 'text-lg font-semibold tracking-tight'}>
+                  {currentBand?.website ? (
+                    <a
+                      href={safeHref(currentBand.website)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={currentBand.website}
+                      className="inline-block origin-left transition-transform hover:scale-105"
+                    >
+                      {name}
+                    </a>
+                  ) : (
+                    name
+                  )}
+                </h1>
               );
             })()}
           </div>

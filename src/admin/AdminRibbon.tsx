@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { HelpModal } from '../components/HelpModal';
 import { useBandStore } from '../store/bandStore';
 import { useSessionStore } from '../store/sessionStore';
+import { safeHref } from '../utils/url';
 
 type DropdownId = 'bands' | 'songs' | 'setlists' | null;
 
@@ -200,7 +201,7 @@ export function AdminRibbon({
       {setlistNavLinks?.map((link, i) => (
         <a
           key={`sl-${i}`}
-          href={link.url}
+          href={safeHref(link.url)}
           target="_blank"
           rel="noopener noreferrer"
           className="text-xs text-gray-500 hover:text-gray-300"
@@ -216,7 +217,7 @@ export function AdminRibbon({
       {songNavLinks?.map((link, i) => (
         <a
           key={`sg-${i}`}
-          href={link.url}
+          href={safeHref(link.url)}
           target="_blank"
           rel="noopener noreferrer"
           className="text-xs text-gray-500 hover:text-gray-300"

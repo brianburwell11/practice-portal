@@ -13,9 +13,13 @@ const PENDING_COOKIE = 'pp_oauth';
 const PENDING_PATH = '/api/auth/google';
 const PENDING_TTL_SECONDS = 10 * 60;
 
-/** Only same-site paths: `/x`, never `//evil.com` or `/\evil.com`. */
+/**
+ * Only same-site paths: `/x`, never `//evil.com`, `/\evil.com`, or one with a
+ * tab or newline in it (browsers drop those, so `/\t/evil.com` is `//evil.com`).
+ */
 function safeNext(next: string | null): string {
-  if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return '/';
+  // eslint-disable-next-line no-control-regex
+  if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\') || /[\x00-\x1f\x7f]/.test(next)) return '/';
   return next;
 }
 

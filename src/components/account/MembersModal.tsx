@@ -112,6 +112,8 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
   const [newLink, setNewLink] = useState<string | null>(null);
   /** Who the last invite was emailed to, if it was. */
   const [emailedTo, setEmailedTo] = useState<string | null>(null);
+  /** Why the last invite with an address wasn't emailed. */
+  const [emailSkipped, setEmailSkipped] = useState<'blocked' | 'weekly-limit' | null>(null);
   const [copied, setCopied] = useState(false);
 
   const [requests, setRequests] = useState<AccessRequest[]>([]);
@@ -162,6 +164,7 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
     const res = await api('POST', `${base}/invites`, { role: inviteRole, email: inviteEmail.trim() || undefined });
     setNewLink(res.url);
     setEmailedTo(res.emailed ? res.email : null);
+    setEmailSkipped(res.emailSkipped ?? null);
     setCopied(false);
     setInviteEmail('');
   });
@@ -299,7 +302,13 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
           {newLink && (
             <div className="space-y-1">
               <div className="text-xs text-gray-400">
-                {emailedTo ? `Emailed to ${emailedTo}. The link, in case it doesn’t arrive:` : 'Send this link yourself:'}
+                {emailedTo
+                  ? `Emailed to ${emailedTo}. The link, in case it doesn’t arrive:`
+                  : emailSkipped === 'weekly-limit'
+                    ? 'This band has sent its 10 invite emails for the week, so this one wasn’t emailed. Send the link yourself:'
+                    : emailSkipped === 'blocked'
+                      ? 'That address has asked not to get emails from Practice Portal. Send the link yourself:'
+                      : 'Send this link yourself:'}
               </div>
               <div className="group flex items-center gap-2 bg-gray-800 border border-gray-700 rounded px-3 py-2">
                 <span className="flex-1 min-w-0 truncate font-mono text-xs text-gray-200 select-all" title={newLink}>{newLink}</span>

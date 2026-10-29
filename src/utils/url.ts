@@ -13,3 +13,8 @@ export function dataUrl(path: string): string {
   const key = path.replace(/^\//, '');
   return import.meta.env.VITE_DATA_SOURCE === 'api' ? `/api/data/${key}` : r2Url(key);
 }
+
+/** A user-entered link, only if it's http(s); anything else (javascript:, data:) renders as no link. */
+export function safeHref(url: string | undefined): string | undefined {
+  return url && /^https?:\/\//i.test(url) ? url : undefined;
+}

@@ -25,9 +25,10 @@ function check(label: string, ok: boolean, detail = ''): void {
 /**
  * Writes allowed without signing in. Sign-out has to work for anyone holding a
  * cookie, and a sub opens or leaves a guest link with no account — both only
- * set or clear the caller's own cookie.
+ * set or clear the caller's own cookie. Opting an address out of email takes
+ * the invite token that was emailed to it.
  */
-const PUBLIC_WRITES = new Set(['auth.logout', 'guest.open', 'guest.leave']);
+const PUBLIC_WRITES = new Set(['auth.logout', 'guest.open', 'guest.leave', 'email.block']);
 
 console.log(`--- route table (${routes.length} routes)`);
 for (const r of routes) {

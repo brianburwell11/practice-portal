@@ -20,7 +20,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../db/client';
 import * as schema from '../db/schema';
-import { mirrorDelete, mirrorWrite, parseKey, readDocumentUnchecked, type Db } from './documents';
+import { mirrorDelete, mirrorWrite, parseKey, readDocument, readDocumentUnchecked, type Db } from './documents';
 import {
   r2CopyKey as rawCopy,
   r2DeleteKey as rawDelete,
@@ -61,7 +61,11 @@ export async function writeJson(key: string, data: unknown): Promise<void> {
   const ctx = current();
   if (!ctx || !parseKey(key)) return rawWrite(key, data);
   await mirrorWrite(key, data, ctx.tx, { actorId: ctx.actor?.userId });
-  const snapshot = structuredClone(data);
+  // The R2 copy is public. Its band list holds only what a signed-out
+  // visitor may see (Public bands), never the full list a handler wrote.
+  const snapshot = key === 'registry.json'
+    ? await readDocument(key, ctx.tx)
+    : structuredClone(data);
   ctx.afterCommit.push({ what: `write ${key}`, run: () => rawWrite(key, snapshot) });
 }
 

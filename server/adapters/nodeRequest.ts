@@ -11,13 +11,32 @@ import os from 'node:os';
 import path from 'node:path';
 import type { IncomingMessage } from 'node:http';
 import Busboy from 'busboy';
+import { HttpError } from '../core/http';
 import type { UploadedFile } from '../core/types';
 
-export function readBody(req: IncomingMessage): Promise<string> {
+/** Read a request body as text, refusing one larger than `maxBytes` (413). */
+export function readBody(req: IncomingMessage, maxBytes = Infinity): Promise<string> {
   return new Promise((resolve, reject) => {
+    const tooLarge = () => new HttpError(413, `Request body is larger than ${Math.round(maxBytes / 1024)} KB`);
+    if (Number(req.headers['content-length'] ?? 0) > maxBytes) {
+      req.resume(); // drain it, so the response still goes out
+      reject(tooLarge());
+      return;
+    }
     const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks).toString()));
+    let size = 0;
+    let over = false;
+    req.on('data', (chunk: Buffer) => {
+      if (over) return; // keep draining, without keeping it
+      size += chunk.length;
+      if (size > maxBytes) {
+        over = true;
+        chunks.length = 0;
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => (over ? reject(tooLarge()) : resolve(Buffer.concat(chunks).toString())));
     req.on('error', reject);
   });
 }
@@ -40,11 +59,14 @@ export function readMultipart(
     const files: UploadedFile[] = [];
     const writes: Promise<void>[] = [];
     let sizeExceeded = false;
+    let tooManyFiles = false;
 
     const busboy = Busboy({
       headers: req.headers as Record<string, string>,
-      ...(limits.files || limits.fileSize ? { limits } : {}),
+      // No form fields are used; files only.
+      limits: { ...limits, fields: 0, parts: (limits.files ?? 1) },
     });
+    busboy.on('filesLimit', () => { tooManyFiles = true; });
 
     busboy.on('file', (fieldName, stream, info) => {
       const filename = path.basename(info.filename || 'upload');
@@ -63,7 +85,11 @@ export function readMultipart(
 
     busboy.on('finish', () => {
       if (sizeExceeded) {
-        reject(new Error(`Upload exceeds ${limits.fileSize} bytes`));
+        reject(new HttpError(413, `Upload is larger than ${Math.round((limits.fileSize ?? 0) / (1024 * 1024))} MB`));
+        return;
+      }
+      if (tooManyFiles) {
+        reject(new HttpError(413, `Upload has more than ${limits.files} file(s)`));
         return;
       }
       Promise.all(writes).then(() => resolve(files)).catch(reject);
