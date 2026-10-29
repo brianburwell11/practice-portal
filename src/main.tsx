@@ -1,6 +1,7 @@
 import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import '@fontsource/hanken-grotesk/latin-700.css'
 import './index.css'
 import App from './App.tsx'
 import { BandApp } from './components/band/BandApp.tsx'
@@ -13,7 +14,7 @@ import { TermsOfService } from './components/legal/TermsOfService.tsx'
 import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage } from './admin/lazyPages.ts'
 
 const adminFallback = (
-  <div className="min-h-screen bg-gray-900 text-gray-400 p-8">Loading admin...</div>
+  <div className="min-h-screen bg-page text-gray-400 p-8">Loading admin...</div>
 );
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';

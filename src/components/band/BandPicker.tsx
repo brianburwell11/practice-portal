@@ -6,6 +6,7 @@ import { dataUrl } from '../../utils/url';
 import { AccountMenu } from '../account/AccountMenu';
 import { LegalLinks } from '../legal/LegalPage';
 import { useSessionStore } from '../../store/sessionStore';
+import practicePortalMark from '../../assets/practice-portal-mark-large.png';
 
 export function BandPicker() {
   const { bandsManifest, setBandsManifest } = useBandStore();
@@ -20,11 +21,18 @@ export function BandPicker() {
   }, [bandsManifest, setBandsManifest]);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-8">
+    <div className="min-h-screen bg-page text-gray-100 flex flex-col items-center justify-center p-8">
       <div className="absolute top-4 right-4">
         <AccountMenu />
       </div>
-      <h1 className="text-3xl font-bold mb-2">Practice Portal</h1>
+      {/* The wordmark: the logo above "Practice" in white and "Portal" in the logo's blue. */}
+      <h1 className="flex flex-col items-center mb-4 font-brand font-bold text-3xl sm:text-6xl tracking-tight text-center">
+        <img src={practicePortalMark} alt="" className="h-16 sm:h-28 w-auto" />
+        {/* No gap and a tight line box: the mark all but rests on the capitals. */}
+        <span className="leading-none -mt-0.5 sm:-mt-1.5">
+          <span className="text-white">Practice</span> <span className="text-brand">Portal</span>
+        </span>
+      </h1>
       <p className="text-gray-400 mb-10">Select your band to get started.</p>
 
       {!bandsManifest ? (
