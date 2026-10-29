@@ -31,7 +31,7 @@ createRoot(document.getElementById('root')!).render(
           path="/admin/new-band"
           element={
             <Suspense fallback={adminFallback}>
-              <RequireCan need="platformAdmin"><NewBandPage /></RequireCan>
+              <RequireCan need="signedIn"><NewBandPage /></RequireCan>
             </Suspense>
           }
         />

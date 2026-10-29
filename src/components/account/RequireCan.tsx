@@ -4,7 +4,7 @@ import { signInHref, useSessionStore } from '../../store/sessionStore';
 import { useBandStore } from '../../store/bandStore';
 
 interface Props {
-  /** A capability in the band on screen, or 'platformAdmin' for site-wide pages. */
+  /** A capability in the band on screen, or 'signedIn' / 'platformAdmin' for site-wide pages. */
   need: string;
   children: ReactNode;
 }
@@ -24,7 +24,7 @@ export function RequireCan({ need, children }: Props) {
 
   if (!loaded) return <div className="min-h-screen bg-page text-gray-400 p-8">Loading…</div>;
 
-  const allowed = need === 'platformAdmin' ? platformAdmin : can(bandId, need);
+  const allowed = need === 'signedIn' ? !!user : need === 'platformAdmin' ? platformAdmin : can(bandId, need);
   if (allowed) return <>{children}</>;
 
   return (

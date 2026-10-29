@@ -9,6 +9,7 @@
  * writes — a rename deletes the old config (and so its row) *before* copying
  * the lyrics across, which is why copies mirror from the destination.
  */
+import { eq } from 'drizzle-orm';
 import { mirrorDelete, mirrorWrite, readDocument, type Db } from '../server/core/documents';
 import * as schema from '../server/db/schema';
 
@@ -68,6 +69,15 @@ async function main(): Promise<void> {
   const reg = await read('registry.json') as { bands: { id: string; route: string; logo?: string }[] };
   check('registry follows the written order', same(reg.bands.map((b) => b.id), ['b1', 'b0']));
   check('registry entry rebuilt from band.json', reg.bands[0].route === 'band.one' && reg.bands[0].logo === band.logo);
+  const [b1] = await db.select().from(schema.band).where(eq(schema.band.legacyId, 'b1'));
+  check('a band written without an actor is Public, owned by the oldest band\'s owner', b1.visibility === 'public' && b1.ownerUserId === user.id);
+
+  console.log('\n--- putBand (new band, created by a signed-in user)');
+  const [creator] = await db.insert(schema.appUser).values({ email: 'creator@example.com' }).returning();
+  await mirrorWrite('b9/band.json', { ...band, id: 'b9', route: 'band.nine' }, db, { actorId: creator.id });
+  const [b9] = await db.select().from(schema.band).where(eq(schema.band.legacyId, 'b9'));
+  check('a user\'s new band is Members only', b9.visibility === 'private', b9.visibility);
+  check('the creator owns it', b9.ownerUserId === creator.id);
 
   console.log('\n--- add song (config, then discography upsert)');
   await write('b1/songs/s1/config.json', config('s1'));

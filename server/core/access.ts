@@ -6,7 +6,7 @@
  *
  *   'public'         anyone, signed in or not
  *   'signedIn'       any signed-in user; the handler (or `authorize`) decides more
- *   'platformAdmin'  an address in ADMIN_EMAILS — creating bands, until quotas exist
+ *   'platformAdmin'  an address in ADMIN_EMAILS
  *   a capability     the caller holds it in the route's band (`params.bandId`)
  *
  * Some routes need more than one fixed capability. `authorizePath` refines
@@ -140,26 +140,25 @@ export async function authorizePresign(req: CoreRequest): Promise<void> {
   await requireCapabilities(req.actor, band, caps.size ? [...caps] : ['song.audio.write']);
 }
 
-/** `PUT /api/bands/:bandId` — editing needs `band.settings`; creating one is for site admins. */
+/**
+ * `PUT /api/bands/:bandId` — editing needs `band.settings`. Any signed-in
+ * user may create a band, and owns it (see `mirrorWrite`).
+ */
 export async function authorizeBandPut(req: Pick<CoreRequest, 'params' | 'actor'>): Promise<void> {
-  const actor = requireActor(req.actor);
-  const [existing] = await db().select({ id: schema.band.id }).from(schema.band)
-    .where(and(eq(schema.band.legacyId, req.params.bandId), isNull(schema.band.deletedAt)));
-  if (!existing) {
-    if (!isPlatformAdmin(actor)) throw new HttpError(403, 'Only a site admin can create a band');
-    return;
-  }
-  await requireCapabilities(actor, await bandByLegacyId(req.params.bandId), ['band.settings']);
+  await authorizeBandOrNew(req);
 }
 
 /** `POST /api/bands/:bandId/logo` — a new band's logo is uploaded before its band.json exists. */
 export async function authorizeLogo(req: Pick<CoreRequest, 'params' | 'actor'>): Promise<void> {
+  await authorizeBandOrNew(req);
+}
+
+/** `band.settings` in an existing band; a band that doesn't exist yet, anyone signed in. */
+async function authorizeBandOrNew(req: Pick<CoreRequest, 'params' | 'actor'>): Promise<void> {
   const actor = requireActor(req.actor);
+  // A deleted band's id stays claimed: its row still holds the legacy id.
   const [existing] = await db().select({ id: schema.band.id }).from(schema.band)
-    .where(and(eq(schema.band.legacyId, req.params.bandId), isNull(schema.band.deletedAt)));
-  if (!existing) {
-    if (!isPlatformAdmin(actor)) throw new HttpError(403, 'Only a site admin can create a band');
-    return;
-  }
+    .where(eq(schema.band.legacyId, req.params.bandId));
+  if (!existing) return;
   await requireCapabilities(actor, await bandByLegacyId(req.params.bandId), ['band.settings']);
 }

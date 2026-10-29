@@ -299,15 +299,16 @@ export async function mirrorWrite(
         await tx.update(schema.band).set(values).where(eq(schema.band.id, existing.id));
         return;
       }
-      // A new band belongs to whoever created it (a site admin; see access.ts).
-      // Without one — a script — it falls back to the oldest band's owner.
+      // A new band belongs to whoever created it, and starts Members only.
+      // Without one — a script — it falls back to the oldest band's owner, and
+      // starts Public, as the bands imported from R2 did.
       const [fallback] = opts.actorId ? [] : await tx.select({ id: schema.band.ownerUserId }).from(schema.band)
         .orderBy(asc(schema.band.createdAt)).limit(1);
       const owner = opts.actorId ? { id: opts.actorId } : fallback;
       if (!owner) throw new Error(`Can't create band ${k.band}: no owner`);
       const [{ next }] = await tx.select({ next: sql<number>`coalesce(max(${schema.band.position}) + 1, 0)` }).from(schema.band);
       await tx.insert(schema.band).values({
-        ...values, legacyId: k.band, ownerUserId: owner.id, visibility: 'public', position: next,
+        ...values, legacyId: k.band, ownerUserId: owner.id, visibility: opts.actorId ? 'private' : 'public', position: next,
       });
       return;
     }

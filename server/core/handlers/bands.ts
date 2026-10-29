@@ -102,11 +102,17 @@ export async function putBand(req: CoreRequest): Promise<CoreResponse> {
     }
   }
 
+  // Every band, Members-only ones included: the caller may not see the band
+  // already at this address, but it's still taken.
+  const { registry, existed } = await readRegistry();
+  if (registry.bands.some((b) => b.id !== bandId && b.route === validated.route)) {
+    throw new HttpError(400, `"${validated.route}" is already taken. Pick another address.`);
+  }
+
   // 1. Write the authoritative per-band file.
   await writeJson(`${bandId}/band.json`, validated);
 
   // 2. Upsert the slim entry in registry.json.
-  const { registry, existed } = await readRegistry();
   const isNewBand = !existed || !registry.bands.some((b) => b.id === bandId);
 
   registry.bands = registry.bands

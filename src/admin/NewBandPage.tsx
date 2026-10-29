@@ -8,11 +8,13 @@ import { generateUniqueBandId } from '../utils/bandId';
 import { dedupeSlug } from '../utils/dedupeSlug';
 import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
 
+// The portal's own: `--color-brand`, `--color-page` and the body text in
+// index.css. The portal has no accent, so that one is just a default.
 const defaultColors: BandColors = {
-  primary: '#3b82f6',
+  primary: '#4a31f5',
   accent: '#f59e0b',
-  background: '#111827',
-  text: '#f3f4f6',
+  background: '#080e22',
+  text: '#e5e7eb',
 };
 
 function nameToSlug(name: string) {
@@ -160,16 +162,8 @@ export default function NewBandPage() {
         throw new Error(body.error ?? 'Save failed');
       }
 
-      const indexEntry: BandIndexEntry = {
-        id: finalDraft.id,
-        name: finalDraft.name,
-        route: finalDraft.route,
-        background: finalDraft.colors.background,
-        text: finalDraft.colors.text,
-        ...(finalDraft.logo ? { logo: finalDraft.logo } : {}),
-      };
-      setBandsManifest({ bands: [...bands, indexEntry] });
-      navigate(`/${finalDraft.route}`);
+      // A full load, so the session picks up that you own the new band.
+      window.location.assign(`/${finalDraft.route}`);
     } catch (err: any) {
       setError(err.message ?? 'Save failed');
       setSaving(false);
@@ -332,6 +326,11 @@ export default function NewBandPage() {
             </div>
           </div>
         </div>
+
+        <p className="text-sm text-gray-400">
+          You’ll be the band’s Owner. It starts out Members only, so only people you invite can see it. You can make it
+          Public later in Members &amp; Sharing.
+        </p>
 
         <div className="flex items-center gap-3 pt-2">
           <button

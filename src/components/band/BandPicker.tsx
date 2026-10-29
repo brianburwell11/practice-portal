@@ -10,7 +10,7 @@ import practicePortalMark from '../../assets/practice-portal-mark-large.png';
 
 export function BandPicker() {
   const { bandsManifest, setBandsManifest } = useBandStore();
-  const { available, loaded, user, bands: memberOf, platformAdmin } = useSessionStore();
+  const { available, loaded, user, bands: memberOf } = useSessionStore();
   // With accounts, only the bands you're in: public bands aren't listed here.
   const bands = (bandsManifest?.bands ?? []).filter((b) => !available || memberOf.some((m) => m.id === b.id));
   // Signed out on a server with accounts: what this is, and how to get in.
@@ -77,18 +77,18 @@ export function BandPicker() {
       ) : (
         user && (
           <p className="text-gray-400 text-center max-w-sm">
-            You’re not in a band yet. Ask someone in your band for an invite link.
+            You’re not in a band yet. Ask someone in your band for an invite link, or start your own.
           </p>
         )
       )}
 
-      {platformAdmin && (
+      {user && (
         <div className="mt-8 flex items-center gap-4">
           <Link
             to="/admin/new-band"
             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium text-white"
           >
-            + New Band
+            + Start a band
           </Link>
         </div>
       )}
