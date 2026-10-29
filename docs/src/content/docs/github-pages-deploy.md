@@ -7,6 +7,8 @@ tags: ["deployment", "github-pages", "ci-cd", "infrastructure"]
 
 # Deploy Practice Portal to GitHub Pages with CI/CD
 
+> **Retired, Oct 29 2026.** Practice Portal now runs on Fly at **https://practiceportal.app**. GitHub Pages only serves `gh-pages-redirect/index.html`, which sends every address to the same page there, and the PR preview workflows are gone. This page is kept as a record of how the static deploy worked.
+
 ## Context
 
 The practice portal is a static Vite + React SPA with no server-side dependencies in production. It's a perfect candidate for GitHub Pages. Currently, all asset paths are hardcoded to `/` (root), and there's no deployment pipeline. We need to:

@@ -7,12 +7,14 @@ tags: ["deployment", "github-pages", "git", "guide"]
 
 # Git Workflow & Deployment
 
-This project uses a **feature branch** workflow. All changes go through a pull request before landing on `main`. Pushing to `main` triggers an automatic deploy to GitHub Pages.
+This project uses a **feature branch** workflow. All changes go through a pull request before landing on `main`.
+
+> **Update, Oct 29 2026:** production runs on Fly at **https://practiceportal.app**, deployed with `fly deploy --ha=false` (see the multi-user server architecture page). The GitHub Pages copy is retired: `brianburwell11.github.io/practice-portal` now only redirects to the same page on practiceportal.app, and PR previews are gone. The rest of this page describes the old GitHub Pages setup.
 
 ## Quick reference
 
 ```
-main  ← always deployed to https://brianburwell11.github.io/practice-portal/
+main  ← production: https://practiceportal.app (Fly)
   └── feature branches ← your working branches, merged via PR
 ```
 
@@ -79,9 +81,9 @@ GitHub offers to delete the remote branch after merge — accept it.
 
 | Event | Workflow | What it does |
 |-------|----------|-------------|
-| Push to `main` | `deploy.yml` | Builds and deploys to GitHub Pages root |
-| PR opened/updated | `preview.yml` | Builds and deploys a preview to `/pr/<number>/` |
-| PR closed | `preview-cleanup.yml` | Removes the preview directory |
+| Push to `main` touching `gh-pages-redirect/` | `deploy.yml` | Publishes the redirect page to GitHub Pages, wiping the old copy |
+
+`preview.yml` and `preview-cleanup.yml` (PR previews at `/pr/<number>/`) were removed when GitHub Pages was retired.
 
 ## Initial setup (one-time)
 
