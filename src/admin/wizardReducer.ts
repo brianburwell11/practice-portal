@@ -52,7 +52,7 @@ export interface WizardState {
   timeSignatureNumerator: number;
   timeSignatureDenominator: number;
   // Optional sheet music (MusicXML / MXL). Uploaded in ReviewStep after
-  // the stem transcode-upload succeeds; `sheetMusicUrl` is injected into
+  // every stem is transcoded; `sheetMusicUrl` is injected into
   // the saved config using the file's canonical name (`score.{ext}`).
   sheetMusicFile: File | null;
   // When true, internal repeats / voltas are re-taken on the return

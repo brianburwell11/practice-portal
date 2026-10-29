@@ -5,6 +5,8 @@ import { songConfigSchema } from '../config/schema';
 import { detectStem, isAudioFile } from './utils/stemDetection';
 import { getAudioInfo } from './utils/audioConvert';
 import { uploadFileWithProgress, uploadFormWithProgress } from './utils/uploadWithProgress';
+import { uploadStems, waitForStems, type StemJobState } from './utils/stemJobs';
+import { StemProgress } from './components/StemProgress';
 import { prepareSheetMusicUpload } from './utils/sheetMusic';
 import { SheetMusicUploader } from './SheetMusicUploader';
 import { dataUrl } from '../utils/url';
@@ -26,11 +28,6 @@ const groupColors = [
   '#8b5cf6', '#ec4899', '#14b8a6',
 ];
 
-function extOf(name: string): string {
-  const i = name.lastIndexOf('.');
-  return i > 0 ? name.slice(i) : '';
-}
-
 function toKebab(str: string): string {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
@@ -49,6 +46,8 @@ export default function EditSongPage() {
   // add-time so the UI can offer a mono/stereo choice (matching the wizard)
   // without re-decoding the file on every render.
   const [newStemFiles] = useState(() => new Map<string, { file: File; channels: number }>());
+  /** Per-stem upload and transcode progress for new stem files, while saving. */
+  const [stemStates, setStemStates] = useState<StemJobState[] | null>(null);
   // Sheet music file staged this session but not yet uploaded. Saved
   // during handleSave via /api/r2/presign + PUT; cleared on success.
   const [newSheetMusicFile, setNewSheetMusicFile] = useState<File | null>(null);
@@ -294,31 +293,22 @@ export default function EditSongPage() {
       // actually stores .opus, which 404s the player on reload).
       let configToSave: typeof config = { ...config, slug: normalizedSlug };
 
-      // Upload new stem files using OLD id (files still at old location).
-      // Send each under `${stemId}${origExt}` so server transcodes to the
-      // canonical `${stemId}.opus` — config.stems[].file then matches with no
-      // fileMap round-trip.
+      // Upload new stem files using OLD id (files still at old location),
+      // straight to storage; the server's job queue transcodes each to the
+      // canonical `${stemId}.opus` (Phase 9), so config.stems[].file matches.
       if (newStemFiles.size > 0) {
-        const formData = new FormData();
-        for (const [id, { file }] of newStemFiles) {
-          formData.append('stems', file, `${id}${extOf(file.name)}`);
-        }
-
-        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-          fileIndex: 0, fileCount: newStemFiles.size, bytesSent: 0, bytesTotal: 1,
-        }});
-
-        const uploadResult = await uploadFormWithProgress(
-          `/api/r2/transcode-upload/${currentBand.id}/${oldId}`,
-          formData,
-          (bytesSent, bytesTotal) => {
-            dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-              fileIndex: 0, fileCount: newStemFiles.size, bytesSent, bytesTotal,
-            }});
-          },
+        setStemStates(null);
+        const { states } = await uploadStems(
+          currentBand.id,
+          oldId,
+          [...newStemFiles].map(([stemId, { file }]) => ({ stemId, file })),
+          true,
+          setStemStates,
         );
-
-        if (!uploadResult.ok) throw new Error(uploadResult.error ?? 'Upload failed');
+        const final = await waitForStems(currentBand.id, oldId, states, setStemStates);
+        if (final.some((st) => st.phase === 'failed')) {
+          throw new Error('Some stems couldn’t be prepared (see below). Save again to retry, or choose a different file.');
+        }
 
         // Update new-stem filenames to the canonical opus; existing stems
         // keep whatever the saved config already had.
@@ -984,6 +974,8 @@ export default function EditSongPage() {
             </div>
           )}
 
+          {stemStates && <StemProgress stems={stemStates} />}
+
           {state.uploadProgress && (() => {
             const pct = state.uploadProgress.bytesTotal
               ? Math.round((state.uploadProgress.bytesSent / state.uploadProgress.bytesTotal) * 100)
@@ -992,9 +984,7 @@ export default function EditSongPage() {
             return (
               <div className="space-y-1">
                 <p className="text-sm text-gray-400">
-                  {uploading
-                    ? `Uploading ${state.uploadProgress.fileCount} stems (${pct}%)...`
-                    : 'Transcoding & uploading to storage...'}
+                  {uploading ? `Uploading sheet music (${pct}%)...` : 'Converting sheet music...'}
                 </p>
                 <div className="w-full bg-gray-700 rounded-full h-2">
                   <div

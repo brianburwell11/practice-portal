@@ -4,6 +4,8 @@ import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
 import { songConfigSchema } from '../../config/schema';
 import { uploadFileWithProgress, uploadFormWithProgress } from '../utils/uploadWithProgress';
+import { retryStem, uploadStems, waitForStems, type StemJobState } from '../utils/stemJobs';
+import { StemProgress } from '../components/StemProgress';
 import { prepareSheetMusicUpload } from '../utils/sheetMusic';
 import { dataUrl } from '../../utils/url';
 import { useBandStore } from '../../store/bandStore';
@@ -14,32 +16,143 @@ interface Props {
   dispatch: React.Dispatch<WizardAction>;
 }
 
-function extOf(name: string): string {
-  const i = name.lastIndexOf('.');
-  return i > 0 ? name.slice(i) : '';
-}
-
 export function ReviewStep({ state, dispatch }: Props) {
   const [result, setResult] = useState<'success' | null>(null);
+  /** Per-stem upload and transcode progress, once saving starts. */
+  const [stemStates, setStemStates] = useState<StemJobState[] | null>(null);
+  /** Where a retried save picks up. */
+  const [pending, setPending] = useState<{ bandId: string; publicBase: string } | null>(null);
   const { bandSlug = '' } = useParams();
   const navigate = useNavigate();
   const bandName = useBandStore((s) => s.currentBand?.name ?? '');
   const config = buildConfig(state, bandName);
   const validation = songConfigSchema.safeParse(config);
 
-  const handleSave = async () => {
+  /** After the stems: sheet music, the config, the discography entry. */
+  const saveRest = async (bandId: string, publicBase: string) => {
+    let transcodedConfig: typeof config = {
+      ...config,
+      stems: config.stems.map((stem) => ({ ...stem, file: `${stem.id}.opus` })),
+    };
+
+    // 2b. Upload sheet music (optional). Two paths depending on format:
+    // - `.mxl` / `.musicxml` / `.xml` → presigned PUT straight to R2;
+    //   plain XML gets zipped to MXL client-side (20–50× smaller).
+    // - `.mscz` → POST to the server-side conversion endpoint, which
+    //   shells out to the `mscore` CLI and writes `score.mxl` on R2.
+    // In both cases `sheetMusicUrl` lands on the canonical `score.mxl`.
+    if (state.sheetMusicFile) {
+      const prepared = await prepareSheetMusicUpload(state.sheetMusicFile);
+      if (!prepared) throw new Error('Unsupported sheet music file type');
+      if (prepared.mode === 'server-convert') {
+        const { file, filename } = prepared;
+        const sheetForm = new FormData();
+        sheetForm.append('sheetMusic', file, file.name);
+        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+          fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: file.size,
+        }});
+        const convertResult = await uploadFormWithProgress(
+          `/api/r2/mscz-convert-upload/${bandId}/${state.id}?filename=${encodeURIComponent(filename)}`,
+          sheetForm,
+          (bytesSent, bytesTotal) => {
+            dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+              fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+            }});
+          },
+        );
+        if (!convertResult.ok) throw new Error(convertResult.error ?? 'MSCZ conversion failed');
+        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+        transcodedConfig = { ...transcodedConfig, sheetMusicUrl: filename };
+      } else {
+        const { blob, filename } = prepared;
+        const presignRes = await fetch('/api/r2/presign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bandId, songId: state.id, files: [filename] }),
+        });
+        if (!presignRes.ok) {
+          const err = await presignRes.json().catch(() => ({}));
+          throw new Error(err.error ?? 'Sheet music presign failed');
+        }
+        const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
+        const putUrl = urls[filename];
+        if (!putUrl) throw new Error('Sheet music presign returned no URL');
+        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+          fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: blob.size,
+        }});
+        await uploadFileWithProgress(putUrl, blob, (bytesSent, bytesTotal) => {
+          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+            fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+          }});
+        });
+        dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
+        transcodedConfig = { ...transcodedConfig, sheetMusicUrl: filename };
+      }
+    }
+
+    const configRes = await fetch(`/api/bands/${bandId}/songs/${state.id}/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(transcodedConfig),
+    });
+    if (!configRes.ok) {
+      const err = await configRes.json();
+      throw new Error(err.error || 'Config save failed');
+    }
+
+    // 4. Update discography with R2 audio path
+    const finalSlug = slugify(state.slug);
+    const discographyRes = await fetch(`/api/bands/${bandId}/songs/discography`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: state.id,
+        ...(finalSlug ? { slug: finalSlug } : {}),
+        title: state.title,
+        artist: state.artist,
+        audioBasePath: publicBase,
+      }),
+    });
+    if (!discographyRes.ok) {
+      const err = await discographyRes.json();
+      throw new Error(err.error || 'Discography update failed');
+    }
+    setResult('success');
+  };
+
+  /**
+   * Wait for every stem's transcode, then save the rest. A failed stem stops
+   * here with Retry beside it; nothing else is saved until every stem is done.
+   */
+  const finish = async (bandId: string, publicBase: string, stems: StemJobState[]) => {
+    const final = await waitForStems(bandId, state.id, stems, setStemStates);
+    if (final.some((s) => s.phase === 'failed')) {
+      throw new Error('Some stems couldn’t be prepared. Retry them below, or go back and replace the file.');
+    }
+    await saveRest(bandId, publicBase);
+  };
+
+  const run = async (work: () => Promise<void>) => {
     dispatch({ type: 'SET_SAVING', saving: true });
     dispatch({ type: 'SET_ERROR', error: null });
-
     try {
+      await work();
+    } catch (err) {
+      dispatch({ type: 'SET_ERROR', error: (err as Error).message });
+    } finally {
+      dispatch({ type: 'SET_SAVING', saving: false });
+    }
+  };
+
+  const handleSave = () => run(async () => {
       // Resolve band first so we can use bandId in all subsequent calls
       const bandsRes = await fetch(dataUrl('registry.json'));
       const bandsData = await bandsRes.json();
-      const band = bandsData.bands.find((b: any) => b.route === bandSlug);
+      const band = (bandsData.bands as { id: string; route: string }[]).find((b) => b.route === bandSlug);
       const bandId = band?.id ?? '';
 
       // Pre-flight collision check: refuse if a song already exists at this
-      // derived id. Without this, transcode-upload + config POST would
+      // derived id. Without this, the stem uploads + config POST would
       // silently overwrite that song's R2 files. (The server returns 409 as
       // a backstop, but by then the stems are already on R2.)
       let collision = false;
@@ -47,7 +160,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         const discRes = await fetch(dataUrl(`${bandId}/songs/discography.json`));
         if (discRes.ok) {
           const disc = await discRes.json();
-          collision = Array.isArray(disc?.songs) && disc.songs.some((s: any) => s.id === state.id);
+          collision = Array.isArray(disc?.songs) && disc.songs.some((s: { id: string }) => s.id === state.id);
         }
         // Non-OK (e.g. 404 on a fresh bucket) → no collision possible.
       } catch {
@@ -59,134 +172,27 @@ export function ReviewStep({ state, dispatch }: Props) {
         );
       }
 
-      // 1. Upload stems to server for transcoding + R2 upload.
-      // Alignment offsets are NOT baked in — they live in config.json's
-      // offsetSec fields and are applied at playback time by StemPlayer.
-      // Upload each stem as `${stemId}${origExt}` so the server transcodes to
-      // the canonical `${stemId}.opus` on R2 — config.json then just references
-      // `${stemId}.opus` with no round-trip through the original filename.
-      const formData = new FormData();
-      state.stems.forEach((entry, i) => {
-        formData.append('stems', entry.file, `${config.stems[i].id}${extOf(entry.file.name)}`);
-      });
-
-      dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-        fileIndex: 0, fileCount: state.stems.length, bytesSent: 0, bytesTotal: 1,
-      }});
-
-      const transcodeQuery = state.normalize ? '' : '?normalize=0';
-      const uploadResult = await uploadFormWithProgress(
-        `/api/r2/transcode-upload/${bandId}/${state.id}${transcodeQuery}`,
-        formData,
-        (bytesSent, bytesTotal) => {
-          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-            fileIndex: 0, fileCount: state.stems.length, bytesSent, bytesTotal,
-          }});
-        },
+      // 1. Stems go straight to storage, then the server's job queue
+      // transcodes each to `${stemId}.opus` (Phase 9). Alignment offsets
+      // aren't baked in — they live in config.json's offsetSec fields.
+      const { states, publicBase } = await uploadStems(
+        bandId,
+        state.id,
+        state.stems.map((entry, i) => ({ stemId: config.stems[i].id, file: entry.file })),
+        state.normalize,
+        setStemStates,
       );
+      setPending({ bandId, publicBase });
+      await finish(bandId, publicBase, states);
+  });
 
-      if (!uploadResult.ok) throw new Error(uploadResult.error ?? 'Upload failed');
-      const { publicBase } = uploadResult;
-      dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
-
-      // 2. Update config stem filenames to match the canonical opus names
-      let transcodedConfig: typeof config = {
-        ...config,
-        stems: config.stems.map((stem) => ({
-          ...stem,
-          file: `${stem.id}.opus`,
-        })),
-      };
-
-      // 2b. Upload sheet music (optional). Two paths depending on format:
-      // - `.mxl` / `.musicxml` / `.xml` → presigned PUT straight to R2;
-      //   plain XML gets zipped to MXL client-side (20–50× smaller).
-      // - `.mscz` → POST to the server-side conversion endpoint, which
-      //   shells out to the `mscore` CLI and writes `score.mxl` on R2.
-      // In both cases `sheetMusicUrl` lands on the canonical `score.mxl`.
-      if (state.sheetMusicFile) {
-        const prepared = await prepareSheetMusicUpload(state.sheetMusicFile);
-        if (!prepared) throw new Error('Unsupported sheet music file type');
-        if (prepared.mode === 'server-convert') {
-          const { file, filename } = prepared;
-          const sheetForm = new FormData();
-          sheetForm.append('sheetMusic', file, file.name);
-          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-            fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: file.size,
-          }});
-          const convertResult = await uploadFormWithProgress(
-            `/api/r2/mscz-convert-upload/${bandId}/${state.id}?filename=${encodeURIComponent(filename)}`,
-            sheetForm,
-            (bytesSent, bytesTotal) => {
-              dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-                fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
-              }});
-            },
-          );
-          if (!convertResult.ok) throw new Error(convertResult.error ?? 'MSCZ conversion failed');
-          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
-          transcodedConfig = { ...transcodedConfig, sheetMusicUrl: filename };
-        } else {
-          const { blob, filename } = prepared;
-          const presignRes = await fetch('/api/r2/presign', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bandId, songId: state.id, files: [filename] }),
-          });
-          if (!presignRes.ok) {
-            const err = await presignRes.json().catch(() => ({}));
-            throw new Error(err.error ?? 'Sheet music presign failed');
-          }
-          const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
-          const putUrl = urls[filename];
-          if (!putUrl) throw new Error('Sheet music presign returned no URL');
-          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-            fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: blob.size,
-          }});
-          await uploadFileWithProgress(putUrl, blob, (bytesSent, bytesTotal) => {
-            dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-              fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
-            }});
-          });
-          dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
-          transcodedConfig = { ...transcodedConfig, sheetMusicUrl: filename };
-        }
-      }
-
-      const configRes = await fetch(`/api/bands/${bandId}/songs/${state.id}/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(transcodedConfig),
-      });
-      if (!configRes.ok) {
-        const err = await configRes.json();
-        throw new Error(err.error || 'Config save failed');
-      }
-
-      // 4. Update discography with R2 audio path
-      const finalSlug = slugify(state.slug);
-      const discographyRes = await fetch(`/api/bands/${bandId}/songs/discography`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: state.id,
-          ...(finalSlug ? { slug: finalSlug } : {}),
-          title: state.title,
-          artist: state.artist,
-          audioBasePath: publicBase,
-        }),
-      });
-      if (!discographyRes.ok) {
-        const err = await discographyRes.json();
-        throw new Error(err.error || 'Discography update failed');
-      }
-      setResult('success');
-    } catch (err: any) {
-      dispatch({ type: 'SET_ERROR', error: err.message });
-    } finally {
-      dispatch({ type: 'SET_SAVING', saving: false });
-    }
-  };
+  const handleRetry = (jobId: string) => run(async () => {
+    if (!pending || !stemStates) return;
+    await retryStem(pending.bandId, state.id, jobId);
+    const states = stemStates.map((s) => (s.jobId === jobId ? { ...s, phase: 'waiting' as const, progress: 0, error: null } : s));
+    setStemStates(states);
+    await finish(pending.bandId, pending.publicBase, states);
+  });
 
   if (result === 'success') {
     return (
@@ -285,7 +291,10 @@ export function ReviewStep({ state, dispatch }: Props) {
         </div>
       )}
 
-      {/* Upload progress */}
+      {/* Stems: upload, then the server's transcode, one row each */}
+      {stemStates && <StemProgress stems={stemStates} onRetry={handleRetry} retrying={state.saving} />}
+
+      {/* Sheet music upload */}
       {state.uploadProgress && (() => {
         const pct = state.uploadProgress.bytesTotal
           ? Math.round((state.uploadProgress.bytesSent / state.uploadProgress.bytesTotal) * 100)
@@ -294,9 +303,7 @@ export function ReviewStep({ state, dispatch }: Props) {
         return (
           <div className="space-y-1">
             <p className="text-sm text-gray-400">
-              {uploading
-                ? `Uploading ${state.stems.length} stems (${pct}%)...`
-                : 'Transcoding & uploading to storage...'}
+              {uploading ? `Uploading sheet music (${pct}%)...` : 'Converting sheet music...'}
             </p>
             <div className="w-full bg-gray-700 rounded-full h-2">
               <div
@@ -322,7 +329,7 @@ export function ReviewStep({ state, dispatch }: Props) {
           className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium"
         >
           {state.saving
-            ? state.uploadProgress ? 'Uploading...' : 'Saving...'
+            ? stemStates?.some((s) => s.phase !== 'done') ? 'Preparing stems...' : 'Saving...'
             : 'Save Song'}
         </button>
       </div>
