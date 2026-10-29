@@ -15,11 +15,13 @@
 import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import { db } from '../../db/client';
 import * as schema from '../../db/schema';
-import { bandByLegacyId, isAssignable, requireCan, roleIn, roleRank, type BandRef } from '../auth/can';
+import { bandByLegacyId, effectiveRole, isAssignable, requireCan, roleIn, roleRank, type BandRef } from '../auth/can';
 import { hashToken, newToken } from '../auth/sessions';
 import { emailLinkOrigin, emailText, escapeHtml, htmlEmail, isBlocked, sendEmailLater, type Email } from '../email';
 import { HttpError, json, ok } from '../http';
 import type { Actor, CoreRequest, CoreResponse } from '../types';
+import { auditActorKind } from '../store';
+import type { Db } from '../documents';
 
 export const INVITE_TTL_DAYS = 7;
 
@@ -51,14 +53,15 @@ export type Tx = Parameters<Parameters<ReturnType<typeof db>['transaction']>[0]>
 
 export async function audit(tx: Tx, band: BandRef, actor: Actor, action: string, target: string, diff?: unknown): Promise<void> {
   await tx.insert(schema.auditLog).values({
-    bandId: band.id, actorId: actor.userId, actorKind: 'user', action, target, diff: diff ?? null,
+    bandId: band.id, actorId: actor.userId, actorKind: await auditActorKind(tx as unknown as Db, actor, band.id),
+    action, target, diff: diff ?? null,
   });
 }
 
 /** Refuse to grant a role more privileged than the granter's own. */
 async function assertCanGrant(actor: Actor, band: BandRef, role: string): Promise<void> {
   if (!(await isAssignable(role))) throw new HttpError(400, `"${role}" can't be assigned`);
-  const mine = await roleIn(actor.userId, band);
+  const mine = await effectiveRole(actor, band);
   if (mine === null || (await roleRank(role)) < (await roleRank(mine))) {
     throw new HttpError(403, `You can't grant a role above your own`);
   }
@@ -99,7 +102,7 @@ export async function listMembers(req: CoreRequest): Promise<CoreResponse> {
 
   return json({
     band: { visibility: band.visibility },
-    you: { userId: actor.userId, role: await roleIn(actor.userId, band) },
+    you: { userId: actor.userId, role: await effectiveRole(actor, band) },
     members: [{ ...owner, role: 'owner', joinedAt: null }, ...members],
     invites,
   });
@@ -118,7 +121,7 @@ export async function setMemberRole(req: CoreRequest): Promise<CoreResponse> {
   const current = await roleIn(targetId, band);
   if (current === null) throw new HttpError(404, 'Not a member of this band');
   // Nor can you demote someone who outranks you.
-  if ((await roleRank(current)) < (await roleRank((await roleIn(actor.userId, band))!))) {
+  if ((await roleRank(current)) < (await roleRank((await effectiveRole(actor, band))!))) {
     throw new HttpError(403, `You can't change the role of someone above you`);
   }
 
@@ -143,7 +146,7 @@ export async function removeMember(req: CoreRequest): Promise<CoreResponse> {
   const actor = leaving ? req.actor : await requireCan(req.actor, 'member.role.set', band);
   const current = await roleIn(targetId, band);
   if (current === null) throw new HttpError(404, 'Not a member of this band');
-  if (!leaving && (await roleRank(current)) < (await roleRank((await roleIn(actor.userId, band))!))) {
+  if (!leaving && (await roleRank(current)) < (await roleRank((await effectiveRole(actor, band))!))) {
     throw new HttpError(403, `You can't remove someone above you`);
   }
 

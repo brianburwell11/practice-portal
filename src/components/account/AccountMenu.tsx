@@ -12,7 +12,7 @@ interface Props {
  * A sub here through a guest link gets a "Guest" chip beside sign-in.
  */
 export function AccountMenu({ bandId }: Props) {
-  const { available, loaded, user, load, signOut, roleIn, guestIn, leaveGuest } = useSessionStore();
+  const { available, loaded, user, load, signOut, roleIn, guestIn, leaveGuest, platformAdmin } = useSessionStore();
   const [open, setOpen] = useState(false);
   // Google sends errors back as ?signin_error=… — show it once.
   const [signInError, setSignInError] = useState<string | null>(
@@ -122,11 +122,19 @@ export function AccountMenu({ bandId }: Props) {
             <div className="text-gray-400 truncate">{user.email}</div>
             {role && <div className="mt-1 text-xs text-gray-500">{ROLE_LABELS[role]} of this band</div>}
             {!role && guest && <div className="mt-1 text-xs text-gray-500">Guest of this band{until && ` until ${until}`}</div>}
+            {!role && !guest && platformAdmin && bandId && (
+              <div className="mt-1 text-xs text-blue-300">Site admin: Owner access to this band</div>
+            )}
           </div>
           {!role && guest && (
             <button onClick={() => leaveGuest()} className="w-full text-left px-4 py-2 hover:bg-gray-800">
               Leave guest access
             </button>
+          )}
+          {platformAdmin && (
+            <a href="/admin" className="block w-full text-left px-4 py-2 hover:bg-gray-800">
+              Site admin
+            </a>
           )}
           <button onClick={() => signOut()} className="w-full text-left px-4 py-2 hover:bg-gray-800">
             Sign out

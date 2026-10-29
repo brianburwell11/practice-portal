@@ -158,10 +158,19 @@ export async function me(req: CoreRequest): Promise<CoreResponse> {
   const capsByRole = new Map<string, string[]>();
   for (const g of grants) capsByRole.set(g.role, [...(capsByRole.get(g.role) ?? []), g.cap]);
 
+  // A site admin acts as the Owner in bands they aren't in (support access):
+  // the Owner's capabilities, for the app to show the same controls.
+  const platformAdmin = isPlatformAdmin(req.actor);
+  const supportCapabilities = platformAdmin
+    ? (await db().select({ cap: schema.roleCapability.capabilityKey }).from(schema.roleCapability)
+      .where(eq(schema.roleCapability.roleKey, 'owner'))).map((r) => r.cap).sort()
+    : [];
+
   return json({
     signInEnabled,
     user,
-    platformAdmin: isPlatformAdmin(req.actor),
+    platformAdmin,
+    supportCapabilities,
     bands: bands.map((b) => ({ ...b, capabilities: (capsByRole.get(b.role) ?? []).sort() })),
     guest,
   });

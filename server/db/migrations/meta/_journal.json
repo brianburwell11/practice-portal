@@ -71,6 +71,13 @@
       "when": 1793298955921,
       "tag": "0009_note_capabilities",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793302564312,
+      "tag": "0010_user_last_seen",
+      "breakpoints": true
     }
   ]
 }

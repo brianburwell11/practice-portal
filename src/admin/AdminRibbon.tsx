@@ -119,7 +119,7 @@ export function AdminRibbon({
   // What you can do here, from the session. Hiding a control is UX only —
   // the server checks every request on its own.
   const bandId = useBandStore((st) => st.currentBand?.id);
-  const caps = useSessionStore((st) => st.bands.find((b) => b.id === bandId)?.capabilities);
+  const caps = useSessionStore((st) => st.capabilitiesIn(bandId));
   const can = (c: string) => !!caps?.includes(c);
 
   const allMenus: { id: Exclude<DropdownId, null>; label: string; items: MenuEntry[] }[] = [

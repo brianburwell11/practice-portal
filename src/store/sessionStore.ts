@@ -38,8 +38,10 @@ interface SessionState {
   loaded: boolean;
   user: SessionUser | null;
   bands: SessionBand[];
-  /** In ADMIN_EMAILS: may create bands. */
+  /** In ADMIN_EMAILS: the /admin dashboard, and the Owner's powers in every band. */
   platformAdmin: boolean;
+  /** A site admin's capabilities in bands they aren't in (the Owner's). Empty for everyone else. */
+  supportCapabilities: string[];
   /** Guest links opened on this device, signed in or not. */
   guest: GuestAccess[];
   load: () => Promise<void>;
@@ -48,6 +50,8 @@ interface SessionState {
   leaveGuest: () => Promise<void>;
   guestIn: (bandId: string | undefined) => GuestAccess | null;
   roleIn: (bandId: string | undefined) => BandRole | null;
+  /** What the signed-in user may do in the band: their role's capabilities, or a site admin's support access. */
+  capabilitiesIn: (bandId: string | undefined) => string[] | undefined;
   /**
    * UX only — whether to show a control. The server checks every request
    * itself; hiding a button is never what keeps anyone out.
@@ -63,19 +67,22 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   user: null,
   bands: [],
   platformAdmin: false,
+  supportCapabilities: [],
   guest: [],
 
   load: () => {
     inflight ??= fetch('/api/me')
       .then((r) => (r.ok ? r.json() : null))
       .then((data: {
-        signInEnabled?: boolean; user: SessionUser | null; bands: SessionBand[]; platformAdmin?: boolean; guest?: GuestAccess[];
+        signInEnabled?: boolean; user: SessionUser | null; bands: SessionBand[]; platformAdmin?: boolean;
+        supportCapabilities?: string[]; guest?: GuestAccess[];
       } | null) => {
         set({
           available: !!data?.signInEnabled,
           user: data?.user ?? null,
           bands: data?.bands ?? [],
           platformAdmin: !!data?.platformAdmin,
+          supportCapabilities: data?.supportCapabilities ?? [],
           guest: data?.guest ?? [],
           loaded: true,
         });
@@ -102,8 +109,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   roleIn: (bandId) => get().bands.find((b) => b.id === bandId)?.role ?? null,
 
-  can: (bandId, capability) =>
-    !!get().bands.find((b) => b.id === bandId)?.capabilities.includes(capability),
+  capabilitiesIn: (bandId) => {
+    const { bands, platformAdmin, supportCapabilities } = get();
+    const mine = bands.find((b) => b.id === bandId)?.capabilities;
+    return mine ?? (platformAdmin && bandId ? supportCapabilities : undefined);
+  },
+
+  can: (bandId, capability) => !!get().capabilitiesIn(bandId)?.includes(capability),
 }));
 
 /** Whether the signed-in user holds `capability` in the band on screen. UX only. */

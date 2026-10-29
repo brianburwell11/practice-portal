@@ -29,7 +29,12 @@ export interface Email {
   replyTo?: string;
   /** Extra headers, e.g. List-Unsubscribe. */
   headers?: Record<string, string>;
+  /** The sender, when it isn't the usual do-not-reply address. */
+  from?: string;
 }
+
+/** Where site admins' emails to users come from (the /admin dashboard). */
+export const ADMIN_FROM = process.env.ADMIN_EMAIL_FROM || 'Practice Portal <admin@practiceportal.app>';
 
 /** The longest any user-written text runs in an email. */
 export const EMAIL_TEXT_MAX = 100;
@@ -143,7 +148,7 @@ export async function sendEmail(email: Email): Promise<boolean> {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: process.env.EMAIL_FROM || DEFAULT_FROM,
+        from: email.from || process.env.EMAIL_FROM || DEFAULT_FROM,
         to: [email.to],
         subject: email.subject,
         text: email.text,

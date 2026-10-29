@@ -12,7 +12,7 @@ import { TermsOfService } from './components/legal/TermsOfService.tsx'
 import { NotFound } from './components/NotFound.tsx'
 import { DialogHost } from './components/ui/DialogHost.tsx'
 
-import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage } from './admin/lazyPages.ts'
+import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage, SiteAdminPage } from './admin/lazyPages.ts'
 import { App, BandApp, HelpGuide, HelpIndex } from './lazyPages.ts'
 
 const adminFallback = (
@@ -34,6 +34,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/help/:slug" element={<Suspense fallback={pageFallback}><HelpGuide /></Suspense>} />
         <Route path="/legal/privacy" element={<PrivacyPolicy />} />
         <Route path="/legal/terms" element={<TermsOfService />} />
+        <Route path="/admin" element={<Suspense fallback={pageFallback}><SiteAdminPage /></Suspense>} />
         <Route
           path="/admin/new-band"
           element={

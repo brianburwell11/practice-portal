@@ -95,7 +95,7 @@ export default function App() {
   const [showMembersModal, setShowMembersModal] = useState(false);
   // Anything to manage here? Decides whether a Member sees the admin ribbon
   // at all (they don't — their screen is the public one). UX only.
-  const myCaps = useSessionStore((s) => s.bands.find((b) => b.id === currentBand?.id)?.capabilities);
+  const myCaps = useSessionStore((s) => s.capabilitiesIn(currentBand?.id));
   const canManage = !!myCaps?.some((c) => ADMIN_CAPABILITIES.has(c));
   const canEditContent = !!myCaps?.includes('song.content.write');
   const canInvite = !!myCaps?.includes('member.invite');

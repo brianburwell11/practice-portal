@@ -11,6 +11,7 @@ import { db } from '../../db/client';
 import * as schema from '../../db/schema';
 import type { Capability } from '../../db/capabilities';
 import { HttpError } from '../http';
+import { isSiteAdminEmail } from './siteAdmins';
 import type { Actor } from '../types';
 
 export interface BandRef {
@@ -51,9 +52,18 @@ export async function roleHas(role: string, capability: Capability): Promise<boo
   return !!row;
 }
 
+/**
+ * The role the actor acts with in the band: their own, or, for a site admin
+ * who isn't in it, the Owner's (support access). Permission checks use this;
+ * `roleIn` stays the real membership, which is what rosters show.
+ */
+export async function effectiveRole(actor: Actor, band: BandRef): Promise<string | null> {
+  return (await roleIn(actor.userId, band)) ?? (isSiteAdminEmail(actor.email) ? 'owner' : null);
+}
+
 export async function can(actor: Actor | undefined, capability: Capability, band: BandRef): Promise<boolean> {
   if (!actor) return false;
-  const role = await roleIn(actor.userId, band);
+  const role = await effectiveRole(actor, band);
   return role !== null && roleHas(role, capability);
 }
 

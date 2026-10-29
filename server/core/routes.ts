@@ -52,6 +52,7 @@ import {
 import { blockEmail, getEmailBlock } from './handlers/emailBlock';
 import { createNote, deleteNote, updateNote } from './handlers/notes';
 import { deleteSetlist, saveSetlist } from './handlers/setlists';
+import { adminBands, adminUsers, emailUser } from './handlers/siteAdmin';
 import { createStemUploads, getStemJobs, queueStemUploads, retryStemJob } from './handlers/stems';
 import {
   deleteSong,
@@ -320,6 +321,36 @@ export const routes: RouteDef[] = [
     handler: logout,
     errorStatus: 500,
     errorMessage: 'Sign-out failed',
+  },
+  // The site admin dashboard (/admin): ADMIN_EMAILS only.
+  {
+    name: 'admin.bands',
+    access: 'platformAdmin',
+    method: 'GET',
+    pattern: /^\/api\/admin\/bands$/,
+    handler: adminBands,
+    errorStatus: 500,
+    errorMessage: 'Couldn’t load bands',
+  },
+  {
+    name: 'admin.users',
+    access: 'platformAdmin',
+    method: 'GET',
+    pattern: /^\/api\/admin\/users$/,
+    handler: adminUsers,
+    errorStatus: 500,
+    errorMessage: 'Couldn’t load users',
+  },
+  {
+    name: 'admin.email_user',
+    writes: 'self',
+    access: 'platformAdmin',
+    method: 'POST',
+    pattern: /^\/api\/admin\/users\/(?<userId>[0-9a-f-]{36})\/email$/,
+    body: 'json',
+    handler: emailUser,
+    errorStatus: 400,
+    errorMessage: 'Couldn’t send the email',
   },
   {
     name: 'auth.me',

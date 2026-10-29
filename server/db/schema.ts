@@ -58,6 +58,10 @@ export const appUser = pgTable('app_user', {
   googleSub: text('google_sub').unique(),
   avatarUrl: text('avatar_url'),
   createdAt: createdAt(),
+  /** The last time they signed in with Google. Kept here because sessions are deleted on sign-out. */
+  lastSignInAt: timestamp('last_sign_in_at', { withTimezone: true }),
+  /** Roughly when they last used the site signed in (updated at most hourly, like sessions). */
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
 });
 
 /**

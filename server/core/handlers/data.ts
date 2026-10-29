@@ -1,3 +1,4 @@
+import { isPlatformAdmin } from '../access';
 import { readDocument } from '../documents';
 import { HttpError, json } from '../http';
 import type { CoreRequest, CoreResponse } from '../types';
@@ -12,6 +13,7 @@ export async function readData(req: CoreRequest): Promise<CoreResponse> {
   const doc = await readDocument(req.params.key, undefined, {
     userId: req.actor?.userId,
     guestBandIds: req.guests?.map((g) => g.bandId),
+    siteAdmin: isPlatformAdmin(req.actor),
   });
   if (doc === null) throw new HttpError(404, 'Not found');
   return json(doc);

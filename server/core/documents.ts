@@ -78,6 +78,8 @@ type BandRow = typeof schema.band.$inferSelect;
 export interface Viewer {
   userId?: string;
   guestBandIds?: string[];
+  /** A site admin reads every band, as its Owner would (support access). */
+  siteAdmin?: boolean;
 }
 
 /** Skip the visibility check: the caller is already authorized for the band. */
@@ -95,7 +97,7 @@ async function findBand(d: Db, legacyId: string, viewer: Viewer | typeof UNCHECK
     isNull(schema.band.deletedAt),
   ));
   if (!row) return null;
-  if (row.visibility === 'public' || viewer === UNCHECKED) return row;
+  if (row.visibility === 'public' || viewer === UNCHECKED || viewer.siteAdmin) return row;
   if (viewer.guestBandIds?.includes(row.id)) return row;
   const viewerId = viewer.userId;
   if (!viewerId) throw new HttpError(401, 'Sign in to view this band');
@@ -169,7 +171,7 @@ async function read(key: string, d: Db, viewer: Viewer | typeof UNCHECKED): Prom
   if (k.kind === 'registry') {
     // Public bands, plus Members-only bands the viewer owns, belongs to, or
     // holds a guest link for.
-    const visible = viewer === UNCHECKED
+    const visible = viewer === UNCHECKED || viewer.siteAdmin
       ? undefined
       : or(
         eq(schema.band.visibility, 'public'),

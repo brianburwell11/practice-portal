@@ -19,6 +19,7 @@ import type { Capability } from '../db/capabilities';
 import { db } from '../db/client';
 import * as schema from '../db/schema';
 import { bandByLegacyId, can, type BandRef } from './auth/can';
+import { isSiteAdminEmail } from './auth/siteAdmins';
 import { HttpError } from './http';
 import type { Actor, CoreRequest } from './types';
 
@@ -31,9 +32,7 @@ export function isCapabilityAccess(access: Access): access is Capability {
 }
 
 export function isPlatformAdmin(actor: Actor | undefined): boolean {
-  if (!actor) return false;
-  const admins = (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-  return admins.includes(actor.email.toLowerCase());
+  return isSiteAdminEmail(actor?.email);
 }
 
 function requireActor(actor: Actor | undefined): Actor {

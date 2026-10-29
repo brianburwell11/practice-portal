@@ -28,6 +28,7 @@ import {
   r2ReadJson as rawRead,
   r2WriteJson as rawWrite,
 } from './r2';
+import { isSiteAdminEmail } from './auth/siteAdmins';
 import type { Actor, RouteDef } from './types';
 
 interface RequestContext {
@@ -135,10 +136,11 @@ export async function inRequestTransaction<T>(
         .where(and(eq(schema.band.legacyId, legacyId), isNull(schema.band.deletedAt)));
       bandId = band?.id ?? null;
     }
+    const actorKind = await auditActorKind(tx, actor, bandId);
     await tx.insert(schema.auditLog).values({
       bandId,
       actorId: actor?.userId ?? null,
-      actorKind: actor ? 'user' : 'system',
+      actorKind,
       action: route.name,
       target: legacyId ?? null,
       diff: Object.keys(target).length ? target : null,
@@ -156,6 +158,19 @@ export async function inRequestTransaction<T>(
   return result;
 }
 
+/**
+ * Who an audit row is by: a user, the system (no actor), or support, for a
+ * site admin working in a band they aren't in (their support access).
+ */
+export async function auditActorKind(d: Db, actor: Actor | undefined, bandId: string | null): Promise<'user' | 'system' | 'support'> {
+  if (!actor) return 'system';
+  if (!bandId || !isSiteAdminEmail(actor.email)) return 'user';
+  const [b] = await d.select({ owner: schema.band.ownerUserId }).from(schema.band).where(eq(schema.band.id, bandId));
+  const [m] = await d.select({ role: schema.membership.role }).from(schema.membership)
+    .where(and(eq(schema.membership.bandId, bandId), eq(schema.membership.userId, actor.userId)));
+  return b?.owner !== actor.userId && !m ? 'support' : 'user';
+}
+
 /** Audit a media write once it has succeeded. */
 export async function auditWrite(route: RouteDef, params: Record<string, string>, actor: Actor | undefined): Promise<void> {
   const { bandId: legacyId, ...target } = params;
@@ -168,7 +183,7 @@ export async function auditWrite(route: RouteDef, params: Record<string, string>
   await db().insert(schema.auditLog).values({
     bandId,
     actorId: actor?.userId ?? null,
-    actorKind: actor ? 'user' : 'system',
+    actorKind: await auditActorKind(db() as unknown as Db, actor, bandId),
     action: route.name,
     target: legacyId ?? null,
     diff: Object.keys(target).length ? target : null,

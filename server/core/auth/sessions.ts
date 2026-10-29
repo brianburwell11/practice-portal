@@ -32,6 +32,8 @@ export async function createSession(userId: string): Promise<string> {
     userId,
     expiresAt: new Date(now + SESSION_TTL_SECONDS * 1000),
   });
+  await db().update(schema.appUser).set({ lastSignInAt: new Date(now), lastSeenAt: new Date(now) })
+    .where(eq(schema.appUser.id, userId));
   // Opportunistic cleanup; sessions are small and few.
   await db().delete(schema.session).where(lt(schema.session.expiresAt, new Date(now)));
   return token;
@@ -52,8 +54,11 @@ export async function resolveSession(token: string): Promise<Actor | undefined> 
   if (!row) return undefined;
 
   if (Date.now() - row.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) {
-    await db().update(schema.session).set({ lastSeenAt: new Date() })
+    const now = new Date();
+    await db().update(schema.session).set({ lastSeenAt: now })
       .where(eq(schema.session.tokenHash, tokenHash));
+    await db().update(schema.appUser).set({ lastSeenAt: now })
+      .where(eq(schema.appUser.id, row.userId));
   }
   return { kind: 'user', userId: row.userId, email: row.email, sessionHash: tokenHash };
 }
