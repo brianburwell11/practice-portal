@@ -9,6 +9,7 @@
 import type { Plugin, ViteDevServer } from 'vite';
 import dotenv from 'dotenv';
 import { createApiHandler } from './server/adapters/nodeApi';
+import { startWorker } from './server/core/jobs/worker';
 
 // The core reads R2 credentials and DATABASE_URL from `process.env` lazily,
 // so loading `.env` here is enough. Without DATABASE_URL nobody can sign in,
@@ -20,6 +21,10 @@ export function configApiPlugin(): Plugin {
     name: 'config-api',
     configureServer(server: ViteDevServer) {
       const handleApi = createApiHandler();
+      // The same background worker as production, so stem uploads finish in
+      // dev. It shares the job table with production — SKIP LOCKED keeps the
+      // two from taking the same job. WORKER=off disables it.
+      startWorker();
       server.middlewares.use(async (req, res, next) => {
         if (!(await handleApi(req, res))) next();
       });

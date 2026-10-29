@@ -16,6 +16,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   unique,
@@ -231,6 +232,39 @@ export const invite = pgTable('invite', {
   createdAt: createdAt(),
 }, (t) => [
   index('invite_band_idx').on(t.bandId),
+]);
+
+/**
+ * Background work (Phase 9) — today, transcoding one uploaded stem. The
+ * browser uploads the raw file straight to R2 (`uploading`), says so
+ * (`queued`), and the in-process worker claims one job at a time with
+ * `FOR UPDATE SKIP LOCKED` (`running`), heartbeating `locked_at` as it
+ * reports progress, until `done` or, after its retries, `failed`.
+ */
+export const job = pgTable('job', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  kind: text('kind').notNull(),
+  bandId: uuid('band_id').notNull().references(() => band.id, { onDelete: 'cascade' }),
+  createdBy: uuid('created_by').references(() => appUser.id, { onDelete: 'set null' }),
+  /** What the kind needs — for `transcode_stem`: song, stem id, raw key, original name, normalize. */
+  payload: jsonb('payload').notNull(),
+  status: text('status').notNull().default('uploading'),
+  attempts: integer('attempts').notNull().default(0),
+  /** 0–1, while running. */
+  progress: real('progress').notNull().default(0),
+  error: text('error'),
+  /** What it produced — for `transcode_stem`: the `.opus` file name. */
+  result: jsonb('result'),
+  createdAt: createdAt(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Set when claimed and on every progress write; a stale one means the worker died. */
+  lockedAt: timestamp('locked_at', { withTimezone: true }),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+}, (t) => [
+  check('job_kind_check', sql`${t.kind} in ('transcode_stem')`),
+  check('job_status_check', sql`${t.status} in ('uploading','queued','running','done','failed')`),
+  index('job_status_idx').on(t.status, t.createdAt),
+  index('job_band_idx').on(t.bandId),
 ]);
 
 /**

@@ -1,9 +1,8 @@
 /**
- * Phase 8c: does a real multi-stem transcode survive the hosted server?
- * Times one Add Song upload (the wizard's single multipart POST to
- * transcode-upload) and, alongside it, how long /healthz takes to answer —
- * ffmpeg runs synchronously, so a slow /healthz means every other request
- * on the machine waited too.
+ * Does a real multi-stem song survive the hosted server? Times one Add Song
+ * the way the wizard does it since Phase 9 — stems straight to storage, then
+ * the job queue — and, alongside, how long /healthz takes to answer: if the
+ * server stalls while transcoding, every other request waits too.
  *
  *   npx tsx scripts/measure-transcode.ts --url https://practiceportal.app
  *   npx tsx scripts/measure-transcode.ts --url ... --stems 8 --seconds 300
@@ -80,9 +79,10 @@ async function main(): Promise<void> {
     await sql`insert into band (slug, legacy_id, name, colors, owner_user_id, visibility)
               values (${BAND}, ${BAND}, ${BAND}, ${colors}, ${userId}, 'private')`;
 
-    const form = new FormData();
-    files.forEach((f, i) => {
-      form.append('stems', new Blob([fs.readFileSync(f)]), `stem${i + 1}${path.extname(f)}`);
+    const cookie = `pp_session=${token}`;
+    const song = `${base}/api/bands/${BAND}/songs/${SONG}/stems`;
+    const post = (url: string, body: unknown) => fetch(url, {
+      method: 'POST', headers: { cookie, origin: base!, 'content-type': 'application/json' }, body: JSON.stringify(body),
     });
 
     // Poll /healthz throughout; record the slowest answer.
@@ -98,24 +98,39 @@ async function main(): Promise<void> {
     })();
 
     const started = performance.now();
-    const res = await fetch(`${base}/api/r2/transcode-upload/${BAND}/${SONG}${normalize ? '' : '?normalize=0'}`, {
-      method: 'POST',
-      headers: { cookie: `pp_session=${token}`, origin: base! },
-      body: form,
-      signal: AbortSignal.timeout(30 * 60_000),
+    const created = await post(song, {
+      normalize,
+      files: files.map((f, i) => ({ stemId: `stem${i + 1}`, filename: path.basename(f), size: fs.statSync(f).size })),
     });
-    const body = await res.text();
+    if (!created.ok) throw new Error(`create: ${created.status} ${await created.text()}`);
+    const { jobs } = await created.json() as { jobs: { id: string; uploadUrl: string }[] };
+    await Promise.all(jobs.map(async (j, i) => {
+      const put = await fetch(j.uploadUrl, { method: 'PUT', body: fs.readFileSync(files[i]) });
+      if (!put.ok) throw new Error(`upload ${i + 1}: ${put.status}`);
+    }));
+    const uploaded = (performance.now() - started) / 1000;
+    const queued = await post(`${song}/queue`, { jobIds: jobs.map((j) => j.id) });
+    if (!queued.ok) throw new Error(`queue: ${queued.status} ${await queued.text()}`);
+
+    let states: { status: string; error: string | null }[] = [];
+    while (performance.now() - started < 60 * 60_000) {
+      const res = await fetch(`${song}?jobs=${jobs.map((j) => j.id).join(',')}`, { headers: { cookie } });
+      states = (await res.json() as { jobs: { status: string; error: string | null }[] }).jobs;
+      if (states.every((j) => j.status === 'done' || j.status === 'failed')) break;
+      await new Promise((r) => setTimeout(r, 3000));
+    }
     const elapsed = (performance.now() - started) / 1000;
     polling = false;
     await poller;
 
-    console.log(`status ${res.status} after ${elapsed.toFixed(1)} s`);
-    console.log(body.slice(0, 300));
+    const done = states.filter((j) => j.status === 'done').length;
+    console.log(`uploaded straight to storage in ${uploaded.toFixed(1)} s; all stems settled after ${elapsed.toFixed(1)} s`);
+    console.log(`${done}/${files.length} done${states.some((j) => j.error) ? ` — errors: ${states.map((j) => j.error).filter(Boolean).join('; ')}` : ''}`);
     const opus = (await r2ListKeys(`${BAND}/songs/${SONG}/`)).filter((k) => k.endsWith('.opus'));
-    console.log(`${opus.length}/${files.length} .opus objects on R2`);
+    console.log(`${opus.length}/${files.length} .opus objects in storage`);
     const sorted = [...health].sort((a, b) => a - b);
     console.log(`/healthz during the run: ${health.length} polls, median ${sorted[sorted.length >> 1]?.toFixed(0)} ms, worst ${sorted.at(-1)?.toFixed(0)} ms`);
-    process.exitCode = res.ok && opus.length === files.length ? 0 : 1;
+    process.exitCode = done === files.length && opus.length === files.length ? 0 : 1;
   } finally {
     for (const key of await r2ListKeys(`${BAND}/`)) await r2DeleteKey(key);
     await sql`delete from audit_log where band_id in (select id from band where legacy_id = ${BAND})`;

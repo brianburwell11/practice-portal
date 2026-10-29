@@ -18,6 +18,7 @@
 import http from 'node:http';
 import { createApiHandler, sendJson } from './adapters/nodeApi';
 import { createStaticHandler } from './adapters/staticFiles';
+import { startWorker, stopWorker } from './core/jobs/worker';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const STATIC_DIR = process.env.STATIC_DIR ?? 'dist';
@@ -99,6 +100,8 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`practice-portal listening on :${PORT} (serving ${STATIC_DIR})`);
+  // Background jobs (Phase 9) run in this process, one at a time.
+  startWorker();
 });
 
 // Fly sends SIGINT on deploy/stop by default, Docker sends SIGTERM. Stop
@@ -106,6 +109,8 @@ server.listen(PORT, () => {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     console.log(`${signal} received, shutting down`);
+    // A job in hand is abandoned; it goes back to the queue once it's stale.
+    stopWorker();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10_000).unref();
   });

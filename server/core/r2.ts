@@ -12,7 +12,11 @@ import {
   ListObjectsV2Command,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
+import fs from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+import type { Readable } from 'node:stream';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { HttpError } from './http';
 
@@ -22,6 +26,13 @@ export function getR2Client(): S3Client | null {
   return new S3Client({
     region: 'auto',
     endpoint: R2_ENDPOINT,
+    // An S3 stand-in for tests wants bucket-in-path addressing.
+    forcePathStyle: process.env.R2_FORCE_PATH_STYLE === '1',
+    // Otherwise the SDK signs a CRC32 of the *empty* body into every presigned
+    // PUT (x-amz-checksum-crc32=AAAAAA==). R2 ignores it today; stores that
+    // check it reject the real upload as a bad digest.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
     credentials: {
       accessKeyId: R2_ACCESS_KEY_ID,
       secretAccessKey: R2_SECRET_ACCESS_KEY,
@@ -145,6 +156,26 @@ export async function r2StorageBytes(prefix: string): Promise<{ totalBytes: numb
 export async function r2PresignPut(key: string, expiresIn = 3600): Promise<string> {
   const { r2, bucket } = assertR2Configured();
   return getSignedUrl(r2, new PutObjectCommand({ Bucket: bucket, Key: key }), { expiresIn });
+}
+
+/** An object's size in bytes, or null if there's no such object. */
+export async function r2HeadSize(key: string): Promise<number | null> {
+  const { r2, bucket } = requireR2();
+  try {
+    const head = await r2.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return head.ContentLength ?? 0;
+  } catch (err) {
+    if (isNoSuchKey(err)) return null;
+    throw err;
+  }
+}
+
+/** Stream an object to a local file — raw stems can be hundreds of megabytes. */
+export async function r2DownloadToFile(key: string, filePath: string): Promise<void> {
+  const { r2, bucket } = requireR2();
+  const result = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!result.Body) throw new Error(`Empty body for R2 key: ${key}`);
+  await pipeline(result.Body as Readable, fs.createWriteStream(filePath));
 }
 
 /** True when the error means "object doesn't exist" rather than "call failed". */

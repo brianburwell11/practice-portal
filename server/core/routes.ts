@@ -50,6 +50,7 @@ import {
   requestAccess,
 } from './handlers/requests';
 import { deleteSetlist, saveSetlist } from './handlers/setlists';
+import { createStemUploads, getStemJobs, queueStemUploads, retryStemJob } from './handlers/stems';
 import {
   deleteSong,
   deleteSongFile,
@@ -65,7 +66,6 @@ import {
   msczPrecheck,
   presignUploads,
   requireR2Precheck,
-  transcodeUpload,
 } from './handlers/uploads';
 import type { RouteDef } from './types';
 
@@ -147,6 +147,45 @@ export const routes: RouteDef[] = [
     method: 'POST',
     pattern: /^\/api\/invites\/(?<token>[A-Za-z0-9_-]+)\/accept$/,
     handler: acceptInvite,
+  },
+
+  // --- Stem uploads through the job queue (Phase 9): raw files go straight
+  // to R2, the worker transcodes them, the browser polls.
+  {
+    name: 'song.stems.create',
+    writes: 'self',
+    access: 'song.audio.write',
+    method: 'POST',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/stems$/,
+    body: 'json',
+    precheck: requireR2Precheck,
+    handler: createStemUploads,
+  },
+  {
+    name: 'song.stems.queue',
+    writes: 'self',
+    access: 'song.audio.write',
+    method: 'POST',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/stems\/queue$/,
+    body: 'json',
+    precheck: requireR2Precheck,
+    handler: queueStemUploads,
+  },
+  {
+    name: 'song.stems.status',
+    access: 'song.audio.write',
+    method: 'GET',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/stems$/,
+    handler: getStemJobs,
+  },
+  {
+    name: 'song.stems.retry',
+    writes: 'self',
+    access: 'song.audio.write',
+    method: 'POST',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/stems\/(?<jobId>[^/]+)\/retry$/,
+    precheck: requireR2Precheck,
+    handler: retryStemJob,
   },
 
   // --- Asking to join a Members-only band. Anyone may see which band lives
@@ -340,18 +379,6 @@ export const routes: RouteDef[] = [
     handler: uploadBandLogo,
     errorStatus: 400,
     errorMessage: 'Upload failed',
-  },
-  {
-    name: 'song.audio.transcode',
-    writes: 'media',
-    access: 'song.audio.write',
-    method: 'POST',
-    pattern: /^\/api\/r2\/transcode-upload\/(?<bandId>[^/]+)\/(?<songId>[^/]+)$/,
-    body: 'multipart',
-    precheck: requireR2Precheck,
-    handler: transcodeUpload,
-    errorStatus: 500,
-    errorMessage: 'Transcode/upload failed',
   },
   {
     name: 'song.score.convert',

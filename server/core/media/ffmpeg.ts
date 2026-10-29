@@ -12,6 +12,31 @@ export interface ProbeResult {
   bitrate: number;
   channels: number;
   sampleRate: number;
+  /** Seconds; 0 when ffprobe can't tell. */
+  duration: number;
+}
+
+/** Called with 0–1 as ffmpeg works through the file. */
+export type OnProgress = (fraction: number) => void;
+
+/**
+ * ffmpeg's `-progress pipe:1` output, turned into 0–1 calls. Lines arrive as
+ * `key=value`; `out_time_us` is how far into the input it is.
+ */
+function progressArgs(duration: number, onProgress?: OnProgress): { args: string[]; onStdout?: (chunk: string) => void } {
+  if (!onProgress || duration <= 0) return { args: [] };
+  let partial = '';
+  return {
+    args: ['-progress', 'pipe:1'],
+    onStdout: (chunk) => {
+      const lines = (partial + chunk).split('\n');
+      partial = lines.pop() ?? '';
+      for (const line of lines) {
+        const m = line.match(/^out_time_us=(\d+)/);
+        if (m) onProgress(Math.min(1, Number(m[1]) / 1e6 / duration));
+      }
+    },
+  };
 }
 
 export interface LoudnessInfo {
@@ -32,26 +57,28 @@ interface FfprobeStream {
 }
 
 export async function ffprobe(filePath: string): Promise<ProbeResult> {
-  const proc = await run('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_streams', filePath]);
-  if (proc.code !== 0) throw new Error(`ffprobe failed (exit ${proc.code})`);
-  const data = JSON.parse(proc.stdout) as { streams?: FfprobeStream[] };
+  const proc = await run('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_streams', '-show_format', filePath]);
+  if (proc.code !== 0) throw new Error('Couldn’t read this file as audio — is it a WAV, FLAC, AIFF or MP3?');
+  const data = JSON.parse(proc.stdout) as { streams?: FfprobeStream[]; format?: { duration?: string } };
   const audio = data.streams?.find((s) => s.codec_type === 'audio');
-  if (!audio) throw new Error('No audio stream found');
+  if (!audio) throw new Error('This file has no audio in it');
   return {
     codec: audio.codec_name ?? '',
     bitrate: parseInt(audio.bit_rate ?? '0', 10),
     channels: audio.channels ?? 0,
     sampleRate: parseInt(audio.sample_rate ?? '0', 10),
+    duration: parseFloat(data.format?.duration ?? '0') || 0,
   };
 }
 
 /** Pass 1 of two-pass loudnorm: measure, don't write. */
-export async function measureLoudness(filePath: string): Promise<LoudnessInfo> {
+export async function measureLoudness(filePath: string, duration = 0, onProgress?: OnProgress): Promise<LoudnessInfo> {
+  const progress = progressArgs(duration, onProgress);
   const proc = await run('ffmpeg', [
-    '-nostats', '-i', filePath,
+    '-nostats', ...progress.args, '-i', filePath,
     '-af', `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11:print_format=json`,
     '-f', 'null', '-',
-  ]);
+  ], { onStdout: progress.onStdout });
 
   if (proc.code !== 0) {
     throw new Error(`loudnorm measurement failed: ${proc.stderr?.slice(-500)}`);
@@ -71,6 +98,7 @@ export async function transcodeToOpus(
   probe: ProbeResult,
   loudness: LoudnessInfo | undefined,
   normalize: boolean,
+  onProgress?: OnProgress,
 ): Promise<void> {
   const isMono = probe.channels === 1;
   const bitrate = isMono ? '64k' : '128k';
@@ -84,10 +112,11 @@ export async function transcodeToOpus(
     filter = ['-af', `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`];
   }
 
+  const progress = progressArgs(probe.duration, onProgress);
   const proc = await run('ffmpeg', [
-    '-nostats', '-y', '-i', inputPath, ...filter,
+    '-nostats', ...progress.args, '-y', '-i', inputPath, ...filter,
     '-codec:a', 'libopus', '-b:a', bitrate, ...(isMono ? ['-ac', '1'] : []), '-ar', '48000', '-vbr', 'on',
     outputPath,
-  ]);
+  ], { onStdout: progress.onStdout });
   if (proc.code !== 0) throw new Error(`Opus transcode failed: ${proc.stderr.slice(-500)}`);
 }

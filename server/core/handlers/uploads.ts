@@ -1,13 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { HttpError, errorMessage, json, ok } from '../http';
+import { HttpError, json, ok } from '../http';
 import { assertR2Configured, r2PresignPut, r2PublicUrl, r2PutFile } from '../r2';
-import {
-  ffprobe,
-  measureLoudness,
-  transcodeToOpus,
-  type LoudnessInfo,
-} from '../media/ffmpeg';
 import { MSCORE_MISSING_MESSAGE, convertScore, resolveMscoreBin } from '../media/musescore';
 import type { CoreRequest, CoreResponse, RouteTarget } from '../types';
 
@@ -37,53 +31,6 @@ export function msczPrecheck({ query }: RouteTarget): void {
 /** Missing R2 credentials shouldn't be discovered after a multi-hundred-MB upload. */
 export function requireR2Precheck(): void {
   assertR2Configured();
-}
-
-/**
- * Transcode uploaded stems to Opus and put them on R2.
- *
- * Alignment offsets are NOT baked in — they live in config.json and are
- * applied at playback time by StemPlayer. The opus files on R2 are
- * authoritative and unmodified.
- */
-export async function transcodeUpload(req: CoreRequest): Promise<CoreResponse> {
-  const { bandId, songId } = req.params;
-  // Default to true so existing callers (older clients, scripts) keep the
-  // historical loudnorm behavior.
-  const normalize = req.query.get('normalize') !== '0';
-
-  const r2Prefix = `${bandId}/songs/${songId}`;
-  const tmpDir = req.tmpDir!;
-  const fileMap: Record<string, string> = {}; // origName → transcoded name
-
-  for (const file of req.files ?? []) {
-    const probe = await ffprobe(file.path);
-
-    let loudness: LoudnessInfo | undefined;
-    if (normalize) {
-      try {
-        loudness = await measureLoudness(file.path);
-      } catch (err) {
-        console.warn(`Loudness measurement failed for ${file.filename}, transcoding without normalization:`, errorMessage(err));
-      }
-    }
-
-    const baseName = path.basename(file.filename, path.extname(file.filename));
-    const uploadName = `${baseName}.opus`;
-    const uploadPath = path.join(tmpDir, `out-${uploadName}`);
-    await transcodeToOpus(file.path, uploadPath, probe, loudness, normalize);
-
-    await r2PutFile(
-      `${r2Prefix}/${uploadName}`,
-      fs.readFileSync(uploadPath),
-      'audio/opus',
-      'public, max-age=31536000, immutable',
-    );
-
-    fileMap[file.filename] = uploadName;
-  }
-
-  return ok({ fileMap, publicBase: `${r2PublicUrl()}/${r2Prefix}` });
 }
 
 /**
