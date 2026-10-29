@@ -12,7 +12,9 @@ export function BandPicker() {
   const { bandsManifest, setBandsManifest } = useBandStore();
   const { available, loaded, user, bands: memberOf } = useSessionStore();
   // With accounts, only the bands you're in: public bands aren't listed here.
-  const bands = (bandsManifest?.bands ?? []).filter((b) => !available || memberOf.some((m) => m.id === b.id));
+  const bands = (bandsManifest?.bands ?? [])
+    .filter((b) => !available || memberOf.some((m) => m.id === b.id))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   // Signed out on a server with accounts: what this is, and how to get in.
   const welcome = loaded && available && !user;
 

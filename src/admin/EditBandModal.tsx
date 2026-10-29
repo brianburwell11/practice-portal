@@ -34,7 +34,6 @@ export function EditBandModal({ band, onClose }: Props) {
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [logoCacheBust, setLogoCacheBust] = useState(0);
   const [storage, setStorage] = useState<{ totalBytes: number; objectCount: number } | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -134,7 +133,6 @@ export function EditBandModal({ band, onClose }: Props) {
       }
       const { path: logoPath } = await res.json();
       updateDraft({ logo: logoPath });
-      setLogoCacheBust(Date.now());
     } catch (err: any) {
       setError(err.message ?? 'Logo upload failed');
     } finally {
@@ -281,7 +279,7 @@ export function EditBandModal({ band, onClose }: Props) {
               {draft.logo ? (
                 <div className="relative group">
                   <img
-                    src={draft.logo + (logoCacheBust ? `?v=${logoCacheBust}` : '')}
+                    src={draft.logo}
                     alt="Band logo"
                     className="w-16 h-16 rounded object-contain bg-gray-800 border border-gray-600"
                   />

@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { isReservedRoute } from '../../../src/config/reservedRoutes';
@@ -73,8 +74,11 @@ export async function uploadBandLogo(req: CoreRequest): Promise<CoreResponse> {
   const ext = path.extname(file.filename).toLowerCase() || '.png';
   const contentType = LOGO_CONTENT_TYPES[ext] ?? 'application/octet-stream';
 
-  const key = `${bandId}/assets/logo${ext}`;
-  await r2PutFile(key, fs.readFileSync(file.path), contentType, 'public, max-age=86400');
+  // A new name for every upload: a replaced logo shows at once everywhere,
+  // with no browser or CDN cache holding the old one. The name never gets
+  // new content, so it can be cached for good. `putBand` deletes the old one.
+  const key = `${bandId}/assets/logo-${randomBytes(6).toString('hex')}${ext}`;
+  await r2PutFile(key, fs.readFileSync(file.path), contentType, 'public, max-age=31536000, immutable');
 
   return ok({ path: `${r2PublicUrl()}/${key}` });
 }
@@ -109,8 +113,23 @@ export async function putBand(req: CoreRequest): Promise<CoreResponse> {
     throw new HttpError(400, `"${validated.route}" is already taken. Pick another address.`);
   }
 
+  // The logo it had, to delete if this save replaces or removes it.
+  let previousLogo: string | undefined;
+  try {
+    previousLogo = (await readJson<{ logo?: string }>(`${bandId}/band.json`)).logo;
+  } catch (err) {
+    if (!isNoSuchKey(err)) throw err;
+  }
+
   // 1. Write the authoritative per-band file.
   await writeJson(`${bandId}/band.json`, validated);
+
+  // An old uploaded logo nothing points at any more. Only this band's own
+  // uploads, never another URL someone pasted in.
+  const ownLogos = `${r2PublicUrl()}/${bandId}/assets/logo`;
+  if (previousLogo && previousLogo !== validated.logo && previousLogo.startsWith(ownLogos)) {
+    await deleteObject(previousLogo.slice(`${r2PublicUrl()}/`.length));
+  }
 
   // 2. Upsert the slim entry in registry.json.
   const isNewBand = !existed || !registry.bands.some((b) => b.id === bandId);
