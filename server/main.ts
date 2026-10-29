@@ -71,11 +71,14 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
 
 /**
  * A request path fit for the logs: guest-link and invite tokens are secrets
- * that work for whoever holds them, so mask them.
+ * that work for whoever holds them, so mask them (the email opt-out link
+ * carries an invite token too).
  */
 function loggable(url = ''): string {
   return url
     .replace(/([?&]guest=)[^&#]+/, '$1…')
+    // The email opt-out link carries the invite's token.
+    .replace(/([?&]token=)[^&#]+/, '$1…')
     .replace(/^(\/api\/guest\/|\/api\/invites\/|\/invite\/)[^/?#]+/, '$1…')
     // Sign-in carries where to go next, which may be an invite or guest link.
     .replace(/(next=%2Finvite%2F)[^&#]+/i, '$1…')
