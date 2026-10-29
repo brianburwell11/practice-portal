@@ -1,8 +1,15 @@
-name: Deploy to GitHub Pages
+name: GitHub Pages redirect
+
+# Practice Portal runs on Fly at https://practiceportal.app. The old GitHub
+# Pages copy is retired: this publishes a page that sends every address on
+# brianburwell11.github.io/practice-portal to the same address there, and
+# keep_files: false wipes everything the old builds left behind.
 
 on:
   push:
     branches: [main]
+    paths: [gh-pages-redirect/**, .github/workflows/deploy.yml]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -17,22 +24,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      - run: npm run build
-        env:
-          VITE_BASE_PATH: /practice-portal/
-          VITE_R2_PUBLIC_URL: https://pub-9e583788dafa4ce193a3eee1987d93b6.r2.dev
-
-      - run: cp dist/index.html dist/404.html
+      # 404.html answers every path that isn't index.html, so deep links redirect too.
+      - run: |
+          mkdir -p out
+          cp gh-pages-redirect/index.html out/index.html
+          cp gh-pages-redirect/index.html out/404.html
+          touch out/.nojekyll
 
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          keep_files: true
+          publish_dir: ./out
+          keep_files: false

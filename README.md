@@ -1,73 +1,32 @@
-# React + TypeScript + Vite
+# Practice Portal
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A practice tool for bands, live at **https://practiceportal.app**.
 
-Currently, two official plugins are available:
+Each song is split into stems, one audio file per part, so a musician can solo, mute or turn down any part and play along with the rest of the band. Sheet music and lyrics scroll in time with the audio, tempo slows down without changing pitch, and bands keep set lists for their gigs. Bands have Owners, Managers, Editors and Members, sign-in is with Google, and new bands are Members only.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
 
-## React Compiler
+- **App:** React, TypeScript, Vite, Tailwind, zustand (`src/`)
+- **Server:** Node (`server/`), Postgres via Drizzle (`server/db/`), media on Cloudflare R2
+- **Hosting:** Fly.io (`fly.toml`, `Dockerfile`)
+- **Docs:** an Astro site in `docs/`, with design notes, plans and decisions
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Develop
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```sh
+npm install
+npm run dev          # Vite dev server with the API
+npm run build        # type-check and build the app
+npm run build:server # bundle the server into dist-server/
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Server checks live in `scripts/verify-*.ts`. Run them against a scratch Postgres with R2 blanked, not the shared database: see the comment at the top of each script.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Deploy
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```sh
+npm run build        # catch type errors locally first
+fly deploy --ha=false # the Dockerfile builds the app and server itself
 ```
+
+`brianburwell11.github.io/practice-portal` is retired and only redirects here (`gh-pages-redirect/`).
