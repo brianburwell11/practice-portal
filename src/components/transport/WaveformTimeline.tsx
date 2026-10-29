@@ -8,7 +8,7 @@ import type { TapMapEntry } from '../../audio/types';
 import { markersToSeconds } from '../../audio/tempoUtils';
 import { autoLabelSection, findEnclosingSectionIndex, getSectionRange } from '../../audio/tapMapUtils';
 import { useNotesStore, NOTE_COLOR } from '../../store/notesStore';
-import { usePersonalNotesStore, PERSONAL_NOTE_COLOR } from '../../store/personalNotesStore';
+import { useNotePermissions } from '../../hooks/useNotePermissions';
 
 /** Detect coarse pointer (touch device) */
 const isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
@@ -33,8 +33,8 @@ export function WaveformTimeline() {
   const moveLyricLine = useLyricsEditorStore((s) => s.moveLine);
   const notes = useNotesStore((s) => s.notes);
   const setNoteTime = useNotesStore((s) => s.setTime);
-  const personalNotes = usePersonalNotesStore((s) => s.notes);
-  const setPersonalNoteTime = usePersonalNotesStore((s) => s.setTime);
+  // Dragging a note's dot retimes it: your own notes, or anyone's for a Manager or the Owner.
+  const { canEdit: canEditNote } = useNotePermissions();
 
   // TapMap editor integration \u2014 when the editor is open the timeline
   // sources its tapMap from the editor store (live, dirty copy) and
@@ -165,12 +165,11 @@ export function WaveformTimeline() {
   // TapMap editor entry drag state \u2014 mirrors the lyric-marker pattern.
   const dragEditorEntryRef = useRef<{ index: number; time: number } | null>(null);
   // Note marker drag state — held in a ref for high-frequency updates;
-  // `noteDragTick` bumps on each move so the canvas redraws. Tracks
-  // both kinds of notes (admin / personal) via the `kind` field.
-  type NoteKind = 'admin' | 'personal';
-  const dragNoteRef = useRef<{ kind: NoteKind; id: string; time: number; startX: number; moved: boolean } | null>(null);
+  // `noteDragTick` bumps on each move so the canvas redraws. `editable`:
+  // whether a drag may retime it (otherwise a click only seeks).
+  const dragNoteRef = useRef<{ id: string; time: number; startX: number; moved: boolean; editable: boolean } | null>(null);
   const [noteDragTick, setNoteDragTick] = useState(0);
-  const [hoveredNote, setHoveredNote] = useState<{ kind: NoteKind; id: string } | null>(null);
+  const [hoveredNote, setHoveredNote] = useState<{ id: string } | null>(null);
 
   // Hit-test tapMap entries when the editor is active. Threshold
   // matches HIT_PX (same as loop/lyric markers) so behavior is
@@ -196,41 +195,30 @@ export function WaveformTimeline() {
     [markerEditorOpen, editorTapMap, secondsToPixel],
   );
 
-  // Hit-test note markers (both admin + personal). Note dots live at
+  // Hit-test note markers. Note dots live at
   // (x, height-4) so we require both a small horizontal AND vertical
   // proximity — clicks higher up in the canvas (over the waveform)
   // shouldn't catch a note. Uses live drag time for the dragging note
   // so its dot stays hittable mid-drag.
   const hitTestNote = useCallback(
-    (pixelX: number, pixelY: number): { kind: NoteKind; id: string } | null => {
+    (pixelX: number, pixelY: number): { id: string } | null => {
       const { width, height } = sizeRef.current;
       if (width === 0 || height === 0) return null;
       if (Math.abs(pixelY - (height - 4)) > 14) return null;
       let closestId: string | null = null;
-      let closestKind: NoteKind = 'admin';
       let closestDist = Infinity;
-      const candidates: { kind: NoteKind; list: { id: string; time: number }[] }[] = [
-        { kind: 'admin', list: notes },
-        { kind: 'personal', list: personalNotes },
-      ];
-      for (const { kind, list } of candidates) {
-        for (const note of list) {
-          const t =
-            dragNoteRef.current?.kind === kind && dragNoteRef.current?.id === note.id
-              ? dragNoteRef.current.time
-              : note.time;
-          const mx = secondsToPixel(t, width);
-          const dist = Math.abs(pixelX - mx);
-          if (dist <= 8 && dist < closestDist) {
-            closestId = note.id;
-            closestKind = kind;
-            closestDist = dist;
-          }
+      for (const note of notes) {
+        const t = dragNoteRef.current?.id === note.id ? dragNoteRef.current.time : note.time;
+        const mx = secondsToPixel(t, width);
+        const dist = Math.abs(pixelX - mx);
+        if (dist <= 8 && dist < closestDist) {
+          closestId = note.id;
+          closestDist = dist;
         }
       }
-      return closestId !== null ? { kind: closestKind, id: closestId } : null;
+      return closestId !== null ? { id: closestId } : null;
     },
-    [notes, personalNotes, secondsToPixel],
+    [notes, secondsToPixel],
   );
 
   const hitTestLyricMarker = useCallback(
@@ -399,10 +387,9 @@ export function WaveformTimeline() {
       const noteHit = hitTestNote(x, y);
       if (noteHit) {
         e.preventDefault();
-        const list = noteHit.kind === 'admin' ? notes : personalNotes;
-        const note = list.find((n) => n.id === noteHit.id);
+        const note = notes.find((n) => n.id === noteHit.id);
         if (note) {
-          dragNoteRef.current = { kind: noteHit.kind, id: noteHit.id, time: note.time, startX: x, moved: false };
+          dragNoteRef.current = { id: noteHit.id, time: note.time, startX: x, moved: false, editable: canEditNote(note) };
         }
         didDragRef.current = false;
         suppressClickRef.current = false;
@@ -447,7 +434,7 @@ export function WaveformTimeline() {
       dragStartRef.current = { x: e.clientX, viewStart };
       didDragRef.current = false;
     },
-    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestNote, editorTapMap, lyricsLines, notes, personalNotes, setMarkerSelectedIndex, effectiveViewDuration, viewStart],
+    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestNote, editorTapMap, lyricsLines, notes, canEditNote, setMarkerSelectedIndex, effectiveViewDuration, viewStart],
   );
 
   const handlePointerMove = useCallback(
@@ -472,8 +459,9 @@ export function WaveformTimeline() {
         return;
       }
 
-      // Single pointer: drag note marker
+      // Single pointer: drag note marker (only one you may edit; others just seek on click)
       if (dragNoteRef.current) {
+        if (!dragNoteRef.current.editable) return;
         const seconds = pixelToSeconds(x, sizeRef.current.width);
         const clamped = Math.max(0, Math.min(seconds, duration || 0));
         dragNoteRef.current.time = clamped;
@@ -563,13 +551,11 @@ export function WaveformTimeline() {
 
       // End note marker drag — drag commits a setTime, click seeks.
       if (dragNoteRef.current) {
-        const { kind, id, time, moved } = dragNoteRef.current;
+        const { id, time, moved } = dragNoteRef.current;
         if (moved) {
-          if (kind === 'admin') setNoteTime(id, time);
-          else setPersonalNoteTime(id, time);
+          setNoteTime(id, time);
         } else {
-          const list = kind === 'admin' ? notes : personalNotes;
-          const note = list.find((n) => n.id === id);
+          const note = notes.find((n) => n.id === id);
           if (note && duration) engine.seek(Math.max(0, Math.min(note.time, duration)));
         }
         dragNoteRef.current = null;
@@ -628,7 +614,7 @@ export function WaveformTimeline() {
         setFollowPlayhead(true);
       }
     },
-    [draggingMarker, moveLyricLine, moveMarkerEntry, setNoteTime, setPersonalNoteTime, notes, personalNotes, duration, findSnapMarker, pixelToSeconds, engine, setFollowPlayhead],
+    [draggingMarker, moveLyricLine, moveMarkerEntry, setNoteTime, notes, duration, findSnapMarker, pixelToSeconds, engine, setFollowPlayhead],
   );
 
   const handlePointerLeave = useCallback(
@@ -825,32 +811,12 @@ export function WaveformTimeline() {
         }
       }
 
-      // Note markers (timestamp notes — always visible to admin and viewers).
-      // Substitutes the live drag time for a dragging note so the dot
-      // tracks the cursor. Admin notes are yellow; personal (per-user)
-      // notes are blue and rendered just above the admin row so they
-      // never overlap exactly on shared timestamps.
+      // Note markers (timestamp notes, visible to everyone). Substitutes
+      // the live drag time for a dragging note so the dot tracks the cursor.
       if (notes.length > 0) {
         ctx.fillStyle = NOTE_COLOR;
         for (const note of notes) {
-          const t =
-            dragNoteRef.current?.kind === 'admin' && dragNoteRef.current.id === note.id
-              ? dragNoteRef.current.time
-              : note.time;
-          const x = toPixel(t);
-          if (x < -4 || x > width + 4) continue;
-          ctx.beginPath();
-          ctx.arc(x, height - 4, 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      if (personalNotes.length > 0) {
-        ctx.fillStyle = PERSONAL_NOTE_COLOR;
-        for (const note of personalNotes) {
-          const t =
-            dragNoteRef.current?.kind === 'personal' && dragNoteRef.current.id === note.id
-              ? dragNoteRef.current.time
-              : note.time;
+          const t = dragNoteRef.current?.id === note.id ? dragNoteRef.current.time : note.time;
           const x = toPixel(t);
           if (x < -4 || x > width + 4) continue;
           ctx.beginPath();
@@ -888,7 +854,7 @@ export function WaveformTimeline() {
         }
       }
     },
-    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines, notes, personalNotes, noteDragTick],
+    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines, notes, noteDragTick],
   );
 
   // Draw main canvas (viewport-relative)
@@ -1141,8 +1107,7 @@ export function WaveformTimeline() {
           onContextMenu={handleContextMenu}
         />
         {hoveredNote && !dragNoteRef.current && (() => {
-          const list = hoveredNote.kind === 'admin' ? notes : personalNotes;
-          const note = list.find((n) => n.id === hoveredNote.id);
+          const note = notes.find((n) => n.id === hoveredNote.id);
           if (!note) return null;
           const { width } = sizeRef.current;
           if (width === 0) return null;
@@ -1151,7 +1116,7 @@ export function WaveformTimeline() {
           const TIP_W = 220;
           const left = Math.max(4, Math.min(cx - TIP_W / 2, width - TIP_W - 4));
           const text = note.text.trim() || '(empty)';
-          const tipColor = hoveredNote.kind === 'admin' ? NOTE_COLOR : PERSONAL_NOTE_COLOR;
+          const tipColor = NOTE_COLOR;
           return (
             <div
               className="absolute pointer-events-none z-20 rounded border px-2 py-1 text-xs leading-snug shadow-lg whitespace-pre-wrap"

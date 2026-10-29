@@ -63,6 +63,19 @@ export const noteSchema = z.object({
   id: z.string().min(1),
   time: z.number().min(0),
   text: z.string(),
+  /** Who added it (app_user id). Absent on notes from before notes had authors. */
+  authorId: z.string().optional(),
+  /** Set when deleted, so Undo can bring it back; reads leave these out. */
+  deletedAt: z.string().optional(),
+});
+
+/** The longest a note's text may be. */
+export const NOTE_TEXT_MAX = 200;
+
+/** What a client sends to add or edit a note. */
+export const noteWriteSchema = z.object({
+  time: z.number().min(0).max(24 * 60 * 60),
+  text: z.string().trim().min(1, 'A note needs some text').max(NOTE_TEXT_MAX),
 });
 
 export const notesDataSchema = z.object({

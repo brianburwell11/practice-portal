@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useCan } from '../../store/sessionStore';
+import { useCan, useSessionStore } from '../../store/sessionStore';
+import { useNotePermissions } from '../../hooks/useNotePermissions';
+import { Avatar } from '../account/AccountMenu';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 import {
+  isDraft,
   useNotesStore,
   NOTE_COLOR,
   NOTE_LEAD_SECONDS,
   NOTE_TAIL_SECONDS,
 } from '../../store/notesStore';
-import {
-  usePersonalNotesStore,
-  PERSONAL_NOTE_COLOR,
-} from '../../store/personalNotesStore';
 import type { Note } from '../../audio/types';
 
 const FADE_IN_MS = 250;
@@ -64,7 +63,7 @@ interface StickyTheme {
   inputClass: string;
 }
 
-const ADMIN_THEME: StickyTheme = {
+const THEME: StickyTheme = {
   bg: NOTE_COLOR,
   pulseRgb: '255, 224, 102',
   textClass: 'text-gray-900',
@@ -76,84 +75,38 @@ const ADMIN_THEME: StickyTheme = {
   inputClass: 'bg-yellow-100/60 border-gray-700/30 focus:border-gray-700 text-gray-900',
 };
 
-const PERSONAL_THEME: StickyTheme = {
-  bg: PERSONAL_NOTE_COLOR,
-  pulseRgb: '59, 130, 246',
-  textClass: 'text-blue-50',
-  mutedTextClass: 'text-blue-100',
-  placeholderClass: 'placeholder-blue-200/70',
-  saveButtonClass: 'bg-blue-900 text-blue-50 hover:bg-blue-800',
-  errorTextClass: 'text-red-200',
-  deleteButtonClass: 'text-red-200 hover:text-red-50',
-  inputClass: 'bg-blue-300/30 border-blue-100/40 focus:border-blue-50 text-blue-50',
-};
-
 interface VisibleEntry {
   note: Note;
-  kind: 'admin' | 'personal';
   isDirty: boolean;
   editable: boolean;
-  theme: StickyTheme;
-  actions: NoteActions;
 }
 
 export function NotesLayer() {
-  // Band notes are editable by whoever may edit song content; everyone else
-  // sees them read-only and adds personal notes instead.
-  const ADMIN = useCan('song.content.write');
+  // Everyone sees every note. Members add them and edit their own; Managers
+  // and the Owner edit anyone's (useNotePermissions).
+  const { canAdd, canEdit } = useNotePermissions();
+  const canExport = useCan('song.content.write');
   const position = useTransportStore((s) => s.position);
-  const adminNotes = useNotesStore((s) => s.notes);
-  const adminDirty = useNotesStore((s) => s.dirty);
-  const adminLoaded = useNotesStore((s) => s.loaded);
-  const adminActions: NoteActions = {
+  const notes = useNotesStore((s) => s.notes);
+  const dirty = useNotesStore((s) => s.dirty);
+  const loaded = useNotesStore((s) => s.loaded);
+  const actions: NoteActions = {
     setText: useNotesStore((s) => s.setText),
     setTime: useNotesStore((s) => s.setTime),
     saveNote: useNotesStore((s) => s.saveNote),
     deleteNote: useNotesStore((s) => s.deleteNote),
   };
 
-  const personalNotes = usePersonalNotesStore((s) => s.notes);
-  const personalDirty = usePersonalNotesStore((s) => s.dirty);
-  const personalLoaded = usePersonalNotesStore((s) => s.loaded);
-  const personalActions: NoteActions = {
-    setText: usePersonalNotesStore((s) => s.setText),
-    setTime: usePersonalNotesStore((s) => s.setTime),
-    saveNote: usePersonalNotesStore((s) => s.saveNote),
-    deleteNote: usePersonalNotesStore((s) => s.deleteNote),
-  };
-
-  // Combined visible set across both stores. Admin notes are read-only
-  // for non-admin viewers; personal notes are editable for everyone.
-  // Dirty notes (drafts/edits) stay visible until saved so the editor
-  // has time to type. Sorted earliest-first so the chronologically
-  // earliest sticky lands on the left.
+  // Notes near the playhead, plus any being edited (they stay until saved
+  // so the writer has time to type). Earliest first, so the earliest
+  // sticky lands on the left.
   const visible: VisibleEntry[] = useMemo(() => {
     const inWindow = (n: Note) =>
       position >= n.time - NOTE_LEAD_SECONDS && position <= n.time + NOTE_TAIL_SECONDS;
-
-    const out: VisibleEntry[] = [];
-    for (const n of adminNotes) {
-      if (ADMIN && adminDirty.has(n.id)) {
-        out.push({ note: n, kind: 'admin', isDirty: true, editable: true, theme: ADMIN_THEME, actions: adminActions });
-      } else if (inWindow(n)) {
-        out.push({ note: n, kind: 'admin', isDirty: false, editable: ADMIN, theme: ADMIN_THEME, actions: adminActions });
-      }
-    }
-    for (const n of personalNotes) {
-      if (personalDirty.has(n.id) || inWindow(n)) {
-        out.push({
-          note: n,
-          kind: 'personal',
-          isDirty: personalDirty.has(n.id),
-          editable: true,
-          theme: PERSONAL_THEME,
-          actions: personalActions,
-        });
-      }
-    }
-    return out.sort((a, b) => a.note.time - b.note.time);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminNotes, adminDirty, personalNotes, personalDirty, position, ADMIN]);
+    return notes
+      .filter((n) => dirty.has(n.id) || inWindow(n))
+      .map((n) => ({ note: n, isDirty: dirty.has(n.id), editable: canEdit(n) }));
+  }, [notes, dirty, position, canEdit]);
 
   // Track the waveform's left edge so the first sticky lines up with the
   // focused-lyric reading point (waveform.left + FOCUS_LEFT_NUDGE_PX).
@@ -185,21 +138,9 @@ export function NotesLayer() {
 
   if (minimized) return null;
 
-  // Add-note button is always visible (admin: yellow, viewer: blue) so
-  // the layer renders even when no stickies are currently in view.
-  const addReady = ADMIN ? adminLoaded : personalLoaded;
-  const addTheme = ADMIN ? ADMIN_THEME : PERSONAL_THEME;
-  const addIconClass = ADMIN ? 'text-gray-900' : 'text-white';
-
   const handleAdd = () => {
-    const pos = useTransportStore.getState().position;
-    if (ADMIN) {
-      if (!useNotesStore.getState().loaded) return;
-      useNotesStore.getState().createDraft(pos);
-    } else {
-      if (!usePersonalNotesStore.getState().loaded) return;
-      usePersonalNotesStore.getState().createDraft(pos);
-    }
+    if (!useNotesStore.getState().loaded) return;
+    useNotesStore.getState().createDraft(useTransportStore.getState().position);
   };
 
   const handleExport = () => {
@@ -224,24 +165,21 @@ export function NotesLayer() {
       className="pr-4 pb-2 pt-2 flex flex-col md:flex-row md:items-start md:flex-wrap gap-2 shrink-0"
       style={{ paddingLeft: leftPadding ?? 16 }}
     >
-      <AddNoteButton
-        onClick={handleAdd}
-        disabled={!addReady}
-        bg={addTheme.bg}
-        iconClass={addIconClass}
-      />
+      {canAdd && (
+        <AddNoteButton onClick={handleAdd} disabled={!loaded} bg={THEME.bg} iconClass="text-gray-900" />
+      )}
       {visible.map((entry) => (
         <Sticky
-          key={`${entry.kind}:${entry.note.id}`}
+          key={entry.note.id}
           note={entry.note}
           isDirty={entry.isDirty}
           editable={entry.editable}
-          theme={entry.theme}
-          actions={entry.actions}
+          theme={THEME}
+          actions={actions}
         />
       ))}
       <div className="flex items-center gap-2 md:ml-auto md:self-center">
-        {ADMIN && <ExportButton onClick={handleExport} disabled={adminNotes.length === 0} />}
+        {canExport && <ExportButton onClick={handleExport} disabled={notes.length === 0} />}
         <MinimizeButton onClick={() => minimizePanel('notes')} />
       </div>
     </div>
@@ -328,6 +266,9 @@ interface StickyProps {
 }
 
 function Sticky({ note, isDirty, editable, theme, actions }: StickyProps) {
+  // A draft is yours, so it shows your picture until the server says so.
+  const me = useSessionStore((s) => s.user);
+  const author = note.author ?? (isDraft(note.id) && me ? { id: me.id, name: me.name ?? me.email, avatarUrl: me.avatarUrl } : undefined);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [busy, setBusy] = useState<'saving' | 'deleting' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -465,6 +406,7 @@ function Sticky({ note, isDirty, editable, theme, actions }: StickyProps) {
             onClick={handleDelete}
             disabled={!!busy}
             title="Delete note"
+            aria-label="Delete note"
             className={`disabled:opacity-40 leading-none text-base px-1 ${theme.deleteButtonClass}`}
           >
             &times;
@@ -491,23 +433,33 @@ function Sticky({ note, isDirty, editable, theme, actions }: StickyProps) {
         }`}
       />
 
-      {editable && (isDirty || error) && (
+      {((editable && (isDirty || error)) || author) && (
         <div className="flex items-center justify-between px-2 pb-1.5 gap-2">
-          {error ? (
+          {editable && error ? (
             <span className={`text-[11px] truncate ${theme.errorTextClass}`}>{error}</span>
-          ) : (
+          ) : editable && isDirty ? (
             <span className={`text-[11px] ${theme.mutedTextClass}`}>Unsaved</span>
+          ) : (
+            <span />
           )}
-          {isDirty && (
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!!busy}
-              className={`text-xs px-2 py-0.5 rounded disabled:opacity-50 ${theme.saveButtonClass}`}
-            >
-              {busy === 'saving' ? 'Saving…' : 'Save'}
-            </button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {editable && isDirty && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!!busy}
+                className={`text-xs px-2 py-0.5 rounded disabled:opacity-50 ${theme.saveButtonClass}`}
+              >
+                {busy === 'saving' ? 'Saving…' : 'Save'}
+              </button>
+            )}
+            {/* Who wrote it, bottom right. */}
+            {author && (
+              <span title={author.name} aria-label={`Note by ${author.name}`} className="rounded-full ring-1 ring-gray-900/20">
+                <Avatar name={author.name} url={author.avatarUrl} size={20} />
+              </span>
+            )}
+          </div>
         </div>
       )}
     </div>

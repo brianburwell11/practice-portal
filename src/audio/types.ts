@@ -56,6 +56,14 @@ export interface Note {
   id: string;
   time: number;
   text: string;
+  /** Who added it. Absent on notes from before notes had authors. */
+  author?: NoteAuthor;
+}
+
+export interface NoteAuthor {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
 }
 
 export interface NotesData {

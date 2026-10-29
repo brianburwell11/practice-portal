@@ -9,7 +9,6 @@ import { dataUrl, r2Url } from '../../utils/url';
 import { loadMixerState } from '../../utils/mixerStorage';
 import { useLyricsStore } from '../../store/lyricsStore';
 import { useNotesStore } from '../../store/notesStore';
-import { usePersonalNotesStore } from '../../store/personalNotesStore';
 import { toast } from '../../store/dialogStore';
 import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
 
@@ -41,7 +40,6 @@ export function useSongLoader() {
     setError(null);
     useLyricsStore.getState().clear();
     useNotesStore.getState().clear();
-    usePersonalNotesStore.getState().clear();
 
     try {
       const bandId = currentBand?.id;
@@ -69,9 +67,6 @@ export function useSongLoader() {
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => useNotesStore.getState().load(bandId!, entry.id, data?.notes ?? []))
         .catch(() => useNotesStore.getState().load(bandId!, entry.id, []));
-
-      // Load personal notes from localStorage (sync, scoped per song).
-      usePersonalNotesStore.getState().load(entry.id);
 
       // In a setlist, `#n` is the song's place in it. Otherwise the song is
       // `?song=<slug>`, in the query so the server sees it and link previews

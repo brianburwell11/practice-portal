@@ -1,7 +1,7 @@
 import { LegalPage, Mail, Section } from './LegalPage';
 
 const CONTACT = 'legal@practiceportal.app';
-const EFFECTIVE = 'October 28, 2026';
+const EFFECTIVE = 'October 29, 2026';
 
 /**
  * /legal/privacy. Written against what the app actually does — when that
@@ -30,9 +30,10 @@ export function PrivacyPolicy() {
         <p><span className="text-gray-100">When you sign in with Google.</span> Your Google account ID, email address, name and profile photo address. We ask Google only for basic profile access (“openid”, “email” and “profile”); we can’t see your Gmail, Drive, contacts or anything else in your Google account.</p>
         <p><span className="text-gray-100">Band membership.</span> Which bands you belong to, your role in each (Owner, Manager, Editor or Member) and when you joined. If you create an invite link, we keep its role, expiry date and — if you lock it to one person — that person’s email address, and we email them the link on your behalf. If a band turns on its guest link, we keep the link, its expiry date if it has one, and when it was last opened — not who opened it.</p>
         <p><span className="text-gray-100">Requests to join.</span> If you ask to join a Members-only band, we keep your request, the message you wrote (if any), and whether it was approved or declined.</p>
-        <p><span className="text-gray-100">What bands add.</span> Audio, sheet music, lyrics, band notes, setlists, song details, YouTube links, and a band’s name, logo, colors and website. We record who added a song, and keep a log of changes — who did what, and when — so a band can see its own history.</p>
+        <p><span className="text-gray-100">What bands add.</span> Audio, sheet music, lyrics, notes on songs, setlists, song details, YouTube links, and a band’s name, logo, colors and website. We record who added a song and who wrote each note, and keep a log of changes — who did what, and when — so a band can see its own history.</p>
         <p><span className="text-gray-100">Server logs.</span> Like most websites, our server records each request it answers: the page or file asked for, the time, and whether it succeeded. Our hosting provider may also record your IP address.</p>
-        <p><span className="text-gray-100">Kept only on your device.</span> Personal notes, your mixer settings and a few display preferences are saved in your browser’s storage. They never leave your device and we never see them. Clearing your browser’s site data deletes them.</p>
+        <p><span className="text-gray-100">Email opt-outs.</span> If you use “Don’t email me again” in one of our emails, we keep your email address on a list so we never email it again.</p>
+        <p><span className="text-gray-100">Kept only on your device.</span> Your mixer settings and a few display preferences are saved in your browser’s storage. They never leave your device and we never see them. Clearing your browser’s site data deletes them.</p>
       </Section>
 
       <Section title="Cookies">
@@ -50,6 +51,7 @@ export function PrivacyPolicy() {
           <li>To sign you in and keep you signed in.</li>
           <li>To show you the bands you belong to and let you do what your role allows.</li>
           <li>To show band members who else is in the band (Owners and Managers see members’ names and email addresses).</li>
+          <li>To show who wrote each note on a song: everyone who can see the song sees the name and profile photo of whoever added each of its notes, but never their email address.</li>
           <li>To pass on a request to join: the band’s Owner gets an email with your name, email address and message, and can reply to you directly. Owners and Managers see it in the app too. We email you when the band answers.</li>
           <li>To keep the site running and secure — for example, to investigate errors or misuse.</li>
         </ul>

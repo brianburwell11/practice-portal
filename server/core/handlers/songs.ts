@@ -1,7 +1,6 @@
 import {
   songConfigSchema,
   lyricsDataSchema,
-  notesDataSchema,
 } from '../../../src/config/schema';
 import { HttpError, ok } from '../http';
 import { isNoSuchKey, r2ListKeys } from '../r2';
@@ -31,22 +30,6 @@ export async function saveSongLyrics(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, songId } = req.params;
   const validated = lyricsDataSchema.parse(req.body);
   await writeJson(`${bandId}/songs/${songId}/lyrics.json`, validated);
-  return ok();
-}
-
-export async function saveSongNotes(req: CoreRequest): Promise<CoreResponse> {
-  const { bandId, songId } = req.params;
-  const validated = notesDataSchema.parse(req.body);
-  const key = `${bandId}/songs/${songId}/notes.json`;
-  if (validated.notes.length === 0) {
-    try {
-      await deleteObject(key);
-    } catch {
-      // already absent — fine
-    }
-  } else {
-    await writeJson(key, validated);
-  }
   return ok();
 }
 

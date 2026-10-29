@@ -1,36 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNotesStore } from '../../store/notesStore';
-import { usePersonalNotesStore } from '../../store/personalNotesStore';
 
 const TOAST_MS = 5000;
 
 /**
  * Bottom-floating toast offering Undo for the most recently deleted note.
- * Subscribes to both stores (admin + personal) and shows whichever
- * deletion was more recent. Auto-dismisses after TOAST_MS.
+ * Auto-dismisses after TOAST_MS.
  */
 export function UndoToast() {
-  const adminDeleted = useNotesStore((s) => s.lastDeleted);
-  const adminUndo = useNotesStore((s) => s.undoDelete);
-  const adminClear = useNotesStore((s) => s.clearLastDeleted);
-  const personalDeleted = usePersonalNotesStore((s) => s.lastDeleted);
-  const personalUndo = usePersonalNotesStore((s) => s.undoDelete);
-  const personalClear = usePersonalNotesStore((s) => s.clearLastDeleted);
+  const lastDeleted = useNotesStore((s) => s.lastDeleted);
+  const undoDelete = useNotesStore((s) => s.undoDelete);
+  const clearLastDeleted = useNotesStore((s) => s.clearLastDeleted);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Pick whichever deletion happened more recently.
-  let active: 'admin' | 'personal' | null = null;
-  if (adminDeleted && personalDeleted) {
-    active = adminDeleted.deletedAt >= personalDeleted.deletedAt ? 'admin' : 'personal';
-  } else if (adminDeleted) {
-    active = 'admin';
-  } else if (personalDeleted) {
-    active = 'personal';
-  }
-  const lastDeleted = active === 'admin' ? adminDeleted : active === 'personal' ? personalDeleted : null;
-  const undoDelete = active === 'admin' ? adminUndo : personalUndo;
-  const clearLastDeleted = active === 'admin' ? adminClear : personalClear;
 
   // Auto-dismiss after TOAST_MS based on the deletedAt timestamp.
   useEffect(() => {

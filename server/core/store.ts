@@ -43,6 +43,20 @@ function current(): RequestContext | undefined {
   return context.getStore();
 }
 
+/**
+ * Lock a song's row until the request's transaction ends, so two requests
+ * editing the same song document (its notes) take turns instead of one
+ * overwriting the other. False if there's no such song.
+ */
+export async function lockSong(bandLegacyId: string, songId: string): Promise<boolean> {
+  const ctx = current();
+  if (!ctx) throw new Error('lockSong needs a request transaction');
+  const rows = await ctx.tx.select({ id: schema.song.id }).from(schema.song)
+    .where(and(eq(schema.song.mediaPrefix, `${bandLegacyId}/songs/${songId}`), isNull(schema.song.deletedAt)))
+    .for('update');
+  return rows.length > 0;
+}
+
 /** What R2 throws for a missing object, so handlers' `isNoSuchKey` checks keep working. */
 function noSuchKey(key: string): Error {
   return Object.assign(new Error(`No document at ${key}`), { name: 'NoSuchKey' });

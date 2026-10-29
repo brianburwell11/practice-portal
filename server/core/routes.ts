@@ -50,6 +50,7 @@ import {
   requestAccess,
 } from './handlers/requests';
 import { blockEmail, getEmailBlock } from './handlers/emailBlock';
+import { createNote, deleteNote, updateNote } from './handlers/notes';
 import { deleteSetlist, saveSetlist } from './handlers/setlists';
 import { createStemUploads, getStemJobs, queueStemUploads, retryStemJob } from './handlers/stems';
 import {
@@ -58,7 +59,6 @@ import {
   renameSong,
   saveSongConfig,
   saveSongLyrics,
-  saveSongNotes,
   upsertDiscographyEntry,
 } from './handlers/songs';
 import {
@@ -363,14 +363,37 @@ export const routes: RouteDef[] = [
     errorStatus: 400,
     errorMessage: 'Invalid request',
   },
+  // Notes: any member adds them; your own, or anyone's with note.moderate,
+  // you edit and delete (handlers/notes.ts checks which).
   {
-    name: 'song.notes.write',
+    name: 'note.create',
     writes: 'documents',
-    access: 'song.content.write',
+    access: 'note.create',
     method: 'POST',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/notes$/,
     body: 'json',
-    handler: saveSongNotes,
+    handler: createNote,
+    errorStatus: 400,
+    errorMessage: 'Invalid request',
+  },
+  {
+    name: 'note.update',
+    writes: 'documents',
+    access: 'note.create',
+    method: 'PUT',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/notes\/(?<noteId>[^/]+)$/,
+    body: 'json',
+    handler: updateNote,
+    errorStatus: 400,
+    errorMessage: 'Invalid request',
+  },
+  {
+    name: 'note.delete',
+    writes: 'documents',
+    access: 'note.create',
+    method: 'DELETE',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/notes\/(?<noteId>[^/]+)$/,
+    handler: deleteNote,
     errorStatus: 400,
     errorMessage: 'Invalid request',
   },

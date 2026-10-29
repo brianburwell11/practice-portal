@@ -140,6 +140,28 @@ export async function readDocumentUnchecked(key: string, d: Db): Promise<unknown
   return read(key, d, UNCHECKED);
 }
 
+/**
+ * A song's notes as the app shows them: deleted ones left out (they're kept
+ * a while for Undo), and each note's author by name and picture.
+ */
+async function notesForViewers(stored: unknown, d: Db): Promise<unknown | null> {
+  if (!stored) return null;
+  const notes = ((stored as { notes?: { id: string; time: number; text: string; authorId?: string; deletedAt?: string }[] }).notes ?? [])
+    .filter((n) => !n.deletedAt);
+  const ids = [...new Set(notes.map((n) => n.authorId).filter((id): id is string => !!id))];
+  const users = ids.length
+    ? await d.select({ id: schema.appUser.id, name: schema.appUser.displayName, avatarUrl: schema.appUser.avatarUrl })
+      .from(schema.appUser).where(inArray(schema.appUser.id, ids))
+    : [];
+  // Never the email address: anyone who can see the song sees its notes.
+  const byId = new Map(users.map((u) => [u.id, { id: u.id, name: u.name ?? 'Band member', avatarUrl: u.avatarUrl }]));
+  return {
+    notes: notes.map(({ id, time, text, authorId }) => ({
+      id, time, text, ...(authorId && byId.has(authorId) ? { author: byId.get(authorId) } : {}),
+    })),
+  };
+}
+
 async function read(key: string, d: Db, viewer: Viewer | typeof UNCHECKED): Promise<unknown | null> {
   const k = parseKey(key);
   if (!k) return null;
@@ -200,7 +222,9 @@ async function read(key: string, d: Db, viewer: Viewer | typeof UNCHECKED): Prom
       const [row] = await d.select({ config: schema.song.config, lyrics: schema.song.lyrics, notes: schema.song.notes })
         .from(schema.song)
         .where(and(liveSongs(band.id), eq(schema.song.mediaPrefix, `${k.band}/songs/${k.song}`)));
-      return row ? row[k.file] ?? null : null;
+      if (!row) return null;
+      if (k.file === 'notes' && viewer !== UNCHECKED) return notesForViewers(row.notes, d);
+      return row[k.file] ?? null;
     }
 
     case 'setlistIndex': {

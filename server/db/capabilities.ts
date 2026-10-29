@@ -24,7 +24,9 @@ export const CAPABILITIES = {
   'song.audio.write': 'Upload and replace audio stems',
   'song.timing.write': 'Edit tapMap, tempoMap, and markers',
   'song.score.write': 'Upload and replace sheet music',
-  'song.content.write': 'Edit lyrics, notes, and song metadata',
+  'song.content.write': 'Edit lyrics and song metadata',
+  'note.create': 'Add timestamp notes to songs, and edit or delete your own',
+  'note.moderate': 'Edit or delete anyone’s notes',
   'setlist.write': 'Create, reorder, and delete setlists',
   'audio.download': 'Download original audio files',
   'member.invite': 'Invite people to the band',
@@ -61,6 +63,8 @@ const MANAGER_CAPABILITIES = [
   'audio.download',
   'member.invite',
   'member.role.set',
+  'note.create',
+  'note.moderate',
 ] as const satisfies readonly Capability[];
 
 /**
@@ -75,6 +79,7 @@ const EDITOR_CAPABILITIES = [
   'song.content.write',
   'setlist.write',
   'audio.download',
+  'note.create',
 ] as const satisfies readonly Capability[];
 
 export const ROLES: RoleDefinition[] = [
@@ -106,7 +111,7 @@ export const ROLES: RoleDefinition[] = [
     label: 'Member',
     sortOrder: 3,
     membershipEligible: true,
-    capabilities: ['song.read', 'audio.download'],
+    capabilities: ['song.read', 'audio.download', 'note.create'],
   },
   {
     key: 'guest',

@@ -64,6 +64,13 @@
       "when": 1793295272398,
       "tag": "0008_invite_email_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793298955921,
+      "tag": "0009_note_capabilities",
+      "breakpoints": true
     }
   ]
 }

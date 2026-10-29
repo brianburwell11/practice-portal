@@ -114,7 +114,7 @@ async function main(): Promise<void> {
       for (const [path, body] of [
         ['songs/x/config', config('x')],
         ['songs/x/lyrics', { lines: [{ text: 'secret', time: 1 }] }],
-        ['songs/x/notes', { notes: [{ id: 'n1', time: 1, text: 'secret' }] }],
+        ['songs/x/notes', { time: 1, text: 'secret' }],
         ['setlists/SLX', { id: 'SLX', slug: 'saturday', name: 'Saturday', entries: [{ type: 'song', songId: 'x' }] }],
       ] as const) {
         statuses.push((await call(owner.cookie, 'POST', `/api/bands/${b}/${path}`, body)).status);
