@@ -1005,7 +1005,7 @@ export default function EditSongPage() {
               <button
                 onClick={async () => {
                   if ((isDirty(state) || newSheetMusicFile) && !(await confirmDiscard())) return;
-                  navigate(`/${bandSlug}#${config.slug ?? config.id}`);
+                  navigate(`/${bandSlug}?song=${encodeURIComponent(config.slug ?? config.id)}`);
                 }}
                 disabled={state.saving}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm font-medium"

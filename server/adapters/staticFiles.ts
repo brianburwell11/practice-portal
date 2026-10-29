@@ -146,11 +146,31 @@ function indexable(pathname: string): boolean {
 
 const attr = (v: string) => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-/** index.html, with this page's canonical URL and, off the portal's own pages, noindex. */
-function sendIndex(req: IncomingMessage, res: ServerResponse, indexHtml: string, pathname: string): void {
+const text = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+/** Works out a page's title from its path and query (server/core/pageTitles.ts). */
+export type PageTitler = (pathname: string, query: URLSearchParams) => Promise<string>;
+
+/**
+ * index.html, with this page's title (tab and link previews), its canonical
+ * URL, and, off the portal's own pages, noindex.
+ */
+async function sendIndex(
+  req: IncomingMessage, res: ServerResponse, indexHtml: string, pathname: string, query: URLSearchParams, titler?: PageTitler,
+): Promise<void> {
+  const title = titler ? await titler(pathname, query) : null;
+  // The URL a preview links back to keeps what picks the song or setlist.
+  const kept = new URLSearchParams([...query].filter(([k]) => k === 'setlist' || k === 'song'));
+  const pageUrl = SITE_URL + encodeURI(pathname) + (kept.size ? `?${kept}` : '');
   const tags = [`<link rel="canonical" href="${attr(SITE_URL + encodeURI(pathname))}" />`];
   if (!indexable(pathname)) tags.push('<meta name="robots" content="noindex" />');
-  const html = fs.readFileSync(indexHtml, 'utf8').replace(SEO_PLACEHOLDER, tags.join('\n    '));
+  let html = fs.readFileSync(indexHtml, 'utf8').replace(SEO_PLACEHOLDER, tags.join('\n    '));
+  html = html.replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${attr(pageUrl)}$2`);
+  if (title) {
+    html = html
+      .replace(/<title>[^<]*<\/title>/, `<title>${text(title)}</title>`)
+      .replace(/(<meta property="og:title" content=")[^"]*(")/, `$1${attr(title)}$2`);
+  }
 
   let body = Buffer.from(html);
   const etag = `W/"${createHash('sha1').update(body).digest('base64url').slice(0, 16)}"`;
@@ -173,14 +193,14 @@ function sendIndex(req: IncomingMessage, res: ServerResponse, indexHtml: string,
   res.end(req.method === 'HEAD' ? undefined : body);
 }
 
-export function createStaticHandler(root: string) {
+export function createStaticHandler(root: string, opts: { pageTitle?: PageTitler } = {}) {
   const absRoot = path.resolve(root);
   const indexHtml = path.join(absRoot, 'index.html');
   if (!fs.existsSync(indexHtml)) {
     throw new Error(`No SPA build at ${indexHtml} — run \`npm run build\` first`);
   }
 
-  return (req: IncomingMessage, res: ServerResponse): void => {
+  return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.statusCode = 405;
       res.setHeader('Allow', 'GET, HEAD');
@@ -189,6 +209,7 @@ export function createStaticHandler(root: string) {
     }
 
     let pathname: string;
+    const query = new URLSearchParams((req.url ?? '').split('?')[1]?.split('#')[0] ?? '');
     try {
       pathname = decodeURIComponent((req.url ?? '/').split('?')[0]);
     } catch {
@@ -198,7 +219,7 @@ export function createStaticHandler(root: string) {
     }
 
     const file = resolveFile(absRoot, pathname);
-    if (file?.filePath === indexHtml) return sendIndex(req, res, indexHtml, pathname);
+    if (file?.filePath === indexHtml) return sendIndex(req, res, indexHtml, pathname, query, opts.pageTitle);
     if (file) return send(req, res, absRoot, file);
 
     // A missing script or stylesheet must 404 — answering with index.html
@@ -210,6 +231,6 @@ export function createStaticHandler(root: string) {
       return;
     }
 
-    sendIndex(req, res, indexHtml, pathname);
+    await sendIndex(req, res, indexHtml, pathname, query, opts.pageTitle);
   };
 }

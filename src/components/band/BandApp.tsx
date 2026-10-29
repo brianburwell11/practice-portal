@@ -8,6 +8,7 @@ import { dataUrl } from '../../utils/url';
 import { useSessionStore } from '../../store/sessionStore';
 import { AccountMenu } from '../account/AccountMenu';
 import { RequestAccess } from '../account/RequestAccess';
+import { bandPageTitle } from '../../utils/pageTitle';
 
 /**
  * A band's guest link is the band's own address plus `?guest=<token>`. Open it
@@ -111,8 +112,7 @@ export function BandApp() {
     root.style.setProperty('--band-accent', currentBand.colors.accent);
     root.style.setProperty('--band-bg', currentBand.colors.background);
     root.style.setProperty('--band-text', currentBand.colors.text);
-    // "The Hornets’ Practice Portal", not "The Hornets’s".
-    document.title = `${currentBand.name}${/s$/i.test(currentBand.name) ? '’' : '’s'} Practice Portal`;
+    document.title = bandPageTitle(currentBand.name);
     return () => {
       root.style.removeProperty('--band-primary');
       root.style.removeProperty('--band-accent');

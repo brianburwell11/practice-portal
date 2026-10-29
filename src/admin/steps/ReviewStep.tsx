@@ -209,7 +209,7 @@ export function ReviewStep({ state, dispatch, onSaved, onAddAnother }: Props) {
         </p>
         <div className="flex justify-center gap-3">
           <button
-            onClick={() => navigate(`/${bandSlug}#${slugify(state.slug) || state.id}`)}
+            onClick={() => navigate(`/${bandSlug}?song=${encodeURIComponent(slugify(state.slug) || state.id)}`)}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
           >
             Open Song

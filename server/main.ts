@@ -18,6 +18,7 @@
 import http from 'node:http';
 import { createApiHandler, sendJson } from './adapters/nodeApi';
 import { createStaticHandler } from './adapters/staticFiles';
+import { pageTitleFor } from './core/pageTitles';
 import { startWorker, stopWorker } from './core/jobs/worker';
 import { drainEmails } from './core/email';
 
@@ -28,7 +29,7 @@ const STATIC_DIR = process.env.STATIC_DIR ?? 'dist';
 // (Phase 6). Until this server holds R2 write credentials (Phase 8c), the
 // routes that touch R2 also fail closed for want of them.
 const handleApi = createApiHandler();
-const handleStatic = createStaticHandler(STATIC_DIR);
+const handleStatic = createStaticHandler(STATIC_DIR, { pageTitle: pageTitleFor });
 
 const CANONICAL_HOST = process.env.CANONICAL_HOST?.trim().toLowerCase() || undefined;
 
@@ -66,7 +67,11 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
     return;
   }
 
-  handleStatic(req, res);
+  handleStatic(req, res).catch((err) => {
+    console.error('[static] failed:', err);
+    if (!res.headersSent) res.statusCode = 500;
+    res.end();
+  });
 }
 
 /**

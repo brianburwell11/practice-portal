@@ -73,16 +73,19 @@ export function useSongLoader() {
       // Load personal notes from localStorage (sync, scoped per song).
       usePersonalNotesStore.getState().load(entry.id);
 
+      // In a setlist, `#n` is the song's place in it. Otherwise the song is
+      // `?song=<slug>`, in the query so the server sees it and link previews
+      // can name the song. Legacy songs fall back to their slug-shaped id.
       const setlistState = useSetlistStore.getState();
+      const url = new URL(window.location.href);
       if (setlistState.activeSetlist) {
-        history.pushState(null, '', `#${setlistState.activeIndex + 1}`);
+        url.searchParams.delete('song');
+        url.hash = `#${setlistState.activeIndex + 1}`;
       } else {
-        // Prefer the song's slug (readable kebab-case) when present;
-        // legacy songs fall back to their slug-shaped id, which
-        // matches the pre-refactor hash so bookmarks keep resolving.
-        const hashSegment = config.slug ?? entry.slug ?? entry.id;
-        history.pushState(null, '', `#${hashSegment}`);
+        url.searchParams.set('song', config.slug ?? entry.slug ?? entry.id);
+        url.hash = '';
       }
+      history.pushState(null, '', url.pathname + url.search + url.hash);
 
       const saved = loadMixerState(config.id);
 
@@ -255,7 +258,9 @@ export function SongList() {
     // Wait for setlist preload to complete before auto-selecting a song
     if (hasAutoLoaded.current || setlistPending.current || filteredSongs.length === 0) return;
     const hash = window.location.hash.replace('#', '');
-    if (!hash) return;
+    // ?song=<slug>, or `#<slug>` from links made before songs moved into the query.
+    const songKey = new URLSearchParams(window.location.search).get('song') ?? hash;
+    if (!hash && !songKey) return;
     const activeSetlist = useSetlistStore.getState().activeSetlist;
     if (activeSetlist) {
       // Hash is a 1-based song index when setlist is active
@@ -269,8 +274,8 @@ export function SongList() {
       // Look up by slug first (new songs), fall back to id
       // (legacy songs whose id is already a slug).
       const entry =
-        filteredSongs.find((s) => s.slug && s.slug === hash) ??
-        filteredSongs.find((s) => s.id === hash);
+        filteredSongs.find((s) => s.slug && s.slug === songKey) ??
+        filteredSongs.find((s) => s.id === songKey);
       if (entry) {
         hasAutoLoaded.current = true;
         handleSelect(entry);
@@ -281,7 +286,8 @@ export function SongList() {
   useEffect(() => {
     const onPopState = () => {
       const hash = window.location.hash.replace('#', '');
-      if (!hash) return;
+      const songKey = new URLSearchParams(window.location.search).get('song') ?? hash;
+      if (!hash && !songKey) return;
       const activeSetlist = useSetlistStore.getState().activeSetlist;
       if (activeSetlist) {
         const idx = parseInt(hash) - 1;
@@ -291,10 +297,10 @@ export function SongList() {
         }
       } else {
         const sel = useSongStore.getState().selectedSong;
-        if (sel && (hash === sel.slug || hash === sel.id)) return;
+        if (sel && (songKey === sel.slug || songKey === sel.id)) return;
         const entry =
-          filteredSongs.find((s) => s.slug && s.slug === hash) ??
-          filteredSongs.find((s) => s.id === hash);
+          filteredSongs.find((s) => s.slug && s.slug === songKey) ??
+          filteredSongs.find((s) => s.id === songKey);
         if (entry) handleSelect(entry);
       }
     };
@@ -396,8 +402,8 @@ export function SetlistDropdown() {
       const url = new URL(window.location.href);
       url.searchParams.delete('setlist');
       const sel = useSongStore.getState().selectedSong;
-      const hashSegment = sel ? (sel.slug ?? sel.id) : '';
-      url.hash = hashSegment ? `#${hashSegment}` : '';
+      if (sel) url.searchParams.set('song', sel.slug ?? sel.id);
+      url.hash = '';
       history.replaceState(null, '', url.pathname + url.search + url.hash);
       return;
     }
@@ -413,6 +419,7 @@ export function SetlistDropdown() {
         'setlist',
         data.slug ?? setlistId.replace(/^setlist-/, ''),
       );
+      url.searchParams.delete('song');
       // activeIndex resets to 0 via setActiveSetlist, so first song
       url.hash = '#1';
       history.replaceState(null, '', url.pathname + url.search + url.hash);
