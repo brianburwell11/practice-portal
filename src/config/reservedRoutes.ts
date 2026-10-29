@@ -17,16 +17,16 @@
 /** Paths the app serves today. Must stay reserved. */
 export const IN_USE_ROUTES = [
   'api', 'healthz', 'invite', 'admin', 'assets',
-  'index.html', 'favicon.svg', 'soundtouch-processor.js',
+  'index.html', 'favicon.ico', 'favicon-192.png', 'apple-touch-icon.png', 'soundtouch-processor.js',
 ] as const;
 
 const RESERVED = [
   ...IN_USE_ROUTES,
 
   // Web infrastructure and well-known files
-  'robots.txt', 'sitemap', 'sitemap.xml', 'favicon.ico', 'favicon.png', 'manifest.json',
+  'robots.txt', 'sitemap', 'sitemap.xml', 'favicon.svg', 'favicon.png', 'manifest.json',
   'manifest.webmanifest', 'site.webmanifest', 'sw.js', 'service-worker.js', 'ads.txt', 'app-ads.txt',
-  'humans.txt', 'security.txt', 'apple-app-site-association', 'apple-touch-icon.png',
+  'humans.txt', 'security.txt', 'apple-app-site-association',
   'browserconfig.xml', 'crossdomain.xml', 'feed', 'rss', 'atom', 'cdn', 'static', 'public', 'media',
   'files', 'file', 'uploads', 'upload', 'images', 'img', 'fonts', 'css', 'js', 'scripts', 'styles',
   'dist', 'build', 'health', 'status', 'ping', 'metrics', 'debug', 'graphql', 'oauth', 'oauth2',
