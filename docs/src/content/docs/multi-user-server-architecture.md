@@ -621,10 +621,9 @@ Kept for reference; 6a–6d above are how each item gets done. `can()` already e
 ### 8c — Uploads in production
 - [x] Fly secrets: R2 write credentials. `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` are set (2026-10-28).
 - [x] R2 CORS allows `https://practice-portal.fly.dev` and `https://practiceportal.app` for presigned `PUT` (score uploads go straight from the browser to R2). Checked 2026-10-28 with browser-style preflights: both get `204` with `GET, HEAD, PUT`; an unknown origin gets `403`.
-- [ ] Machine size and timeouts that survive a multi-stem transcode. **Measured 2026-10-28 — it doesn't, yet.** `scripts/measure-transcode.ts --url https://practiceportal.app` with 6 × 4-minute 24-bit stems (415 MB) on the 1 GB `shared-cpu-1x`:
+- [x] Machine size and timeouts that survive a multi-stem transcode. **Measured 2026-10-28 — it didn't; fixed by Phase 9 (2026-10-29: 6 × 4-minute stems in 95.5 s, site up throughout).** `scripts/measure-transcode.ts --url https://practiceportal.app` with 6 × 4-minute 24-bit stems (415 MB) on the 1 GB `shared-cpu-1x`:
   - **Over 5 minutes.** The script's client gave up at 300 s, and Node's own `server.requestTimeout` is also 300 s, so the Add Song wizard can't upload a song this size.
   - **It took the site down.** ffmpeg ran synchronously, so the server answered nobody: Fly's health check failed at 21:08 and its proxy found no healthy machine at 21:12. It recovered on its own when ffmpeg finished, about ten minutes in all. No R2 objects were left behind.
-  - **Don't rerun the script against production** until uploads are a background job (Phase 9).
 - [x] **ffmpeg and MuseScore no longer block the server.** `server/core/media/run.ts` spawns them asynchronously. Locally, 13 s of transcoding a 5-minute stem: `/healthz` answered 65 times, worst 40 ms. This doesn't shorten a transcode; the 5-minute limit still needs Phase 9.
 - [x] **…and run without a shell.** `ffprobe` and the Opus transcode built shell strings with the upload's filename in quotes, so a crafted name like `$(…).wav` would have run as a command for anyone with `song.audio.write`. Now every argument is passed as-is; a file named `$(touch /tmp/…).wav` transcodes and nothing runs.
 - [x] Request logs mask invite tokens (`/invite/…`, `/api/invites/…`, and in sign-in's `next=`), as they already did guest tokens.
@@ -674,7 +673,7 @@ Song prep takes minutes and shells out to native binaries. It cannot run inside 
 
 ### 9e — Prove it
 - [x] `scripts/verify-jobs.ts` against a scratch Postgres plus a local S3 stand-in (SeaweedFS in Docker — MinIO's images are no longer freely pullable), so nothing touches R2: upload, queue, transcode, progress, failure and retry, a restart mid-job, cleanup, and that one band can't queue or read another band's jobs. **32/32**, twice, 2026-10-28. `measure-transcode.ts` (rewritten for the queue) locally: 3 × 2-minute stems, 104 MB, uploaded in under a second and done in 19 s; `/healthz` worst 10 ms.
-- [ ] Apply migration 0007 to Neon (`npm run db:migrate`), deploy, then rerun `measure-transcode.ts --url https://practiceportal.app`: 6 × 4-minute stems finish, and `/healthz` stays fast throughout.
+- [x] Apply migration 0007 to Neon (`npm run db:migrate`), deploy, then rerun `measure-transcode.ts --url https://practiceportal.app`. **Done 2026-10-29:** the same 6 × 4-minute stems (415 MB) that took the site down in 8c uploaded straight to R2 in 21.6 s and were all transcoded 95.5 s after starting; `/healthz` answered 45 times, median 95 ms, worst 2.0 s (ffmpeg holding the one shared CPU for a moment); nothing left behind.
 
 ### Later
 - [ ] Per-band concurrency caps, once more than a few bands upload.
