@@ -71,14 +71,14 @@ export function MetadataStep({ state, dispatch }: Props) {
 
         <div>
           <label className="block text-sm text-gray-400 mb-1">
-            URL hash{' '}
+            Song link{' '}
             <span className="text-gray-600 text-xs">
               (lowercase, numbers, hyphens)
             </span>
           </label>
           <div className={`flex items-center gap-0 w-full bg-gray-800 border rounded focus-within:border-blue-500 ${slugCollides ? 'border-red-500' : 'border-gray-600'}`}>
             <span className="pl-3 py-2 text-gray-500 font-mono text-sm select-none whitespace-nowrap">
-              /{bandRoute}#
+              /{bandRoute}?song=
             </span>
             <input
               type="text"
@@ -89,7 +89,7 @@ export function MetadataStep({ state, dispatch }: Props) {
             />
           </div>
           {slugCollides && (
-            <p className="mt-1 text-xs text-red-400">This URL hash is already taken by another song.</p>
+            <p className="mt-1 text-xs text-red-400">Another song already uses this link.</p>
           )}
         </div>
       </div>

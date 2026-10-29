@@ -9,6 +9,15 @@ New bands are Members only: their songs are visible to the band's signed-in memb
 - [Home](https://practiceportal.app/): what Practice Portal is, and sign up
 - [Help](https://practiceportal.app/help): guides to using Practice Portal
 - [Roles and permissions](https://practiceportal.app/help/roles-and-permissions): the roles in a band, from Owner to Guest, and what each can do
+- [Start your band](https://practiceportal.app/help/start-your-band): create a band, add your first song and bring your bandmates in
+- [Practicing a song](https://practiceportal.app/help/practicing-a-song): play, loop, slow down, jump to a section, sheet music and lyrics
+- [Using the mixer](https://practiceportal.app/help/using-the-mixer): turn parts up or down, mute and solo them, keep your mix
+- [Notes on songs](https://practiceportal.app/help/notes): leave notes at a moment in a song for the whole band
+- [Keyboard shortcuts](https://practiceportal.app/help/keyboard-shortcuts): every shortcut in the player and the editors
+- [Adding and editing songs](https://practiceportal.app/help/adding-songs): upload stems and sheet music, group parts, change a song later
+- [Timing and lyrics](https://practiceportal.app/help/timing-and-lyrics): mark sections and measures, sync lyrics
+- [Setlists](https://practiceportal.app/help/setlists): build sets for a gig and share them
+- [Troubleshooting and FAQ](https://practiceportal.app/help/faq): common questions
 - [Privacy Policy](https://practiceportal.app/legal/privacy)
 - [Terms of Service](https://practiceportal.app/legal/terms)
 

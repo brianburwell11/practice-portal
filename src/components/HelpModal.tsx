@@ -8,8 +8,9 @@ const shortcuts = [
   { key: 'Space', action: 'Play / Pause' },
   { key: '[', action: 'Set loop in point' },
   { key: ']', action: 'Set loop out point' },
-  { key: '\\ or C', action: 'Toggle loop on/off' },
+  { key: '\\ or c', action: 'Toggle loop on/off' },
   { key: 'Shift + \\', action: 'Clear loop' },
+  { key: 'N', action: 'Add a note here' },
   { key: '`', action: 'Toggle follow playhead' },
   { key: 'S', action: 'Toggle global solo' },
   { key: 'Shift + S', action: 'Clear solo group' },
@@ -18,7 +19,8 @@ const shortcuts = [
   { key: 'Cmd/Ctrl + Scroll', action: 'Zoom waveform in/out' },
   { key: 'Shift + Scroll', action: 'Scroll waveform left/right' },
   { key: 'Pinch', action: 'Zoom waveform (touch)' },
-  { key: 'Long-press', action: 'Clear loop / mute group / solo group (mobile)' },
+  { key: 'Shift + click', action: 'Clear loop / mute group / solo group' },
+  { key: 'Long-press', action: 'The same, on a phone or tablet' },
 ];
 
 export function HelpModal({ onClose }: Props) {
@@ -35,6 +37,9 @@ export function HelpModal({ onClose }: Props) {
             </div>
           ))}
         </div>
+        <a href="/help/keyboard-shortcuts" target="_blank" rel="noopener" className="inline-block mt-2 text-xs text-blue-400 hover:text-blue-300">
+          All keyboard shortcuts
+        </a>
       </div>
 
       {/* Mute switch notice */}
