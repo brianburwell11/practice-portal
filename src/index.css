@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
+/* The background behind everything: non-band pages, and a band that hasn't
+   picked its own. `bg-page` in markup. */
+@theme {
+  --color-page: #080e22;
+  /* The logo's blue, sampled from the door. */
+  --color-brand: #4a31f5;
+  /* The wordmark's typeface (HK Grotesk, released on Google Fonts as Hanken Grotesk). */
+  --font-brand: "Hanken Grotesk", system-ui, sans-serif;
+}
+
 body {
   margin: 0;
-  background: #0f1117;
+  background: var(--color-page);
   color: #e5e7eb;
   font-family: system-ui, -apple-system, sans-serif;
 }

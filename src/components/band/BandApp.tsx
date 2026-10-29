@@ -127,7 +127,7 @@ export function BandApp() {
 
   if (!currentBand || guestPending) {
     return (
-      <div className="min-h-screen bg-gray-900 text-gray-400 p-8">
+      <div className="min-h-screen bg-page text-gray-400 p-8">
         Loading...
       </div>
     );
@@ -147,11 +147,11 @@ function BandUnavailable({ slug, error, guestError }: { slug: string; error: str
   }, [load]);
 
   if (!loaded || !available || !error.startsWith('Band not found')) {
-    return <div className="min-h-screen bg-gray-900 text-red-400 p-8">{loaded ? error : null}</div>;
+    return <div className="min-h-screen bg-page text-red-400 p-8">{loaded ? error : null}</div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
       <div className="absolute top-4 right-4"><AccountMenu /></div>
       <div className="max-w-sm text-center space-y-4">
         {guestError && <p className="text-sm text-amber-300">{guestError}</p>}

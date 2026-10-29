@@ -25,7 +25,8 @@ import { dataUrl } from './utils/url';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
 import { useSetlistStore } from './store/setlistStore';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import practicePortalLogo from './assets/practice-portal-logo.png';
 import { useMixerPersistence } from './hooks/useMixerPersistence';
 
 
@@ -144,7 +145,7 @@ export default function App() {
       <div
         className="h-screen overflow-hidden flex flex-col"
         style={{
-          backgroundColor: 'var(--band-bg, #111827)',
+          backgroundColor: 'var(--band-bg, var(--color-page))',
           color: 'var(--band-text, #f3f4f6)',
         }}
       >
@@ -153,32 +154,47 @@ export default function App() {
           className="px-4 py-3 border-b border-gray-700 flex flex-wrap items-center gap-y-2 md:relative"
           style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
         >
-          {(() => {
-            const heading = currentBand?.logo ? (
+          <div className="flex items-center gap-3">
+            {/* Practice Portal's own mark: back to the band picker. */}
+            <Link
+              to="/"
+              title="Practice Portal home"
+              className="inline-block shrink-0 origin-left transition-transform hover:scale-105"
+            >
+              {/* A soft shadow lifts the mark off any band's colours. */}
               <img
-                src={currentBand.logo}
-                alt={currentBand.name}
-                className="h-10 object-contain"
+                src={practicePortalLogo}
+                alt="Practice Portal home"
+                className="h-10 w-auto drop-shadow-[0_2px_4px_rgba(0,0,0,0.35)]"
               />
-            ) : (
-              <h1 className="text-lg font-semibold tracking-tight">
-                {currentBand?.name ?? 'Practice Portal'}
-              </h1>
-            );
-            return currentBand?.website ? (
-              <a
-                href={currentBand.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={currentBand.website}
-                className="inline-block origin-left transition-transform hover:scale-105"
-              >
-                {heading}
-              </a>
-            ) : (
-              heading
-            );
-          })()}
+            </Link>
+            {(() => {
+              const heading = currentBand?.logo ? (
+                <img
+                  src={currentBand.logo}
+                  alt={currentBand.name}
+                  className="h-10 object-contain"
+                />
+              ) : (
+                <h1 className="text-lg font-semibold tracking-tight">
+                  {currentBand?.name ?? 'Practice Portal'}
+                </h1>
+              );
+              return currentBand?.website ? (
+                <a
+                  href={currentBand.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={currentBand.website}
+                  className="inline-block origin-left transition-transform hover:scale-105"
+                >
+                  {heading}
+                </a>
+              ) : (
+                heading
+              );
+            })()}
+          </div>
           <div className="w-full order-last flex justify-center md:w-auto md:order-none md:absolute md:left-1/2 md:-translate-x-1/2">
             <SetlistNav />
           </div>

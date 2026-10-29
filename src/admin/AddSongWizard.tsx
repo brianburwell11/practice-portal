@@ -14,7 +14,7 @@ export default function AddSongWizard() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100">
+    <div className="min-h-screen bg-page text-gray-100">
       {/* Header */}
       <header className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
         <h1 className="text-lg font-semibold tracking-tight">Add Song</h1>

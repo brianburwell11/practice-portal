@@ -22,13 +22,13 @@ export function RequireCan({ need, children }: Props) {
     load();
   }, [load]);
 
-  if (!loaded) return <div className="min-h-screen bg-gray-900 text-gray-400 p-8">Loading…</div>;
+  if (!loaded) return <div className="min-h-screen bg-page text-gray-400 p-8">Loading…</div>;
 
   const allowed = need === 'platformAdmin' ? platformAdmin : can(bandId, need);
   if (allowed) return <>{children}</>;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
       <div className="max-w-sm text-center space-y-4">
         <h1 className="text-xl font-semibold">{user ? 'You don’t have access to this' : 'Sign in to continue'}</h1>
         <p className="text-sm text-gray-400">

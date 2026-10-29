@@ -58,7 +58,7 @@ export function InvitePage() {
   const wrongAccount = !!(user && preview?.email && preview.email.toLowerCase() !== user.email.toLowerCase());
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
       <div className="max-w-sm w-full bg-gray-800/60 border border-gray-700 rounded-xl p-6 space-y-5 text-center">
         {!preview && !error && <p className="text-gray-400">Loading invite…</p>}
 

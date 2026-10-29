@@ -491,7 +491,7 @@ export default function EditSongPage() {
   // Loading / error states
   if (loadError) {
     return (
-      <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
+      <div className="min-h-screen bg-page text-gray-100 p-8">
         <div className="max-w-2xl mx-auto space-y-4">
           <h1 className="text-2xl font-bold">Edit Song</h1>
           <div className="bg-red-900/30 border border-red-700 rounded p-3 text-sm text-red-300">{loadError}</div>
@@ -503,12 +503,12 @@ export default function EditSongPage() {
 
   if (!config) {
     return (
-      <div className="min-h-screen bg-gray-900 text-gray-400 p-8">Loading config...</div>
+      <div className="min-h-screen bg-page text-gray-400 p-8">Loading config...</div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100">
+    <div className="min-h-screen bg-page text-gray-100">
       {/* Header */}
       <header className="px-4 py-3 border-b border-gray-700 flex items-center gap-4">
         <button onClick={handleBack} className="text-sm text-gray-400 hover:text-gray-200">

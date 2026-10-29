@@ -11,7 +11,7 @@ export function LegalPage({ title, effective, children }: { title: string; effec
   }, [title]);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-300">
+    <div className="min-h-screen bg-page text-gray-300">
       <div className="max-w-2xl mx-auto px-6 py-12 space-y-8 leading-relaxed text-[15px]">
         <header className="space-y-2">
           <Link to="/" className="text-sm text-gray-500 hover:text-gray-300">← Practice Portal</Link>

@@ -179,7 +179,7 @@ export default function NewBandPage() {
   const colorKeys: (keyof BandColors)[] = ['primary', 'accent', 'background', 'text'];
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100">
+    <div className="min-h-screen bg-page text-gray-100">
       <header className="px-4 py-3 border-b border-gray-700 flex items-center gap-4">
         <button
           onClick={() => navigate('/')}

@@ -167,14 +167,14 @@ export default function AlignSongPage() {
 
   if (load.kind === 'loading') {
     return (
-      <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
+      <div className="min-h-screen bg-page text-gray-100 p-8">
         <p className="text-gray-400">Loading song & decoding stems…</p>
       </div>
     );
   }
   if (load.kind === 'error') {
     return (
-      <div className="min-h-screen bg-gray-900 text-gray-100 p-8 space-y-4">
+      <div className="min-h-screen bg-page text-gray-100 p-8 space-y-4">
         <p className="text-red-400">{load.message}</p>
         <button
           onClick={() => navigate(`/${bandSlug}`)}
@@ -195,7 +195,7 @@ export default function AlignSongPage() {
   }));
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100">
+    <div className="min-h-screen bg-page text-gray-100">
       <header className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Align Stems</h1>
