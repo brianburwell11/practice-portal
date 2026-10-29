@@ -297,7 +297,10 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
             </button>
           </div>
           <p className="text-xs text-gray-500">
-            {ROLE_HINTS[inviteRole]}. The link works once and expires in 7 days.
+            {ROLE_HINTS[inviteRole]}. The link works once and expires in 7 days.{' '}
+            <a href="/help/roles-and-permissions" target="_blank" rel="noopener" className="text-blue-400 hover:text-blue-300">
+              What can each role do?
+            </a>
           </p>
           {newLink && (
             <div className="space-y-1">

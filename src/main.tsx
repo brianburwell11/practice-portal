@@ -13,7 +13,7 @@ import { NotFound } from './components/NotFound.tsx'
 import { DialogHost } from './components/ui/DialogHost.tsx'
 
 import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage } from './admin/lazyPages.ts'
-import { App, BandApp } from './lazyPages.ts'
+import { App, BandApp, HelpGuide, HelpIndex } from './lazyPages.ts'
 
 const adminFallback = (
   <div className="min-h-screen bg-page text-gray-400 p-8">Loading admin...</div>
@@ -30,6 +30,8 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<BandPicker />} />
         <Route path="/invite/:token" element={<InvitePage />} />
         <Route path="/email/unsubscribe" element={<EmailUnsubscribe />} />
+        <Route path="/help" element={<Suspense fallback={pageFallback}><HelpIndex /></Suspense>} />
+        <Route path="/help/:slug" element={<Suspense fallback={pageFallback}><HelpGuide /></Suspense>} />
         <Route path="/legal/privacy" element={<PrivacyPolicy />} />
         <Route path="/legal/terms" element={<TermsOfService />} />
         <Route

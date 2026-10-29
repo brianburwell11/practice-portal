@@ -34,10 +34,12 @@ export function Mail({ to }: { to: string }) {
   return <a href={`mailto:${to}`} className="text-blue-400 hover:text-blue-300">{to}</a>;
 }
 
-/** "Privacy · Terms", for page footers. */
+/** "Help · Privacy · Terms", for page footers. */
 export function LegalLinks({ className = '' }: { className?: string }) {
   return (
     <nav className={`flex justify-center gap-3 text-xs text-gray-600 ${className}`}>
+      <Link to="/help" className="hover:text-gray-400">Help</Link>
+      <span aria-hidden>·</span>
       <Link to="/legal/privacy" className="hover:text-gray-400">Privacy</Link>
       <span aria-hidden>·</span>
       <Link to="/legal/terms" className="hover:text-gray-400">Terms</Link>

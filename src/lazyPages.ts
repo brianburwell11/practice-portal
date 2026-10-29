@@ -6,3 +6,7 @@ import { lazy } from 'react';
  */
 export const BandApp = lazy(() => import('./components/band/BandApp.tsx').then((m) => ({ default: m.BandApp })));
 export const App = lazy(() => import('./App.tsx'));
+
+/** The Help center: its own chunk, since most visits never open it. */
+export const HelpIndex = lazy(() => import('./help/HelpIndex.tsx'));
+export const HelpGuide = lazy(() => import('./help/HelpGuide.tsx'));

@@ -56,8 +56,16 @@ export function HelpModal({ onClose }: Props) {
         <span>If you can't hear audio, check that your phone isn't on silent.</span>
       </div>
 
-      {/* Support */}
-      <div className="pt-2 border-t border-gray-700 flex justify-center">
+      {/* Guides, then support */}
+      <div className="pt-2 border-t border-gray-700 flex flex-wrap justify-center gap-2">
+        <a
+          href="/help"
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-200 transition-colors"
+        >
+          Help guides
+        </a>
         <a
           href="mailto:support@practiceportal.app?subject=Practice%20Portal%20Support"
           className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-200 transition-colors"

@@ -141,7 +141,7 @@ const SEO_PLACEHOLDER = '<!-- seo -->';
 
 /** The portal's own pages; everything else (bands, admin, invites) stays out of search. */
 function indexable(pathname: string): boolean {
-  return pathname === '/' || pathname.startsWith('/legal/');
+  return pathname === '/' || pathname.startsWith('/legal/') || pathname === '/help' || pathname.startsWith('/help/');
 }
 
 const attr = (v: string) => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');

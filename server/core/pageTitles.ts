@@ -7,6 +7,7 @@
  * Mirrors the titles the React pages set (`usePageTitle`, `BandApp`).
  */
 import { and, eq, isNull } from 'drizzle-orm';
+import { guideBySlug } from '../../src/help/guideList';
 import { bandPageTitle, previewTitle, SITE_TITLE } from '../../src/utils/pageTitle';
 import { db } from '../db/client';
 import * as schema from '../db/schema';
@@ -18,15 +19,22 @@ const FIXED: Record<string, string> = {
   '/legal/terms': `Terms of Service · ${SITE_TITLE}`,
   '/email/unsubscribe': `Email preferences · ${SITE_TITLE}`,
   '/admin/new-band': SITE_TITLE,
+  '/help': `Help · ${SITE_TITLE}`,
 };
 
 export async function pageTitleFor(pathname: string, query: URLSearchParams): Promise<string> {
   const fixed = FIXED[pathname.replace(/\/$/, '') || '/'];
   if (fixed) return fixed;
+  const [first, second, ...rest] = pathname.split('/').filter(Boolean);
+
+  // Help guides need no database.
+  if (first === 'help' && second && rest.length === 0) {
+    const guide = guideBySlug(second);
+    return guide ? `${guide.title} · ${SITE_TITLE}` : `Page not found · ${SITE_TITLE}`;
+  }
+
   if (!process.env.DATABASE_URL) return SITE_TITLE;
   try {
-    const [first, second, ...rest] = pathname.split('/').filter(Boolean);
-
     if (first === 'invite' && second && rest.length === 0) {
       const [row] = await db().select({ name: schema.band.name }).from(schema.invite)
         .innerJoin(schema.band, eq(schema.band.id, schema.invite.bandId))

@@ -7,6 +7,8 @@ New bands are Members only: their songs are visible to the band's signed-in memb
 ## Pages
 
 - [Home](https://practiceportal.app/): what Practice Portal is, and sign up
+- [Help](https://practiceportal.app/help): guides to using Practice Portal
+- [Roles and permissions](https://practiceportal.app/help/roles-and-permissions): the roles in a band, from Owner to Guest, and what each can do
 - [Privacy Policy](https://practiceportal.app/legal/privacy)
 - [Terms of Service](https://practiceportal.app/legal/terms)
 
