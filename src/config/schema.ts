@@ -129,8 +129,9 @@ export const songManifestEntrySchema = z.object({
   audioBasePath: z.string().optional(),
 });
 
+// A new band has no songs yet, so an empty list is valid.
 export const songManifestSchema = z.object({
-  songs: z.array(songManifestEntrySchema).min(1),
+  songs: z.array(songManifestEntrySchema),
 });
 
 export const bandColorsSchema = z.object({
