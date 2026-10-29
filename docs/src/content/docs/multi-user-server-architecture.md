@@ -650,30 +650,31 @@ Song prep takes minutes and shells out to native binaries. It cannot run inside 
 | Machine | **Unchanged** (1 GB `shared-cpu-1x`). | With a queue, slow only means a song takes longer to be ready. Revisit with real timings. |
 
 ### 9a — Schema
-- [ ] Migration: `job` — kind (`transcode_stem`), band, payload (raw key, target name, normalize), status (`uploading` → `queued` → `running` → `done` | `failed`), attempts, progress (0–1), error, timestamps, `locked_at` for a stuck-job sweep. Index on `(status, created_at)`.
+- [x] Migration: `job` — kind (`transcode_stem`), band, payload (raw key, target name, normalize), status (`uploading` → `queued` → `running` → `done` | `failed`), attempts, progress (0–1), error, timestamps, `locked_at` for a stuck-job sweep. Index on `(status, created_at)`.
 
 ### 9b — Uploads straight to R2
-- [ ] `POST /api/bands/:bandId/songs/:songId/stems` `{ files: [{ name, size }], normalize }` (`song.audio.write`): one job per stem in `uploading`, a presigned PUT each to `_incoming/<jobId>/<name>`. Random, short-lived keys; size capped per file.
-- [ ] `POST …/stems/queue` `{ jobIds }`: the browser's uploads are done; check each raw object exists, then mark the jobs `queued`.
-- [ ] `GET …/stems?jobs=…`: status, progress and error per job — what the wizard polls.
-- [ ] R2 CORS already allows browser `PUT` from both origins (8c).
+- [x] `POST /api/bands/:bandId/songs/:songId/stems` `{ files: [{ stemId, filename, size }], normalize }` (`song.audio.write`): one job per stem in `uploading`, a presigned PUT each to `_incoming/<jobId>/<name>`. Random, short-lived keys; size capped per file.
+- [x] `POST …/stems/queue` `{ jobIds }`: the browser's uploads are done; check each raw object exists, then mark the jobs `queued`.
+- [x] `GET …/stems?jobs=…`: status, progress and error per job — what the wizard polls.
+- [x] R2 CORS allows browser `PUT` from `practiceportal.app`, `practice-portal.fly.dev` and `https://localhost:5173` (checked 2026-10-28).
+- [x] Presigned links no longer carry a checksum: the AWS SDK was signing a CRC32 of the *empty* body into every presigned PUT. R2 ignores it (checked against R2), but S3 stores that check it reject the upload; the client now adds checksums only when required.
 
 ### 9c — The worker
-- [ ] Started with the server: claims the oldest `queued` job (`SKIP LOCKED`), one at a time, and checks for more every couple of seconds when idle.
-- [ ] Per stem: stream the raw file from R2 to scratch disk; probe; loudness pass; transcode to Opus with `ffmpeg -progress`, writing progress to the row; upload `<stemId>.opus` to the song's prefix; delete the raw file and the scratch copy.
-- [ ] Failures: up to 2 retries, then `failed` with the error. A job left `running` by a restart or deploy goes back to `queued` after a timeout.
-- [ ] Deploys: on SIGTERM the worker stops claiming jobs; the one in progress is retried after the restart.
-- [ ] Sweep: delete `_incoming/` objects and `job` rows older than a day.
+- [x] Started with the server: claims the oldest `queued` job (`SKIP LOCKED`), one at a time, and checks for more every couple of seconds when idle.
+- [x] Per stem: stream the raw file from R2 to scratch disk; probe; loudness pass; transcode to Opus with `ffmpeg -progress`, writing progress to the row; upload `<stemId>.opus` to the song's prefix; delete the raw file and the scratch copy.
+- [x] Failures: up to 2 retries, then `failed` with the error. A job left `running` by a restart or deploy goes back to `queued` after a timeout.
+- [x] Deploys: on SIGTERM the worker stops claiming jobs; the one in progress is retried after the restart.
+- [x] Sweep: delete `_incoming/` objects and `job` rows older than a day.
 
 ### 9d — UI
-- [ ] Add Song wizard (`ReviewStep`): upload each stem to R2 with progress, queue them, poll, and show per-stem state (waiting / transcoding n% / done / failed + Retry). Save the config once every stem is done.
-- [ ] Edit Song's stem replacement does the same.
-- [ ] Retire `POST /api/r2/transcode-upload` once neither uses it.
+- [x] Add Song wizard (`ReviewStep`): upload each stem to R2 with progress, queue them, poll, and show per-stem state (waiting / transcoding n% / done / failed + Retry). Save the config once every stem is done.
+- [x] Edit Song's stem replacement uses the queue too, with per-stem progress; a failed stem stops the save with its reason (save again to retry).
+- [x] Retire `POST /api/r2/transcode-upload` once neither uses it.
 - [ ] `.mscz` conversion stays a request: about 2 s, and no longer blocking (8c).
 
 ### 9e — Prove it
-- [ ] A test script against a scratch Postgres plus a local S3 stand-in (MinIO in Docker), so nothing touches R2: upload, queue, transcode, progress, failure and retry, a restart mid-job, cleanup, and that one band can't queue or read another band's jobs.
-- [ ] Production: rerun `measure-transcode.ts` (rewritten for the new flow): 6 × 4-minute stems finish, and `/healthz` stays fast throughout.
+- [x] `scripts/verify-jobs.ts` against a scratch Postgres plus a local S3 stand-in (SeaweedFS in Docker — MinIO's images are no longer freely pullable), so nothing touches R2: upload, queue, transcode, progress, failure and retry, a restart mid-job, cleanup, and that one band can't queue or read another band's jobs. **32/32**, twice, 2026-10-28. `measure-transcode.ts` (rewritten for the queue) locally: 3 × 2-minute stems, 104 MB, uploaded in under a second and done in 19 s; `/healthz` worst 10 ms.
+- [ ] Apply migration 0007 to Neon (`npm run db:migrate`), deploy, then rerun `measure-transcode.ts --url https://practiceportal.app`: 6 × 4-minute stems finish, and `/healthz` stays fast throughout.
 
 ### Later
 - [ ] Per-band concurrency caps, once more than a few bands upload.
