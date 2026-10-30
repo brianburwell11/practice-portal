@@ -18,6 +18,7 @@ const FIXED: Record<string, string> = {
   '/': SITE_TITLE,
   '/legal/privacy': `Privacy Policy · ${SITE_TITLE}`,
   '/legal/terms': `Terms of Service · ${SITE_TITLE}`,
+  '/legal/licenses': `Licenses · ${SITE_TITLE}`,
   '/email/unsubscribe': `Email preferences · ${SITE_TITLE}`,
   '/admin/new-band': SITE_TITLE,
   '/help': `Help · ${SITE_TITLE}`,

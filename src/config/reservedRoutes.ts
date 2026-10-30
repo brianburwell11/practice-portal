@@ -18,6 +18,7 @@
 export const IN_USE_ROUTES = [
   'api', 'healthz', 'invite', 'admin', 'assets',
   'index.html', 'favicon.ico', 'favicon-192.png', 'apple-touch-icon.png', 'soundtouch-processor.js',
+  'third-party-licenses.txt',
 ] as const;
 
 const RESERVED = [

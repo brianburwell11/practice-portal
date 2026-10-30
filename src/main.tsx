@@ -10,6 +10,7 @@ import { EmailUnsubscribe } from './components/account/EmailUnsubscribe.tsx'
 import { RequireCan } from './components/account/RequireCan.tsx'
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy.tsx'
 import { TermsOfService } from './components/legal/TermsOfService.tsx'
+import { Licenses } from './components/legal/Licenses.tsx'
 import { NotFound } from './components/NotFound.tsx'
 import { DialogHost } from './components/ui/DialogHost.tsx'
 
@@ -36,6 +37,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/help/:slug" element={<Suspense fallback={pageFallback}><HelpGuide /></Suspense>} />
         <Route path="/legal/privacy" element={<PrivacyPolicy />} />
         <Route path="/legal/terms" element={<TermsOfService />} />
+        <Route path="/legal/licenses" element={<Licenses />} />
         <Route path="/admin" element={<Suspense fallback={pageFallback}><SiteAdminPage /></Suspense>} />
         <Route
           path="/admin/new-band"

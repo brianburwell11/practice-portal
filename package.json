@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --open",
-    "build": "tsc -b && vite build",
+    "build": "tsx scripts/gen-licenses.ts && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "prod": "tsc -b && vite build && vite preview --open",
@@ -13,6 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
+    "licenses:gen": "tsx scripts/gen-licenses.ts",
     "db:seed:gen": "tsx scripts/gen-seed-migration.ts",
     "db:verify": "tsx scripts/gen-seed-migration.ts --check && tsx scripts/verify-db.ts",
     "db:verify:remote": "tsx scripts/gen-seed-migration.ts --check && tsx scripts/verify-db.ts --url",

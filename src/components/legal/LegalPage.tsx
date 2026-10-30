@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { usePageTitle } from '../../hooks/usePageTitle';
 
 /** Shared layout for the /legal pages. */
-export function LegalPage({ title, effective, children }: { title: string; effective: string; children: ReactNode }) {
+export function LegalPage({ title, effective, children }: { title: string; effective?: string; children: ReactNode }) {
   usePageTitle(`${title} · Practice Portal`);
 
   return (
@@ -12,7 +12,7 @@ export function LegalPage({ title, effective, children }: { title: string; effec
         <header className="space-y-2">
           <Link to="/" className="text-sm text-gray-500 hover:text-gray-300">← Practice Portal</Link>
           <h1 className="text-3xl font-bold text-gray-100">{title}</h1>
-          <p className="text-sm text-gray-500">Effective {effective}</p>
+          {effective && <p className="text-sm text-gray-500">Effective {effective}</p>}
         </header>
         {children}
         <LegalLinks />
@@ -49,7 +49,7 @@ export function AgreeNotice({ action = 'signing up', className = '' }: { action?
   );
 }
 
-/** "Help · Privacy · Terms", for page footers. */
+/** "Help · Privacy · Terms · Licenses", for page footers. */
 export function LegalLinks({ className = '' }: { className?: string }) {
   return (
     <nav className={`flex justify-center gap-3 text-xs text-gray-600 ${className}`}>
@@ -58,6 +58,8 @@ export function LegalLinks({ className = '' }: { className?: string }) {
       <Link to="/legal/privacy" className="hover:text-gray-400">Privacy</Link>
       <span aria-hidden>·</span>
       <Link to="/legal/terms" className="hover:text-gray-400">Terms</Link>
+      <span aria-hidden>·</span>
+      <Link to="/legal/licenses" className="hover:text-gray-400">Licenses</Link>
     </nav>
   );
 }
