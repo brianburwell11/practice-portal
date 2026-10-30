@@ -74,12 +74,25 @@ export async function msczConvertUpload(req: CoreRequest): Promise<CoreResponse>
 export const SCORE_FILENAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\.(mxl|musicxml|xml|mscz)$/i;
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
-/** Presigned PUT URLs so the browser can upload a score straight to R2. */
+/** What a score is stored and served as, by extension. */
+export function scoreContentType(filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  if (ext === '.mxl') return 'application/vnd.recordare.musicxml';
+  if (ext === '.mscz') return 'application/octet-stream';
+  return 'application/vnd.recordare.musicxml+xml';
+}
+
+/**
+ * Presigned PUT URLs so the browser can upload a score straight to R2.
+ * `sizes[i]` is the byte size of `files[i]`; it is signed into the URL along
+ * with the type the browser must send (`contentTypes`).
+ */
 export async function presignUploads(req: CoreRequest): Promise<CoreResponse> {
-  const { bandId, songId, files } = (req.body ?? {}) as {
+  const { bandId, songId, files, sizes } = (req.body ?? {}) as {
     bandId?: string;
     songId?: string;
     files?: string[];
+    sizes?: number[];
   };
   if (!bandId || !songId || !Array.isArray(files) || !files.length) {
     throw new HttpError(400, 'bandId, songId and files[] required');
@@ -90,12 +103,21 @@ export async function presignUploads(req: CoreRequest): Promise<CoreResponse> {
       || !files.every((f) => typeof f === 'string' && SCORE_FILENAME.test(f))) {
     throw new HttpError(400, 'Only sheet-music files (.mxl, .musicxml, .xml) can be uploaded here');
   }
+  if (!Array.isArray(sizes) || sizes.length !== files.length
+      || !sizes.every((n) => Number.isInteger(n) && n > 0 && n <= MSCZ_MAX_BYTES)) {
+    throw new HttpError(400, `Each score needs its size, up to ${MSCZ_MAX_BYTES / 1024 / 1024} MB`);
+  }
 
   const r2Prefix = `${bandId}/songs/${songId}`;
   const urls: Record<string, string> = {};
-  for (const filename of files) {
-    urls[filename] = await r2PresignPut(`${r2Prefix}/${filename}`);
+  const contentTypes: Record<string, string> = {};
+  for (const [i, filename] of files.entries()) {
+    contentTypes[filename] = scoreContentType(filename);
+    urls[filename] = await r2PresignPut(`${r2Prefix}/${filename}`, {
+      contentType: contentTypes[filename],
+      contentLength: sizes[i],
+    });
   }
 
-  return json({ urls, publicBase: `${r2PublicUrl()}/${r2Prefix}` });
+  return json({ urls, contentTypes, publicBase: `${r2PublicUrl()}/${r2Prefix}` });
 }

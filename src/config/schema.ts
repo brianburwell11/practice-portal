@@ -134,8 +134,11 @@ export const songConfigSchema = z.object({
   repeatAfterDcDs: z.boolean().optional(),
 });
 
+/** A song id is one path segment of its media prefix, so no `/` or `..`. */
+export const songIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
+
 export const songManifestEntrySchema = z.object({
-  id: z.string(),
+  id: songIdSchema,
   slug: slugSchema,
   title: z.string(),
   artist: z.string(),

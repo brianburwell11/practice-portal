@@ -72,13 +72,17 @@ export async function uploadBandLogo(req: CoreRequest): Promise<CoreResponse> {
   if (!file) throw new HttpError(400, 'No file in upload');
 
   const ext = path.extname(file.filename).toLowerCase() || '.png';
-  const contentType = LOGO_CONTENT_TYPES[ext] ?? 'application/octet-stream';
+  const contentType = LOGO_CONTENT_TYPES[ext];
+  if (!contentType) throw new HttpError(400, 'A logo must be a PNG, JPG or SVG file');
+  // An SVG can carry script. In an <img> it never runs; opened on its own it
+  // would, so storage serves it as a download instead of a page.
+  const disposition = ext === '.svg' ? 'attachment' : undefined;
 
   // A new name for every upload: a replaced logo shows at once everywhere,
   // with no browser or CDN cache holding the old one. The name never gets
   // new content, so it can be cached for good. `putBand` deletes the old one.
   const key = `${bandId}/assets/logo-${randomBytes(6).toString('hex')}${ext}`;
-  await r2PutFile(key, fs.readFileSync(file.path), contentType, 'public, max-age=31536000, immutable');
+  await r2PutFile(key, fs.readFileSync(file.path), contentType, 'public, max-age=31536000, immutable', disposition);
 
   return ok({ path: `${r2PublicUrl()}/${key}` });
 }

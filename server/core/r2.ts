@@ -94,7 +94,13 @@ export async function r2DeleteKey(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
-export async function r2PutFile(key: string, body: Buffer, contentType: string, cacheControl: string): Promise<void> {
+export async function r2PutFile(
+  key: string,
+  body: Buffer,
+  contentType: string,
+  cacheControl: string,
+  contentDisposition?: string,
+): Promise<void> {
   const { r2, bucket } = requireR2();
   await r2.send(new PutObjectCommand({
     Bucket: bucket,
@@ -102,6 +108,7 @@ export async function r2PutFile(key: string, body: Buffer, contentType: string, 
     Body: body,
     ContentType: contentType,
     CacheControl: cacheControl,
+    ContentDisposition: contentDisposition,
   }));
 }
 
@@ -152,10 +159,23 @@ export async function r2StorageBytes(prefix: string): Promise<{ totalBytes: numb
   return { totalBytes, objectCount };
 }
 
-/** Presigned PUT URL for a direct-from-browser upload. */
-export async function r2PresignPut(key: string, expiresIn = 3600): Promise<string> {
+/**
+ * Presigned PUT URL for a direct-from-browser upload. The size and type are
+ * signed in, so the upload must send exactly `contentLength` bytes with
+ * exactly `contentType`: nobody can reuse the URL for a bigger file or one
+ * served as something else (an HTML page under a `.xml` name).
+ */
+export async function r2PresignPut(
+  key: string,
+  { contentType, contentLength, expiresIn = 3600 }: { contentType: string; contentLength: number; expiresIn?: number },
+): Promise<string> {
   const { r2, bucket } = assertR2Configured();
-  return getSignedUrl(r2, new PutObjectCommand({ Bucket: bucket, Key: key }), { expiresIn });
+  return getSignedUrl(
+    r2,
+    new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType, ContentLength: contentLength }),
+    // The presigner leaves Content-Type unsigned unless asked.
+    { expiresIn, signableHeaders: new Set(['content-type', 'content-length']) },
+  );
 }
 
 /** An object's size in bytes, or null if there's no such object. */

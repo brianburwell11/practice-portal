@@ -14,7 +14,7 @@
  * `authorizeBody` needs the JSON body — a song config save that touches the
  * tapMap needs `song.timing.write` even though most of the save is content.
  */
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import type { Capability } from '../db/capabilities';
 import { db } from '../db/client';
 import * as schema from '../db/schema';
@@ -152,12 +152,26 @@ export async function authorizeLogo(req: Pick<CoreRequest, 'params' | 'actor'>):
   await authorizeBandOrNew(req);
 }
 
-/** `band.settings` in an existing band; a band that doesn't exist yet, anyone signed in. */
+/**
+ * How many live bands one user may own. A cap until per-band storage quotas
+ * exist, so one account can't fill R2. Site admins aren't capped.
+ */
+export const MAX_OWNED_BANDS = 3;
+
+/** `band.settings` in an existing band; a band that doesn't exist yet, anyone signed in under the cap. */
 async function authorizeBandOrNew(req: Pick<CoreRequest, 'params' | 'actor'>): Promise<void> {
   const actor = requireActor(req.actor);
   // A deleted band's id stays claimed: its row still holds the legacy id.
   const [existing] = await db().select({ id: schema.band.id }).from(schema.band)
     .where(eq(schema.band.legacyId, req.params.bandId));
-  if (!existing) return;
+  if (!existing) {
+    if (isSiteAdminEmail(actor.email)) return;
+    const [{ owned }] = await db().select({ owned: count() }).from(schema.band)
+      .where(and(eq(schema.band.ownerUserId, actor.userId), isNull(schema.band.deletedAt)));
+    if (owned >= MAX_OWNED_BANDS) {
+      throw new HttpError(403, `You can own up to ${MAX_OWNED_BANDS} bands. Delete one or hand it to another member first.`);
+    }
+    return;
+  }
   await requireCapabilities(actor, await bandByLegacyId(req.params.bandId), ['band.settings']);
 }

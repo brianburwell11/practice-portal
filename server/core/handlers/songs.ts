@@ -1,6 +1,8 @@
 import {
   songConfigSchema,
   lyricsDataSchema,
+  songIdSchema,
+  songManifestEntrySchema,
 } from '../../../src/config/schema';
 import { HttpError, ok } from '../http';
 import { isNoSuchKey, r2ListKeys } from '../r2';
@@ -40,6 +42,9 @@ export async function renameSong(req: CoreRequest): Promise<CoreResponse> {
 
   if (!newId || oldId === newId) {
     return ok({ noChange: true });
+  }
+  if (!songIdSchema.safeParse(newId).success) {
+    throw new HttpError(400, 'A song id may use only letters, digits, - and _');
   }
 
   // Conflict check against R2 discography
@@ -161,7 +166,8 @@ export async function deleteSongFile(req: CoreRequest): Promise<CoreResponse> {
 
 export async function upsertDiscographyEntry(req: CoreRequest): Promise<CoreResponse> {
   const bandId = req.params.bandId;
-  const { overwrite, ...entry } = (req.body ?? {}) as { overwrite?: boolean } & DiscographyEntry;
+  const { overwrite, ...body } = (req.body ?? {}) as { overwrite?: boolean };
+  const entry: DiscographyEntry = songManifestEntrySchema.parse(body);
 
   let discography: Discography;
   try {

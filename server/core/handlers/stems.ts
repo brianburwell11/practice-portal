@@ -28,6 +28,7 @@ const MAX_STEMS = 32;
 export const MAX_STEM_BYTES = 1024 * 1024 * 1024;
 const AUDIO_EXT = /\.(wav|flac|aiff?|mp3|m4a|aac|ogg|opus)$/i;
 const STEM_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const RAW_STEM_TYPE = 'application/octet-stream';
 
 /** This song's jobs in this band, by id. */
 const songJobs = (band: BandRef, songId: string, ids: string[]) => and(
@@ -64,22 +65,28 @@ export async function createStemUploads(req: CoreRequest): Promise<CoreResponse>
     if (!AUDIO_EXT.test(name)) throw new HttpError(400, `"${name || '?'}" isn’t an audio file this can read`);
     if (typeof size !== 'number' || size <= 0) throw new HttpError(400, `"${name}" is empty`);
     if (size > MAX_STEM_BYTES) throw new HttpError(400, `"${name}" is over ${MAX_STEM_BYTES / 1024 ** 3} GB`);
-    return { stemId, name };
+    return { stemId, name, size };
   });
   if (new Set(stems.map((s) => s.stemId)).size !== stems.length) throw new HttpError(400, 'Two stems share an id');
 
-  const created = stems.map(({ stemId, name }) => {
+  const created = stems.map(({ stemId, name, size }) => {
     const id = randomUUID();
     // The key keeps only the extension: the original name can be anything.
     const rawKey = `${INCOMING_PREFIX}${id}/raw${path.extname(name).toLowerCase()}`;
     const payload: TranscodePayload = { songId, stemId, rawKey, filename: name, normalize: normalize !== false };
-    return { id, payload };
+    return { id, payload, size };
   });
   await db().insert(schema.job).values(created.map(({ id, payload }) => ({
     id, kind: 'transcode_stem', bandId: band.id, createdBy: req.actor?.userId ?? null, payload,
   })));
-  const jobs = await Promise.all(created.map(async ({ id, payload }) => ({
-    id, stemId: payload.stemId, uploadUrl: await r2PresignPut(payload.rawKey, 6 * 60 * 60),
+  // Raw files are only read by the worker, never served, so one neutral type.
+  // The URL lasts an hour, the default: the clock only has to cover the start
+  // of the upload, not its end.
+  const jobs = await Promise.all(created.map(async ({ id, payload, size }) => ({
+    id,
+    stemId: payload.stemId,
+    contentType: RAW_STEM_TYPE,
+    uploadUrl: await r2PresignPut(payload.rawKey, { contentType: RAW_STEM_TYPE, contentLength: size }),
   })));
   return json({ jobs, publicBase: `${r2PublicUrl()}/${band.legacyId}/songs/${songId}` });
 }

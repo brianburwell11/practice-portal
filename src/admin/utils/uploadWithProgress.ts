@@ -40,14 +40,20 @@ export function uploadFormWithProgress(
   });
 }
 
+/**
+ * PUT a file to a presigned URL. `contentType` must be the type the server
+ * signed into the URL, or storage refuses the upload.
+ */
 export function uploadFileWithProgress(
   url: string,
   file: Blob,
+  contentType: string,
   onProgress: (bytesSent: number, bytesTotal: number) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url);
+    xhr.setRequestHeader('Content-Type', contentType);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(e.loaded, e.total);
     };

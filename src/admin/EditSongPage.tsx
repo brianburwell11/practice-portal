@@ -357,19 +357,22 @@ export default function EditSongPage() {
           const presignRes = await fetch('/api/r2/presign', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bandId: currentBand.id, songId: oldId, files: [filename] }),
+            body: JSON.stringify({ bandId: currentBand.id, songId: oldId, files: [filename], sizes: [blob.size] }),
           });
           if (!presignRes.ok) {
             const err = await presignRes.json().catch(() => ({}));
             throw new Error(err.error ?? 'Sheet music presign failed');
           }
-          const { urls } = (await presignRes.json()) as { urls: Record<string, string> };
+          const { urls, contentTypes } = (await presignRes.json()) as {
+            urls: Record<string, string>;
+            contentTypes: Record<string, string>;
+          };
           const putUrl = urls[filename];
           if (!putUrl) throw new Error('Sheet music presign returned no URL');
           dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
             fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: blob.size,
           }});
-          await uploadFileWithProgress(putUrl, blob, (bytesSent, bytesTotal) => {
+          await uploadFileWithProgress(putUrl, blob, contentTypes[filename], (bytesSent, bytesTotal) => {
             dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
               fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
             }});

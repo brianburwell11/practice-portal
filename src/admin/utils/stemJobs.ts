@@ -52,7 +52,7 @@ export async function uploadStems(
   onUpdate: (states: StemJobState[]) => void,
 ): Promise<{ states: StemJobState[]; publicBase: string }> {
   const base = songUrl(bandId, songId);
-  const { jobs, publicBase } = await api<{ jobs: { id: string; stemId: string; uploadUrl: string }[]; publicBase: string }>(
+  const { jobs, publicBase } = await api<{ jobs: { id: string; stemId: string; contentType: string; uploadUrl: string }[]; publicBase: string }>(
     'POST', base, {
       normalize,
       files: stems.map(({ stemId, file }) => ({ stemId, filename: file.name, size: file.size })),
@@ -77,7 +77,7 @@ export async function uploadStems(
   const worker = async () => {
     for (let j = queue.shift(); j; j = queue.shift()) {
       const { file } = stems.find((s) => s.stemId === j!.stemId)!;
-      await uploadFileWithProgress(j.uploadUrl, file, (sent, total) => set(j!.id, { progress: total ? sent / total : 0 }));
+      await uploadFileWithProgress(j.uploadUrl, file, j.contentType, (sent, total) => set(j!.id, { progress: total ? sent / total : 0 }));
       set(j.id, { phase: 'waiting', progress: 0 });
     }
   };
