@@ -95,9 +95,9 @@ RUN set -eux; \
 # Build the SPA and bundle the server. Pure JS output, so like stage 1 this
 # runs on the BUILD platform — no QEMU for a cross-arch build.
 #
-# VITE_R2_PUBLIC_URL is baked into the bundle at build time (the browser reads
-# every config and media file straight from that public bucket URL), so it is
-# a build arg, not a runtime secret. .env is dockerignored on purpose.
+# VITE_R2_PUBLIC_URL is baked into the bundle at build time (the browser builds
+# every media URL from it: on Fly, the access-checked /api/media route), so it
+# is a build arg, not a runtime secret. .env is dockerignored on purpose.
 FROM --platform=$BUILDPLATFORM node:22-trixie-slim AS web
 
 ARG VITE_R2_PUBLIC_URL
@@ -105,8 +105,7 @@ RUN test -n "${VITE_R2_PUBLIC_URL}" \
     || { echo "VITE_R2_PUBLIC_URL build arg is required" >&2; exit 1; }
 ENV VITE_R2_PUBLIC_URL=${VITE_R2_PUBLIC_URL}
 # Read JSON documents from this server's /api/data (Postgres) rather than R2.
-# Media still comes straight from R2. Other builds (GitHub Pages, dev) leave
-# this unset and keep reading R2.
+# Other builds (dev) may leave this unset and read the R2 copies instead.
 ENV VITE_DATA_SOURCE=api
 
 WORKDIR /app
