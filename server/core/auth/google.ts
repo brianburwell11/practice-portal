@@ -31,6 +31,8 @@ export interface PendingSignIn {
   verifier: string;
   /** Same-site path to return to afterwards. */
   next: string;
+  /** Started from a button shown with the terms notice: record the agreement. */
+  agreedTerms?: boolean;
 }
 
 const random = () => randomBytes(32).toString('base64url');

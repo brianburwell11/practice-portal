@@ -34,6 +34,21 @@ export function Mail({ to }: { to: string }) {
   return <a href={`mailto:${to}`} className="text-blue-400 hover:text-blue-300">{to}</a>;
 }
 
+/**
+ * The line under a sign-up button. Signing in from a button that shows it
+ * records the terms version the user agreed to (`signInHref(next, true)`).
+ */
+export function AgreeNotice({ action = 'signing up', className = '' }: { action?: string; className?: string }) {
+  return (
+    <p className={`text-xs text-gray-500 ${className}`}>
+      By {action}, you agree to the{' '}
+      <Link to="/legal/terms" className="text-gray-300 hover:text-white underline underline-offset-2">Terms of Service</Link>
+      {' '}and{' '}
+      <Link to="/legal/privacy" className="text-gray-300 hover:text-white underline underline-offset-2">Privacy Policy</Link>.
+    </p>
+  );
+}
+
 /** "Help · Privacy · Terms", for page footers. */
 export function LegalLinks({ className = '' }: { className?: string }) {
   return (

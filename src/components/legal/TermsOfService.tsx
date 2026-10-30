@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
+import { TERMS_EFFECTIVE } from '../../config/legal';
 import { LegalPage, Mail, Section } from './LegalPage';
 
 const CONTACT = 'legal@practiceportal.app';
-const EFFECTIVE = 'October 28, 2026';
 
 /**
  * /legal/terms. Like the privacy policy, written against what the app does —
@@ -13,7 +13,7 @@ export function TermsOfService() {
   const privacy = <Link to="/legal/privacy" className="text-blue-400 hover:text-blue-300">Privacy Policy</Link>;
 
   return (
-    <LegalPage title="Terms of Service" effective={EFFECTIVE}>
+    <LegalPage title="Terms of Service" effective={TERMS_EFFECTIVE}>
       <p>
         These terms cover your use of Practice Portal (<span className="text-gray-100">practiceportal.app</span>), a
         rehearsal tool for bands. By using the site you agree to them. If you don’t agree, please don’t use it.

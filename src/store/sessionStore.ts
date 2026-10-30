@@ -124,9 +124,13 @@ export function useCan(capability: string): boolean {
   return useSessionStore((s) => s.can(bandId, capability));
 }
 
-/** Full-page hop to Google; comes back to `next` (defaults to here). */
-export function signInHref(next = window.location.pathname + window.location.search): string {
-  return `/api/auth/google/start?next=${encodeURIComponent(next)}`;
+/**
+ * Full-page hop to Google; comes back to `next` (defaults to here). `agreeing`
+ * marks a button shown with the terms notice (`AgreeNotice`): signing in from
+ * it records that the user agreed to the current terms.
+ */
+export function signInHref(next = window.location.pathname + window.location.search, agreeing = false): string {
+  return `/api/auth/google/start?next=${encodeURIComponent(next)}${agreeing ? '&terms=1' : ''}`;
 }
 
 export const ROLE_LABELS: Record<BandRole, string> = {

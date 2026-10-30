@@ -62,6 +62,13 @@ export const appUser = pgTable('app_user', {
   lastSignInAt: timestamp('last_sign_in_at', { withTimezone: true }),
   /** Roughly when they last used the site signed in (updated at most hourly, like sessions). */
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+  /**
+   * The Terms of Service version (`TERMS_VERSION`) they agreed to, and when:
+   * set when they sign in from a button shown with the terms notice. Null for
+   * accounts from before the notice.
+   */
+  termsVersion: text('terms_version'),
+  termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
 });
 
 /**

@@ -4,7 +4,7 @@ import { useBandStore } from '../../store/bandStore';
 import { bandsManifestSchema } from '../../config/schema';
 import { dataUrl } from '../../utils/url';
 import { AccountMenu, GoogleMark } from '../account/AccountMenu';
-import { LegalLinks } from '../legal/LegalPage';
+import { AgreeNotice, LegalLinks } from '../legal/LegalPage';
 import { signInHref, useSessionStore } from '../../store/sessionStore';
 import practicePortalMark from '../../assets/practice-portal-mark-large.png';
 
@@ -133,12 +133,13 @@ function Welcome() {
         Your band’s songs split into stems with the charts in sync. Practice your part anywhere between rehearsals.
       </p>
       <a
-        href={signInHref()}
+        href={signInHref(undefined, true)}
         className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-white text-gray-800 font-medium shadow hover:bg-gray-100"
       >
         <GoogleMark />
         Sign up with Google
       </a>
+      <AgreeNotice className="mt-3" />
       <p className="mt-3 text-sm text-gray-500">
         Already have an account? <a href={signInHref()} className="text-gray-300 hover:text-white underline underline-offset-2">Sign in</a>
       </p>

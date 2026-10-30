@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ROLE_LABELS, signInHref, useSessionStore, type BandRole } from '../../store/sessionStore';
 import { GoogleMark } from './AccountMenu';
-import { LegalLinks } from '../legal/LegalPage';
+import { AgreeNotice, LegalLinks } from '../legal/LegalPage';
 import { usePageTitle } from '../../hooks/usePageTitle';
 
 interface Preview {
@@ -82,12 +82,13 @@ export function InvitePage() {
                   <p className="text-xs text-gray-400">This invite is for <span className="text-gray-200">{preview.email}</span>.</p>
                 )}
                 <a
-                  href={signInHref(here)}
+                  href={signInHref(here, true)}
                   className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-white text-gray-800 font-medium hover:bg-gray-100"
                 >
                   <GoogleMark />
                   Sign in with Google to join
                 </a>
+                <AgreeNotice action="joining" className="text-center" />
               </>
             ) : wrongAccount ? (
               <>

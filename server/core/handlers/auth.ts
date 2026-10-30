@@ -8,6 +8,7 @@ import { guestView } from '../auth/guests';
 import { createSession, deleteSession, SESSION_COOKIE, SESSION_TTL_SECONDS } from '../auth/sessions';
 import { HttpError, json, ok } from '../http';
 import type { CoreRequest, CoreResponse } from '../types';
+import { TERMS_VERSION } from '../../../src/config/legal';
 
 const PENDING_COOKIE = 'pp_oauth';
 const PENDING_PATH = '/api/auth/google';
@@ -30,6 +31,7 @@ function redirect(location: string, cookies: string[] = []): CoreResponse {
 /** `GET /api/auth/google/start?next=/path` — off to Google's account chooser. */
 export async function googleStart(req: CoreRequest): Promise<CoreResponse> {
   const { url, pending } = beginSignIn(req.origin, safeNext(req.query.get('next')));
+  if (req.query.get('terms') === '1') pending.agreedTerms = true;
   const value = Buffer.from(JSON.stringify(pending)).toString('base64url');
   return redirect(url, [setCookie(PENDING_COOKIE, value, { maxAge: PENDING_TTL_SECONDS, path: PENDING_PATH })]);
 }
@@ -96,6 +98,10 @@ export async function googleCallback(req: CoreRequest): Promise<CoreResponse> {
   try {
     const identity = await finishSignIn(req.origin, code, pending);
     const userId = await upsertUser(identity);
+    if (pending.agreedTerms) {
+      await db().update(schema.appUser).set({ termsVersion: TERMS_VERSION, termsAcceptedAt: new Date() })
+        .where(eq(schema.appUser.id, userId));
+    }
     // A fresh token every sign-in; end the browser's previous session if it had one.
     if (req.actor) await deleteSession(req.actor.sessionHash);
     const token = await createSession(userId);
