@@ -77,17 +77,49 @@ function looksLikeFile(pathname: string): boolean {
   return path.extname(pathname).toLowerCase() in CONTENT_TYPES;
 }
 
+/** Presigned R2 URLs: media redirects and direct uploads land here. */
+const R2_HOSTS = 'https://*.r2.cloudflarestorage.com';
+
+/**
+ * Where the SPA may load things from. Scripts only from us and YouTube's
+ * player API, so an injected <script> or `javascript:` link can't run.
+ * Inline styles stay allowed: React's `style` props are inline styles.
+ *
+ * Sent as Report-Only until a pass through the live app shows no
+ * violations in the console; then it moves into `Content-Security-Policy`.
+ */
+export const CONTENT_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' https://www.youtube.com https://s.ytimg.com",
+  "style-src 'self' 'unsafe-inline'",
+  `img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com https://*.googleusercontent.com ${R2_HOSTS}`,
+  `media-src 'self' blob: ${R2_HOSTS}`,
+  `connect-src 'self' https://www.youtube.com ${R2_HOSTS}`,
+  'frame-src https://www.youtube-nocookie.com https://www.youtube.com',
+  "font-src 'self' data:",
+  "worker-src 'self' blob:",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "object-src 'none'",
+].join('; ');
+
+/** HTTPS only, here and on every subdomain, once a browser has seen us over it. */
+export const HSTS = 'max-age=31536000; includeSubDomains';
+
 /**
  * On every file: no framing by other sites (clickjacking), no <base> or
  * plugin tricks, referrers cut to the origin across sites, and HTTPS only
- * once a browser has seen us over it (on Fly, where TLS is guaranteed).
+ * (on Fly, where TLS is guaranteed).
  */
 function securityHeaders(res: ServerResponse): void {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
+  res.setHeader('Content-Security-Policy-Report-Only', CONTENT_POLICY);
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  if (process.env.FLY_APP_NAME) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  if (process.env.FLY_APP_NAME) res.setHeader('Strict-Transport-Security', HSTS);
 }
 
 const gzipCache = new Map<string, Buffer>();

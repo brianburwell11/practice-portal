@@ -13,6 +13,7 @@ import { resolveSession, SESSION_COOKIE } from '../core/auth/sessions';
 import { matchRoute, runRoute } from '../core/router';
 import { clientIp, hit, limitFor } from '../core/rateLimit';
 import { HttpError } from '../core/http';
+import { HSTS } from './staticFiles';
 import type { Actor, CoreResponse, RequestBody, RouteDef } from '../core/types';
 import {
   makeScratchDir,
@@ -31,6 +32,7 @@ function setHeaders(res: ServerResponse, headers: CoreResponse['headers']): void
 export function sendJson(res: ServerResponse, { status, body, headers }: CoreResponse): void {
   res.statusCode = status;
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (process.env.FLY_APP_NAME) res.setHeader('Strict-Transport-Security', HSTS);
   setHeaders(res, headers);
   if (status >= 300 && status < 400) {
     res.end();

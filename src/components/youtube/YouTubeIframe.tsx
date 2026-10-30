@@ -54,6 +54,8 @@ export const YouTubeIframe = forwardRef<YouTubeIframeHandle, Props>(function You
     loadYouTubeApi().then((YTApi) => {
       if (cancelled || !containerRef.current) return;
       player = new YTApi.Player(containerRef.current, {
+        // The privacy-enhanced player: no YouTube cookies until a video plays.
+        host: 'https://www.youtube-nocookie.com',
         videoId,
         width,
         height,
