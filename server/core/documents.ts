@@ -121,6 +121,18 @@ const liveSetlists = (bandId: string) => and(eq(schema.setlist.bandId, bandId), 
 const setlistById = (bandId: string, id: string) => and(liveSetlists(bandId), sql`${schema.setlist.config}->>'id' = ${id}`);
 
 /**
+ * Whether the viewer may read the band's media: true for a live band they may
+ * read, false for no such band. Throws 401/403 as `readDocument` does.
+ */
+export async function canReadBandMedia(
+  legacyId: string,
+  viewer: Viewer,
+  d: Db = defaultDb() as unknown as Db,
+): Promise<boolean> {
+  return (await findBand(d, legacyId, viewer)) !== null;
+}
+
+/**
  * The document at `key`, built from Postgres — or null where R2 would 404.
  * An unknown or malformed key is a 404 too. Members-only bands are visible
  * to their members and to guest-link holders alone.

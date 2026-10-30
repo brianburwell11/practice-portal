@@ -24,6 +24,7 @@ import {
 } from './access';
 import { googleCallback, googleStart, logout, me } from './handlers/auth';
 import { readData } from './handlers/data';
+import { readMedia } from './handlers/media';
 import {
   getGuestLink,
   leaveGuest,
@@ -368,6 +369,16 @@ export const routes: RouteDef[] = [
     method: 'GET',
     pattern: /^\/api\/data\/(?<key>[^?#]+\.json)$/,
     handler: readData,
+    errorStatus: 500,
+    errorMessage: 'Read failed',
+  },
+  {
+    // Audio, scores and logos, behind the same visibility check (Phase 7).
+    name: 'media.read',
+    access: 'public',
+    method: 'GET',
+    pattern: /^\/api\/media\/(?<key>[^?#]+)$/,
+    handler: readMedia,
     errorStatus: 500,
     errorMessage: 'Read failed',
   },

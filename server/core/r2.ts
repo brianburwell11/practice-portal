@@ -178,6 +178,21 @@ export async function r2PresignPut(
   );
 }
 
+/**
+ * Presigned GET for a private object. URLs are signed per 6-hour window
+ * (and last 12 hours), so the same object gets the same URL all window long
+ * and the browser's cache keeps working; every URL lasts at least 6 hours,
+ * longer than any rehearsal needs to seek around one song.
+ */
+export async function r2PresignGet(key: string, now = Date.now()): Promise<string> {
+  const { r2, bucket } = requireR2();
+  const windowMs = 6 * 60 * 60 * 1000;
+  return getSignedUrl(r2, new GetObjectCommand({ Bucket: bucket, Key: key }), {
+    signingDate: new Date(Math.floor(now / windowMs) * windowMs),
+    expiresIn: 12 * 60 * 60,
+  });
+}
+
 /** An object's size in bytes, or null if there's no such object. */
 export async function r2HeadSize(key: string): Promise<number | null> {
   const { r2, bucket } = requireR2();

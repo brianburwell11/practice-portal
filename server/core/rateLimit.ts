@@ -9,6 +9,9 @@
  *   writes     300 per 15 minutes for every other change
  *   reads      1500 per 5 minutes for everything else: a whole band behind
  *              one rehearsal-room IP, each opening setlists and songs
+ *   media      5000 per 5 minutes for audio, scores and logos, counted
+ *              apart from reads: one song can be 30 stems, and a seek
+ *              re-requests them
  *
  * RATE_LIMIT=off turns it off, for scripts that hammer a local server.
  */
@@ -25,6 +28,7 @@ export const LIMITS = {
   tokens: { max: 30, windowMs: 15 * MINUTE },
   writes: { max: 300, windowMs: 15 * MINUTE },
   reads: { max: 1500, windowMs: 5 * MINUTE },
+  media: { max: 5000, windowMs: 5 * MINUTE },
 } satisfies Record<string, Limit>;
 
 export type LimitName = keyof typeof LIMITS;
@@ -37,6 +41,7 @@ export function limitFor(routeName: string, method: string): { name: LimitName; 
   if (['invite.preview', 'invite.accept', 'guest.open', 'email.block.get', 'email.block'].includes(routeName)) {
     return { name: 'tokens', bucket: 'tokens' };
   }
+  if (routeName === 'media.read') return { name: 'media', bucket: 'media' };
   return method === 'GET' || method === 'HEAD'
     ? { name: 'reads', bucket: 'reads' }
     : { name: 'writes', bucket: 'writes' };
