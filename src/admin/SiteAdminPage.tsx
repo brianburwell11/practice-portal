@@ -89,6 +89,7 @@ function Dashboard() {
   usePageTitle('Site admin · Practice Portal');
   const [bands, setBands] = useState<AdminBand[] | null>(null);
   const [users, setUsers] = useState<AdminUser[] | null>(null);
+  const [deletedCount, setDeletedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [measuring, setMeasuring] = useState(true);
 
@@ -101,7 +102,12 @@ function Dashboard() {
 
   useEffect(() => {
     loadBands();
-    getJson<{ users: AdminUser[] }>('/api/admin/users').then((d) => setUsers(d.users)).catch((err) => setError(err.message));
+    getJson<{ users: AdminUser[]; deletedCount: number }>('/api/admin/users')
+      .then((d) => {
+        setUsers(d.users);
+        setDeletedCount(d.deletedCount);
+      })
+      .catch((err) => setError(err.message));
   }, [loadBands]);
 
   return (
@@ -116,7 +122,7 @@ function Dashboard() {
         </header>
         {error && <p className="rounded border border-red-700 bg-red-900/30 px-3 py-2 text-sm text-red-300">{error}</p>}
         <BandsSection bands={bands} measuring={measuring} onRefresh={() => { setMeasuring(true); loadBands(); }} />
-        <UsersSection users={users} />
+        <UsersSection users={users} deletedCount={deletedCount} />
       </div>
     </div>
   );
@@ -215,7 +221,7 @@ function BandsSection({ bands, measuring, onRefresh }: { bands: AdminBand[] | nu
   );
 }
 
-function UsersSection({ users }: { users: AdminUser[] | null }) {
+function UsersSection({ users, deletedCount }: { users: AdminUser[] | null; deletedCount: number }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const shown = useMemo(() => {
@@ -228,7 +234,14 @@ function UsersSection({ users }: { users: AdminUser[] | null }) {
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold text-gray-100">Users {users && <span className="text-gray-500 font-normal">({users.length})</span>}</h2>
+        <h2 className="text-xl font-semibold text-gray-100">
+          Users {users && <span className="text-gray-500 font-normal">({users.length})</span>}
+          {deletedCount > 0 && (
+            <span className="ml-2 text-sm text-gray-500 font-normal">
+              plus {deletedCount} deleted {deletedCount === 1 ? 'account' : 'accounts'}
+            </span>
+          )}
+        </h2>
         <input
           type="search"
           value={query}

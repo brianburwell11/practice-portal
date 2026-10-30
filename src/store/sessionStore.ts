@@ -48,6 +48,10 @@ interface SessionState {
   signOut: () => Promise<void>;
   /** Forget every guest link on this device. */
   leaveGuest: () => Promise<void>;
+  /** Leave a band you're a member of (not one you own). Throws the server's message. */
+  leaveBand: (bandId: string) => Promise<void>;
+  /** Delete the signed-in account. Throws the server's message (an Owner must hand on their bands first). */
+  deleteAccount: () => Promise<void>;
   guestIn: (bandId: string | undefined) => GuestAccess | null;
   roleIn: (bandId: string | undefined) => BandRole | null;
   /** What the signed-in user may do in the band: their role's capabilities, or a site admin's support access. */
@@ -102,6 +106,27 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   leaveGuest: async () => {
     await fetch('/api/guest', { method: 'DELETE' });
     // A Members-only band reached through the link is no longer readable.
+    window.location.assign('/');
+  },
+
+  leaveBand: async (bandId) => {
+    const userId = get().user?.id;
+    if (!userId) return;
+    const res = await fetch(`/api/bands/${bandId}/members/${userId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Couldn’t leave the band');
+    }
+    // As with signing out: a Members-only band isn't left on screen.
+    window.location.assign('/');
+  },
+
+  deleteAccount: async () => {
+    const res = await fetch('/api/me', { method: 'DELETE' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Couldn’t delete the account');
+    }
     window.location.assign('/');
   },
 

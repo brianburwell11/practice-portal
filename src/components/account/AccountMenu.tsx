@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ROLE_LABELS, signInHref, useSessionStore } from '../../store/sessionStore';
 
 interface Props {
@@ -12,8 +13,13 @@ interface Props {
  * A sub here through a guest link gets a "Guest" chip beside sign-in.
  */
 export function AccountMenu({ bandId }: Props) {
-  const { available, loaded, user, load, signOut, roleIn, guestIn, leaveGuest, platformAdmin } = useSessionStore();
+  const {
+    available, loaded, user, load, signOut, roleIn, guestIn, leaveGuest, leaveBand, platformAdmin, bands,
+  } = useSessionStore();
   const [open, setOpen] = useState(false);
+  // Leaving a band takes a second click, and shows the server's refusal if any.
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   // Google sends errors back as ?signin_error=… — show it once.
   const [signInError, setSignInError] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('signin_error'),
@@ -103,12 +109,17 @@ export function AccountMenu({ bandId }: Props) {
   }
 
   const role = roleIn(bandId);
+  const bandName = bands.find((b) => b.id === bandId)?.name ?? 'this band';
 
   return (
     <div ref={ref} className="relative">
       {banner}
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setOpen((o) => !o);
+          setConfirming(false);
+          setConfirmError(null);
+        }}
         className="flex items-center rounded-full ring-2 ring-transparent hover:ring-gray-500 focus:outline-none focus:ring-gray-400"
         aria-label="Account"
         aria-expanded={open}
@@ -131,11 +142,36 @@ export function AccountMenu({ bandId }: Props) {
               Leave guest access
             </button>
           )}
+          {bandId && role && role !== 'owner' && !confirming && (
+            <button onClick={() => setConfirming(true)} className="w-full text-left px-4 py-2 hover:bg-gray-800">
+              Leave this band
+            </button>
+          )}
+          {bandId && confirming && (
+            <div className="px-4 py-2 border-y border-gray-800">
+              <p className="text-gray-300">Leave {bandName}? You’ll need a new invite to rejoin.</p>
+              {confirmError && <p className="mt-1 text-red-300">{confirmError}</p>}
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => leaveBand(bandId).catch((err: Error) => setConfirmError(err.message))}
+                  className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white"
+                >
+                  Leave
+                </button>
+                <button onClick={() => { setConfirming(false); setConfirmError(null); }} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           {platformAdmin && (
             <a href="/admin" className="block w-full text-left px-4 py-2 hover:bg-gray-800">
               Site admin
             </a>
           )}
+          <Link to="/account" onClick={() => setOpen(false)} className="block w-full text-left px-4 py-2 hover:bg-gray-800">
+            Account settings
+          </Link>
           <button onClick={() => signOut()} className="w-full text-left px-4 py-2 hover:bg-gray-800">
             Sign out
           </button>

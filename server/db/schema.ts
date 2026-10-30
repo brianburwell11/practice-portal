@@ -69,6 +69,11 @@ export const appUser = pgTable('app_user', {
    */
   termsVersion: text('terms_version'),
   termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
+  /**
+   * When they deleted the account. The row stays, emptied of anything that
+   * identifies them, because the audit log and band content point at it.
+   */
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });
 
 /**

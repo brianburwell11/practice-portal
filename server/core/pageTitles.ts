@@ -21,6 +21,7 @@ const FIXED: Record<string, string> = {
   '/email/unsubscribe': `Email preferences · ${SITE_TITLE}`,
   '/admin/new-band': SITE_TITLE,
   '/help': `Help · ${SITE_TITLE}`,
+  '/account': `Account · ${SITE_TITLE}`,
 };
 
 export async function pageTitleFor(pathname: string, query: URLSearchParams): Promise<string> {

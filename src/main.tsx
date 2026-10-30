@@ -5,6 +5,7 @@ import '@fontsource/hanken-grotesk/latin-700.css'
 import './index.css'
 import { BandPicker } from './components/band/BandPicker.tsx'
 import { InvitePage } from './components/account/InvitePage.tsx'
+import { AccountPage } from './components/account/AccountPage.tsx'
 import { EmailUnsubscribe } from './components/account/EmailUnsubscribe.tsx'
 import { RequireCan } from './components/account/RequireCan.tsx'
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy.tsx'
@@ -29,6 +30,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<BandPicker />} />
         <Route path="/invite/:token" element={<InvitePage />} />
+        <Route path="/account" element={<RequireCan need="signedIn"><AccountPage /></RequireCan>} />
         <Route path="/email/unsubscribe" element={<EmailUnsubscribe />} />
         <Route path="/help" element={<Suspense fallback={pageFallback}><HelpIndex /></Suspense>} />
         <Route path="/help/:slug" element={<Suspense fallback={pageFallback}><HelpGuide /></Suspense>} />

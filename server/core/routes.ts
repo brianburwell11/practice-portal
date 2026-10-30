@@ -23,6 +23,7 @@ import {
   authorizePresign,
 } from './access';
 import { googleCallback, googleStart, logout, me } from './handlers/auth';
+import { deleteAccount, exportAccount } from './handlers/account';
 import { readData } from './handlers/data';
 import { readMedia } from './handlers/media';
 import {
@@ -352,6 +353,25 @@ export const routes: RouteDef[] = [
     handler: emailUser,
     errorStatus: 400,
     errorMessage: 'Couldn’t send the email',
+  },
+  {
+    name: 'account.export',
+    access: 'signedIn',
+    method: 'GET',
+    pattern: /^\/api\/me\/export$/,
+    handler: exportAccount,
+    errorStatus: 500,
+    errorMessage: 'Export failed',
+  },
+  {
+    name: 'account.delete',
+    writes: 'self',
+    access: 'signedIn',
+    method: 'DELETE',
+    pattern: /^\/api\/me$/,
+    handler: deleteAccount,
+    errorStatus: 500,
+    errorMessage: 'Couldn’t delete the account',
   },
   {
     name: 'auth.me',

@@ -66,8 +66,10 @@ export default function Faq() {
         </Question>
         <Question q="How do I leave a band, or hand it to someone else?">
           <p>
-            An Owner can hand the band to another member in <Ui>Members &amp; Sharing</Ui>, and stays on as a Manager. To
-            leave a band or delete your account, email <a href={`mailto:${SUPPORT}`} className="text-blue-400 hover:text-blue-300">{SUPPORT}</a>.
+            To leave, open the band, click your picture at the top right and choose <Ui>Leave this band</Ui>. An Owner
+            can’t leave, but can hand the band to another member in <Ui>Members &amp; Sharing</Ui> and stays on as a
+            Manager. To delete your account, or download what we hold about you, choose <Ui>Account settings</Ui> in the
+            same menu. If you own a band, hand it on or delete it first.
           </p>
         </Question>
       </HelpSection>

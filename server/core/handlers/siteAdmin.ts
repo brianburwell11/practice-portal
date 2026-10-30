@@ -4,12 +4,13 @@
  *
  *   GET /api/admin/bands   every band: owner, songs, setlists, members, storage
  *   GET /api/admin/users   every user: when they joined, signed in and were
- *                          last seen, and their role in each band
+ *                          last seen, and their role in each band. Deleted
+ *                          accounts are only counted.
  *
  * Storage is measured by listing each band's R2 prefix, only when the
  * dashboard asks: nothing runs in the background, and nothing is kept.
  */
-import { and, count, eq, isNull } from 'drizzle-orm';
+import { and, count, eq, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '../../db/client';
 import * as schema from '../../db/schema';
 import { isPlatformAdmin } from '../access';
@@ -85,7 +86,9 @@ export async function adminUsers(): Promise<CoreResponse> {
     createdAt: schema.appUser.createdAt,
     lastSignInAt: schema.appUser.lastSignInAt,
     lastSeenAt: schema.appUser.lastSeenAt,
-  }).from(schema.appUser);
+  }).from(schema.appUser).where(isNull(schema.appUser.deletedAt));
+  const [{ deleted }] = await db().select({ deleted: count() }).from(schema.appUser)
+    .where(isNotNull(schema.appUser.deletedAt));
 
   const bandFields = { userBand: schema.band.slug, name: schema.band.name };
   const [owned, joined] = await Promise.all([
@@ -103,6 +106,7 @@ export async function adminUsers(): Promise<CoreResponse> {
   }
 
   return json({
+    deletedCount: deleted,
     users: users.map((u) => ({
       ...u,
       siteAdmin: isPlatformAdmin({ kind: 'user', userId: u.id, email: u.email, sessionHash: '' }),
