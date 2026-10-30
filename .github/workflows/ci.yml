@@ -1,0 +1,28 @@
+name: CI
+
+# Every push and PR: install exactly what the lockfile pins, refuse a
+# high-severity advisory in anything that ships, and build the SPA and the
+# server the way the Dockerfile does.
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Audit shipped dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - run: npm run build
+      - run: npm run build:server
