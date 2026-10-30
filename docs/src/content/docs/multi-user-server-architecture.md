@@ -594,11 +594,11 @@ Kept for reference; 6a–6d above are how each item gets done. `can()` already e
 
 **This phase is load-bearing and easy to overlook.** Audio currently lives on a public R2 URL (`VITE_R2_PUBLIC_URL`) — anyone with the URL can fetch anything. The moment bands are private and multi-tenant, a public bucket contradicts the entire access model.
 
-- [ ] Stop serving media from the public r2.dev URL.
-- [ ] Add `GET /api/songs/:id/media/:key` that checks capability, then issues a short-TTL presigned R2 GET and redirects.
-- [ ] Confirm presigned URLs survive the audio path: range requests for streaming, the `AudioEngine` fetch/decode flow, and `Cache-Control: immutable` browser caching. Pick a TTL long enough that a long rehearsal doesn't expire mid-song.
-- [ ] Verify sheet-music (`.mxl`) and logo fetches go through the same gate.
-- [ ] Tighten R2 CORS and remove public bucket access once nothing reads it.
+- [x] Add `GET /api/media/<R2 key>` (`server/core/handlers/media.ts`): the same visibility check as `/api/data`, then a 302 to a presigned R2 GET. URLs are signed per 6-hour window and last 12 hours, so the browser cache keeps working and a rehearsal never outlives one. Logos (`<band>/assets/`) skip the check: the band's address already shows them.
+- [x] Point `R2_PUBLIC_URL` and `VITE_R2_PUBLIC_URL` at it (`fly.toml`). Every media URL the app builds comes from those two, so audio, scores and logos all go through the gate.
+- [ ] Deploy, then confirm in the live app: playback, seeking (range requests through the redirect), sheet music, logos and stem upload.
+- [ ] Turn off the bucket's public r2.dev URL in the Cloudflare dashboard. Until then the old URLs still work for anyone who has one.
+- [ ] Tighten R2 CORS to `GET, PUT` from practiceportal.app only.
 
 **Exit criteria**: no media object is reachable without a capability check; playback, seeking, and sheet music all still work.
 
