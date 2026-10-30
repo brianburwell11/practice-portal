@@ -832,6 +832,7 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
                     mix.muted ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   }`}
                   title="Mute"
+                  aria-label="Mute"
                 >
                   M
                 </button>
@@ -841,6 +842,7 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
                     mix.soloed ? 'bg-yellow-500 text-gray-900' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   }`}
                   title="Solo"
+                  aria-label="Solo"
                 >
                   S
                 </button>

@@ -668,6 +668,7 @@ export default function EditSongPage() {
                           onClick={() => dispatch({ type: 'UPDATE_STEM', index: i, updates: { stereo: !stem.stereo } })}
                           className="-ml-2"
                           title={stem.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
+                          aria-label={stem.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
                         >
                           <div
                             className="w-6 h-6 rounded-full border-2 border-gray-600"
@@ -832,6 +833,7 @@ export default function EditSongPage() {
                 onChange={(e) => dispatch({ type: 'UPDATE_NAV_LINK', index: i, link: { ...link, title: e.target.value } })}
                 className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
                 placeholder="Title"
+                aria-label="Link title"
               />
               <input
                 type="url"
@@ -840,6 +842,7 @@ export default function EditSongPage() {
                 onBlur={(e) => { const fixed = ensureProtocol(e.target.value.trim()); if (fixed !== link.url) dispatch({ type: 'UPDATE_NAV_LINK', index: i, link: { ...link, url: fixed } }); }}
                 className="flex-[2] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
                 placeholder="https://..."
+                aria-label="Link address"
               />
               <button
                 onClick={() => dispatch({ type: 'REMOVE_NAV_LINK', index: i })}

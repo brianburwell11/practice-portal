@@ -203,6 +203,7 @@ export function SectionList() {
                           );
                         }}
                         title="More actions"
+                        aria-label="More actions"
                       >
                         ⋯
                       </button>

@@ -298,6 +298,7 @@ export function StemsStep({ state, dispatch }: Props) {
                       }
                       className="-ml-2"
                       title={stem.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
+                      aria-label={stem.stereo ? 'Stereo — click for mono' : 'Mono — click for stereo'}
                     >
                       <div
                         className="w-6 h-6 rounded-full border-2 border-gray-600"
@@ -328,6 +329,7 @@ export function StemsStep({ state, dispatch }: Props) {
                   onClick={() => togglePreview(i, stem.file)}
                   className="text-gray-400 hover:text-blue-400 text-sm px-1"
                   title={previewingIdx === i ? 'Stop preview' : 'Preview stem'}
+                  aria-label={previewingIdx === i ? 'Stop preview' : 'Preview stem'}
                 >
                   {previewingIdx === i ? '\u25A0' : '\u25B6'}
                 </button>

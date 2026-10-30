@@ -1217,6 +1217,7 @@ export function WaveformTimeline() {
             className="md:hidden w-7 h-5 flex items-center justify-center text-xs text-gray-400 bg-gray-700 rounded hover:bg-gray-600"
             onClick={() => handleZoom('out')}
             title="Zoom out"
+            aria-label="Zoom out"
           >
             −
           </button>
@@ -1234,6 +1235,7 @@ export function WaveformTimeline() {
             className="md:hidden w-7 h-5 flex items-center justify-center text-xs text-gray-400 bg-gray-700 rounded hover:bg-gray-600"
             onClick={() => handleZoom('in')}
             title="Zoom in"
+            aria-label="Zoom in"
           >
             +
           </button>

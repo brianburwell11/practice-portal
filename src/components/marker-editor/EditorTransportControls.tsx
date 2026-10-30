@@ -17,6 +17,7 @@ export function EditorTransportControls() {
         className="w-9 h-9 rounded-lg bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-base transition-colors"
         onClick={() => (playing ? engine.pause() : engine.play())}
         title={playing ? 'Pause' : 'Play'}
+        aria-label={playing ? 'Pause' : 'Play'}
       >
         {playing ? '\u23F8' : '\u25B6'}
       </button>

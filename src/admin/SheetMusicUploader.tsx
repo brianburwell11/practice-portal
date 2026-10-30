@@ -78,6 +78,7 @@ export function SheetMusicUploader({
             disabled={disabled}
             className="text-gray-500 hover:text-red-400 text-sm px-1 disabled:opacity-50"
             title="Remove"
+            aria-label="Remove"
           >
             &times;
           </button>

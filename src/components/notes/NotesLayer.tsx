@@ -426,6 +426,7 @@ function Sticky({ note, isDirty, editable, theme, actions }: StickyProps) {
           }
         } : undefined}
         placeholder={editable ? 'Note…' : undefined}
+        aria-label="Note"
         rows={2}
         maxLength={editable ? 60 : undefined}
         className={`resize-none bg-transparent outline-none px-2 pb-1 text-sm leading-snug ${theme.textClass} ${theme.placeholderClass} ${

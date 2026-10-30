@@ -286,6 +286,7 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="Their Google email (optional)"
+              aria-label="Their Google email (optional)"
               className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
             />
             <button

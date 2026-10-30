@@ -628,6 +628,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                       onClick={() => setWheelOpen((v) => !v)}
                       className={`p-1 rounded hover:bg-gray-700 ${wheelOpen ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
                       title="Camelot wheel"
+                      aria-label="Camelot wheel"
                     >
                       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <circle cx="8" cy="8" r="6.5" />
@@ -640,6 +641,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                       onClick={openFilter}
                       className={`p-1 rounded hover:bg-gray-700 ${hasActiveFilters || sortMode !== 'title' || sortDir !== 'asc' ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
                       title="Filter & sort songs"
+                      aria-label="Filter & sort songs"
                     >
                       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M1.5 2h13M3.5 5.5h9M5.5 9h5M7 12.5h2" />
@@ -1011,6 +1013,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                     onChange={(e) => setNavLinks((prev) => prev.map((l, j) => j === i ? { ...l, title: e.target.value } : l))}
                     className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
                     placeholder="Title"
+                    aria-label="Link title"
                     disabled={saving}
                   />
                   <input
@@ -1023,6 +1026,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                     }}
                     className="flex-[2] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
                     placeholder="https://..."
+                    aria-label="Link address"
                     disabled={saving}
                   />
                   <button

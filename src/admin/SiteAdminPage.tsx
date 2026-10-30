@@ -344,6 +344,7 @@ function EmailUser({ user }: { user: AdminUser }) {
         onChange={(e) => setSubject(e.target.value)}
         maxLength={150}
         placeholder="Subject"
+        aria-label="Subject"
         className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
       />
       <textarea
@@ -352,6 +353,7 @@ function EmailUser({ user }: { user: AdminUser }) {
         maxLength={5000}
         rows={5}
         placeholder="Message"
+        aria-label="Message"
         className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-blue-500"
       />
       <div className="flex flex-wrap items-center gap-3">
