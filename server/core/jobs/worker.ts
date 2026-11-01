@@ -50,6 +50,7 @@ let started = false;
 let stopping = false;
 let wake: (() => void) | null = null;
 let current: Promise<void> | null = null;
+let sweepTimer: ReturnType<typeof setInterval> | undefined;
 
 /** Nudge an idle worker — a job was just queued. */
 export function wakeWorker(): void {
@@ -66,12 +67,15 @@ export function startWorker(): void {
   console.log('[worker] started');
   void loop();
   void sweep();
-  setInterval(() => void sweep(), SWEEP_EVERY_MS).unref();
+  sweepTimer = setInterval(() => void sweep(), SWEEP_EVERY_MS);
+  sweepTimer.unref();
 }
 
 /** Stop taking jobs. The one in hand is abandoned and retried by whichever process is next. */
 export function stopWorker(): void {
+  if (started && !stopping) console.log('[worker] stopped');
   stopping = true;
+  clearInterval(sweepTimer);
   wake?.();
 }
 
