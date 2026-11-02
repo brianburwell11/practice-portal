@@ -1,0 +1,142 @@
+---
+title: "Ableton Import: A Live Set Becomes a Song"
+description: "Drop an Ableton Live project folder into the Add Song wizard. Each audio track is rendered with its arrangement edits and becomes a stem, and tempo, meter and locators set up the timing."
+pubDate: "Nov 01 2026"
+tags: ["audio", "admin", "wizard", "ableton", "import", "plan"]
+---
+
+## Original request
+
+> I want to be able to drag and drop a project from Ableton to upload stems and create a new song. It should take all of the edits and effects that are in the Ableton file.
+
+## Decisions
+
+- **Effects.** Ableton's devices (Limiter, Echo, Reverb, plugins) can't be reproduced outside Live. The importer renders every *edit* exactly and lists the effects it skipped. When a track's effect sound matters, drop in the file from Ableton's **Export All Individual Tracks** and it replaces that rendered stem.
+- **Stems.** There is one stem for each audio track that has arrangement clips, chosen from a checklist. Muted tracks, and tracks in muted groups, start unticked.
+- **Timing.** The set's tempo, time signature and locators become the song's `tempoMap`, `timeSignatureMap` and tapMap sections.
+- **Where it runs.** Everything happens in the browser, inside the existing wizard. Rendered stems go through the normal upload, Opus transcode and config save. There are no server changes.
+
+## What "edits" covers
+
+| Ableton | In the stem |
+|---|---|
+| Clip position, trims, loop region, `StartRelative` | Baked in |
+| Looped clips (`LoopOn`) | Baked in, repeated |
+| Warp markers | Baked in. Warped clips that change speed are time-stretched with SoundTouch, keeping their pitch |
+| Clip gain, fade in/out | Baked in |
+| Track volume automation | Baked in |
+| Track volume, pan | Stem `defaultVolume` / `defaultPan`. A panned track plays as mono, since the player only pans mono stems; its file keeps its channels |
+| Group tracks | Stem groups, with group volume as the default. Or, per group, mixed down to one stem (see below) |
+| Track mute | Starts unticked |
+| Device effects, sends | Skipped and listed |
+| MIDI tracks, session clips | Ignored |
+
+## Phases
+
+### 1. Plan
+- [x] This page
+
+### 2. Parse the set
+- [x] `src/admin/ableton/alsParser.ts`: gunzip, then XML, then the `AbletonSet` model
+- [x] `timeline.ts`: beats to seconds through the tempo map, warp markers to sample time, clips to segments
+- [x] `buildTiming.ts`: tempo map, time signature, and a tapMap of locators, measures and beats
+- [x] `npm run smoke:als` prints the Gunk Palace summary
+
+### 3. Render
+- [x] `decodeSource.ts`: `decodeAudioData`, with an AIFF/AIFC fallback for Chrome
+- [x] `renderTrack.ts`: an OfflineAudioContext render to a WAV `File`
+
+### 4. Wizard UI
+- [x] `projectFiles.ts`: find the `.als`, resolve sample paths, match Ableton exports
+- [x] `AbletonImportPanel.tsx`: track checklist, missing files, skipped effects, per-row export drop, progress
+- [x] `StemsStep` opens the panel when a dropped folder holds an `.als`
+
+### 5. Timing into the config
+- [x] `IMPORT_ABLETON` action and `'ableton'` timing mode
+- [x] `buildConfig` uses the imported bpm, meter and locator markers
+
+### Testing
+- [x] `npm run smoke:als` on Gunk Palace matches what Ableton shows (201 BPM, 12/8, locators, 14 ORIGINAL TRACK segments, TEMPO missing)
+- [x] `npm run build` passes; eslint is clean on every changed file (the repo has 13 older lint errors elsewhere)
+- [x] Headless Chrome check: every rendered clip matches its source sample-for-sample (correlation 1.0), all 9 tracks render in about 8 s
+- [x] Headless Chrome check: the panel ticks 7 stems (TEMPO missing, Drums and Sousa muted), builds the BACKTRACKS group, and puts locator "1" at bar 3
+- [x] Shared sample folders: on all 43 sets in `Sooza Live/Tunes`, dropping all of `Sooza Live` finds 1,359 of 1,501 clips with no wrong matches. Dropping a project and then adding `Sooza Resources` also works
+- [x] Collect All and Save callout: amber box with steps whenever clips have no audio (headless screenshot)
+- [x] Group mixdown: BACKTRACKS mixed is the exact sum of its four tracks except within 0.2% of samples around the limited peaks; peaks 0.98, default volume 1, and the Import button counts it as one stem
+- [ ] Dropping the Gunk Palace folder in the real wizard shows the expected checklist
+- [x] Pan to the mixer: Wiggle's GUITAR tracks import as mono stems panned -0.49 and +0.50; mixed, they bake into one stereo stem with a note
+- [x] Every audio file the Tunes sets use decodes in Chrome (181 of 183; the other 2 are encrypted Pack audio, now flagged on their rows)
+- [x] Stepped tempo changes: beat 40 in Ain't No Sunshine lands at Live's own 36.923 s; its drums play at 101.6% (126 / 124 BPM)
+- [x] Time-stretch: exact pitch and length from 50% to 200%, hits within a few ms on average; a 260 s warped drum track renders in about 1 s
+- [x] Import work runs in a Web Worker: no long tasks during a full import or while a set opens
+- [ ] Listen to a stretched practice track (Ain't No Sunshine Drums) against Ableton
+- [ ] Mixed BACKTRACKS sounds the same as the four separate stems played together
+- [ ] Dropping `Sooza Live`, picking a set, and importing works in the real wizard
+- [x] Automatic export matching only looks inside the project folder (raw stems in `Sooza Resources/Stems` were being taken for exports)
+- [ ] ORIGINAL TRACK sounds the same as in Ableton at bar 3 and at the loop seams
+- [ ] Saved song plays with section markers, against the scratch DB
+
+## Shared sample folders
+
+Most Sooza sets keep their audio outside the project, in `../../Sooza Resources` (Guides, Stems, Original Tracks, Clicks). Dropping only the project folder leaves those out. The importer handles this three ways:
+
+- **Path-tail matching.** A sample is found wherever it sits in the drop. The file whose path shares the longest tail with where the set expects it wins. A bare file name only counts when no other file has that name.
+- **Set picker.** Dropping a parent folder like `Sooza Live` lists every set in it (Backups excluded).
+- **Add files.** When samples are missing, the panel names the folders they were in, and takes more drops to fill them in.
+
+Samples that only existed on the computer that saved the set (sound libraries, Ableton's factory library, files in Downloads) can only be recovered in Ableton with Collect All and Save.
+
+## Mixing a group down to one stem
+
+Each Ableton group with ticked tracks gets a **Mix into one stem** option, off by default. When it's on:
+
+- each member is rendered as usual, then summed at its own Ableton volume;
+- pan goes to the mixer, not the audio: when the members share a pan, the stem gets that pan (plus the group's) as its default and plays as mono so the mixer can apply it;
+- when members are panned differently from each other (Wiggle's GUITAR group is two tracks at -0.49 and +0.50), one mixer pan can't keep them apart, so only then are their pans baked into a stereo stem, using the player's equal-power pan law. The panel says when this happens;
+- the mixed stem gets the group's volume as its default, and sits where the group was in the mixer order;
+- members that use an Ableton export go in at unity, since exports are post-fader.
+
+Summing often goes over full scale briefly. On Gunk Palace, BACKTRACKS peaks at 1.44 for 279 samples. Instead of turning the whole stem down (about 4 dB, more than the 1.5 volume cap can make up), a look-ahead peak limiter (5 ms attack, 50 ms release, 0.98 ceiling) pulls just those moments under. That stands in for the Limiter Live groups usually carry. If more than 0.1% of a mix is over, the whole mix is scaled down instead, and the default volume is raised to match.
+
+The mix is generated a track at a time into one running sum, so memory stays at one track plus the sum.
+
+## Warped clips and tempo changes
+
+Warped clips that play faster or slower than their source (more than 0.5% off) are time-stretched offline with SoundTouch, the engine the player already uses for its tempo control, so their pitch stays put. About 450 clips across the 43 Tunes sets need this, mostly between 80% and 125%.
+
+SoundTouch's output runs a little ahead of or behind where it should, by an amount that depends on the ratio (about 30 ms early at 75% speed, 100 ms at 50%). The stretcher measures that once per ratio, by stretching a train of tone bursts, and trims it off, with a quarter second of real audio fed in front so the start isn't cold. On test signals from 50% to 200%, pitch is exact (440 Hz stays 440 Hz), lengths are exact, and hits land within a few ms on average (worst 23 ms, which is normal for this kind of stretch). Unwarped clips that are transposed are still resampled, since that's how Live plays them too.
+
+Tempo automation in Live writes a step as two points at the same beat (65 then 126 at beat 40). An early version of the beats-to-seconds math read the post-step value into the segment before it, turning steps into ramps, which put every clip after a tempo change at the wrong time and speed (Ain't No Sunshine's drums came out at 74% instead of 101.6%). Each segment now uses only its own two points; beat 40 in that set lands at 36.923 s, the time Live itself wrote into the GUIDE clip's warp markers.
+
+## Encrypted Pack audio
+
+Ableton Pack samples are encrypted (AIFC with compression type `able`), and Live keeps derived files encrypted too, such as reversed copies in `Samples/Processed/Reverse`. Nothing outside Live can decode them. The importer reads each file's header up front, marks those clips on their row with what to do (Consolidate the clip in Ableton, or drop an export of the track on the row), and unticks the track only if every clip is encrypted. Three such files exist in Sooza Live; all are reversed Pack cymbals.
+
+## Keeping the page responsive
+
+All the heavy work runs in a Web Worker (`src/admin/ableton/audioWorker.ts`), so the rest of the site keeps responding during an import:
+
+- reading the set (gunzip, then XML via `@xmldom/xmldom`, since workers have no DOMParser);
+- parsing AIFF (the worker reads the `File` itself);
+- time-stretching warped clips;
+- summing and limiting mixed groups;
+- fitting each stem under full scale and encoding its WAV.
+
+The page keeps only what needs Web Audio: `decodeAudioData` for m4a, mp3 and wav, and the `OfflineAudioContext` render. Chrome runs both on threads of their own. Sample arrays move between the page and the worker by transfer, so they aren't copied.
+
+Measured in Chrome with a 16 ms heartbeat timer and the long-task observer:
+
+| | Time | Longest stall |
+|---|---|---|
+| Gunk Palace, 4 stems with BACKTRACKS mixed | 3.1 s | none over 50 ms; heartbeat never late by more than 35 ms |
+| Ain't No Sunshine, AIFF + time-stretched drums | 1.2 s | none over 50 ms; worst heartbeat gap 23 ms |
+| Opening Wiggle Remix (largest set, 550 clips) | 2.8 s | none (parsing it on the page used to stall for 191 ms) |
+
+Leaving the Add Song wizard mid-import stops it, as with the rest of the wizard's unsaved state.
+
+## Known limits
+
+- Device effects aren't rendered. Use Ableton exports for those tracks.
+- Time-stretching uses SoundTouch, not Live's warp modes (Beats, Complex), so stretched clips can sound slightly different, and transients can sit up to about 20 ms off.
+- Encrypted Pack audio can't be decoded.
+- Stems are uploaded as WAV (about 60 MB per stereo stem for a 5 minute song) and transcoded to Opus on the server.
