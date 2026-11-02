@@ -2,6 +2,7 @@ import type { SongConfig, StemConfig, StemGroupConfig } from './types';
 import { TransportClock } from './TransportClock';
 import { StemPlayer } from './StemPlayer';
 import { SoundTouchFallbackNode } from './SoundTouchFallbackNode';
+import { BackgroundAudio } from './BackgroundAudio';
 
 /** Common interface for both AudioWorklet and ScriptProcessorNode pitch correction paths */
 interface PitchCorrectorNode {
@@ -50,12 +51,20 @@ export class AudioEngine {
   private _loopEnabled = true;
   private loopCheckInterval: ReturnType<typeof setInterval> | null = null;
   private wakeLock: WakeLockSentinel | null = null;
+  private background: BackgroundAudio;
 
   constructor() {
     this.ctx = new AudioContext();
     this.clock = new TransportClock(this.ctx);
     this.masterGain = this.ctx.createGain();
-    this.masterGain.connect(this.ctx.destination);
+    // Speakers directly, or on iOS through an <audio> element so playback survives backgrounding
+    this.background = new BackgroundAudio(this.ctx, this.masterGain);
+    this.background.setControls({
+      play: () => { this.play(); },
+      pause: () => this.pause(),
+      seek: (seconds) => { this.seek(Math.min(Math.max(0, seconds), this.clock.duration)); },
+      position: () => ({ currentTime: this.clock.currentTime, duration: this.clock.duration }),
+    });
     // Mix bus: all stems connect here, single SoundTouch node sits between mixBus and masterGain
     this.mixBus = this.ctx.createGain();
 
@@ -128,6 +137,7 @@ export class AudioEngine {
 
     this._songConfig = config;
     this.clock.duration = config.durationSeconds;
+    this.background.setMetadata(config.title, config.artist);
 
     // Fetch all stems, but only decode audible ones (lazy decode for muted stems)
     const total = config.stems.length;
@@ -190,6 +200,9 @@ export class AudioEngine {
   async play(): Promise<void> {
     if (this.clock.playing || this.stems.size === 0) return;
 
+    // Must happen before the first await, while we're still inside the user's tap
+    this.background.start();
+
     // Resume AudioContext if not running (suspended by autoplay policy, or interrupted by screen lock)
     if (this.ctx.state !== 'running') {
       await this.ctx.resume();
@@ -212,6 +225,7 @@ export class AudioEngine {
       this.startLoopScheduler();
     }
     this.acquireWakeLock();
+    this.syncMediaSession();
     this.notify();
   }
 
@@ -226,6 +240,8 @@ export class AudioEngine {
     this.stopPositionUpdates();
     this.stopLoopScheduler();
     this.releaseWakeLock();
+    this.background.stop();
+    this.syncMediaSession();
     this.notify();
   }
 
@@ -239,6 +255,8 @@ export class AudioEngine {
     this.stopPositionUpdates();
     this.stopLoopScheduler();
     this.releaseWakeLock();
+    this.background.stop();
+    this.syncMediaSession();
     this.notify();
   }
 
@@ -262,6 +280,7 @@ export class AudioEngine {
       }
     }
 
+    this.syncMediaSession();
     this.notify();
   }
 
@@ -289,6 +308,7 @@ export class AudioEngine {
     for (const stem of this.stems.values()) {
       stem.setTempo(ratio);
     }
+    this.syncMediaSession();
     this.notify();
   }
 
@@ -494,6 +514,10 @@ export class AudioEngine {
     );
   }
 
+  private syncMediaSession(): void {
+    this.background.update(this.clock.playing, this.clock.currentTime, this.clock.duration, this._tempoRatio);
+  }
+
   private releaseWakeLock(): void {
     if (!this.wakeLock) return;
     this.wakeLock.release().catch(() => {});
@@ -622,6 +646,7 @@ export class AudioEngine {
     this.stopLoopScheduler();
     this.stop();
     this.disposeStemPlayers();
+    this.background.dispose();
     this.ctx.close();
   }
 }
