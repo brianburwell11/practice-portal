@@ -1,6 +1,7 @@
 // @ts-check
 
 import mdx from '@astrojs/mdx';
+import { unified } from '@astrojs/markdown-remark';
 import sitemap from '@astrojs/sitemap';
 import react from '@astrojs/react';
 import remarkMath from 'remark-math';
@@ -17,8 +18,12 @@ export default defineConfig({
 	site: 'https://example.com',
 	integrations: [mdx(), sitemap(), react()],
 	markdown: {
-		remarkPlugins: [remarkMath],
-		rehypePlugins: [rehypeKatex],
+		// Astro 7's default Markdown processor is Sätteri; math needs the
+		// remark/rehype pipeline for remark-math and rehype-katex.
+		processor: unified({
+			remarkPlugins: [remarkMath],
+			rehypePlugins: [rehypeKatex],
+		}),
 	},
 	vite: {
 		plugins: [tailwindcss()],
