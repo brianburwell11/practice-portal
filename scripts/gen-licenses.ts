@@ -25,6 +25,7 @@ const BROWSER_ROOTS = [
   '@radix-ui/react-slider',
   '@soundtouchjs/audio-worklet',
   '@soundtouchjs/core',
+  '@xmldom/xmldom',
   'jszip',
   'opensheetmusicdisplay',
   'react',
