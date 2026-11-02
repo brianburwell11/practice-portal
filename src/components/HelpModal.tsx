@@ -42,25 +42,6 @@ export function HelpModal({ onClose }: Props) {
         </a>
       </div>
 
-      {/* Mute switch notice */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/25 rounded-lg text-sm text-yellow-200">
-        <span className="inline-flex items-center gap-0.5 shrink-0">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            <path d="M18.63 13A17.89 17.89 0 0 1 18 8" />
-            <path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14" />
-            <path d="M18 8a6 6 0 0 0-9.33-5" />
-            <line x1="1" y1="1" x2="23" y2="23" />
-          </svg>
-          <span className="text-xs mx-0.5">&rarr;</span>
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-        </span>
-        <span>If you can't hear audio, check that your phone isn't on silent.</span>
-      </div>
-
       {/* Guides, then support */}
       <div className="pt-2 border-t border-gray-700 flex flex-wrap justify-center gap-2">
         <a
