@@ -1,3 +1,9 @@
+/** An A/B loop in song seconds. The engine snaps both ends to the sample grid. */
+export interface LoopRegion {
+  start: number;
+  end: number;
+}
+
 export class StemPlayer {
   private ctx: AudioContext;
   private buffer: AudioBuffer;
@@ -11,6 +17,10 @@ export class StemPlayer {
   private _userVolume: number;
   private _userPan: number;
   private _offsetSec: number;
+  private loopRegion: LoopRegion | null = null;
+  /** This stem's audio for the loop, for stems that start or end inside it */
+  private segment: { region: LoopRegion; buffer: AudioBuffer } | null = null;
+  private sourceIsSegment = false;
 
   constructor(
     ctx: AudioContext,
@@ -53,13 +63,22 @@ export class StemPlayer {
   start(when: number, globalPos: number): void {
     this.stop();
 
+    const loop = this.loopRegion;
+    if (loop && !this.covers(loop)) {
+      this.startSegment(when, globalPos, loop);
+      return;
+    }
+
     const stemPos = globalPos - this._offsetSec;
     if (stemPos >= this.buffer.duration) return; // already past the end of this stem
 
-    this.source = this.ctx.createBufferSource();
-    this.source.buffer = this.buffer;
-    this.source.playbackRate.value = this._tempoRatio;
-    this.source.connect(this.monoMixer);
+    this.source = this.createSource(this.buffer);
+    if (loop) {
+      // The audio wraps from B to A by itself, sample-accurately, with no timer involved
+      this.source.loop = true;
+      this.source.loopStart = loop.start - this._offsetSec;
+      this.source.loopEnd = loop.end - this._offsetSec;
+    }
 
     if (stemPos >= 0) {
       this.source.start(when, stemPos);
@@ -67,6 +86,73 @@ export class StemPlayer {
       // Delay start until globalPos reaches offsetSec
       this.source.start(when + -stemPos, 0);
     }
+  }
+
+  /**
+   * Set or clear the A/B loop. Returns false when the playing source can't
+   * take the change in place and the stem needs restarting.
+   */
+  setLoop(region: LoopRegion | null): boolean {
+    this.loopRegion = region;
+    if (this.segment && !(region && sameRegion(this.segment.region, region))) {
+      this.segment = null;
+    }
+    if (!this.source) return true;
+    if (this.sourceIsSegment || (region && !this.covers(region))) return false;
+    this.source.loop = region !== null;
+    if (region) {
+      this.source.loopStart = region.start - this._offsetSec;
+      this.source.loopEnd = region.end - this._offsetSec;
+    }
+    return true;
+  }
+
+  /** Whether this stem has audio for the whole loop, so its own buffer can loop */
+  private covers(region: LoopRegion): boolean {
+    return this._offsetSec <= region.start && this._offsetSec + this.buffer.duration >= region.end;
+  }
+
+  /**
+   * Loop a stem that starts or ends inside the loop. Its buffer can't loop on
+   * the same period as the others, so play a copy of just the loop section,
+   * padded with silence, and loop that.
+   */
+  private startSegment(when: number, globalPos: number, loop: LoopRegion): void {
+    this.source = this.createSource(this.segmentFor(loop));
+    this.source.loop = true;
+    this.sourceIsSegment = true;
+    if (globalPos >= loop.start) {
+      this.source.start(when, globalPos - loop.start);
+    } else {
+      this.source.start(when + (loop.start - globalPos), 0);
+    }
+  }
+
+  private segmentFor(loop: LoopRegion): AudioBuffer {
+    if (this.segment && sameRegion(this.segment.region, loop)) return this.segment.buffer;
+    const rate = this.buffer.sampleRate;
+    const length = Math.round((loop.end - loop.start) * rate);
+    const buffer = this.ctx.createBuffer(this.buffer.numberOfChannels, length, rate);
+    // Stem frame that lines up with the loop's first frame (negative if the stem starts later)
+    const from = Math.round((loop.start - this._offsetSec) * rate);
+    const first = Math.max(0, from);
+    const last = Math.min(this.buffer.length, from + length);
+    if (last > first) {
+      for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+        buffer.getChannelData(ch).set(this.buffer.getChannelData(ch).subarray(first, last), first - from);
+      }
+    }
+    this.segment = { region: loop, buffer };
+    return buffer;
+  }
+
+  private createSource(buffer: AudioBuffer): AudioBufferSourceNode {
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = this._tempoRatio;
+    source.connect(this.monoMixer);
+    this.sourceIsSegment = false;
+    return source;
   }
 
   get offsetSec(): number {
@@ -89,6 +175,7 @@ export class StemPlayer {
       }
       this.source.disconnect();
       this.source = null;
+      this.sourceIsSegment = false;
     }
   }
 
@@ -179,8 +266,13 @@ export class StemPlayer {
 
   disconnect(): void {
     this.stop();
+    this.segment = null;
     this.monoMixer.disconnect();
     this.gainNode.disconnect();
     this.panNode.disconnect();
   }
+}
+
+function sameRegion(a: LoopRegion, b: LoopRegion): boolean {
+  return a.start === b.start && a.end === b.end;
 }

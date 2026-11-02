@@ -1,6 +1,6 @@
 import type { SongConfig, StemConfig, StemGroupConfig } from './types';
 import { TransportClock } from './TransportClock';
-import { StemPlayer } from './StemPlayer';
+import { StemPlayer, type LoopRegion } from './StemPlayer';
 import { SoundTouchFallbackNode } from './SoundTouchFallbackNode';
 import { BackgroundAudio } from './BackgroundAudio';
 
@@ -49,7 +49,6 @@ export class AudioEngine {
   private _loopA: number | null = null;
   private _loopB: number | null = null;
   private _loopEnabled = true;
-  private loopCheckInterval: ReturnType<typeof setInterval> | null = null;
   private wakeLock: WakeLockSentinel | null = null;
   private background: BackgroundAudio;
 
@@ -211,6 +210,12 @@ export class AudioEngine {
     // Recreate pitch corrector to flush internal buffers from previous playback
     await this.connectPitchNode();
 
+    // Starting past the loop's end plays the loop from A
+    const loop = this.loopRegion();
+    if (loop && this.clock.currentTime >= loop.end) {
+      this.clock.seek(loop.start);
+    }
+
     const offset = this.clock.currentTime;
     const when = this.ctx.currentTime + 0.01; // tiny future offset for sync
 
@@ -221,9 +226,6 @@ export class AudioEngine {
     }
 
     this.startPositionUpdates();
-    if (this._loopEnabled && this._loopA !== null && this._loopB !== null) {
-      this.startLoopScheduler();
-    }
     this.acquireWakeLock();
     this.syncMediaSession();
     this.notify();
@@ -238,7 +240,6 @@ export class AudioEngine {
     }
 
     this.stopPositionUpdates();
-    this.stopLoopScheduler();
     this.releaseWakeLock();
     this.background.stop();
     this.syncMediaSession();
@@ -253,7 +254,6 @@ export class AudioEngine {
     }
 
     this.stopPositionUpdates();
-    this.stopLoopScheduler();
     this.releaseWakeLock();
     this.background.stop();
     this.syncMediaSession();
@@ -262,6 +262,12 @@ export class AudioEngine {
 
   async seek(seconds: number): Promise<void> {
     const wasPlaying = this.clock.playing;
+
+    // While playing a loop, seeking past its end plays the loop from A
+    const loop = this.loopRegion();
+    if (wasPlaying && loop && seconds >= loop.end) {
+      seconds = loop.start;
+    }
 
     if (wasPlaying) {
       for (const stem of this.stems.values()) {
@@ -482,6 +488,7 @@ export class AudioEngine {
       player.stereo = true;
     }
     this.stems.set(id, player);
+    player.setLoop(this.loopRegion());
 
     // If currently playing, start the new stem at the current position
     if (this.clock.playing) {
@@ -600,21 +607,13 @@ export class AudioEngine {
     this._loopA = a;
     this._loopB = b;
     this._loopEnabled = true;
-    if (a !== null && b !== null && this.clock.playing) {
-      this.startLoopScheduler();
-    } else {
-      this.stopLoopScheduler();
-    }
+    this.applyLoop();
     this.notify();
   }
 
   setLoopEnabled(enabled: boolean): void {
     this._loopEnabled = enabled;
-    if (enabled && this._loopA !== null && this._loopB !== null && this.clock.playing) {
-      this.startLoopScheduler();
-    } else if (!enabled) {
-      this.stopLoopScheduler();
-    }
+    this.applyLoop();
     this.notify();
   }
 
@@ -622,28 +621,41 @@ export class AudioEngine {
     this._loopA = null;
     this._loopB = null;
     this._loopEnabled = true;
-    this.stopLoopScheduler();
+    this.applyLoop();
     this.notify();
   }
 
-  private startLoopScheduler(): void {
-    this.stopLoopScheduler();
-    this.loopCheckInterval = setInterval(() => {
-      if (this._loopEnabled && this._loopA !== null && this._loopB !== null && this.clock.playing && this.clock.currentTime >= this._loopB) {
-        this.seek(this._loopA);
-      }
-    }, 10);
+  /**
+   * The loop the audio should play, or null. Both ends are snapped to the
+   * stems' sample grid so every stem wraps on the same frame.
+   */
+  private loopRegion(): LoopRegion | null {
+    if (!this._loopEnabled || this._loopA === null || this._loopB === null) return null;
+    const first = this.stems.values().next().value;
+    const rate = first?.audioBuffer.sampleRate ?? this.ctx.sampleRate;
+    return { start: Math.round(this._loopA * rate) / rate, end: Math.round(this._loopB * rate) / rate };
   }
 
-  private stopLoopScheduler(): void {
-    if (this.loopCheckInterval !== null) {
-      clearInterval(this.loopCheckInterval);
-      this.loopCheckInterval = null;
+  /** Hand the current loop to the clock and every stem. Call whenever A, B or the loop toggle changes. */
+  private applyLoop(): void {
+    const loop = this.loopRegion();
+    this.clock.setLoop(loop);
+    let restart = false;
+    for (const stem of this.stems.values()) {
+      if (!stem.setLoop(loop)) restart = true;
+    }
+    if (!this.clock.playing) return;
+    if (loop && this.clock.currentTime >= loop.end) {
+      this.seek(loop.start);
+    } else if (restart) {
+      const when = this.ctx.currentTime + 0.01;
+      for (const stem of this.stems.values()) {
+        stem.start(when, this.clock.currentTime);
+      }
     }
   }
 
   dispose(): void {
-    this.stopLoopScheduler();
     this.stop();
     this.disposeStemPlayers();
     this.background.dispose();

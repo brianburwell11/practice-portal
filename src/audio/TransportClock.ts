@@ -1,3 +1,5 @@
+import type { LoopRegion } from './StemPlayer';
+
 export class TransportClock {
   private ctx: AudioContext;
   private _playing = false;
@@ -5,6 +7,7 @@ export class TransportClock {
   private songTimeAtPlay = 0;
   private _duration = 0;
   private _tempoRatio = 1.0;
+  private loop: LoopRegion | null = null;
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
@@ -34,11 +37,24 @@ export class TransportClock {
     this._tempoRatio = ratio;
   }
 
+  /** Match the A/B loop the audio is playing, so the position wraps with it */
+  setLoop(loop: LoopRegion | null): void {
+    if (this._playing) {
+      this.songTimeAtPlay = this.currentTime;
+      this.contextTimeAtPlay = this.ctx.currentTime;
+    }
+    this.loop = loop;
+  }
+
   /** Current song position in seconds */
   get currentTime(): number {
     if (!this._playing) return this.songTimeAtPlay;
     const elapsed = (this.ctx.currentTime - this.contextTimeAtPlay) * this._tempoRatio;
-    const pos = this.songTimeAtPlay + elapsed;
+    let pos = this.songTimeAtPlay + elapsed;
+    const loop = this.loop;
+    if (loop && this.songTimeAtPlay < loop.end && pos >= loop.end) {
+      pos = loop.start + (pos - loop.start) % (loop.end - loop.start);
+    }
     return Math.min(pos, this._duration);
   }
 
