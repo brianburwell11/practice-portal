@@ -2,6 +2,7 @@ import type { SongConfig, MarkerConfig } from '../../audio/types';
 import type { WizardState } from '../wizardReducer';
 import { deduplicateLabels } from './stemDetection';
 import { slugify } from '../../utils/deriveId';
+import { secondsToBeat } from '../../audio/tempoUtils';
 
 const markerColors = [
   '#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ef4444',
@@ -47,23 +48,25 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
     .filter((id) => validIds.has(id));
 
   // Tempo map
+  const imported = state.timingMode === 'ableton' ? state.importedTiming : null;
   const bpm = state.timingMode === 'manual' ? state.manualBpm : 120;
-  const tempoMap = [{ beat: 0, bpm }];
+  const tempoMap = imported?.tempoMap ?? [{ beat: 0, bpm }];
 
   // Time signature
-  const numerator = state.timingMode === 'manual' ? state.timeSignatureNumerator : 4;
+  const numerator = imported?.timeSignatureMap[0].numerator
+    ?? (state.timingMode === 'manual' ? state.timeSignatureNumerator : 4);
   const denominator = state.timingMode === 'manual' ? state.timeSignatureDenominator : 4;
-  const timeSignatureMap = [{ beat: 0, numerator, denominator }];
+  const timeSignatureMap = imported?.timeSignatureMap ?? [{ beat: 0, numerator, denominator }];
 
   // Accent pattern based on time signature
   const accentPattern = buildAccentPattern(numerator);
 
   // Markers from XSC sections
   const markers: MarkerConfig[] = [];
-  if (state.timingMode === 'xsc') {
+  if (state.timingMode === 'xsc' || state.timingMode === 'ableton') {
     const sections = state.tapMap.filter((e) => e.type === 'section' && e.label);
     sections.forEach((section, i) => {
-      const beat = section.time * (bpm / 60);
+      const beat = secondsToBeat(section.time, tempoMap);
       markers.push({
         name: section.label!,
         beat: Math.round(beat * 100) / 100,

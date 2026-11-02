@@ -6,6 +6,9 @@ import { previewStem } from '../utils/stemPreview';
 import { StemColorPicker } from '../StemColorPicker';
 import { SheetMusicUploader } from '../SheetMusicUploader';
 import { MixerOrderEditor, shouldShowMixerOrderEditor } from '../components/MixerOrderEditor';
+import { AbletonImportPanel } from '../components/AbletonImportPanel';
+import type { DroppedFile } from '../ableton/projectFiles';
+import { collectDroppedFiles, findSets } from '../ableton/projectFiles';
 
 interface Props {
   state: WizardState;
@@ -16,38 +19,6 @@ const groupColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
   '#8b5cf6', '#ec4899', '#14b8a6',
 ];
-
-async function collectFiles(dataTransfer: DataTransfer): Promise<File[]> {
-  const files: File[] = [];
-  const entries: FileSystemEntry[] = [];
-
-  for (let i = 0; i < dataTransfer.items.length; i++) {
-    const entry = dataTransfer.items[i].webkitGetAsEntry?.();
-    if (entry) entries.push(entry);
-  }
-
-  async function readEntry(entry: FileSystemEntry): Promise<void> {
-    if (entry.isFile) {
-      const file = await new Promise<File>((resolve, reject) => {
-        (entry as FileSystemFileEntry).file(resolve, reject);
-      });
-      if (isAudioFile(file.name)) files.push(file);
-    } else if (entry.isDirectory) {
-      const reader = (entry as FileSystemDirectoryEntry).createReader();
-      const children = await new Promise<FileSystemEntry[]>((resolve, reject) => {
-        reader.readEntries(resolve, reject);
-      });
-      for (const child of children) {
-        await readEntry(child);
-      }
-    }
-  }
-
-  for (const entry of entries) {
-    await readEntry(entry);
-  }
-  return files;
-}
 
 function buildStems(files: File[]): StemEntry[] {
   const detected = files.map((file) => ({
@@ -68,6 +39,7 @@ export function StemsStep({ state, dispatch }: Props) {
   const [dropIdx, setDropIdx] = useState<number | null>(null);
   const [previewingIdx, setPreviewingIdx] = useState<number | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
+  const [ableton, setAbleton] = useState<DroppedFile[] | null>(null);
 
   // Group creation state
   const [groupLabel, setGroupLabel] = useState('');
@@ -101,8 +73,12 @@ export function StemsStep({ state, dispatch }: Props) {
     async (e: React.DragEvent) => {
       e.preventDefault();
       setDragging(false);
-      const files = await collectFiles(e.dataTransfer);
-      handleFiles(files);
+      const dropped = await collectDroppedFiles(e.dataTransfer);
+      if (findSets(dropped).length > 0) {
+        setAbleton(dropped);
+        return;
+      }
+      handleFiles(dropped.map((f) => f.file).filter((f) => isAudioFile(f.name)));
     },
     [handleFiles],
   );
@@ -181,8 +157,17 @@ export function StemsStep({ state, dispatch }: Props) {
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">Stems & Groups</h2>
 
+      {ableton && (
+        <AbletonImportPanel
+          files={ableton}
+          dispatch={dispatch}
+          onClose={() => setAbleton(null)}
+        />
+      )}
+
       {/* Drop zone */}
       <div
+        hidden={!!ableton}
         onDragOver={(e) => {
           // Only handle file drops, not stem reorder
           if (dragIdx !== null) return;
@@ -202,6 +187,7 @@ export function StemsStep({ state, dispatch }: Props) {
         ) : (
           <>
             <p className="text-gray-300 mb-2">Drag a folder or audio files here</p>
+            <p className="text-gray-500 text-xs mb-2">Dropping an Ableton project folder renders its tracks into stems</p>
             <p className="text-gray-500 text-sm mb-3">or</p>
             <button
               onClick={() => filesInputRef.current?.click()}

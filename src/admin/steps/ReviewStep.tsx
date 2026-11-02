@@ -262,7 +262,11 @@ export function ReviewStep({ state, dispatch, onSaved, onAddAnother }: Props) {
               ? `XSC (${state.tapMap.length} entries)`
               : state.timingMode === 'manual'
                 ? `${state.manualBpm} BPM, ${state.timeSignatureNumerator}/${state.timeSignatureDenominator}`
-                : 'Default (120 BPM, 4/4)'}
+                : state.timingMode === 'ableton'
+                  ? `From Ableton set: ${config.timeSignatureMap[0].numerator}/${config.timeSignatureMap[0].denominator}, ` +
+                    `${state.tapMap.filter((e) => e.type === 'section').length} sections, ` +
+                    `${state.tapMap.filter((e) => e.type !== 'beat').length} measures`
+                  : 'Default (120 BPM, 4/4)'}
           </span>
         </div>
         <div>

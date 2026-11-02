@@ -1,4 +1,4 @@
-import type { TapMapEntry, StemGroupConfig } from '../audio/types';
+import type { TapMapEntry, StemGroupConfig, TempoMapEntry, TimeSignatureEntry } from '../audio/types';
 import type { UploadProgress } from './utils/uploadWithProgress';
 import { slugify, cleanSlugInput } from '../utils/deriveId';
 import { dedupeSlug } from '../utils/dedupeSlug';
@@ -46,8 +46,10 @@ export interface WizardState {
    *  reconciles at render time, so the reducer is forgiving. */
   mixerOrder: string[];
   // Step 3: Timing
-  timingMode: 'xsc' | 'manual' | null;
+  timingMode: 'xsc' | 'manual' | 'ableton' | null;
   tapMap: TapMapEntry[];
+  /** Tempo and meter maps from an Ableton import (`timingMode: 'ableton'`). */
+  importedTiming: { tempoMap: TempoMapEntry[]; timeSignatureMap: TimeSignatureEntry[] } | null;
   manualBpm: number;
   timeSignatureNumerator: number;
   timeSignatureDenominator: number;
@@ -79,6 +81,16 @@ export type WizardAction =
   | { type: 'SET_TIMING_XSC'; tapMap: TapMapEntry[] }
   | { type: 'SET_TIMING_MANUAL'; bpm: number; numerator: number; denominator: number }
   | { type: 'CLEAR_TIMING' }
+  | {
+      type: 'IMPORT_ABLETON';
+      stems: StemEntry[];
+      durationSeconds: number;
+      groups: StemGroupConfig[];
+      mixerOrder: string[];
+      tempoMap: TempoMapEntry[];
+      timeSignatureMap: TimeSignatureEntry[];
+      tapMap: TapMapEntry[];
+    }
   | { type: 'ADD_GROUP'; group: StemGroupConfig }
   | { type: 'REMOVE_GROUP'; index: number }
   | { type: 'SET_MIXER_ORDER'; order: string[] }
@@ -105,6 +117,7 @@ export function createInitialState(): WizardState {
     durationSeconds: 0,
     timingMode: null,
     tapMap: [],
+    importedTiming: null,
     manualBpm: 120,
     timeSignatureNumerator: 4,
     timeSignatureDenominator: 4,
@@ -170,7 +183,20 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
         timeSignatureDenominator: action.denominator,
       };
     case 'CLEAR_TIMING':
-      return { ...state, timingMode: null, tapMap: [] };
+      return { ...state, timingMode: null, tapMap: [], importedTiming: null };
+    case 'IMPORT_ABLETON':
+      // Rendered stems already carry the set's balance; loudnorm would undo it.
+      return {
+        ...state,
+        stems: action.stems,
+        durationSeconds: action.durationSeconds,
+        groups: action.groups,
+        mixerOrder: action.mixerOrder,
+        normalize: false,
+        timingMode: 'ableton',
+        tapMap: action.tapMap,
+        importedTiming: { tempoMap: action.tempoMap, timeSignatureMap: action.timeSignatureMap },
+      };
     case 'ADD_GROUP':
       return { ...state, groups: [...state.groups, action.group] };
     case 'REMOVE_GROUP':
