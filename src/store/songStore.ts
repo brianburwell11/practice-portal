@@ -25,7 +25,8 @@ export const useSongStore = create<SongState>((set) => ({
   failedSong: null,
   setManifest: (manifest) => set({ manifest }),
   setSelectedSong: (selectedSong) => set({ selectedSong }),
-  setLoading: (loading) => set({ loading }),
+  // A new load starts its progress from nothing, not the last song's.
+  setLoading: (loading) => set(loading ? { loading, loadProgress: null } : { loading }),
   setLoadProgress: (loaded, total) => set({ loadProgress: { loaded, total } }),
   setError: (error, failedSong = null) => set({ error, failedSong }),
 }));

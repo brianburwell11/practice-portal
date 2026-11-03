@@ -15,15 +15,14 @@ import { TermsOfService } from './components/legal/TermsOfService.tsx'
 import { Licenses } from './components/legal/Licenses.tsx'
 import { NotFound } from './components/NotFound.tsx'
 import { DialogHost } from './components/ui/DialogHost.tsx'
+import { PageLoader } from './components/ui/Loading.tsx'
 
 import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage, SiteAdminPage } from './admin/lazyPages.ts'
 import { App, BandApp, HelpGuide, HelpIndex } from './lazyPages.ts'
 
-const adminFallback = (
-  <div className="min-h-screen bg-page text-gray-400 p-8">Loading admin...</div>
-);
+const adminFallback = <PageLoader label="Loading admin" />;
 
-const pageFallback = <div className="min-h-screen bg-page" />;
+const pageFallback = <PageLoader />;
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
 
@@ -51,7 +50,7 @@ createRoot(document.getElementById('root')!).render(
           }
         />
         <Route path="/:bandSlug" element={<Suspense fallback={pageFallback}><BandApp /></Suspense>}>
-          <Route index element={<Suspense fallback={null}><App /></Suspense>} />
+          <Route index element={<Suspense fallback={pageFallback}><App /></Suspense>} />
           <Route
             path="admin/add-song"
             element={

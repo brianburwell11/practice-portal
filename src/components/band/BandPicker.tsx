@@ -8,6 +8,7 @@ import { AgreeNotice, LegalLinks } from '../legal/LegalPage';
 import { signInHref, useSessionStore } from '../../store/sessionStore';
 import practicePortalMark from '../../assets/practice-portal-mark-large.png';
 import { GetAppButton } from '../HomeScreen';
+import { Skeleton } from '../ui/Loading';
 
 export function BandPicker() {
   const { bandsManifest, setBandsManifest } = useBandStore();
@@ -61,7 +62,7 @@ export function BandPicker() {
           </button>
         </div>
       ) : !bandsManifest || !loaded ? (
-        <p className="text-gray-500">Loading...</p>
+        <BandListSkeleton />
       ) : bands.length > 0 ? (
         <>
           <p className="text-gray-400 mb-6">Select your band to get started.</p>
@@ -116,6 +117,27 @@ export function BandPicker() {
       )}
 
       <LegalLinks className="mt-12" />
+    </div>
+  );
+}
+
+/** Stand-ins for the band cards, the same size, while the list loads. */
+function BandListSkeleton() {
+  return (
+    <div className="flex flex-col items-center w-full" role="status">
+      <span className="sr-only">Loading your bands</span>
+      <Skeleton className="h-5 w-56 mb-7" />
+      <div className="grid gap-4 w-full max-w-md">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex items-center gap-4 p-4 min-h-[56px] rounded-lg border border-gray-800">
+            <Skeleton className="w-10 h-10" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-2/5" />
+              <Skeleton className="h-3.5 w-1/4" />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

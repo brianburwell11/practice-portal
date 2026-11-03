@@ -8,6 +8,7 @@ import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useLongPress } from '../../hooks/useLongPress';
 import { ChannelStrip } from './ChannelStrip';
 import { GroupStrip } from './GroupStrip';
+import { MixerSkeleton } from './MixerSkeleton';
 import { resolveMixerOrder } from '../../audio/mixerOrder';
 
 type SaveState = 'idle' | 'pending' | 'cancelled' | 'saving' | 'saved' | 'error';
@@ -17,6 +18,7 @@ export function MixerPanel() {
   // Saving the mix as the song's defaults rewrites its stems.
   const canSaveMix = useCan('song.audio.write');
   const selectedSong = useSongStore((s) => s.selectedSong);
+  const songLoading = useSongStore((s) => s.loading);
   const stems = useMixerStore((s) => s.stems);
   const globalSoloActive = useMixerStore((s) => s.globalSoloActive);
   const globalMuteActive = useMixerStore((s) => s.globalMuteActive);
@@ -193,6 +195,8 @@ export function MixerPanel() {
 
   // `NoSongState` (App.tsx) has the screen until a song loads.
   if (!selectedSong) return null;
+  // Switching songs: the next song's shape, not the last song's strips.
+  if (songLoading) return <MixerSkeleton className={minimized ? 'md:hidden' : ''} />;
 
   return (
     <div className={`flex-1 p-4 overflow-auto ${minimized ? 'md:hidden' : ''}`}>
