@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useWakeLock } from '../../../hooks/useWakeLock';
 import { useSheetMusicStore } from '../../../store/sheetMusicStore';
+import { useTransportStore } from '../../../store/transportStore';
 import { CompactTransport } from '../../transport/CompactTransport';
 import type { PartInfo } from '../EngravedStripRenderer';
 import { PartsMenu } from '../PartsMenu';
@@ -13,6 +15,8 @@ interface Props {
   parts: PartInfo[];
   hiddenPartIds: ReadonlySet<string>;
   onHiddenPartIdsChange: (hidden: Set<string>) => void;
+  /** The score's parts as the page view finds them (on phones the strip isn't there to). */
+  onParts?: (parts: PartInfo[]) => void;
   repeatAfterDcDs: boolean;
   onClose: () => void;
 }
@@ -32,7 +36,7 @@ const isTouchScreen = () => typeof window !== 'undefined' && window.matchMedia('
  * Key presses aren't swallowed, so the player's shortcuts (space, loop keys)
  * still work while it's open; Escape closes it.
  */
-export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPartIdsChange, repeatAfterDcDs, onClose }: Props) {
+export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPartIdsChange, onParts, repeatAfterDcDs, onClose }: Props) {
   const [layout, setLayout] = useState<PageLayoutMode>('auto');
   const [touch] = useState(isTouchScreen);
   const zoom = useSheetMusicStore((s) => s.pageZoom);
@@ -40,6 +44,8 @@ export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPart
   const invert = useSheetMusicStore((s) => s.pageInvert);
   const setInvert = useSheetMusicStore((s) => s.setPageInvert);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  // Keep the screen on while playing (a phone on a music stand).
+  useWakeLock(useTransportStore((s) => s.playing));
 
   // Escape closes (unless typing in a field).
   useEffect(() => {
@@ -117,7 +123,7 @@ export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPart
       </div>
 
       <div className="min-h-0 flex-1">
-        <PageScoreView files={files} hiddenPartIds={hiddenPartIds} repeatAfterDcDs={repeatAfterDcDs} layoutMode={layout} />
+        <PageScoreView files={files} hiddenPartIds={hiddenPartIds} onParts={onParts} repeatAfterDcDs={repeatAfterDcDs} layoutMode={layout} />
       </div>
 
       <div

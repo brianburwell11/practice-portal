@@ -23,6 +23,9 @@ interface Persisted {
 }
 
 interface SheetMusicState extends Persisted {
+  /** Sheet music full screen is open (not saved: every visit starts closed). */
+  fullViewOpen: boolean;
+  setFullViewOpen: (open: boolean) => void;
   setTrackingMode: (m: TrackingMode) => void;
   setScoreZoom: (z: number) => void;
   setWindowBars: (n: number) => void;
@@ -64,6 +67,8 @@ function persist(state: Persisted): void {
 
 export const useSheetMusicStore = create<SheetMusicState>((set, get) => ({
   ...loadInitial(),
+  fullViewOpen: false,
+  setFullViewOpen: (open) => set({ fullViewOpen: open }),
   setTrackingMode: (m) => { set({ trackingMode: m }); persist(getPersisted(get())); },
   setScoreZoom: (z) => { set({ scoreZoom: z }); persist(getPersisted(get())); },
   setWindowBars: (n) => { set({ windowBars: n }); persist(getPersisted(get())); },

@@ -5,6 +5,7 @@ import { useSheetMusicStore } from '../../../store/sheetMusicStore';
 import { useTransportStore } from '../../../store/transportStore';
 import { firstPlayedIndex, PAST_END, writtenOf } from '../scorePosition';
 import { useScorePosition } from '../useScorePosition';
+import type { PartInfo } from '../EngravedStripRenderer';
 import { fetchSongScore, ScoreEngine, scorePartIds, type MeasureRect, type SongScoreFiles } from './museEncoreEngine';
 
 const CSS_DPI = 96;
@@ -29,6 +30,8 @@ interface Props {
   files: SongScoreFiles;
   /** MusicXML ids of the parts not to show (the strip's selection). */
   hiddenPartIds?: ReadonlySet<string>;
+  /** The score's parts, once it has loaded. */
+  onParts?: (parts: PartInfo[]) => void;
   repeatAfterDcDs?: boolean;
   /** 'page': MuseScore's own pages. 'fit-width': re-wrapped to the screen. 'auto': pages unless narrow. */
   layoutMode?: PageLayoutMode;
@@ -78,7 +81,7 @@ interface Anchor {
  * The cursor comes from the same `useScorePosition` as the scrolling strip,
  * so the two always agree.
  */
-export function PageScoreView({ files, hiddenPartIds, repeatAfterDcDs = false, layoutMode = 'auto' }: Props) {
+export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs = false, layoutMode = 'auto' }: Props) {
   const audio = useAudioEngine();
   const playing = useTransportStore((s) => s.playing);
   const zoom = useSheetMusicStore((s) => s.pageZoom);
@@ -91,6 +94,8 @@ export function PageScoreView({ files, hiddenPartIds, repeatAfterDcDs = false, l
   const structureRef = useRef<MusicXMLStructure | null>(null);
   /** The score's MusicXML part ids, in instrument order. */
   const partIdsRef = useRef<string[]>([]);
+  const onPartsRef = useRef(onParts);
+  useEffect(() => { onPartsRef.current = onParts; }, [onParts]);
   /** Bumped when hidden parts change the layout. */
   const [partsLayout, setPartsLayout] = useState(0);
 
@@ -144,7 +149,13 @@ export function PageScoreView({ files, hiddenPartIds, repeatAfterDcDs = false, l
         }
         const e = await ScoreEngine.open(source, { mode: 'page' });
         if (cancelled) return;
-        partIdsRef.current = scorePartIds(xml);
+        const ids = scorePartIds(xml);
+        partIdsRef.current = ids;
+        onPartsRef.current?.(e.parts().map((p, i) => ({
+          id: ids.length === e.parts().length && ids[i] ? ids[i] : `P${i + 1}`,
+          name: p.name,
+          index: i,
+        })));
         setEngine(e);
         setStatus('ready');
       } catch (err) {

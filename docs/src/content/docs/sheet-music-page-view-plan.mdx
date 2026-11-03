@@ -100,10 +100,14 @@ The strip is drawn by muse-encore too, in MuseScore's continuous view (the whole
 
 ## Phase 6: Mobile
 
-- [ ] Sheet music button on phones that opens the page view
-- [ ] Larger default zoom (2-4 bars per system), dock in the thumb zone, safe-area insets
-- [ ] Re-layout on rotation
-- [ ] Screen Wake Lock while playing
+- [x] Below 768 px there is no strip: a **sheet music** button in the transport's phone row (left of bookmarks, only when the song has a score) opens the full screen view. `ScrollingScore` decides with `useMediaQuery`, and `App` no longer hides the panel with CSS. Before, phones mounted the hidden strip and quietly downloaded and laid out the score for nothing; now the strip never loads there
+- [x] The button uses the same icon as the minimized sheet music chip on desktop (`SheetMusicIcon`: a treble clef over a faint staff; the clef is the engraved glyph from Leland, MuseScore's music font); the full screen open state is in the sheet music store so the transport can open it
+- [x] `auto` reflows below 700 px; at 100% a phone fits about 2 to 4 bars per system, and pinch zoom adjusts it
+- [x] The dock: bigger buttons, long-press to stop, safe-area insets (from Phase 5)
+- [x] Re-layout on rotation (the view's resize handling, from Phase 4)
+- [x] Screen Wake Lock while the full screen view is open and playing (`useWakeLock`), asked for again on coming back to the app; nothing happens where it isn't supported
+- [x] Parts on phones: the page view reports the score's parts, so saved hidden parts load and the parts menu works without the strip
+- [x] Checked in Chrome's device mode (a real iPhone still to do: safe areas, wake lock, home screen app)
 
 ## Phase 7: Tests and docs
 

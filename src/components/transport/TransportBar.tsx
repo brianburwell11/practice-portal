@@ -10,6 +10,9 @@ import { Skeleton } from '../ui/Loading';
 import { formatTime } from '../../utils/formatTime';
 import { measureBeatAt } from '../../audio/tempoUtils';
 import { LoopButton, PlayPauseButton, StopButton } from './TransportButtons';
+import { SheetMusicIcon } from '../sheet/SheetMusicIcon';
+import { useSheetMusicStore } from '../../store/sheetMusicStore';
+import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 
 import type { TapMapEntry } from '../../audio/types';
 
@@ -121,6 +124,13 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
   const lyricsMobileVisible = useLyricsStore((s) => s.mobileVisible);
   const toggleLyricsMobileVisible = useLyricsStore((s) => s.toggleMobileVisible);
   const hasLyrics = useLyricsStore((s) => s.lines.length > 0);
+  const hasSheetMusic = !!selectedSong?.sheetMusicUrl;
+  const sheetMusicOpen = useSheetMusicStore((s) => s.fullViewOpen);
+  const openSheetMusic = () => {
+    // The full screen view lives in the sheet music panel, so bring it back if minimized.
+    usePanelMinimizeStore.getState().restorePanel('sheet');
+    useSheetMusicStore.getState().setFullViewOpen(true);
+  };
   const [editingMeasure, setEditingMeasure] = useState(false);
   const [editingBeat, setEditingBeat] = useState(false);
   const [measureEditValue, setMeasureEditValue] = useState('');
@@ -360,6 +370,19 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
             <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="18" y1="16" x2="22" y2="16" />
           </svg>
         </button>
+
+        {/* Mobile sheet music: opens it full screen (only when the song has a score) */}
+        {hasSheetMusic && <button
+          className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
+            sheetMusicOpen ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+          }`}
+          onClick={openSheetMusic}
+          title="Sheet music"
+          aria-label="Sheet music"
+          aria-pressed={sheetMusicOpen}
+        >
+          <SheetMusicIcon />
+        </button>}
 
         {/* Mobile bookmark toggle */}
         <button

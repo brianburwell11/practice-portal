@@ -5,6 +5,7 @@ import { useBandStore } from '../../store/bandStore';
 import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { r2Url } from '../../utils/url';
 import { MSCZ_FILENAME, SCORE_FILENAME } from '../../config/schema';
 import {
@@ -113,7 +114,15 @@ export function ScrollingScore() {
   const [parts, setParts] = useState<PartInfo[]>([]);
   /** Subset of part ids the user has hidden. Empty = show all. */
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(new Set());
-  const [fullViewOpen, setFullViewOpen] = useState(false);
+  // Full screen open state is shared: on phones the transport's sheet music button opens it.
+  const fullViewOpen = useSheetMusicStore((s) => s.fullViewOpen);
+  const setFullViewOpen = useSheetMusicStore((s) => s.setFullViewOpen);
+  /** Wide enough for the scrolling strip (Tailwind's md). Narrower, there
+   *  is no strip (it's never loaded): the transport's sheet music button
+   *  opens the full screen view instead. */
+  const wide = useMediaQuery('(min-width: 768px)');
+  // Close it if the panel goes away (an editor opened), so it doesn't pop up again later.
+  useEffect(() => () => setFullViewOpen(false), [setFullViewOpen]);
   const fullViewOpenRef = useRef(false);
   useEffect(() => { fullViewOpenRef.current = fullViewOpen; }, [fullViewOpen]);
   const expandButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -121,7 +130,7 @@ export function ScrollingScore() {
     setFullViewOpen(false);
     // Give focus back to what opened it.
     requestAnimationFrame(() => expandButtonRef.current?.focus());
-  }, []);
+  }, [setFullViewOpen]);
   // F opens or closes it (not while typing, and not with modifier keys).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -136,7 +145,7 @@ export function ScrollingScore() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeFullView]);
+  }, [closeFullView, setFullViewOpen]);
   /** Gear-panel open state + click-outside container ref. */
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const settingsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -644,6 +653,25 @@ export function ScrollingScore() {
 
   if (!sheetMusicUrl) return null;
 
+  const fullView = fullViewOpen && scoreFiles && song && (
+    <Suspense fallback={null}>
+      <ScoreFullView
+        title={song.title}
+        files={scoreFiles}
+        parts={parts}
+        hiddenPartIds={hiddenPartIds}
+        onHiddenPartIdsChange={setHiddenPartIds}
+        onParts={handleParts}
+        repeatAfterDcDs={song.repeatAfterDcDs ?? false}
+        onClose={closeFullView}
+      />
+    </Suspense>
+  );
+
+  // Phones: no strip. The transport's sheet music button opens the full
+  // screen view (pages re-wrapped to the screen).
+  if (!wide) return fullView || null;
+
   // Loading-only placeholder height. Once the score is rendered the
   // scroll host auto-sizes to the SVG, so this only controls the
   // height of the "loading…" spinner area, not the final layout.
@@ -739,19 +767,7 @@ export function ScrollingScore() {
               </svg>
             </button>
           )}
-          {fullViewOpen && scoreFiles && song && (
-            <Suspense fallback={null}>
-              <ScoreFullView
-                title={song.title}
-                files={scoreFiles}
-                parts={parts}
-                hiddenPartIds={hiddenPartIds}
-                onHiddenPartIdsChange={setHiddenPartIds}
-                repeatAfterDcDs={song.repeatAfterDcDs ?? false}
-                onClose={closeFullView}
-              />
-            </Suspense>
-          )}
+          {fullView}
           <PartsMenu parts={parts} hiddenPartIds={hiddenPartIds} onApply={setHiddenPartIds} />
           <div ref={settingsMenuRef} className="relative">
             <button
