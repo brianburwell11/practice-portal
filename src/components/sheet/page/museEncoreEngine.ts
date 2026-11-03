@@ -71,6 +71,26 @@ function sanitizeMscz(bytes: Uint8Array, modified?: string): Uint8Array {
 
 type MuseEncore = typeof import('muse-encore');
 
+/** muse-encore internals used for the header position (not part of its public API). */
+interface InternalItem {
+  visible(): boolean;
+  pageBoundingRect(): { left(): number };
+}
+interface InternalScore {
+  nstaves(): number;
+  style(): { spatium(): number };
+  firstMeasure(): {
+    system(): {
+      pagePos(): { x(): number };
+      leftMargin(): number;
+      brackets(): InternalItem[];
+      staff(i: number): { show(): boolean; instrumentNames: InternalItem[] } | null;
+    } | null;
+  } | null;
+}
+/** muse-encore's layout units per inch. */
+const UNITS_PER_INCH = 1200;
+
 /** Rectangle of one written measure, in inches from the top left of its page. */
 export interface MeasureRect {
   page: number;
@@ -242,6 +262,21 @@ export class ScoreEngine {
   }
 
   /**
+   * MuseScore's continuous panel for the 'line' layout: staff names, brackets,
+   * and the clef, key and time signature in force at `leftInches` into the
+   * page. See `drawContinuousPanel` in src/types/muse-encore.d.ts.
+   */
+  drawContinuousPanel(
+    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    dpi: number,
+    leftInches: number,
+    topInches: number,
+    shownKey?: string,
+  ): { width: number; key: string; painted: boolean } | null {
+    return this.me.drawContinuousPanel(this.score, ctx, { dpi, left: leftInches, top: topInches, shownKey });
+  }
+
+  /**
    * Rectangles of the measures in written order, indexed like
    * `MusicXMLStructure.measures` (and so like `UnfoldedStep.srcIndex`).
    * Built once per layout.
@@ -269,6 +304,30 @@ export class ScoreEngine {
     }
     this.beatStarts = starts;
     return starts;
+  }
+
+  /**
+   * Where the first system's header begins (inches into the page): its
+   * leftmost instrument name or bracket, less half a staff space, the same
+   * point MuseScore's continuous panel draws its header from. So a panel
+   * placed here matches the score's own header exactly.
+   */
+  headerLeft(): number | null {
+    const score = this.score as unknown as InternalScore;
+    const system = score.firstMeasure()?.system();
+    if (!system) return null;
+    const spatium = score.style().spatium();
+    const staffStart = system.pagePos().x() + system.leftMargin();
+    const items: InternalItem[] = [...system.brackets()];
+    for (let i = 0; i < score.nstaves(); i++) {
+      const staff = system.staff(i);
+      if (staff?.show()) items.push(...staff.instrumentNames);
+    }
+    let left = staffStart;
+    for (const item of items) {
+      if (item.visible()) left = Math.min(left, item.pageBoundingRect().left() - 0.5 * spatium);
+    }
+    return left / UNITS_PER_INCH;
   }
 
   /** Where the first measure's first beat is (inches): past the clef, key and time signature. */

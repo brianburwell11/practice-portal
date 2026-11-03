@@ -17,13 +17,29 @@ export interface PartInfo {
   index: number;
 }
 
-export interface PreambleImage {
-  /** The clef, key and time signature at the start of the line. */
+/**
+ * MuseScore's continuous panel for the strip: the staff names and brackets,
+ * then the clef, key and time signature in force, as at the left edge of a
+ * view. It changes as the music does (a new key, a clef change, 3/4 to 4/4).
+ */
+export interface ContinuousPanel {
+  /** Where it is drawn (CSS width `PANEL_MAX_PX`; only `update`'s width of it is the panel). */
   canvas: HTMLCanvasElement;
-  widthPx: number;
-  /** Where it starts, in content px after the leading pad (past the page margin and staff names). */
-  offsetPx: number;
+  /** Scroll-host content x where the score's own header begins: a panel
+   *  placed here matches it exactly, so it can ride along with it. */
+  headerContentX: number;
+  /**
+   * Draws the panel for a view whose left edge is at scroll-host content x
+   * `contentX` (at the start of the score, as if measure 1 were just past
+   * it, so there is always something to show). Returns the panel's width in
+   * px, or null if there's nothing to draw. Repaints only when what it shows
+   * changes.
+   */
+  update(contentX: number): number | null;
 }
+
+/** The widest the panel can be (CSS px): its canvas is this wide. */
+const PANEL_MAX_PX = 480;
 
 interface Props {
   files: SongScoreFiles;
@@ -37,7 +53,7 @@ interface Props {
   onScrollHost?: (host: HTMLDivElement | null) => void;
   /** Measure start positions in scroll-host content px, plus the end of the last one. */
   onMeasureXs?: (xs: number[]) => void;
-  onPreamble?: (preamble: PreambleImage | null) => void;
+  onPanel?: (panel: ContinuousPanel | null) => void;
   onParts?: (parts: PartInfo[]) => void;
   onUnfoldedOrder?: (steps: UnfoldedStep[]) => void;
   visiblePartIds?: Set<string>;
@@ -73,7 +89,7 @@ export function EngravedStripRenderer({
   leadingPadPx = 180,
   onScrollHost,
   onMeasureXs,
-  onPreamble,
+  onPanel,
   onParts,
   onUnfoldedOrder,
   visiblePartIds,
@@ -91,9 +107,9 @@ export function EngravedStripRenderer({
   const [hostWidth, setHostWidth] = useState(0);
 
   // Keep the latest callbacks without re-running effects when they change.
-  const cb = useRef({ onScrollHost, onMeasureXs, onPreamble, onParts, onUnfoldedOrder });
+  const cb = useRef({ onScrollHost, onMeasureXs, onPanel, onParts, onUnfoldedOrder });
   useLayoutEffect(() => {
-    cb.current = { onScrollHost, onMeasureXs, onPreamble, onParts, onUnfoldedOrder };
+    cb.current = { onScrollHost, onMeasureXs, onPanel, onParts, onUnfoldedOrder };
   });
 
   useLayoutEffect(() => {
@@ -202,30 +218,8 @@ export function EngravedStripRenderer({
 
     cb.current.onMeasureXs?.(xs);
 
-    // The pinned preamble: the clef, key and time signature, from where
-    // measure 1 starts (past the margin, staff names and brackets) to its
-    // first beat. Kept narrow so it never covers the playhead.
-    const preambleStart = Math.round((rects[0]?.x ?? 0) * scale);
-    const preambleWidth = Math.max(0, Math.round(xs[0] - leadingPadPx) - preambleStart);
     const heightPx = Math.ceil((bounds.bottom - bounds.top) * scale);
-    if (preambleWidth > 0 && heightPx > 0) {
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.ceil(preambleWidth * dpr);
-      canvas.height = Math.ceil(heightPx * dpr);
-      canvas.style.cssText = `display:block;width:${preambleWidth}px;height:${heightPx}px`;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        engine.draw(ctx, 0, scale * dpr, {
-          x: Math.round(preambleStart * dpr),
-          y: bounds.top * scale * dpr,
-          width: canvas.width,
-          height: canvas.height,
-        });
-      }
-      cb.current.onPreamble?.({ canvas, widthPx: preambleWidth, offsetPx: preambleStart });
-    } else {
-      cb.current.onPreamble?.(null);
-    }
+    cb.current.onPanel?.(heightPx > 0 ? makePanel(engine, scale, dpr, bounds.top, page.height, heightPx, leadingPadPx, rects[0]?.x ?? 0) : null);
 
     setLayout({ scale, dpr, top: bounds.top, widthPx: Math.ceil(page.width * scale), heightPx });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,7 +227,7 @@ export function EngravedStripRenderer({
 
   useEffect(() => {
     const callbacks = cb.current;
-    return () => callbacks.onPreamble?.(null);
+    return () => callbacks.onPanel?.(null);
   }, []);
 
   // Draw the tiles in and near the view; drop far ones.
@@ -331,4 +325,52 @@ export function EngravedStripRenderer({
       )}
     </div>
   );
+}
+
+/**
+ * The continuous panel at this layout. muse-encore paints it over the page's
+ * full height (it sets the canvas transform itself), so it goes to a scratch
+ * canvas first and only the strip's cropped band is copied to the one shown.
+ */
+function makePanel(
+  engine: ScoreEngine,
+  scale: number,
+  dpr: number,
+  topInches: number,
+  pageHeightInches: number,
+  heightPx: number,
+  leadingPadPx: number,
+  firstMeasureInches: number,
+): ContinuousPanel {
+  const dpi = scale * dpr;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(PANEL_MAX_PX * dpr);
+  canvas.height = Math.ceil(heightPx * dpr);
+  canvas.style.cssText = `display:block;width:${PANEL_MAX_PX}px;height:${heightPx}px`;
+  const scratch = document.createElement('canvas');
+  scratch.width = canvas.width;
+  scratch.height = Math.ceil(pageHeightInches * dpi);
+  const scratchCtx = scratch.getContext('2d');
+  const ctx = canvas.getContext('2d');
+  let shownKey: string | undefined;
+
+  const headerLeft = engine.headerLeft() ?? 0;
+  return {
+    canvas,
+    headerContentX: leadingPadPx + headerLeft * scale,
+    update(contentX) {
+      if (!ctx || !scratchCtx) return null;
+      // MuseScore shows no panel while measure 1 starts inside it (the score's
+      // own header is there); ask as if it were just past, for the same contents.
+      const left = Math.max(firstMeasureInches, (contentX - leadingPadPx) / scale);
+      const result = engine.drawContinuousPanel(scratchCtx, dpi, left, topInches, shownKey);
+      if (!result) { shownKey = undefined; return null; }
+      if (result.painted) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(scratch, 0, Math.round(topInches * dpi), canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+      }
+      shownKey = result.key;
+      return Math.min(PANEL_MAX_PX, result.width * scale);
+    },
+  };
 }

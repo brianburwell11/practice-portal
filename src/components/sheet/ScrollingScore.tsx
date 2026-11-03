@@ -15,7 +15,7 @@ import {
 import type { UnfoldedStep } from '../../audio/unfoldRepeats';
 import { firstPlayedIndex, PAST_END } from './scorePosition';
 import { useScorePosition } from './useScorePosition';
-import type { PartInfo, PreambleImage } from './EngravedStripRenderer';
+import type { ContinuousPanel, PartInfo } from './EngravedStripRenderer';
 import { PartsMenu } from './PartsMenu';
 
 // Drawn by MuseScore's own engraving engine, loaded on demand.
@@ -40,6 +40,54 @@ const FOCUS_RIGHT_NUDGE_PX = 32;
  *  resize and shift every cached `measureXs` value — so every measure
  *  in the score is a fixed px constant. */
 const LEADING_PAD_PX = 180;
+
+/** Gap between the continuous panel and the reading point. */
+const PANEL_GAP_PX = 6;
+
+/** Where the continuous panel shows: `left`/`width` of the visible box, and
+ *  `offset` (≤ 0) to shift its canvas when the start of it is cut off. */
+interface PanelBox {
+  left: number;
+  width: number;
+  offset: number;
+}
+
+/**
+ * Places the continuous panel, like CSS `position: sticky`: over the score's
+ * own header and moving with it as it scrolls, until it reaches the strip's
+ * left edge, where it stays. It never reaches the reading point
+ * (`focusLeftPx`, viewport px): pinned, if it's wider than the room before
+ * it, it shifts left and the start of the staff names is cut off; and while
+ * the score's own header is still under or past the reading point it isn't
+ * shown (the header itself is there). Its width depends on what it shows, so
+ * the last width is the first guess and it is asked again once if that
+ * changed. Null when not shown.
+ */
+function placePanel(
+  panel: ContinuousPanel | null,
+  scrollLeft: number,
+  focusLeftPx: number,
+  widthRef: { current: number },
+): PanelBox | null {
+  if (!panel) return null;
+  const room = focusLeftPx - PANEL_GAP_PX;
+  if (room <= 0) return null;
+  const natural = panel.headerContentX - scrollLeft;
+  const leftFor = (width: number) => Math.max(Math.min(0, room - width), natural);
+  let width = widthRef.current;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const w = panel.update(scrollLeft + leftFor(width));
+    if (w === null) return null;
+    const settled = Math.abs(w - width) < 0.5;
+    width = w;
+    if (settled) break;
+  }
+  widthRef.current = width;
+  const left = leftFor(width);
+  if (left + width > room + 0.5) return null;
+  const visibleLeft = Math.max(0, left);
+  return { left: visibleLeft, width: left + width - visibleLeft, offset: left - visibleLeft };
+}
 
 /**
  * Scrolling-sheet-music panel. Renders the current song's MusicXML if the
@@ -85,20 +133,17 @@ export function ScrollingScore() {
   const [trainGrayLeftPx, setTrainGrayLeftPx] = useState(0);
   const [trainGrayRightStartPx, setTrainGrayRightStartPx] = useState<number | null>(null);
   const [windowAnchor, setWindowAnchor] = useState(0);
-  /** Viewport-x where the sticky preamble (clef/key/time) sits. Slides
-   *  left with the scroll in karaoke mode until it hits 0, then pins. */
-  const [stickyPreambleLeftPx, setStickyPreambleLeftPx] = useState(0);
-  /** The pinned preamble (clef, key and time signature) the renderer drew. */
-  const [preambleImage, setPreambleImage] = useState<PreambleImage | null>(null);
-  const preambleWidth = preambleImage?.widthPx ?? 0;
-  /** Where the preamble starts after the leading pad, for the effects and listeners that place it. */
-  const preambleOffsetRef = useRef(0);
-  useEffect(() => { preambleOffsetRef.current = preambleImage?.offsetPx ?? 0; }, [preambleImage]);
-
-  /** Host div for the preamble image. Stored via a ref callback so we get a
+  /** MuseScore's continuous panel (staff names, then the clef, key and time
+   *  signature in force), from the renderer, and where it's shown. */
+  const [panel, setPanel] = useState<ContinuousPanel | null>(null);
+  const panelRef = useRef<ContinuousPanel | null>(null);
+  useEffect(() => { panelRef.current = panel; }, [panel]);
+  const [panelBox, setPanelBox] = useState<PanelBox | null>(null);
+  const panelWidthRef = useRef(0);
+  /** Host div for the panel's canvas. Stored via a ref callback so we get a
    *  re-render when it mounts/unmounts (the overlay is conditionally
-   *  rendered, so it can appear after the image arrived). */
-  const [preambleHost, setPreambleHost] = useState<HTMLDivElement | null>(null);
+   *  rendered, so it can appear after the panel arrived). */
+  const [panelHost, setPanelHost] = useState<HTMLDivElement | null>(null);
   /** Incremented on window resize / scroll-host resize. Used as a sync-effect
    *  dependency so window-mode re-derives how many bars fit when the
    *  viewport changes (browser resize, mobile rotate, etc.). */
@@ -242,12 +287,20 @@ export function ScrollingScore() {
     return s;
   }, [parts, hiddenPartIds]);
 
-  // Mount the renderer's preamble image in the sticky overlay.
+  // Mount the panel's canvas in its overlay.
   useEffect(() => {
-    if (!preambleHost) return;
-    if (preambleImage) preambleHost.replaceChildren(preambleImage.canvas);
-    else preambleHost.replaceChildren();
-  }, [preambleHost, preambleImage]);
+    if (!panelHost) return;
+    if (panel) panelHost.replaceChildren(panel.canvas);
+    else panelHost.replaceChildren();
+  }, [panelHost, panel]);
+
+  // Place a new panel (a new score, zoom or part selection) right away,
+  // not only on the next tick or scroll.
+  useEffect(() => {
+    if (!scrollHost) return;
+    panelWidthRef.current = 0;
+    setPanelBox(placePanel(panel, scrollHost.scrollLeft, focusLeftPxRef.current, panelWidthRef));
+  }, [panel, scrollHost]);
 
   // Reset the window anchor whenever the song changes
   useEffect(() => { setWindowAnchor(0); }, [sheetMusicUrl]);
@@ -367,7 +420,7 @@ export function ScrollingScore() {
       setCursorPx(null);
       setBbox(null);
       measureRangeRef.current = null;
-      setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX + preambleOffsetRef.current - scrollHost.scrollLeft));
+      setPanelBox(placePanel(panelRef.current, scrollHost.scrollLeft, focusLeftPxRef.current, panelWidthRef));
       return;
     }
     if (scorePosition) {
@@ -517,14 +570,9 @@ export function ScrollingScore() {
       setTrainGrayRightStartPx(Math.min(rightEndInViewport, focusRightPx));
     }
 
-    // Sticky preamble position — same math for both modes.
-    // Karaoke: `spacerPx - scrollLeft` slides the preamble left until it
-    // pins at 0 once the original preamble would have scrolled off.
-    // Window: `scrollLeft` is large on pages 2+ (anchor > 0), so the max
-    // clamp pins it at 0; on page 1 (anchor === 0) scrollLeft is 0, so
-    // this evaluates to spacerPx — but page 1 doesn't render the sticky
-    // anyway (the natural preamble is already visible).
-    setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX + preambleOffsetRef.current - scrollHost.scrollLeft));
+    // The continuous panel: sticky at the strip's left edge, never reaching
+    // the reading point (the karaoke playhead, or the window's first bar).
+    setPanelBox(placePanel(panelRef.current, scrollHost.scrollLeft, focusLeftPxRef.current, panelWidthRef));
   }, [
     scorePosition, scrollHost, measureXs,
     trackingMode, windowAnchor, resizeTick, playing, unfolded,
@@ -577,7 +625,7 @@ export function ScrollingScore() {
         }
       }
       if (!playingRef.current) {
-        setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX + preambleOffsetRef.current - scrollHost.scrollLeft));
+        setPanelBox(placePanel(panelRef.current, scrollHost.scrollLeft, focusLeftPxRef.current, panelWidthRef));
         if (!pastEndRef.current) {
           setCursorPx(cursorContentXRef.current - scrollHost.scrollLeft);
           const range = measureRangeRef.current;
@@ -724,21 +772,19 @@ export function ScrollingScore() {
           pointerEvents: 'none', zIndex: 3,
         }} />
       )}
-      {/* Sticky preamble — the clef, key and time signature the renderer
-          drew (`preambleImage`). Opaque so it covers the score when the
-          two overlap.
-          Karaoke: slides left with the scroll until it pins at left=0.
-          Window: hidden on page 1 (the natural preamble is visible) and
-          always pinned at left=0 on pages 2+ (same visual as karaoke
-          when pinned). */}
-      {preambleWidth > 0 && (trackingMode === 'karaoke' || (trackingMode === 'window' && windowAnchor > 0)) && (
+      {/* MuseScore's continuous panel: the staff names, then the clef, key
+          and time signature in force, changing as the music does. Sticky:
+          it rides over the score's own header as it scrolls, then stays at
+          the strip's left edge. It never reaches the reading point (if it's
+          too wide, the start of the names is cut off). */}
+      {panelBox && (
         <div style={{
           position: 'absolute', top: 0, bottom: 0,
-          left: stickyPreambleLeftPx, width: preambleWidth,
+          left: panelBox.left, width: panelBox.width,
           overflow: 'hidden', pointerEvents: 'none', zIndex: 6,
           background: '#fff',
         }}>
-          <div ref={setPreambleHost} style={{ position: 'absolute', top: 0, left: 0 }} />
+          <div ref={setPanelHost} style={{ position: 'absolute', top: 0, left: panelBox.offset }} />
         </div>
       )}
     </>
@@ -870,7 +916,7 @@ export function ScrollingScore() {
               leadingPadPx={LEADING_PAD_PX}
               onScrollHost={setScrollHost}
               onMeasureXs={handleMeasureXs}
-              onPreamble={setPreambleImage}
+              onPanel={setPanel}
               onParts={handleParts}
               onUnfoldedOrder={handleUnfoldedOrder}
               visiblePartIds={visiblePartIds}

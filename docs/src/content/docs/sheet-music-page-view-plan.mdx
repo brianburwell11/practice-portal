@@ -56,7 +56,7 @@ The strip is drawn by muse-encore too, in MuseScore's continuous view (the whole
 - [x] Barlines from muse-encore's measure rectangles; measure 1 starts at its first beat, not at the clef
 - [x] Canvas tiles drawn as they scroll into view, far ones dropped
 - [x] Page margins cropped by scanning a 12 dpi render for ink
-- [x] Pinned preamble: the clef, key and time signature (measure 1 up to its first beat), drawn by muse-encore; the playhead stays above it
+- [x] Pinned preamble: MuseScore's continuous panel (muse-encore's `drawContinuousPanel`, a port of MuseScore's `ContinuousPanel`): the staff names and brackets, then each staff's clef, key and time signature **in force at the reading point**, so it changes when the music does, plus the measure number. It is sticky: it rides over the score's own header as it scrolls (placed where the header begins, so it matches it exactly) and stops at the strip's left edge, instead of the header scrolling away and the panel snapping in. It never reaches the karaoke playhead (or the window's first bar): when it's too wide, it shifts left and the start of the names is cut off, and while the header is still under the playhead it isn't shown. It paints only when its contents change, into a full-height scratch canvas (muse-encore sets the canvas transform itself), and the strip's cropped band is copied to the one shown. The playhead stays above it
 - [x] Hidden parts by instrument order, ids from the MusicXML
 - [x] Remove OSMD (`InfiniteScoreRenderer`, the package, the SVG-copy preamble), the engraving setting and the spacing options
 - [x] MuseEncore and its fonts on the licenses page

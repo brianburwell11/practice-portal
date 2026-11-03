@@ -75,6 +75,21 @@ declare module 'muse-encore' {
     options?: DrawPageOptions,
   ): void;
 
+  /**
+   * MuseScore's continuous panel (horizontal continuous view only): the staff
+   * names, brackets, staff lines, and the clef, key and time signature in
+   * force, at the left edge of a view whose left edge is `left` inches into
+   * the page (`top`: the view's top, for the measure number). Paints the page's
+   * full height from y = 0, with its own white background. Null while the
+   * start of the score is in view; `painted` is false when the contents match
+   * `shownKey` (nothing drawn).
+   */
+  export function drawContinuousPanel(
+    score: MasterScore,
+    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    options: { dpi: number; left: number; top?: number; shownKey?: string },
+  ): { width: number; key: string; painted: boolean } | null;
+
   export interface PlayalongMeasure {
     /** Index in the played order. */
     index: number;
