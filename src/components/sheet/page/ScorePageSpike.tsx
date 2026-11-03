@@ -92,8 +92,7 @@ export function ScorePageSpike({ url, unfolded, hiddenPartIndices, onClose }: Pr
         const e = await ScoreEngine.open(source, layout);
         if (cancelled) return;
         if (origin.kind === 'song') {
-          const hidden = new Set(e.parts().filter((_, i) => hiddenPartIndices.includes(i)).map((p) => p.name));
-          if (hidden.size > 0) e.setHiddenParts(hidden);
+          e.setHiddenParts(new Set(hiddenPartIndices));
         }
         setEngine(e);
       } catch (err) {

@@ -38,7 +38,12 @@ export function requireR2Precheck(): void {
  * Accepts a single `.mscz` upload, shells out to the MuseScore CLI to convert
  * it to MXL, and uploads the result to R2 under the requested filename — the
  * same canonical naming as the presign+PUT path for `.musicxml` / `.xml` /
- * `.mxl`, so InfiniteScoreRenderer picks it up with no changes.
+ * `.mxl`.
+ *
+ * The original is kept too, as `<name>.mscz` next to `<name>.mxl`, so the
+ * score can be drawn exactly as MuseScore lays it out. It is stored only
+ * after MuseScore has converted it, so a file that isn't a real score never
+ * reaches R2.
  */
 export async function msczConvertUpload(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, songId } = req.params;
@@ -68,7 +73,20 @@ export async function msczConvertUpload(req: CoreRequest): Promise<CoreResponse>
     'public, max-age=31536000, immutable',
   );
 
-  return ok({ filename });
+  const msczFilename = msczCompanionName(filename);
+  await r2PutFile(
+    `${bandId}/songs/${songId}/${msczFilename}`,
+    fs.readFileSync(received.path),
+    scoreContentType(msczFilename),
+    'public, max-age=31536000, immutable',
+  );
+
+  return ok({ filename, msczFilename });
+}
+
+/** Where the original `.mscz` of a converted `<name>.mxl` is kept. The client uses the same rule. */
+export function msczCompanionName(mxlFilename: string): string {
+  return mxlFilename.replace(/\.mxl$/, '.mscz');
 }
 
 /** Re-exported for the server's other handlers; the pattern lives with the song schema. */

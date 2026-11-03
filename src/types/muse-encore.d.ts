@@ -91,6 +91,12 @@ declare module 'muse-encore' {
   /** The measures in the order they are played, repeats expanded. */
   export function playalongMeasures(score: MasterScore, partIds?: readonly string[] | null): PlayalongMeasure[];
 
+  /** The playback cursor at a raw tick (inches from its page's top left): where the note at that tick is. */
+  export function playbackCursorBounds(
+    score: MasterScore,
+    tick: number,
+  ): { page: number; x: number; y: number; width: number; height: number } | null;
+
   /** The measure's rectangle (inches from its page's top left; the height of its system). */
   export function playalongMeasureBounds(
     score: MasterScore,

@@ -40,13 +40,27 @@ muse-encore is vendored as a git submodule at `vendor/muse-encore`, pinned to `3
 - [x] Exactness check on *Coco* page 1 against MuseScore 4.7.6's own export (300 dpi, rasterized in Chrome): every staff, note, beam, barline and system is in the same place. Two gaps:
   - fonts the score names that muse-encore doesn't bundle (the title's **Bebas Neue**) fall back to a substitute
   - the `$M` (last modified date) footer macro prints `YYYY-MM-DD`
-- [ ] Keep the original `.mscz` on upload, next to the `.mxl` (the strip and `unfold` keep using the `.mxl`)
+- [x] Keep the original `.mscz` on upload, as `<name>.mscz` next to `<name>.mxl`, stored only after MuseScore converts it. New song fields `sheetMusicMsczUrl` (bare `.mscz` filename) and `sheetMusicModified` (the file's date). Replacing or removing a score deletes both files. The `.mxl` still drives `unfold`
 - [ ] Register extra fonts the scores use (self-hosted, OFL), and warn on upload when a score names a font the app doesn't have
-- [ ] Fill in `$M` from the file's modified date, recorded at upload
+- [x] Fill in `$M` from the file's modified date, recorded at upload (substituted into the style's headers and footers before muse-encore reads it)
 - [ ] Layout time on iPhone Safari under 1.5 s for a typical chart
 - [ ] Font cost: every font and style file (16.4 MB) loads on first open, including six music fonts we don't use. Measure on a phone; trimming it means patching the loader
 - [ ] Check that hiding parts (part show flags) carries over the strip's hidden parts
 - [x] Decide: muse-encore, rendering the `.mscz` when a song has one (exact pages on desktop, reflowed to the screen width on phones) and the `.mxl` otherwise. Existing songs get their `.mscz` by re-uploading in Edit Song
+
+## Phase 2b: MuseScore engraving in the scrolling strip
+
+The strip is drawn by muse-encore too, in MuseScore's continuous view (the whole score on one line), from the `.mscz` when the song has one. **OSMD is gone**: MuseScore's layout is the only one, so the "classic" renderer, the engraving setting, and the natural/equal-beat spacing options (and the per-song `equalBeatWidth` field) are removed.
+
+- [x] `EngravedStripRenderer` replaces the OSMD renderer (same scroll host, pads and outputs; it reports its scroll host itself, since it loads lazily)
+- [x] Barlines from muse-encore's measure rectangles; measure 1 starts at its first beat, not at the clef
+- [x] Canvas tiles drawn as they scroll into view, far ones dropped
+- [x] Page margins cropped by scanning a 12 dpi render for ink
+- [x] Pinned preamble: the clef, key and time signature (measure 1 up to its first beat), drawn by muse-encore; the playhead stays above it
+- [x] Hidden parts by instrument order, ids from the MusicXML
+- [x] Remove OSMD (`InfiniteScoreRenderer`, the package, the SVG-copy preamble), the engraving setting and the spacing options
+- [x] MuseEncore and its fonts on the licenses page
+- [ ] Check in the browser: karaoke and windowed scrolling, click to seek, hidden parts, zoom, songs with and without a `.mscz`, and an error message (not a blank strip) when a score can't be drawn
 
 ## Phase 3: Shared score position hook
 

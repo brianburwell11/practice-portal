@@ -28,7 +28,6 @@ const BROWSER_ROOTS = [
   '@xmldom/xmldom',
   'fflate',
   'jszip',
-  'opensheetmusicdisplay',
   'opentype.js',
   'react',
   'react-dom',

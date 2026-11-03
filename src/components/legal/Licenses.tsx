@@ -3,6 +3,9 @@ import packages from './thirdPartyLicenses.json';
 
 const CONTACT = 'legal@practiceportal.app';
 const SOUNDTOUCH_SOURCE = 'https://github.com/cutterbl/SoundTouchJS';
+/** The exact muse-encore commit vendored at vendor/muse-encore (keep in step with the submodule). */
+const MUSE_ENCORE_COMMIT = '3eadb652dd4b660572f75b88473ab46581de2769';
+const MUSE_ENCORE_SOURCE = `https://github.com/pstaender/muse-encore/tree/${MUSE_ENCORE_COMMIT}`;
 
 const link = 'text-blue-400 hover:text-blue-300';
 
@@ -37,10 +40,25 @@ export function Licenses() {
         </p>
       </Section>
 
+      <Section title="MuseEncore (GPL 3.0)">
+        <p>
+          Sheet music is drawn with MuseEncore, a port of MuseScore Studio’s engraving engine, under the GNU General
+          Public License, version 3. It is based on MuseScore (copyright MuseScore Limited and others) and is not an
+          official MuseScore project. We use it unmodified. Its source code, at the exact version we use, is at{' '}
+          <a href={MUSE_ENCORE_SOURCE} className={link}>github.com/pstaender/muse-encore</a>, and we’ll send you a copy
+          if you email us.
+        </p>
+      </Section>
+
       <Section title="Fonts">
         <p>
           Hanken Grotesk is used under the SIL Open Font License 1.1. We host it ourselves; your browser doesn’t fetch
           it from Google.
+        </p>
+        <p>
+          Sheet music uses the music and text fonts that come with MuseEncore: Leland, Bravura, Petaluma, Edwin and
+          others under the SIL Open Font License 1.1, and FreeSerif and FreeSans under the GNU General Public License
+          with the font exception. Their license files are in MuseEncore’s source.
         </p>
       </Section>
 

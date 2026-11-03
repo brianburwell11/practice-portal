@@ -78,6 +78,10 @@ const CONFIG_FIELDS: Record<string, Capability> = {
   groups: 'song.audio.write',
   mixerOrder: 'song.audio.write',
   sheetMusicUrl: 'song.score.write',
+  sheetMusicMsczUrl: 'song.score.write',
+  sheetMusicModified: 'song.score.write',
+  // Retired: older configs still carry it, and a save drops it, so dropping it
+  // must need the same capability as the rest of the score settings.
   equalBeatWidth: 'song.score.write',
   repeatAfterDcDs: 'song.score.write',
 };

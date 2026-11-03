@@ -7,13 +7,16 @@ import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 import { measureStartTimes, currentMeasureIndex } from '../../audio/tempoUtils';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { r2Url } from '../../utils/url';
-import { SCORE_FILENAME } from '../../config/schema';
+import { MSCZ_FILENAME, SCORE_FILENAME } from '../../config/schema';
 import {
   loadSheetMusicSongState,
   saveSheetMusicSongState,
 } from '../../utils/sheetMusicSongStorage';
-import { InfiniteScoreRenderer, type InfiniteBeatStamp, type PartInfo } from './InfiniteScoreRenderer';
 import type { UnfoldedStep } from '../../audio/unfoldRepeats';
+import type { PartInfo, PreambleImage } from './EngravedStripRenderer';
+
+// Drawn by MuseScore's own engraving engine, loaded on demand.
+const EngravedStripRenderer = lazy(() => import('./EngravedStripRenderer').then((m) => ({ default: m.EngravedStripRenderer })));
 
 // TEMPORARY (Phase 2 spike, dev only): muse-encore page render for comparison.
 const ScorePageSpike = import.meta.env.DEV
@@ -32,8 +35,7 @@ const FOCUS_LEFT_NUDGE_PX = 24;
 const FOCUS_RIGHT_NUDGE_PX = 32;
 
 /** Fixed leading pad (px) reserved inside the scroll host before the
- *  first note. Must match the `leadingPadPx` prop passed to
- *  `InfiniteScoreRenderer`. Using a viewport fraction would shrink on
+ *  first note. Passed to the renderer as `leadingPadPx`. Using a viewport fraction would shrink on
  *  resize and shift every cached `measureXs` value — so every measure
  *  in the score is a fixed px constant. */
 const LEADING_PAD_PX = 180;
@@ -63,14 +65,11 @@ export function ScrollingScore() {
   const engine = useAudioEngine();
   const trackingMode = useSheetMusicStore((s) => s.trackingMode);
   const scoreZoom = useSheetMusicStore((s) => s.scoreZoom);
-  const equalBeatWidthOverride = useSheetMusicStore((s) => s.equalBeatWidthOverride);
   const showPlayhead = useSheetMusicStore((s) => s.showPlayhead);
   const setTrackingMode = useSheetMusicStore((s) => s.setTrackingMode);
   const setScoreZoom = useSheetMusicStore((s) => s.setScoreZoom);
-  const setEqualBeatWidthOverride = useSheetMusicStore((s) => s.setEqualBeatWidthOverride);
   const setShowPlayhead = useSheetMusicStore((s) => s.setShowPlayhead);
 
-  const [timeline, setTimeline] = useState<InfiniteBeatStamp[]>([]);
   const [measureXs, setMeasureXs] = useState<number[]>([]);
   /** Unfolded playback order derived from the MusicXML's repeat / jump
    *  markers. Maps the "audio-side" unfolded index `u` → the written
@@ -87,18 +86,16 @@ export function ScrollingScore() {
   /** Viewport-x where the sticky preamble (clef/key/time) sits. Slides
    *  left with the scroll in karaoke mode until it hits 0, then pins. */
   const [stickyPreambleLeftPx, setStickyPreambleLeftPx] = useState(0);
-  /** Width of the preamble (clef+key sig), in SVG-local px. Derived from
-   *  the first measure's barline position minus the leading-pad spacer,
-   *  minus an estimate of the time signature width (which lives after the
-   *  key signature but is excluded from the sticky region). */
-  const [preambleWidth, setPreambleWidth] = useState(0);
-  /** Live SVG ref — stored in state so a useEffect can re-mount the clone
-   *  whenever either the SVG OR the host div changes. */
-  const [liveSvg, setLiveSvg] = useState<SVGSVGElement | null>(null);
-  /** Host div for the cloned preamble SVG. Stored via a ref callback so
-   *  we get a re-render when it mounts/unmounts (the overlay is
-   *  conditionally rendered, so this can appear after the SVG-ready
-   *  callback already fired). */
+  /** The pinned preamble (clef, key and time signature) the renderer drew. */
+  const [preambleImage, setPreambleImage] = useState<PreambleImage | null>(null);
+  const preambleWidth = preambleImage?.widthPx ?? 0;
+  /** Where the preamble starts after the leading pad, for the effects and listeners that place it. */
+  const preambleOffsetRef = useRef(0);
+  useEffect(() => { preambleOffsetRef.current = preambleImage?.offsetPx ?? 0; }, [preambleImage]);
+
+  /** Host div for the preamble image. Stored via a ref callback so we get a
+   *  re-render when it mounts/unmounts (the overlay is conditionally
+   *  rendered, so it can appear after the image arrived). */
   const [preambleHost, setPreambleHost] = useState<HTMLDivElement | null>(null);
   /** Incremented on window resize / scroll-host resize. Used as a sync-effect
    *  dependency so window-mode re-derives how many bars fit when the
@@ -179,7 +176,20 @@ export function ScrollingScore() {
     if (!currentBand || !song) return undefined;
     return r2Url(`${currentBand.id}/songs/${song.id}/${raw}`);
   }, [song, currentBand]);
-  const effectiveEqualBeatWidth = equalBeatWidthOverride ?? song?.equalBeatWidth ?? false;
+
+  // The original MuseScore file, when the song keeps one, is what gets drawn
+  // (exactly as MuseScore lays it out); the .mxl gives the repeat structure.
+  // Same filename rules as the score itself.
+  const scoreFiles = useMemo(() => {
+    if (!sheetMusicUrl || !song || !currentBand) return null;
+    const mscz = song.sheetMusicMsczUrl;
+    return {
+      mxlUrl: sheetMusicUrl,
+      msczUrl: mscz && MSCZ_FILENAME.test(mscz) ? r2Url(`${currentBand.id}/songs/${song.id}/${mscz}`) : undefined,
+      modified: song.sheetMusicModified,
+    };
+  }, [sheetMusicUrl, song, currentBand]);
+
 
   // tapMap-based measure-start timeline
   const measureTimes = useMemo(() => measureStartTimes(song?.tapMap), [song?.tapMap]);
@@ -191,8 +201,6 @@ export function ScrollingScore() {
     return measureTimes[0] ?? 0;
   }, [song, measureTimes]);
 
-  const handleReady = useCallback((_osmd: any) => { /* reserved for future hook-ins */ }, []);
-  const handleTimeline = useCallback((tl: InfiniteBeatStamp[]) => setTimeline(tl), []);
   const handleMeasureXs = useCallback((xs: number[]) => setMeasureXs(xs), []);
   const handleUnfoldedOrder = useCallback((steps: UnfoldedStep[]) => setUnfolded(steps), []);
   const handleParts = useCallback((ps: PartInfo[]) => {
@@ -202,13 +210,9 @@ export function ScrollingScore() {
     pendingSavedPartIdsRef.current = null;
     const available = new Set(ps.map((p) => p.id));
     const filtered = saved.filter((id) => available.has(id));
-    // OSMD needs at least one visible instrument.
+    // At least one part stays visible.
     if (filtered.length >= ps.length) return;
     setHiddenPartIds(new Set(filtered));
-  }, []);
-
-  const handleSvgReady = useCallback((svg: SVGSVGElement | null) => {
-    setLiveSvg(svg);
   }, []);
 
   // Compute the visible-part set that drives the renderer. Memoized so
@@ -227,8 +231,8 @@ export function ScrollingScore() {
         next.delete(id);
         return next;
       }
-      // OSMD needs at least one visible instrument — refuse to hide the
-      // last one instead of silently keeping it visible.
+      // At least one part stays visible: refuse to hide the last one
+      // instead of silently keeping it visible.
       const remainingVisible = parts.length - next.size - 1;
       if (remainingVisible < 1) return prev;
       next.add(id);
@@ -249,72 +253,12 @@ export function ScrollingScore() {
     return false;
   }, [draftHiddenPartIds, hiddenPartIds]);
 
-  // Bootstrap + refine the sticky preamble.
-  //
-  // This has to handle a chicken-and-egg: the sticky-preamble wrapper
-  // only renders when `preambleWidth > 0`, and `preambleHost` only
-  // populates once the wrapper is in the DOM. So we first compute a
-  // `fallback` width (first-note-x minus a small gap) and set that,
-  // which lets the wrapper render. On the next effect run, both
-  // `liveSvg` and `preambleHost` are available and we refine the width
-  // via DOM measurement — walk every <text>/<path> in the clone and
-  // find the rightmost glyph whose right edge lies in the preamble
-  // region (before the first note). That gives a pixel-accurate cutoff
-  // at any zoom or time-signature width.
+  // Mount the renderer's preamble image in the sticky overlay.
   useEffect(() => {
-    if (!scrollHost || timeline.length === 0) {
-      preambleHost?.replaceChildren();
-      setPreambleWidth(0);
-      return;
-    }
-    const spacerPx = LEADING_PAD_PX;
-    const firstNoteLocalX = timeline[0].xPx - spacerPx;
-    const PADDING_PX = 6;
-    const fallback = Math.max(40, firstNoteLocalX - PADDING_PX);
-
-    // Step 1: bootstrap. If the host or SVG isn't ready, set the
-    // fallback width so the wrapper renders and the host ref populates.
-    if (!preambleHost || !liveSvg) {
-      preambleHost?.replaceChildren();
-      setPreambleWidth(fallback);
-      return;
-    }
-
-    // Step 2: mount the clone and refine via DOM measurement.
-    const clone = liveSvg.cloneNode(true) as SVGSVGElement;
-    clone.querySelectorAll('[id*="cursor"], [id*="Cursor"]').forEach((el) => el.remove());
-    stripActiveSvgContent(clone);
-    clone.style.display = 'block';
-    preambleHost.replaceChildren(clone);
-
-    let rightmostEdge = 0;
-    const glyphs = clone.querySelectorAll('text, path');
-    for (const el of Array.from(glyphs)) {
-      let bbox: DOMRect | null = null;
-      try { bbox = (el as SVGGraphicsElement).getBBox(); } catch { /* detached */ }
-      if (!bbox) continue;
-      const right = bbox.x + bbox.width;
-      // Exclude staff-line paths and anything past the first note. Staff
-      // lines span the full score width so the `right < firstNoteLocalX`
-      // filter keeps them out automatically.
-      if (right > rightmostEdge && right < firstNoteLocalX - 3) {
-        rightmostEdge = right;
-      }
-    }
-
-    const measured = rightmostEdge > 0 ? rightmostEdge + PADDING_PX : fallback;
-    setPreambleWidth(Math.max(40, Math.min(measured, firstNoteLocalX - 2)));
-  }, [liveSvg, preambleHost, scrollHost, timeline, resizeTick]);
-
-  // Grab a handle to the renderer's scroll host the first time we render.
-  // InfiniteScoreRenderer's root element *is* the scroll host, so we just
-  // capture it via a ref callback on the wrapper.
-  const rendererWrapperRef = useCallback((el: HTMLDivElement | null) => {
-    if (!el) { setScrollHost(null); return; }
-    const host = el.querySelector('div[style*="overflow-x: auto"]') as HTMLDivElement | null
-      ?? el.firstElementChild as HTMLDivElement | null;
-    setScrollHost(host);
-  }, [sheetMusicUrl, scoreZoom, effectiveEqualBeatWidth]);
+    if (!preambleHost) return;
+    if (preambleImage) preambleHost.replaceChildren(preambleImage.canvas);
+    else preambleHost.replaceChildren();
+  }, [preambleHost, preambleImage]);
 
   // Reset the window anchor whenever the song changes
   useEffect(() => { setWindowAnchor(0); }, [sheetMusicUrl]);
@@ -335,7 +279,7 @@ export function ScrollingScore() {
   // Reset the parts list + selection on song change so stale part ids
   // from the previous score don't leak into the new one's visibility.
   // Also seed `pendingSavedPartIdsRef` from localStorage so `handleParts`
-  // can re-apply the user's last selection for this song once OSMD
+  // can re-apply the user's last selection for this song once the renderer
   // finishes discovering the parts.
   useEffect(() => {
     setParts([]);
@@ -438,7 +382,7 @@ export function ScrollingScore() {
   // subscription. This is the same pattern LyricsDisplay uses: no RAF loop,
   // just re-derive state when `position` changes.
   useEffect(() => {
-    if (!scrollHost || timeline.length === 0 || measureXs.length < 2) return;
+    if (!scrollHost || measureXs.length < 2) return;
 
     const t = position - audioOffset;
 
@@ -474,7 +418,7 @@ export function ScrollingScore() {
         setCursorPx(null);
         setBbox(null);
         measureRangeRef.current = null;
-        setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX - scrollHost.scrollLeft));
+        setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX + preambleOffsetRef.current - scrollHost.scrollLeft));
         return;
       }
       pastEndRef.current = false;
@@ -641,9 +585,9 @@ export function ScrollingScore() {
     // clamp pins it at 0; on page 1 (anchor === 0) scrollLeft is 0, so
     // this evaluates to spacerPx — but page 1 doesn't render the sticky
     // anyway (the natural preamble is already visible).
-    setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX - scrollHost.scrollLeft));
+    setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX + preambleOffsetRef.current - scrollHost.scrollLeft));
   }, [
-    position, audioOffset, scrollHost, timeline, measureXs, measureTimes,
+    position, audioOffset, scrollHost, measureXs, measureTimes,
     trackingMode, windowAnchor, resizeTick, playing, unfolded,
   ]);
 
@@ -699,7 +643,7 @@ export function ScrollingScore() {
         }
       }
       if (!playingRef.current) {
-        setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX - scrollHost.scrollLeft));
+        setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX + preambleOffsetRef.current - scrollHost.scrollLeft));
         if (!pastEndRef.current) {
           setCursorPx(cursorContentXRef.current - scrollHost.scrollLeft);
           const range = measureRangeRef.current;
@@ -792,14 +736,15 @@ export function ScrollingScore() {
   const overlay = (
     <>
       {/* Playhead line — full-system height, toggleable. Hidden (cursorPx
-          null) when playback has advanced past the last rendered measure. */}
+          null) when playback has advanced past the last rendered measure.
+          Above the sticky preamble, so nothing can cover it. */}
       {showPlayhead && cursorPx !== null && (
         <div style={{
           position: 'absolute', top: 0, bottom: 0,
           left: cursorPx - 1, width: 2,
           background: PLAYHEAD_COLOR, opacity: 0.9,
           boxShadow: `0 0 6px rgba(34,211,238,0.6)`,
-          pointerEvents: 'none', zIndex: 5,
+          pointerEvents: 'none', zIndex: 7,
         }} />
       )}
       {/* Window-mode bbox — spans the current measure */}
@@ -831,9 +776,9 @@ export function ScrollingScore() {
           pointerEvents: 'none', zIndex: 3,
         }} />
       )}
-      {/* Sticky preamble — a clipped clone of the rendered SVG's first
-          `preambleWidth` pixels (clef + key sig + time sig). Opaque so
-          it covers the original score when the two overlap.
+      {/* Sticky preamble — the clef, key and time signature the renderer
+          drew (`preambleImage`). Opaque so it covers the score when the
+          two overlap.
           Karaoke: slides left with the scroll until it pins at left=0.
           Window: hidden on page 1 (the natural preamble is visible) and
           always pinned at left=0 on pages 2+ (same visual as karaoke
@@ -969,23 +914,6 @@ export function ScrollingScore() {
                   </div>
                 </div>
 
-                {/* Spacing */}
-                <div className="mb-2">
-                  <div className="mb-1 text-[10px] uppercase tracking-wide text-gray-500">Spacing</div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => setEqualBeatWidthOverride(false)}
-                      className={`flex-1 px-2 py-0.5 rounded ${!effectiveEqualBeatWidth ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                      title="Space measures based on how many notes they contain"
-                    >natural</button>
-                    <button
-                      onClick={() => setEqualBeatWidthOverride(true)}
-                      className={`flex-1 px-2 py-0.5 rounded ${effectiveEqualBeatWidth ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                      title="Make every measure the same width"
-                    >equal-beat</button>
-                  </div>
-                </div>
-
                 {/* Playhead */}
                 <div className="mb-2">
                   <div className="mb-1 text-[10px] uppercase tracking-wide text-gray-500">Playhead</div>
@@ -1034,22 +962,24 @@ export function ScrollingScore() {
             </svg>
           </button>
         </div>
-      <div ref={rendererWrapperRef} style={{ position: 'relative' }}>
-        <InfiniteScoreRenderer
-          url={sheetMusicUrl}
-          height={minRenderHeight}
-          zoom={scoreZoom}
-          equalBeatWidth={effectiveEqualBeatWidth}
-          leadingPadPx={LEADING_PAD_PX}
-          onReady={handleReady}
-          onTimeline={handleTimeline}
-          onMeasureXs={handleMeasureXs}
-          onSvgReady={handleSvgReady}
-          onParts={handleParts}
-          onUnfoldedOrder={handleUnfoldedOrder}
-          visiblePartIds={visiblePartIds}
-          repeatAfterDcDs={song?.repeatAfterDcDs ?? false}
-        />
+      <div style={{ position: 'relative' }}>
+        {scoreFiles && (
+          <Suspense fallback={<div style={{ minHeight: minRenderHeight, background: '#fff', borderRadius: 6 }} />}>
+            <EngravedStripRenderer
+              files={scoreFiles}
+              height={minRenderHeight}
+              zoom={scoreZoom}
+              leadingPadPx={LEADING_PAD_PX}
+              onScrollHost={setScrollHost}
+              onMeasureXs={handleMeasureXs}
+              onPreamble={setPreambleImage}
+              onParts={handleParts}
+              onUnfoldedOrder={handleUnfoldedOrder}
+              visiblePartIds={visiblePartIds}
+              repeatAfterDcDs={song?.repeatAfterDcDs ?? false}
+            />
+          </Suspense>
+        )}
         {/* Overlay — sibling of the scroll host (NOT inside it) so the
             playhead stays fixed to the viewport instead of scrolling with
             the score content. `inset: 0` stretches it to the wrapper's
@@ -1065,25 +995,6 @@ export function ScrollingScore() {
       </div>
     </div>
   );
-}
-
-/**
- * The pinned clef strip is a copy of OSMD's SVG, which is built from an
- * uploaded (untrusted) MusicXML file. OSMD only emits shapes and text, but as
- * cheap insurance the copy is stripped of anything that could run or embed
- * markup: scripts, foreignObject, event handlers and javascript: links.
- */
-function stripActiveSvgContent(svg: SVGSVGElement): void {
-  svg.querySelectorAll('script, foreignObject, iframe, object, embed').forEach((el) => el.remove());
-  for (const el of [svg, ...Array.from(svg.querySelectorAll('*'))]) {
-    for (const attr of Array.from(el.attributes)) {
-      const name = attr.name.toLowerCase();
-      const isLink = name === 'href' || name.endsWith(':href');
-      if (name.startsWith('on') || (isLink && !attr.value.trim().startsWith('#'))) {
-        el.removeAttribute(attr.name);
-      }
-    }
-  }
 }
 
 /**

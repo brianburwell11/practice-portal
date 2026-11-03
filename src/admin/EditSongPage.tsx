@@ -7,7 +7,7 @@ import { getAudioInfo } from './utils/audioConvert';
 import { uploadFileWithProgress, uploadFormWithProgress } from './utils/uploadWithProgress';
 import { uploadStems, waitForStems, type StemJobState } from './utils/stemJobs';
 import { StemProgress } from './components/StemProgress';
-import { prepareSheetMusicUpload } from './utils/sheetMusic';
+import { prepareSheetMusicUpload, sheetMusicConfigFields } from './utils/sheetMusic';
 import { SheetMusicUploader } from './SheetMusicUploader';
 import { dataUrl } from '../utils/url';
 import { slugify } from '../utils/deriveId';
@@ -350,8 +350,6 @@ export default function EditSongPage() {
           );
           if (!convertResult.ok) throw new Error(convertResult.error ?? 'MSCZ conversion failed');
           dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
-          configToSave = { ...configToSave, sheetMusicUrl: filename };
-          dispatch({ type: 'SET_SHEET_MUSIC_URL', url: filename });
         } else {
           const { blob, filename } = prepared;
           const presignRes = await fetch('/api/r2/presign', {
@@ -378,9 +376,10 @@ export default function EditSongPage() {
             }});
           });
           dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
-          configToSave = { ...configToSave, sheetMusicUrl: filename };
-          dispatch({ type: 'SET_SHEET_MUSIC_URL', url: filename });
         }
+        const fields = sheetMusicConfigFields(prepared);
+        configToSave = { ...configToSave, ...fields };
+        dispatch({ type: 'SET_SHEET_MUSIC', fields });
       }
 
       // Save config to R2 (persisted before rename)
@@ -434,14 +433,16 @@ export default function EditSongPage() {
       // Runs AFTER the rename (if any) so it targets the song's current
       // folder — the rename copies the whole folder, so the orphan
       // follows the song to its new location.
-      const oldSheetMusicUrl = state.original?.sheetMusicUrl;
-      const newSheetMusicUrl = configToSave.sheetMusicUrl;
-      if (oldSheetMusicUrl && oldSheetMusicUrl !== newSheetMusicUrl) {
+      // The same goes for the original MuseScore file kept next to it.
+      const stillUsed = new Set([configToSave.sheetMusicUrl, configToSave.sheetMusicMsczUrl]);
+      const orphans = [state.original?.sheetMusicUrl, state.original?.sheetMusicMsczUrl]
+        .filter((f): f is string => !!f && !stillUsed.has(f));
+      for (const orphan of orphans) {
         const finalId = idChanged ? newId : oldId;
         // Fire-and-forget — don't fail the save if cleanup fails; the
         // config is already authoritative and the orphan is harmless.
         fetch(
-          `/api/bands/${currentBand.id}/songs/${finalId}/file/${encodeURIComponent(oldSheetMusicUrl)}`,
+          `/api/bands/${currentBand.id}/songs/${finalId}/file/${encodeURIComponent(orphan)}`,
           { method: 'DELETE' },
         ).catch(() => { /* leave orphan on R2 rather than break save */ });
       }
@@ -605,7 +606,7 @@ export default function EditSongPage() {
             pendingFile={newSheetMusicFile}
             onSelect={(file) => setNewSheetMusicFile(file)}
             onDiscardPending={() => setNewSheetMusicFile(null)}
-            onRemoveExisting={() => dispatch({ type: 'SET_SHEET_MUSIC_URL', url: undefined })}
+            onRemoveExisting={() => dispatch({ type: 'SET_SHEET_MUSIC', fields: { sheetMusicUrl: undefined, sheetMusicMsczUrl: undefined, sheetMusicModified: undefined } })}
             disabled={state.saving}
           />
           {(config.sheetMusicUrl || newSheetMusicFile) && (

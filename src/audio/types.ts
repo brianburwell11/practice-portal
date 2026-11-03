@@ -112,8 +112,11 @@ export interface SongConfig {
   videos?: Video[];
   tags?: string[];
   sheetMusicUrl?: string;
+  /** Original MuseScore file the score was converted from (see schema). */
+  sheetMusicMsczUrl?: string;
+  /** YYYY-MM-DD last-modified date of that MuseScore file. */
+  sheetMusicModified?: string;
   audioOffsetSeconds?: number;
-  equalBeatWidth?: boolean;
   /** When true, internal repeats / voltas are re-taken on the return
    *  pass after a D.C. / D.S. jump. Default (unset / false) matches
    *  the usual convention where D.C./D.S. walks straight through. */

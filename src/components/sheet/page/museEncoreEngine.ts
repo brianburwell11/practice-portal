@@ -1,10 +1,10 @@
 /**
- * The page view's engraving engine: a thin wrapper around muse-encore
+ * The sheet music engraving engine: a thin wrapper around muse-encore
  * (GPL-3.0-only, vendored at `vendor/muse-encore`), a TypeScript port of
- * MuseScore Studio's layout engine.
+ * MuseScore Studio's layout engine. The scrolling strip uses MuseScore's
+ * continuous view ('line'); the page view uses pages or a reflow.
  *
- * Everything here is loaded on demand, the first time the page view opens,
- * so the scrolling strip and first paint never pay for it.
+ * Loaded on demand (dynamic import), so first paint never pays for it.
  *
  * Two sources:
  * - MuseScore files (.mscz) render exactly as MuseScore lays them out: their
@@ -21,14 +21,22 @@
  */
 import type { MasterScore, PlayalongMeasure } from 'muse-encore';
 import { zipSync } from 'fflate';
-import { extractEntries, isZip, UnsafeArchiveError } from '../../../utils/safeUnzip';
+import { extractEntries, isZip, scoreBytesToXml, UnsafeArchiveError } from '../../../utils/safeUnzip';
 
 export type ScoreSource =
   | { kind: 'musicxml'; xml: string }
-  | { kind: 'mscz'; bytes: Uint8Array };
+  /** `modified` (YYYY-MM-DD) fills MuseScore's `$M` (file date) in headers and footers. */
+  | { kind: 'mscz'; bytes: Uint8Array; modified?: string };
 
-/** 'page': MuseScore's own pages and breaks. 'fit-width': systems re-wrapped to a width (inches). */
-export type ScoreLayout = { mode: 'page' } | { mode: 'fit-width'; widthInches: number };
+/**
+ * - 'page': MuseScore's own pages and breaks.
+ * - 'fit-width': systems re-wrapped to a width (inches).
+ * - 'line': MuseScore's continuous view, the whole score on one line.
+ */
+export type ScoreLayout =
+  | { mode: 'page' }
+  | { mode: 'fit-width'; widthInches: number }
+  | { mode: 'line' };
 
 /** All a .mscz may unpack to here: the score, its style and its pictures. */
 const MSCZ_MAX_TOTAL_BYTES = 40 * 1024 * 1024;
@@ -39,12 +47,24 @@ function isRenderedMsczEntry(name: string): boolean {
   return name.startsWith('Pictures/');
 }
 
-/** A .mscz as a small archive we built ourselves from its checked entries. */
-function sanitizeMscz(bytes: Uint8Array): Uint8Array {
+/**
+ * A .mscz as a small archive we built ourselves from its checked entries.
+ * With `modified`, MuseScore's `$M` (file date) macro in the style's headers
+ * and footers is filled in, which muse-encore can't do without file info.
+ */
+function sanitizeMscz(bytes: Uint8Array, modified?: string): Uint8Array {
   if (!isZip(bytes)) throw new UnsafeArchiveError('Not a MuseScore (.mscz) file');
   const entries = extractEntries(bytes, isRenderedMsczEntry, MSCZ_MAX_TOTAL_BYTES);
   if (![...entries.keys()].some((n) => /\.mscx$/i.test(n))) {
     throw new UnsafeArchiveError('No score inside MuseScore file');
+  }
+  const style = entries.get('score_style.mss');
+  if (style && modified && /^\d{4}-\d{2}-\d{2}$/.test(modified)) {
+    const text = new TextDecoder().decode(style).replace(
+      /(<(?:even|odd)(?:Header|Footer)[LCR]>)([^<]*)(<\/)/g,
+      (_m, open: string, body: string, close: string) => open + body.replaceAll('$M', modified) + close,
+    );
+    entries.set('score_style.mss', new TextEncoder().encode(text));
   }
   return zipSync(Object.fromEntries(entries), { level: 0 });
 }
@@ -116,7 +136,7 @@ export class ScoreEngine {
     const { me, fontsMs } = await loadEngine();
     const t0 = performance.now();
     const score = source.kind === 'mscz'
-      ? me.loadScore(sanitizeMscz(source.bytes))
+      ? me.loadScore(sanitizeMscz(source.bytes, source.modified))
       : await me.importScore(new TextEncoder().encode(source.xml), 'score.musicxml');
     const t1 = performance.now();
     ScoreEngine.applyLayoutMode(me, score, layout);
@@ -128,13 +148,12 @@ export class ScoreEngine {
   }
 
   private static applyLayoutMode(me: MuseEncore, score: MasterScore, layout: ScoreLayout): boolean {
-    return layout.mode === 'page'
-      ? me.setViewMode(score, 'page')
-      : me.setViewMode(score, 'fit-width', layout.widthInches);
+    if (layout.mode === 'fit-width') return me.setViewMode(score, 'fit-width', layout.widthInches);
+    return me.setViewMode(score, layout.mode === 'line' ? 'continuous-horizontal' : 'page');
   }
 
   private static keyOf(layout: ScoreLayout): string {
-    return layout.mode === 'page' ? 'page' : `fit:${layout.widthInches.toFixed(2)}`;
+    return layout.mode === 'fit-width' ? `fit:${layout.widthInches.toFixed(2)}` : layout.mode;
   }
 
   /** Lays out again for a new layout. Returns false when nothing changed. */
@@ -145,8 +164,53 @@ export class ScoreEngine {
     ScoreEngine.applyLayoutMode(this.me, this.score, layout);
     this.timings.layoutMs = performance.now() - t0;
     this.layoutKey = key;
-    this.rects = null;
+    this.invalidate();
     return true;
+  }
+
+  private bounds: { top: number; bottom: number } | null = null;
+
+  private invalidate(): void {
+    this.rects = null;
+    this.bounds = null;
+  }
+
+  /**
+   * The rows of page 0 that have ink on them, in inches: drawn once at low
+   * resolution and scanned, so page margins can be cropped without guessing
+   * how far chord symbols, marks or dynamics reach. For the 'line' layout.
+   */
+  contentBounds(): { top: number; bottom: number } {
+    if (this.bounds) return this.bounds;
+    const PROBE_DPI = 12;
+    const size = this.pageSize(0);
+    const fallback = { top: 0, bottom: size.height };
+    const w = Math.min(16000, Math.ceil(size.width * PROBE_DPI));
+    const h = Math.ceil(size.height * PROBE_DPI);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx || w === 0 || h === 0) return (this.bounds = fallback);
+    this.me.drawPage(this.score, 0, ctx, { dpi: PROBE_DPI, region: { x: 0, y: 0, width: w, height: h } });
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let top = -1;
+    let bottom = -1;
+    for (let y = 0; y < h; y++) {
+      let ink = false;
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        if (data[i] < 200 || data[i + 1] < 200 || data[i + 2] < 200) { ink = true; break; }
+      }
+      if (ink) { if (top < 0) top = y; bottom = y; }
+    }
+    if (top < 0) return (this.bounds = fallback);
+    // One probe pixel of slack either side, for antialiased edges.
+    this.bounds = {
+      top: Math.max(0, (top - 1) / PROBE_DPI),
+      bottom: Math.min(size.height, (bottom + 2) / PROBE_DPI),
+    };
+    return this.bounds;
   }
 
   get title(): string {
@@ -190,6 +254,12 @@ export class ScoreEngine {
     return rects;
   }
 
+  /** Where the first measure's first beat is (inches): past the clef, key and time signature. */
+  firstBeatX(): number | null {
+    const m = this.score.firstMeasure();
+    return m ? this.me.playbackCursorBounds(this.score, m.tick().ticks())?.x ?? null : null;
+  }
+
   /** Written measure index at a point on a page (inches), or -1. */
   measureAt(page: number, x: number, y: number): number {
     const rects = this.measureRects();
@@ -209,15 +279,46 @@ export class ScoreEngine {
     return this.score.parts().map((p) => ({ name: p.partName(), shown: p.show() }));
   }
 
-  /** Shows only the parts not named in `hidden`, and lays out again. */
-  setHiddenParts(hidden: ReadonlySet<string>): void {
+  /** Hides the parts at these indices (instrument order), shows the rest, and lays out again. */
+  setHiddenParts(hiddenIndices: ReadonlySet<number>): boolean {
     let changed = false;
-    for (const p of this.score.parts()) {
-      const show = !hidden.has(p.partName());
+    this.score.parts().forEach((p, i) => {
+      const show = !hiddenIndices.has(i);
       if (p.show() !== show) { p.setShow(show); changed = true; }
-    }
-    if (!changed) return;
+    });
+    if (!changed) return false;
     this.me.layoutScore(this.score);
-    this.rects = null;
+    this.invalidate();
+    return true;
   }
+}
+
+/** Where a song's score files are, as resolved URLs. */
+export interface SongScoreFiles {
+  /** The MusicXML (.mxl) score: the repeat structure, and what's drawn without a .mscz. */
+  mxlUrl: string;
+  /** The original MuseScore file, drawn when present. */
+  msczUrl?: string;
+  /** YYYY-MM-DD date of the MuseScore file, for `$M`. */
+  modified?: string;
+}
+
+/**
+ * Fetches a song's score files: the MusicXML text (always, for the repeat
+ * structure) and what to draw (the .mscz when there is one). A .mscz that
+ * fails to download falls back to drawing the MusicXML.
+ */
+export async function fetchSongScore(files: SongScoreFiles): Promise<{ xml: string; source: ScoreSource }> {
+  const fetchBytes = async (url: string) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+    return new Uint8Array(await res.arrayBuffer());
+  };
+  const [mxl, mscz] = await Promise.all([
+    fetchBytes(files.mxlUrl),
+    files.msczUrl ? fetchBytes(files.msczUrl).catch((e) => { console.warn('MuseScore file failed to load, drawing the MusicXML', e); return null; }) : null,
+  ]);
+  const xml = scoreBytesToXml(mxl);
+  const source: ScoreSource = mscz ? { kind: 'mscz', bytes: mscz, modified: files.modified } : { kind: 'musicxml', xml };
+  return { xml, source };
 }

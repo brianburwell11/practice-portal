@@ -15,7 +15,6 @@ interface Persisted {
   trackingMode: TrackingMode;
   scoreZoom: number;
   windowBars: number;
-  equalBeatWidthOverride: boolean | null; // null = follow song config
   showPlayhead: boolean;
 }
 
@@ -23,7 +22,6 @@ interface SheetMusicState extends Persisted {
   setTrackingMode: (m: TrackingMode) => void;
   setScoreZoom: (z: number) => void;
   setWindowBars: (n: number) => void;
-  setEqualBeatWidthOverride: (v: boolean | null) => void;
   setShowPlayhead: (v: boolean) => void;
 }
 
@@ -31,7 +29,6 @@ const DEFAULTS: Persisted = {
   trackingMode: 'karaoke',
   scoreZoom: 0.95,
   windowBars: 4,
-  equalBeatWidthOverride: null,
   showPlayhead: true,
 };
 
@@ -59,7 +56,6 @@ export const useSheetMusicStore = create<SheetMusicState>((set, get) => ({
   setTrackingMode: (m) => { set({ trackingMode: m }); persist(getPersisted(get())); },
   setScoreZoom: (z) => { set({ scoreZoom: z }); persist(getPersisted(get())); },
   setWindowBars: (n) => { set({ windowBars: n }); persist(getPersisted(get())); },
-  setEqualBeatWidthOverride: (v) => { set({ equalBeatWidthOverride: v }); persist(getPersisted(get())); },
   setShowPlayhead: (v) => { set({ showPlayhead: v }); persist(getPersisted(get())); },
 }));
 
@@ -68,7 +64,6 @@ function getPersisted(s: SheetMusicState): Persisted {
     trackingMode: s.trackingMode,
     scoreZoom: s.scoreZoom,
     windowBars: s.windowBars,
-    equalBeatWidthOverride: s.equalBeatWidthOverride,
     showPlayhead: s.showPlayhead,
   };
 }
