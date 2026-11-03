@@ -6,6 +6,8 @@ import './index.css'
 import { BandPicker } from './components/band/BandPicker.tsx'
 import { InvitePage } from './components/account/InvitePage.tsx'
 import { AccountPage } from './components/account/AccountPage.tsx'
+import { AppSignInPage } from './components/account/AppSignInPage.tsx'
+import { SignInHandoff } from './components/account/SignInHandoff.tsx'
 import { EmailUnsubscribe } from './components/account/EmailUnsubscribe.tsx'
 import { RequireCan } from './components/account/RequireCan.tsx'
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy.tsx'
@@ -31,6 +33,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<BandPicker />} />
         <Route path="/invite/:token" element={<InvitePage />} />
+        <Route path="/app-sign-in" element={<AppSignInPage />} />
         <Route path="/account" element={<RequireCan need="signedIn"><AccountPage /></RequireCan>} />
         <Route path="/email/unsubscribe" element={<EmailUnsubscribe />} />
         <Route path="/help" element={<Suspense fallback={pageFallback}><HelpIndex /></Suspense>} />
@@ -77,6 +80,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="*" element={<NotFound />} />
       </Routes>
       <DialogHost />
+      <SignInHandoff />
     </BrowserRouter>
   </StrictMode>,
 )

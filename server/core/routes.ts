@@ -22,7 +22,9 @@ import {
   authorizeLogo,
   authorizePresign,
 } from './access';
-import { googleCallback, googleStart, logout, me } from './handlers/auth';
+import {
+  googleCallback, googleStart, handoffApprove, handoffClaim, handoffGet, handoffStart, logout, me,
+} from './handlers/auth';
 import { deleteAccount, exportAccount } from './handlers/account';
 import { readData } from './handlers/data';
 import { readMedia } from './handlers/media';
@@ -311,6 +313,51 @@ export const routes: RouteDef[] = [
     method: 'GET',
     pattern: /^\/api\/auth\/google\/callback$/,
     handler: googleCallback,
+    errorStatus: 500,
+    errorMessage: 'Sign-in failed',
+  },
+  // Signing in the iPhone home screen app through another window
+  // (auth/handoff.ts). Starting and claiming are public: the app isn't signed
+  // in yet, and the secret it holds is the authorization.
+  {
+    name: 'auth.handoff.start',
+    writes: 'self',
+    access: 'public',
+    method: 'POST',
+    pattern: /^\/api\/auth\/handoff$/,
+    body: 'json',
+    handler: handoffStart,
+    errorStatus: 500,
+    errorMessage: 'Sign-in unavailable',
+  },
+  {
+    name: 'auth.handoff.claim',
+    writes: 'self',
+    access: 'public',
+    method: 'POST',
+    pattern: /^\/api\/auth\/handoff\/claim$/,
+    body: 'json',
+    handler: handoffClaim,
+    errorStatus: 500,
+    errorMessage: 'Sign-in failed',
+  },
+  {
+    // Public: shows only the code, to the window that was sent the id.
+    name: 'auth.handoff.get',
+    access: 'public',
+    method: 'GET',
+    pattern: /^\/api\/auth\/handoff\/(?<id>[A-Za-z0-9_-]{22,64})$/,
+    handler: handoffGet,
+    errorStatus: 500,
+    errorMessage: 'Lookup failed',
+  },
+  {
+    name: 'auth.handoff.approve',
+    writes: 'self',
+    access: 'signedIn',
+    method: 'POST',
+    pattern: /^\/api\/auth\/handoff\/(?<id>[A-Za-z0-9_-]{22,64})\/approve$/,
+    handler: handoffApprove,
     errorStatus: 500,
     errorMessage: 'Sign-in failed',
   },

@@ -16,8 +16,9 @@
 
 /** Paths the app serves today. Must stay reserved. */
 export const IN_USE_ROUTES = [
-  'api', 'healthz', 'invite', 'admin', 'assets',
-  'index.html', 'favicon.ico', 'favicon-192.png', 'apple-touch-icon.png', 'soundtouch-processor.js',
+  'api', 'healthz', 'invite', 'admin', 'assets', 'app-sign-in',
+  'index.html', 'favicon.ico', 'favicon-192.png', 'apple-touch-icon.png', 'icon-512.png', 'manifest.webmanifest',
+  'soundtouch-processor.js',
   'third-party-licenses.txt',
 ] as const;
 

@@ -3,9 +3,10 @@
  * (one Fly machine), so memory is the whole picture; a restart forgets.
  *
  *   auth       5 sign-in attempts per 15 minutes, counted separately for
- *              starting a Google sign-in and for its callback
+ *              starting a Google sign-in, for its callback, and for the
+ *              home screen app starting one in another window
  *   tokens     30 per 15 minutes on routes that take a secret token in the
- *              URL (invite links, guest links, email opt-out), so guessing one is hopeless
+ *              URL (invite links, guest links, email opt-out, a home screen sign-in's code), so guessing one is hopeless
  *   writes     300 per 15 minutes for every other change
  *   reads      1500 per 5 minutes for everything else: a whole band behind
  *              one rehearsal-room IP, each opening setlists and songs
@@ -35,10 +36,12 @@ export type LimitName = keyof typeof LIMITS;
 
 /** Which limit a route counts against. */
 export function limitFor(routeName: string, method: string): { name: LimitName; bucket: string } {
-  if (routeName === 'auth.google.start' || routeName === 'auth.google.callback') {
+  if (routeName === 'auth.google.start' || routeName === 'auth.google.callback' || routeName === 'auth.handoff.start') {
     return { name: 'auth', bucket: routeName };
   }
-  if (['invite.preview', 'invite.accept', 'guest.open', 'email.block.get', 'email.block'].includes(routeName)) {
+  // The home screen app asks every few seconds while you sign in elsewhere.
+  if (routeName === 'auth.handoff.claim') return { name: 'reads', bucket: 'reads' };
+  if (['invite.preview', 'invite.accept', 'guest.open', 'email.block.get', 'email.block', 'auth.handoff.get'].includes(routeName)) {
     return { name: 'tokens', bucket: 'tokens' };
   }
   if (routeName === 'media.read') return { name: 'media', bucket: 'media' };
