@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ROLE_LABELS, signInHref, useSessionStore } from '../../store/sessionStore';
+import { HomeScreenGuide } from '../HomeScreen';
+import { isPhone, isStandalone, useInstallPrompt } from '../../utils/homeScreen';
 
 interface Props {
   /** Current band's legacy id, to show your role in it. */
@@ -20,6 +22,8 @@ export function AccountMenu({ bandId }: Props) {
   // Leaving a band takes a second click, and shows the server's refusal if any.
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [homeScreenOpen, setHomeScreenOpen] = useState(false);
+  const install = useInstallPrompt();
   // Google sends errors back as ?signin_error=… — show it once.
   const [signInError, setSignInError] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('signin_error'),
@@ -114,6 +118,7 @@ export function AccountMenu({ bandId }: Props) {
   return (
     <div ref={ref} className="relative">
       {banner}
+      {homeScreenOpen && <HomeScreenGuide onClose={() => setHomeScreenOpen(false)} />}
       <button
         onClick={() => {
           setOpen((o) => !o);
@@ -168,6 +173,11 @@ export function AccountMenu({ bandId }: Props) {
             <a href="/admin" className="block w-full text-left px-4 py-2 hover:bg-gray-800">
               Site admin
             </a>
+          )}
+          {isPhone() && !isStandalone() && (
+            <button onClick={() => { setOpen(false); if (install) install(); else setHomeScreenOpen(true); }} className="w-full text-left px-4 py-2 hover:bg-gray-800">
+              Add to home screen
+            </button>
           )}
           <Link to="/account" onClick={() => setOpen(false)} className="block w-full text-left px-4 py-2 hover:bg-gray-800">
             Account settings

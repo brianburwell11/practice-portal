@@ -5,7 +5,7 @@ dark background.
     python3 brand/make_logos.py path/to/logo.png [noise=12] [solid=150]
 
 Writes brand/ (original, transparent, circle, icon-circle, icon-transparent),
-public/ (favicon.ico, favicon-192.png, apple-touch-icon.png) and the header
+public/ (favicon.ico, favicon-192.png, apple-touch-icon.png, icon-512.png) and the header
 logos in src/assets/ (header, and the home page's larger copy). `noise` is how far from the background colour still
 counts as background (the source's faint texture); `solid` is how far
 counts as certainly the mark. Needs Pillow, numpy and scipy.
@@ -76,6 +76,8 @@ s = 1024 * 0.66 / max(mw, mh)
 m = mark.resize((round(mw * s), round(mh * s)), Image.LANCZOS)
 sq.alpha_composite(m, ((1024 - m.width) // 2, (1024 - m.height) // 2))
 sq.convert('RGB').resize((180, 180), Image.LANCZOS).save(f'{P}/apple-touch-icon.png', optimize=True)
+# The home screen app's icon (manifest.webmanifest). Opaque, and the mark sits inside Android's maskable safe zone.
+sq.convert('RGB').resize((512, 512), Image.LANCZOS).save(f'{P}/icon-512.png', optimize=True)
 h = 160
 mark.resize((round(mw * h / mh), h), Image.LANCZOS).save(f'{REPO}/src/assets/practice-portal-logo.png', optimize=True)
 # The home page's wordmark shows it up to ~180 px tall; this is sharp at 2x.

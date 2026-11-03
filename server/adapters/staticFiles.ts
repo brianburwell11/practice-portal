@@ -23,6 +23,7 @@ const CONTENT_TYPES: Record<string, string> = {
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -38,7 +39,7 @@ const CONTENT_TYPES: Record<string, string> = {
   '.map': 'application/json; charset=utf-8',
 };
 
-const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.txt', '.xml', '.map']);
+const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.webmanifest', '.svg', '.txt', '.xml', '.map']);
 
 /** Vite fingerprints everything under `assets/`, so it never changes in place. */
 const IMMUTABLE = 'public, max-age=31536000, immutable';

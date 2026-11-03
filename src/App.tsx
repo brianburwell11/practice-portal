@@ -17,6 +17,7 @@ import { DeleteSongModal } from './components/song-select/DeleteSongModal';
 import { AdminRibbon } from './admin/AdminRibbon';
 import { AccountMenu } from './components/account/AccountMenu';
 import { MembersModal } from './components/account/MembersModal';
+import { HomeScreenOffer } from './components/HomeScreen';
 import { useSessionStore } from './store/sessionStore';
 import { confirmDiscard, toast } from './store/dialogStore';
 import { useMarkerEditorStore } from './store/markerEditorStore';
@@ -96,6 +97,7 @@ export default function App() {
   // Anything to manage here? Decides whether a Member sees the admin ribbon
   // at all (they don't — their screen is the public one). UX only.
   const myCaps = useSessionStore((s) => s.capabilitiesIn(currentBand?.id));
+  const signedIn = useSessionStore((s) => !!s.user);
   const canManage = !!myCaps?.some((c) => ADMIN_CAPABILITIES.has(c));
   const canEditContent = !!myCaps?.includes('song.content.write');
   const canInvite = !!myCaps?.includes('member.invite');
@@ -369,6 +371,8 @@ export default function App() {
       )}
       <MinimizedRibbon />
       <UndoToast />
+      {/* Not for guests: their access doesn't carry over to the home screen app. */}
+      {signedIn && <HomeScreenOffer />}
     </AudioEngineContext.Provider>
   );
 }

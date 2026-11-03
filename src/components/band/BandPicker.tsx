@@ -7,6 +7,7 @@ import { AccountMenu, GoogleMark } from '../account/AccountMenu';
 import { AgreeNotice, LegalLinks } from '../legal/LegalPage';
 import { signInHref, useSessionStore } from '../../store/sessionStore';
 import practicePortalMark from '../../assets/practice-portal-mark-large.png';
+import { GetAppButton } from '../HomeScreen';
 
 export function BandPicker() {
   const { bandsManifest, setBandsManifest } = useBandStore();
@@ -110,6 +111,7 @@ export function BandPicker() {
           >
             + Start a band
           </Link>
+          <GetAppButton />
         </div>
       )}
 
@@ -143,6 +145,7 @@ function Welcome() {
       <p className="mt-3 text-sm text-gray-500">
         Already have an account? <a href={signInHref()} className="text-gray-300 hover:text-white underline underline-offset-2">Sign in</a>
       </p>
+      <GetAppButton className="mt-6" />
       <ul className="mt-12 grid gap-4 sm:grid-cols-2 w-full text-left">
         {FEATURES.map((f) => (
           <li key={f.title} className="rounded-lg border border-gray-800 bg-white/[0.03] p-4">
