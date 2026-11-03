@@ -23,6 +23,7 @@ const FIXED: Record<string, string> = {
   '/admin/new-band': SITE_TITLE,
   '/help': `Help · ${SITE_TITLE}`,
   '/account': `Account · ${SITE_TITLE}`,
+  '/app-sign-in': `Sign in · ${SITE_TITLE}`,
 };
 
 export async function pageTitleFor(pathname: string, query: URLSearchParams): Promise<string> {

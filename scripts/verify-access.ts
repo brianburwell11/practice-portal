@@ -26,9 +26,11 @@ function check(label: string, ok: boolean, detail = ''): void {
  * Writes allowed without signing in. Sign-out has to work for anyone holding a
  * cookie, and a sub opens or leaves a guest link with no account — both only
  * set or clear the caller's own cookie. Opting an address out of email takes
- * the invite token that was emailed to it.
+ * the invite token that was emailed to it. The home screen app starts and
+ * collects a sign-in before it has an account, holding the secret that
+ * authorizes it (auth/handoff.ts).
  */
-const PUBLIC_WRITES = new Set(['auth.logout', 'guest.open', 'guest.leave', 'email.block']);
+const PUBLIC_WRITES = new Set(['auth.logout', 'auth.handoff.start', 'auth.handoff.claim', 'guest.open', 'guest.leave', 'email.block']);
 
 console.log(`--- route table (${routes.length} routes)`);
 for (const r of routes) {
@@ -56,8 +58,9 @@ check('route names are unique', new Set(names).size === names.length);
 const signedInOnly = routes.filter((r) => r.access === 'signedIn' && !r.authorizePath && !r.authorizeBody).map((r) => r.name);
 check('signedIn-only routes are the expected few (their handlers check the rest)',
   // Asking to join is open to anyone signed in: that's who asks. The account
-  // routes act only on the caller's own account.
-  JSON.stringify(signedInOnly.sort()) === JSON.stringify(['access.request', 'account.delete', 'account.export', 'invite.accept', 'member.remove']),
+  // routes act only on the caller's own account, and so does confirming a
+  // home screen sign-in: it signs that app in as you.
+  JSON.stringify(signedInOnly.sort()) === JSON.stringify(['access.request', 'account.delete', 'account.export', 'auth.handoff.approve', 'invite.accept', 'member.remove']),
   signedInOnly.join(', '));
 
 console.log('\n--- what a song config save needs');

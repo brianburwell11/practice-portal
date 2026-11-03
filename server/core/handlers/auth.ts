@@ -4,6 +4,7 @@ import { db } from '../../db/client';
 import * as schema from '../../db/schema';
 import { clearCookie, setCookie } from '../auth/cookies';
 import { beginSignIn, finishSignIn, type GoogleIdentity, type PendingSignIn } from '../auth/google';
+import { approveHandoff, claimHandoff, createHandoff, handoffCode } from '../auth/handoff';
 import { guestView } from '../auth/guests';
 import { createSession, deleteSession, SESSION_COOKIE, SESSION_TTL_SECONDS } from '../auth/sessions';
 import { HttpError, json, ok } from '../http';
@@ -113,6 +114,62 @@ export async function googleCallback(req: CoreRequest): Promise<CoreResponse> {
     console.error('[auth] Google sign-in failed:', err);
     return fail(err instanceof HttpError ? err.message : 'Google sign-in failed.');
   }
+}
+
+/** The app's random id and secret: base64url, long enough not to guess. */
+const HANDOFF_TOKEN = /^[A-Za-z0-9_-]{22,64}$/;
+
+function handoffBody(body: unknown): { id: string; secret: string } {
+  const { id, secret } = (body ?? {}) as { id?: unknown; secret?: unknown };
+  if (typeof id !== 'string' || !HANDOFF_TOKEN.test(id) || typeof secret !== 'string' || !HANDOFF_TOKEN.test(secret)) {
+    throw new HttpError(400, 'A sign-in needs an id and a secret');
+  }
+  return { id, secret };
+}
+
+/**
+ * `POST /api/auth/handoff` `{ id, secret }` — the iPhone home screen app
+ * starts a sign-in in another window (auth/handoff.ts). Returns the code to show.
+ */
+export async function handoffStart(req: CoreRequest): Promise<CoreResponse> {
+  const { id, secret } = handoffBody(req.body);
+  const code = createHandoff(id, secret);
+  if (!code) throw new HttpError(409, 'That sign-in already exists');
+  return json({ code });
+}
+
+/** `GET /api/auth/handoff/:id` — the code to confirm in the sign-in window. */
+export async function handoffGet(req: CoreRequest): Promise<CoreResponse> {
+  const code = handoffCode(req.params.id);
+  if (!code) throw new HttpError(404, 'This sign-in has expired or was already used. Start again from the app.');
+  return json({ code });
+}
+
+/** `POST /api/auth/handoff/:id/approve` — the signed-in window confirms the code. */
+export async function handoffApprove(req: CoreRequest): Promise<CoreResponse> {
+  if (!req.actor) throw new HttpError(401, 'Sign in first');
+  if (!approveHandoff(req.params.id, req.actor.userId)) {
+    throw new HttpError(404, 'This sign-in has expired or was already used. Start again from the app.');
+  }
+  return ok();
+}
+
+/**
+ * `POST /api/auth/handoff/claim` `{ id, secret }` — the app asks whether the
+ * window has confirmed yet; once it has, the app gets a session of its own.
+ */
+export async function handoffClaim(req: CoreRequest): Promise<CoreResponse> {
+  const { id, secret } = handoffBody(req.body);
+  const result = claimHandoff(id, secret);
+  if (!result) throw new HttpError(404, 'This sign-in has expired. Please try again.');
+  if (result === 'pending') return json({ status: 'pending' });
+  if (req.actor) await deleteSession(req.actor.sessionHash);
+  const token = await createSession(result.userId);
+  return {
+    status: 200,
+    body: { status: 'done' },
+    headers: { 'Set-Cookie': [setCookie(SESSION_COOKIE, token, { maxAge: SESSION_TTL_SECONDS })] },
+  };
 }
 
 /** `POST /api/auth/logout` */
