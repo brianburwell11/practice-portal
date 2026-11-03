@@ -1,0 +1,73 @@
+---
+title: "Sheet Music Page View: Implementation Plan"
+description: "Full-page sheet music overlay and a mobile score view, rendered with muse-encore, while keeping the constant scrolling strip."
+pubDate: "Nov 03 2026"
+tags: ["sheet-music", "mobile", "security", "implementation", "plan"]
+---
+
+The scrolling strip (OSMD, karaoke and windowed modes) stays as it is. This plan adds a full-screen page view with a compact waveform and transport docked at the bottom, and uses the same view on phones, where the score is hidden today. Pages are engraved by [muse-encore](https://github.com/pstaender/muse-encore), a TypeScript port of the MuseScore Studio 4.7.5 engraving engine. Each phase is its own commit.
+
+## Licensing
+
+muse-encore is **GPL-3.0-only**. Bundling it means the browser bundle is distributed under the GPL. The server, database and user data stay proprietary, so a subscription model still works.
+
+- [ ] Vendor muse-encore at a pinned commit with its `LICENSE` and SPDX headers intact
+- [ ] License the client (`src/`) under GPL-3.0, keep `server/` proprietary, and document the split in the README
+- [ ] Check that no server-only code ends up in the client bundle
+- [ ] Add a third-party licenses page and a source link for the deployed client
+
+## Phase 1: Security hardening
+
+Found while reviewing the current sheet music path and muse-encore.
+
+- [x] Restrict `sheetMusicUrl` to a score filename, and stop fetching absolute or protocol-relative URLs in the player
+- [x] Validate `sheetMusicUrl` on the server when song config is saved
+- [x] Bounded `.mxl` unzip: cap entry count, declared and actual uncompressed size, and reject a missing root file
+- [ ] Hand muse-encore already-unzipped, size-checked MusicXML, so its unbounded `unzipSync` never sees untrusted archives
+- [x] Strip scripts, event handlers and `foreignObject` from the cloned clef strip SVG
+- [x] CSP already allows `worker-src 'self' blob:` and `font-src 'self' data:`, so no change was needed (it is still report-only; enforcing is a separate change)
+- [ ] Review the upstream diff on every muse-encore bump (it is about 600k lines, AI-assisted)
+
+## Phase 2: Spike and go/no-go
+
+- [ ] Render 3-4 real songs with muse-encore fit-width and compare with OSMD
+- [ ] Layout time on iPhone Safari under 1.5 s for a typical chart
+- [ ] `playalongMeasures` order matches `unfoldRepeats` on D.S. and coda songs
+- [ ] Find how to hide parts, so per-song hidden parts carry over
+- [ ] Decide: muse-encore, or fall back to an OSMD wrapped-systems renderer behind the same interface
+
+## Phase 3: Shared score position hook
+
+- [ ] Extract transport time to `{ playedIdx, writtenMeasure, fraction, jumped }` into `useScorePosition`
+- [ ] `ScrollingScore` uses the hook with no change in behavior
+
+## Phase 4: Page view renderer
+
+- [ ] `museEncoreEngine`: lazy load, fit-width layout, draw a region, measure bounds cache, measure hit test
+- [ ] Canvas per page, drawn only when visible, DPR-aware, tiled above a pixel cap
+- [ ] Re-layout on resize and rotation, keeping the reading position
+- [ ] Measure highlight and cursor line, snapping on repeats and jumps
+- [ ] Auto-follow with a lookahead, paused by user scroll or touch, resumed after idle or with a Follow button
+- [ ] Tap or click a measure to seek
+- [ ] Pinch and ctrl/⌘+wheel zoom
+- [ ] Optional inverted pages for dark mode
+
+## Phase 5: Full-screen overlay (desktop)
+
+- [ ] `ScoreFullView` overlay with focus trap and Escape to close
+- [ ] `CompactTransport`: compact waveform with loop handles, play/pause, A/B loop, speed, time
+- [ ] Keep the strip's playhead aligned to the main waveform, not the compact one
+- [ ] Expand button in the strip header and an `F` shortcut
+- [ ] Zoom, hidden parts, follow and invert settings in the overlay
+
+## Phase 6: Mobile
+
+- [ ] Sheet music button on phones that opens the page view
+- [ ] Larger default zoom (2-4 bars per system), dock in the thumb zone, safe-area insets
+- [ ] Re-layout on rotation
+- [ ] Screen Wake Lock while playing
+
+## Phase 7: Tests and docs
+
+- [ ] Tests for score position mapping, bounded unzip, `sheetMusicUrl` validation and the measure bounds cache
+- [ ] Page view section in the tech stack page, and refresh the stale sheet music items in `TODO.md`
