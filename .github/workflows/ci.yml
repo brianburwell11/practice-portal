@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # vendor/muse-encore (the sheet music engine) is a submodule; the
           # build compiles it. Not recursive: its own MuseScore submodule
