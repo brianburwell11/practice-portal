@@ -7,6 +7,7 @@ import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 import { measureStartTimes, currentMeasureIndex } from '../../audio/tempoUtils';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { r2Url } from '../../utils/url';
+import { SCORE_FILENAME } from '../../config/schema';
 import {
   loadSheetMusicSongState,
   saveSheetMusicSongState,
@@ -161,15 +162,14 @@ export function ScrollingScore() {
   const draggingRef = useRef(false);
   const suppressClickRef = useRef(false);
 
-  // Resolve the score URL. Following the rest of the codebase's R2 convention:
-  // the field in the song config is a *filename* (e.g. "score.musicxml") that
-  // lives alongside the song's other files at `{bandId}/songs/{songId}/`. If
-  // the caller already supplied an absolute URL (starts with "http" or "/"),
-  // we pass it through unchanged — useful for external hosting.
+  // Resolve the score URL. The field in the song config is a *filename*
+  // (e.g. "score.mxl") that lives alongside the song's other files at
+  // `{bandId}/songs/{songId}/`. Anything else (absolute or protocol-relative
+  // URLs, paths) is refused, so a song config can't point the player at
+  // another host.
   const sheetMusicUrl = useMemo(() => {
     const raw = song?.sheetMusicUrl;
-    if (!raw) return undefined;
-    if (/^https?:\/\//.test(raw) || raw.startsWith('/')) return raw;
+    if (!raw || !SCORE_FILENAME.test(raw)) return undefined;
     if (!currentBand || !song) return undefined;
     return r2Url(`${currentBand.id}/songs/${song.id}/${raw}`);
   }, [song, currentBand]);
@@ -277,6 +277,7 @@ export function ScrollingScore() {
     // Step 2: mount the clone and refine via DOM measurement.
     const clone = liveSvg.cloneNode(true) as SVGSVGElement;
     clone.querySelectorAll('[id*="cursor"], [id*="Cursor"]').forEach((el) => el.remove());
+    stripActiveSvgContent(clone);
     clone.style.display = 'block';
     preambleHost.replaceChildren(clone);
 
@@ -1039,6 +1040,25 @@ export function ScrollingScore() {
       </div>
     </div>
   );
+}
+
+/**
+ * The pinned clef strip is a copy of OSMD's SVG, which is built from an
+ * uploaded (untrusted) MusicXML file. OSMD only emits shapes and text, but as
+ * cheap insurance the copy is stripped of anything that could run or embed
+ * markup: scripts, foreignObject, event handlers and javascript: links.
+ */
+function stripActiveSvgContent(svg: SVGSVGElement): void {
+  svg.querySelectorAll('script, foreignObject, iframe, object, embed').forEach((el) => el.remove());
+  for (const el of [svg, ...Array.from(svg.querySelectorAll('*'))]) {
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const isLink = name === 'href' || name.endsWith(':href');
+      if (name.startsWith('on') || (isLink && !attr.value.trim().startsWith('#'))) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  }
 }
 
 /**

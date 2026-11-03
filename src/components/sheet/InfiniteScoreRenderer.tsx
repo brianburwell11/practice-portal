@@ -174,38 +174,17 @@ export function InfiniteScoreRenderer({
         er.PageRightMargin = 2;
         er.FixedMeasureWidth = !!equalBeatWidth;
 
-        // MXL files are ZIP archives (compressed MusicXML). We fetch as
-        // arrayBuffer, detect zip via the PK magic bytes, and — if zipped
-        // — unzip here so we can both (a) parse the inner XML ourselves
-        // for repeat-unfolding and (b) feed OSMD a plain XML string. Plain
-        // .xml / .musicxml files take the decode-as-UTF-8 path directly.
+        // MXL files are ZIP archives (compressed MusicXML). Uploaded files
+        // are untrusted, so `scoreBytesToXml` checks the archive's directory
+        // and caps the inflated size before anything reaches OSMD; it also
+        // handles plain .xml / .musicxml. The same XML text is parsed again
+        // below for repeat-unfolding.
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
         const buf = await res.arrayBuffer();
         if (cancelled) return;
-        const bytes = new Uint8Array(buf);
-        const isZip = bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b;
-        let xmlText: string;
-        if (isZip) {
-          // Dynamic-import JSZip so it only loads for MXL scores.
-          const JSZipMod = await import('jszip');
-          const JSZip = JSZipMod.default ?? JSZipMod;
-          const zip = await JSZip.loadAsync(buf);
-          const container = zip.file('META-INF/container.xml');
-          let rootPath: string | null = null;
-          if (container) {
-            const containerText = await container.async('string');
-            const cdoc = new DOMParser().parseFromString(containerText, 'application/xml');
-            rootPath = cdoc.querySelector('rootfile')?.getAttribute('full-path') ?? null;
-          }
-          const scoreFile = (rootPath && zip.file(rootPath))
-            || zip.file(/\.xml$/i)[0]
-            || null;
-          if (!scoreFile) throw new Error('No score XML inside MXL');
-          xmlText = await scoreFile.async('string');
-        } else {
-          xmlText = new TextDecoder('utf-8').decode(bytes);
-        }
+        const { scoreBytesToXml } = await import('../../utils/safeUnzip');
+        const xmlText = scoreBytesToXml(new Uint8Array(buf));
         if (cancelled) return;
         await osmd.load(xmlText);
         osmd.zoom = zoom;

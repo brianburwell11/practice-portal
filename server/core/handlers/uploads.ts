@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { SCORE_FILENAME } from '../../../src/config/schema';
 import { HttpError, json, ok } from '../http';
 import { assertR2Configured, r2PresignPut, r2PublicUrl, r2PutFile } from '../r2';
 import { MSCORE_MISSING_MESSAGE, convertScore, resolveMscoreBin } from '../media/musescore';
@@ -70,8 +71,8 @@ export async function msczConvertUpload(req: CoreRequest): Promise<CoreResponse>
   return ok({ filename });
 }
 
-/** A sheet-music file in a song's folder, as the app names them (`wiggle-sooza.mxl`). */
-export const SCORE_FILENAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\.(mxl|musicxml|xml|mscz)$/i;
+/** Re-exported for the server's other handlers; the pattern lives with the song schema. */
+export { SCORE_FILENAME };
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** What a score is stored and served as, by extension. */
