@@ -4,7 +4,6 @@ import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
 import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
-import { measureStartTimes, currentMeasureIndex } from '../../audio/tempoUtils';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { r2Url } from '../../utils/url';
 import { MSCZ_FILENAME, SCORE_FILENAME } from '../../config/schema';
@@ -13,6 +12,8 @@ import {
   saveSheetMusicSongState,
 } from '../../utils/sheetMusicSongStorage';
 import type { UnfoldedStep } from '../../audio/unfoldRepeats';
+import { firstPlayedIndex, PAST_END } from './scorePosition';
+import { useScorePosition } from './useScorePosition';
 import type { PartInfo, PreambleImage } from './EngravedStripRenderer';
 
 // Drawn by MuseScore's own engraving engine, loaded on demand.
@@ -53,14 +54,14 @@ const LEADING_PAD_PX = 180;
  *   - Playhead line is always rendered full-system height, 2 px wide,
  *     colored with a soft glow so it's visible with or without the bbox.
  *
- * Sync plumbing mirrors `LyricsDisplay`: we read `useTransportStore.position`
- * via a Zustand selector (no RAF loop) and update scroll / bbox state in a
- * useEffect on position change.
+ * Sync plumbing mirrors `LyricsDisplay`: `useScorePosition` reads the
+ * transport position via a Zustand selector (no RAF loop) and turns it into
+ * a measure and a fraction through it; scroll / bbox state follows in a
+ * useEffect on that.
  */
 export function ScrollingScore() {
   const song = useSongStore((s) => s.selectedSong);
   const currentBand = useBandStore((s) => s.currentBand);
-  const position = useTransportStore((s) => s.position);
   const playing = useTransportStore((s) => s.playing);
   const engine = useAudioEngine();
   const trackingMode = useSheetMusicStore((s) => s.trackingMode);
@@ -77,6 +78,7 @@ export function ScrollingScore() {
    *  Empty array when the score has no repeats (or the parser failed) —
    *  in that case callers fall back to `srcIdx = u`. */
   const [unfolded, setUnfolded] = useState<UnfoldedStep[]>([]);
+  const { measureTimes, scorePosition } = useScorePosition(unfolded, Math.max(0, measureXs.length - 1));
   const [scrollHost, setScrollHost] = useState<HTMLDivElement | null>(null);
   const [cursorPx, setCursorPx] = useState<number | null>(0);
   const [bbox, setBbox] = useState<{ leftPx: number; widthPx: number } | null>(null);
@@ -191,15 +193,6 @@ export function ScrollingScore() {
   }, [sheetMusicUrl, song, currentBand]);
 
 
-  // tapMap-based measure-start timeline
-  const measureTimes = useMemo(() => measureStartTimes(song?.tapMap), [song?.tapMap]);
-
-  // Audio offset: explicit field in song config, else the first measure-tap time
-  const audioOffset = useMemo(() => {
-    if (!song) return 0;
-    if (typeof song.audioOffsetSeconds === 'number') return song.audioOffsetSeconds;
-    return measureTimes[0] ?? 0;
-  }, [song, measureTimes]);
 
   const handleMeasureXs = useCallback((xs: number[]) => setMeasureXs(xs), []);
   const handleUnfoldedOrder = useCallback((steps: UnfoldedStep[]) => setUnfolded(steps), []);
@@ -384,63 +377,33 @@ export function ScrollingScore() {
   useEffect(() => {
     if (!scrollHost || measureXs.length < 2) return;
 
-    const t = position - audioOffset;
-
-    // `mIdx` is the UNFOLDED measure index — `measureTimes` comes from the
-    // tapMap, which is keyed to the unfolded audio (one entry per audible
-    // downbeat), so `currentMeasureIndex` returns `u` directly.
-    //
-    // For x-pixel math, resolve `u` through the unfold table to get
-    // the matching WRITTEN measure index (`srcIdx`). On scores without
-    // repeats `unfolded` is empty and `srcIdx === u`, which is the
-    // pre-existing behavior.
+    // `mIdx` is the PLAYED (unfolded) measure index, which the tapMap is
+    // keyed to; `srcIdx` is the WRITTEN measure it shows, which `measureXs`
+    // is keyed to (see `scorePosition.ts`).
     let mIdx = 0;
     let srcIdx = 0;
-    let srcIdxNext = 0;
     let cursorContentX: number;
-    // Number of measures the rendered score actually covers. For scores
-    // with repeats this is the unfolded length; without repeats it's the
-    // written-measure count (measureXs carries a trailing sentinel, so
-    // `length - 1` is the count). A tapMap with more entries than this
-    // advances `mIdx` past the score's last measure — we detect that and
-    // hide the playhead/bbox instead of letting the cursor math wrap.
-    const scoreMeasureCount = unfolded.length > 0
-      ? unfolded.length
-      : Math.max(0, measureXs.length - 1);
-    if (measureTimes.length >= 2) {
-      mIdx = currentMeasureIndex(t + audioOffset, measureTimes);
-      if (mIdx >= scoreMeasureCount) {
-        // Past the end of the rendered score. Leave scroll where it is,
-        // hide the playhead, and drop the window-mode bbox. Without this
-        // guard `measureXs[srcIdx]` is undefined and the `?? 0` fallback
-        // snaps the playhead to x = 0 (i.e. the top of the song).
-        pastEndRef.current = true;
-        setCursorPx(null);
-        setBbox(null);
-        measureRangeRef.current = null;
-        setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX + preambleOffsetRef.current - scrollHost.scrollLeft));
-        return;
-      }
+    if (scorePosition === PAST_END) {
+      // Past the end of the rendered score (the tapMap has more measures
+      // than the score). Leave scroll where it is, hide the playhead, and
+      // drop the window-mode bbox, rather than snapping to the top.
+      pastEndRef.current = true;
+      setCursorPx(null);
+      setBbox(null);
+      measureRangeRef.current = null;
+      setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX + preambleOffsetRef.current - scrollHost.scrollLeft));
+      return;
+    }
+    if (scorePosition) {
       pastEndRef.current = false;
-      const step = unfolded.length > 0 ? unfolded[mIdx] : undefined;
-      srcIdx = step?.srcIndex ?? mIdx;
-      const nextStep = unfolded.length > 0 ? unfolded[mIdx + 1] : undefined;
-      srcIdxNext = nextStep?.srcIndex ?? (mIdx + 1);
-      const t0 = measureTimes[mIdx];
-      const t1 = measureTimes[mIdx + 1] ?? t0 + 1;
-      const frac = Math.max(0, Math.min(1, (t + audioOffset - t0) / Math.max(0.001, t1 - t0)));
+      mIdx = scorePosition.playedIndex;
+      srcIdx = scorePosition.writtenIndex;
+      // Slide across the current written measure, to its closing barline.
+      // On a repeat or jump the cursor then snaps to the next played measure
+      // at its downbeat, instead of sliding through the music in between.
       const x0 = measureXs[srcIdx] ?? 0;
-      // If the next unfolded measure is a jump target (repeat back,
-      // D.C., D.S., coda, or volta skip), don't lerp across the gap —
-      // that would slide the playhead visibly backward or forward
-      // through the current bar. Instead, lerp to the END of the
-      // current written measure; the snap to the jump destination
-      // happens discontinuously at the next measure onset.
-      const isJump = srcIdxNext !== srcIdx + 1;
-      const x1 = isJump
-        ? (measureXs[srcIdx + 1] ?? x0)
-        : (measureXs[srcIdxNext] ?? x0);
-      cursorContentX = x0 + frac * (x1 - x0);
+      const x1 = measureXs[srcIdx + 1] ?? x0;
+      cursorContentX = x0 + scorePosition.fraction * (x1 - x0);
     } else {
       // No tapMap measures: fall back to the first measure's x and freeze
       cursorContentX = measureXs[0] ?? 0;
@@ -587,7 +550,7 @@ export function ScrollingScore() {
     // anyway (the natural preamble is already visible).
     setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX + preambleOffsetRef.current - scrollHost.scrollLeft));
   }, [
-    position, audioOffset, scrollHost, measureXs, measureTimes,
+    scorePosition, scrollHost, measureXs,
     trackingMode, windowAnchor, resizeTick, playing, unfolded,
   ]);
 
@@ -630,14 +593,9 @@ export function ScrollingScore() {
           const contentX = scrollHost.scrollLeft + focusLeftPxRef.current;
           const writtenIdx = findMeasureAtX(contentX, xs);
           // resumeAtMeasureRef and lockedAnchorRef are compared against
-          // `mIdx` (UNFOLDED index) in the sync effect, so convert the
-          // clicked WRITTEN measure to its first unfolded occurrence.
-          const uf = unfoldedRef.current;
-          let unfoldedIdx = writtenIdx;
-          if (uf.length > 0) {
-            const first = uf.findIndex((s) => s.srcIndex === writtenIdx);
-            if (first >= 0) unfoldedIdx = first;
-          }
+          // `mIdx` (PLAYED index) in the sync effect, so convert the
+          // scrolled-to WRITTEN measure to its first played occurrence.
+          const unfoldedIdx = firstPlayedIndex(writtenIdx, unfoldedRef.current);
           resumeAtMeasureRef.current = unfoldedIdx;
           if (trackingModeRef.current === 'window') lockedAnchorRef.current = unfoldedIdx;
         }
@@ -695,16 +653,11 @@ export function ScrollingScore() {
       const contentX = (e.clientX - hostRect.left) + scrollHost.scrollLeft;
       const writtenIdx = findMeasureAtX(contentX, xs);
       // `findMeasureAtX` returns a WRITTEN measure index. `times` is
-      // keyed in UNFOLDED order (one entry per audible downbeat), so we
-      // need to resolve the click to the first unfolded occurrence of
-      // that written measure — otherwise clicking m.9 on a score with
-      // repeats seeks to the 9th *unfolded* measure, which is usually
-      // not m.9 at all.
-      let unfoldedIdx = writtenIdx;
-      if (uf.length > 0) {
-        const first = uf.findIndex((s) => s.srcIndex === writtenIdx);
-        if (first >= 0) unfoldedIdx = first;
-      }
+      // keyed in PLAYED order (one entry per audible downbeat), so resolve
+      // the click to the first played occurrence of that written measure;
+      // otherwise clicking m.9 on a score with repeats seeks to the 9th
+      // *played* measure, which is usually not m.9 at all.
+      const unfoldedIdx = firstPlayedIndex(writtenIdx, uf);
       const mIdx = Math.max(0, Math.min(unfoldedIdx, times.length - 1));
       engineRef.current?.seek(times[mIdx]);
     };

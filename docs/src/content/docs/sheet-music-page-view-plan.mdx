@@ -64,8 +64,10 @@ The strip is drawn by muse-encore too, in MuseScore's continuous view (the whole
 
 ## Phase 3: Shared score position hook
 
-- [ ] Extract transport time to `{ playedIdx, writtenMeasure, fraction, jumped }` into `useScorePosition`
-- [ ] `ScrollingScore` uses the hook with no change in behavior
+- [x] Extract the position math into `scorePosition.ts` (pure: `scorePositionAt` gives `{ playedIndex, writtenIndex, fraction, jumpsNext }`, or past the end; `firstPlayedIndex` maps a written measure to its first time through) and `useScorePosition.ts` (the hook: transport position and the song's tapMap)
+- [x] `ScrollingScore` uses the hook. Checked against the old inline math on 200,000 random cases (repeats, jumps, tapMaps longer or shorter than the score, missing barlines): identical
+- [x] Two simplifications that change nothing: the cursor always slides to the current written measure's closing barline (the old jump branch always reached the same value), and `audioOffset` is gone from the strip (it was added and subtracted again)
+- [ ] Check in the browser: karaoke and windowed scrolling, repeats and D.S./coda, click to seek, scrolling ahead during playback
 
 ## Phase 4: Page view renderer
 
