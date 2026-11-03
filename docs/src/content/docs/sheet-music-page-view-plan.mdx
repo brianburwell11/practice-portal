@@ -30,11 +30,23 @@ Found while reviewing the current sheet music path and muse-encore.
 
 ## Phase 2: Spike and go/no-go
 
-- [ ] Render 3-4 real songs with muse-encore fit-width and compare with OSMD
+muse-encore is vendored as a git submodule at `vendor/muse-encore`, pinned to `3eadb65`. Vite compiles its TypeScript through a `muse-encore` alias, and `tsc` only sees the hand-written declarations in `src/types/muse-encore.d.ts`, because our compiler settings reject its enums. Its only npm dependencies are `fflate` and `opentype.js` (both MIT, pinned to its versions). A dev-only **pages (spike)** button in the score panel opens the render.
+
+- [x] Vendor the library and wrap it (`src/components/sheet/page/museEncoreEngine.ts`): lazy load, fit-width layout, region drawing, measure rectangles in written order
+- [x] Node smoke test on the docs samples: `Wiggle.mxl` (93 measures, 6 parts) imports in 263 ms, lays out in 605 ms and re-lays out at a new width in 249 ms on a desktop, with bounds for every measure
+- [x] Repeat order: muse-encore matches `unfold` on `Wiggle.mxl`, but on `roadmap-test.mxl` its MusicXML import drops the D.S. al Coda jump. **Decision: the cursor keeps using our `unfold`** (which also has the per-song `repeatAfterDcDs` setting) and takes only measure positions from muse-encore
+- [x] Compare engraving with OSMD on real songs: re-laying out **MusicXML** is only a little better than OSMD, because MusicXML doesn't carry MuseScore's breaks, spacing, style or manual adjustments
+- [x] **Render the original `.mscz` instead.** Our bounded reader extracts only the root `.mscx`, `score_style.mss` and `Pictures/*`, re-zips them uncompressed, and hands that to `loadScore`, so muse-encore never unzips an uploaded archive. Tested on `Wiggle - SOOZA.mscz`, `roadmap-test.mscz` and *Coco* (120 measures, 15 pages: load 44 ms, page layout 392 ms). Measure counts match the `.mxl` exactly, and the native file's repeat order matches `unfold`, D.S. al Coda included
+- [x] Exactness check on *Coco* page 1 against MuseScore 4.7.6's own export (300 dpi, rasterized in Chrome): every staff, note, beam, barline and system is in the same place. Two gaps:
+  - fonts the score names that muse-encore doesn't bundle (the title's **Bebas Neue**) fall back to a substitute
+  - the `$M` (last modified date) footer macro prints `YYYY-MM-DD`
+- [ ] Keep the original `.mscz` on upload, next to the `.mxl` (the strip and `unfold` keep using the `.mxl`)
+- [ ] Register extra fonts the scores use (self-hosted, OFL), and warn on upload when a score names a font the app doesn't have
+- [ ] Fill in `$M` from the file's modified date, recorded at upload
 - [ ] Layout time on iPhone Safari under 1.5 s for a typical chart
-- [ ] `playalongMeasures` order matches `unfoldRepeats` on D.S. and coda songs
-- [ ] Find how to hide parts, so per-song hidden parts carry over
-- [ ] Decide: muse-encore, or fall back to an OSMD wrapped-systems renderer behind the same interface
+- [ ] Font cost: every font and style file (16.4 MB) loads on first open, including six music fonts we don't use. Measure on a phone; trimming it means patching the loader
+- [ ] Check that hiding parts (part show flags) carries over the strip's hidden parts
+- [x] Decide: muse-encore, rendering the `.mscz` when a song has one (exact pages on desktop, reflowed to the screen width on phones) and the `.mxl` otherwise. Existing songs get their `.mscz` by re-uploading in Edit Song
 
 ## Phase 3: Shared score position hook
 
