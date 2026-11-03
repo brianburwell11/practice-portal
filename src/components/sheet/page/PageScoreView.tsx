@@ -3,7 +3,6 @@ import { parseMusicXML, unfold, type MusicXMLStructure, type UnfoldedStep } from
 import { useAudioEngine } from '../../../hooks/useAudioEngine';
 import { useSheetMusicStore } from '../../../store/sheetMusicStore';
 import { useTransportStore } from '../../../store/transportStore';
-import { loadSheetMusicSongState } from '../../../utils/sheetMusicSongStorage';
 import { firstPlayedIndex, PAST_END, writtenOf } from '../scorePosition';
 import { useScorePosition } from '../useScorePosition';
 import { fetchSongScore, ScoreEngine, scorePartIds, type MeasureRect, type SongScoreFiles } from './museEncoreEngine';
@@ -28,8 +27,8 @@ export type PageLayoutMode = 'auto' | 'page' | 'fit-width';
 
 interface Props {
   files: SongScoreFiles;
-  /** For the saved hidden parts. */
-  songId: string;
+  /** MusicXML ids of the parts not to show (the strip's selection). */
+  hiddenPartIds?: ReadonlySet<string>;
   repeatAfterDcDs?: boolean;
   /** 'page': MuseScore's own pages. 'fit-width': re-wrapped to the screen. 'auto': pages unless narrow. */
   layoutMode?: PageLayoutMode;
@@ -79,7 +78,7 @@ interface Anchor {
  * The cursor comes from the same `useScorePosition` as the scrolling strip,
  * so the two always agree.
  */
-export function PageScoreView({ files, songId, repeatAfterDcDs = false, layoutMode = 'auto' }: Props) {
+export function PageScoreView({ files, hiddenPartIds, repeatAfterDcDs = false, layoutMode = 'auto' }: Props) {
   const audio = useAudioEngine();
   const playing = useTransportStore((s) => s.playing);
   const zoom = useSheetMusicStore((s) => s.pageZoom);
@@ -90,6 +89,10 @@ export function PageScoreView({ files, songId, repeatAfterDcDs = false, layoutMo
   const pagesLayerRef = useRef<HTMLDivElement | null>(null);
   const zoomLayerRef = useRef<HTMLDivElement | null>(null);
   const structureRef = useRef<MusicXMLStructure | null>(null);
+  /** The score's MusicXML part ids, in instrument order. */
+  const partIdsRef = useRef<string[]>([]);
+  /** Bumped when hidden parts change the layout. */
+  const [partsLayout, setPartsLayout] = useState(0);
 
   const [engine, setEngine] = useState<ScoreEngine | null>(null);
   const [unfolded, setUnfolded] = useState<UnfoldedStep[]>([]);
@@ -141,13 +144,7 @@ export function PageScoreView({ files, songId, repeatAfterDcDs = false, layoutMo
         }
         const e = await ScoreEngine.open(source, { mode: 'page' });
         if (cancelled) return;
-        // The parts hidden in the strip are hidden here too.
-        const saved = loadSheetMusicSongState(songId)?.hiddenPartIds ?? [];
-        if (saved.length > 0) {
-          const ids = scorePartIds(xml);
-          const hidden = new Set(ids.flatMap((id, i) => (saved.includes(id) ? [i] : [])));
-          if (hidden.size < e.parts().length) e.setHiddenParts(hidden);
-        }
+        partIdsRef.current = scorePartIds(xml);
         setEngine(e);
         setStatus('ready');
       } catch (err) {
@@ -159,7 +156,23 @@ export function PageScoreView({ files, songId, repeatAfterDcDs = false, layoutMo
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filesKey, songId]);
+  }, [filesKey]);
+
+  // Show only the parts not hidden (at least one always stays).
+  const hiddenKey = hiddenPartIds ? Array.from(hiddenPartIds).sort().join('|') : '';
+  useEffect(() => {
+    if (!engine) return;
+    const count = engine.parts().length;
+    const ids = partIdsRef.current;
+    const hidden = new Set<number>();
+    for (let i = 0; i < count; i++) {
+      const id = ids.length === count ? ids[i] : `P${i + 1}`;
+      if (hiddenPartIds?.has(id)) hidden.add(i);
+    }
+    if (hidden.size >= count) hidden.clear();
+    if (engine.setHiddenParts(hidden)) setPartsLayout((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, hiddenKey]);
 
   // Re-run the unfold when the per-song repeat setting flips.
   useEffect(() => {
@@ -216,7 +229,7 @@ export function PageScoreView({ files, songId, repeatAfterDcDs = false, layoutMo
       if (old && !anchorRef.current) anchorRef.current = anchorAt(old, viewport.scrollTop, viewport.scrollTop);
       return { mode, scale, pages, width: contentWidth, height: y, measures };
     });
-  }, [engine, width, zoom, layoutMode]);
+  }, [engine, width, zoom, layoutMode, partsLayout]);
 
   // After a re-layout, put the measure that was in view back where it was.
   useLayoutEffect(() => {

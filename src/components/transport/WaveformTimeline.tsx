@@ -24,7 +24,16 @@ const DEFAULT_MOBILE_VIEW = 30;
 /** Default zoom level in seconds for desktop (songs > 2.5 min start zoomed) */
 const DEFAULT_DESKTOP_VIEW = 150;
 
-export function WaveformTimeline() {
+interface WaveformTimelineProps {
+  /**
+   * A short waveform for a docked transport (the full-screen score). It isn't
+   * marked as *the* waveform: notes, lyrics and the scrolling score line up on
+   * the main one, found by `data-waveform-timeline`.
+   */
+  compact?: boolean;
+}
+
+export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}) {
   const engine = useAudioEngine();
   const { position, duration, loopA, loopB, loopEnabled, followPlayhead, setFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
@@ -1093,8 +1102,8 @@ export function WaveformTimeline() {
       {/* Main waveform */}
       <div
         ref={containerRef}
-        data-waveform-timeline
-        className="h-[80px] md:h-[108px] relative rounded overflow-hidden"
+        data-waveform-timeline={compact ? undefined : true}
+        className={`${compact ? 'h-[44px]' : 'h-[80px] md:h-[108px]'} relative rounded overflow-hidden`}
         style={{ cursor: cursorStyle, touchAction: 'none' }}
       >
         <canvas

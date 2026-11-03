@@ -88,11 +88,15 @@ The strip is drawn by muse-encore too, in MuseScore's continuous view (the whole
 
 ## Phase 5: Full-screen overlay (desktop)
 
-- [ ] `ScoreFullView` overlay with focus trap and Escape to close
-- [ ] `CompactTransport`: compact waveform with loop handles, play/pause, A/B loop, speed, time
-- [ ] Keep the strip's playhead aligned to the main waveform, not the compact one
-- [ ] Expand button in the strip header and an `F` shortcut
-- [ ] Zoom, hidden parts, follow and invert settings in the overlay
+- [x] `ScoreFullView`: the page view full screen (a portal dialog), with a toolbar (layout, zoom, dark pages, parts, close) and a compact transport docked at the bottom
+- [x] Escape closes it and focus goes back to the expand button; focus stays inside while open. It doesn't swallow keys, so the player's shortcuts (space, loop keys) still work, which is why it isn't built on the shared `Modal`
+- [x] `CompactTransport`: stop, play, the A/B loop, a short waveform (seek, drag loops) and time plus measure|beat; bigger buttons and long-press to stop on touch screens
+- [x] Shared transport pieces instead of copies: `StopButton`, `PlayPauseButton`, `LoopButton` (`TransportButtons.tsx`), `formatTime`, `measureBeatAt`; `TransportBar` uses them too
+- [x] `WaveformTimeline compact`: shorter, and not marked `data-waveform-timeline`, so notes, lyrics and the strip keep lining up on the main waveform
+- [x] Expand button in the strip header and an `F` shortcut (toggles; ignored while typing or with modifier keys); replaces the dev preview
+- [x] `PartsMenu` pulled out of the strip and shared; hidden parts change live in both views
+- [x] Safe-area padding for the notch and home indicator
+- [x] Checked in the browser
 
 ## Phase 6: Mobile
 

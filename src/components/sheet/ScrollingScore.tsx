@@ -15,14 +15,13 @@ import type { UnfoldedStep } from '../../audio/unfoldRepeats';
 import { firstPlayedIndex, PAST_END } from './scorePosition';
 import { useScorePosition } from './useScorePosition';
 import type { PartInfo, PreambleImage } from './EngravedStripRenderer';
+import { PartsMenu } from './PartsMenu';
 
 // Drawn by MuseScore's own engraving engine, loaded on demand.
 const EngravedStripRenderer = lazy(() => import('./EngravedStripRenderer').then((m) => ({ default: m.EngravedStripRenderer })));
 
-// TEMPORARY (dev only, until the full-screen overlay): the page view in a panel.
-const PagePreview = import.meta.env.DEV
-  ? lazy(() => import('./page/PagePreview').then((m) => ({ default: m.PagePreview })))
-  : null;
+// Sheet music full screen (the page view with a docked transport), loaded when opened.
+const ScoreFullView = lazy(() => import('./page/ScoreFullView').then((m) => ({ default: m.ScoreFullView })));
 
 /** Pixels to nudge the left focus point right of the waveform's left edge.
  *  Keep in sync with the same constant in `LyricsDisplay.tsx` so the
@@ -114,13 +113,30 @@ export function ScrollingScore() {
   const [parts, setParts] = useState<PartInfo[]>([]);
   /** Subset of part ids the user has hidden. Empty = show all. */
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(new Set());
-  const [partsMenuOpen, setPartsMenuOpen] = useState(false);
-  const [pagePreviewOpen, setPagePreviewOpen] = useState(false);
-  /** Pending checkbox state inside the open dropdown. Changes don't apply
-   *  until the user hits the apply button — closing the menu any other way
-   *  discards them. Synced from `hiddenPartIds` on each open. */
-  const [draftHiddenPartIds, setDraftHiddenPartIds] = useState<Set<string>>(new Set());
-  const partsMenuRef = useRef<HTMLDivElement | null>(null);
+  const [fullViewOpen, setFullViewOpen] = useState(false);
+  const fullViewOpenRef = useRef(false);
+  useEffect(() => { fullViewOpenRef.current = fullViewOpen; }, [fullViewOpen]);
+  const expandButtonRef = useRef<HTMLButtonElement | null>(null);
+  const closeFullView = useCallback(() => {
+    setFullViewOpen(false);
+    // Give focus back to what opened it.
+    requestAnimationFrame(() => expandButtonRef.current?.focus());
+  }, []);
+  // F opens or closes it (not while typing, and not with modifier keys).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'f' && e.key !== 'F') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return;
+      if (t instanceof HTMLElement && t.isContentEditable) return;
+      e.preventDefault();
+      if (fullViewOpenRef.current) closeFullView();
+      else setFullViewOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeFullView]);
   /** Gear-panel open state + click-outside container ref. */
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const settingsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -217,35 +233,6 @@ export function ScrollingScore() {
     return s;
   }, [parts, hiddenPartIds]);
 
-  const toggleDraftPart = useCallback((id: string) => {
-    setDraftHiddenPartIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-        return next;
-      }
-      // At least one part stays visible: refuse to hide the last one
-      // instead of silently keeping it visible.
-      const remainingVisible = parts.length - next.size - 1;
-      if (remainingVisible < 1) return prev;
-      next.add(id);
-      return next;
-    });
-  }, [parts.length]);
-
-  const applyPartsDraft = useCallback(() => {
-    setHiddenPartIds(new Set(draftHiddenPartIds));
-    setPartsMenuOpen(false);
-  }, [draftHiddenPartIds]);
-
-  // True when the draft and committed selections diverge. Drives the
-  // apply button's enabled + highlighted state.
-  const draftDiffers = useMemo(() => {
-    if (draftHiddenPartIds.size !== hiddenPartIds.size) return true;
-    for (const id of draftHiddenPartIds) if (!hiddenPartIds.has(id)) return true;
-    return false;
-  }, [draftHiddenPartIds, hiddenPartIds]);
-
   // Mount the renderer's preamble image in the sticky overlay.
   useEffect(() => {
     if (!preambleHost) return;
@@ -277,7 +264,6 @@ export function ScrollingScore() {
   useEffect(() => {
     setParts([]);
     setHiddenPartIds(new Set());
-    setPartsMenuOpen(false);
     setUnfolded([]);
     const songId = song?.id;
     const saved = songId ? loadSheetMusicSongState(songId) : null;
@@ -302,20 +288,7 @@ export function ScrollingScore() {
     return () => clearTimeout(handle);
   }, [song?.id, hiddenPartIds, parts.length]);
 
-  // Close the parts dropdown when clicking outside it
-  useEffect(() => {
-    if (!partsMenuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      const el = partsMenuRef.current;
-      if (el && !el.contains(e.target as Node)) setPartsMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [partsMenuOpen]);
-
   // Close the settings (gear) dropdown when clicking outside it.
-  // Same pattern as the parts menu — independent state + ref so both can
-  // close on their own outside-click without interfering with each other.
   useEffect(() => {
     if (!settingsMenuOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -325,12 +298,6 @@ export function ScrollingScore() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [settingsMenuOpen]);
-
-  // Sync the dropdown's draft checkboxes from the committed selection
-  // whenever the menu opens, so a prior unapplied draft can't leak in.
-  useEffect(() => {
-    if (partsMenuOpen) setDraftHiddenPartIds(new Set(hiddenPartIds));
-  }, [partsMenuOpen, hiddenPartIds]);
 
   // Track scroll-host + waveform sizes so the window-bars-per-page
   // calculation updates on browser resize / device rotation / layout shift.
@@ -758,72 +725,34 @@ export function ScrollingScore() {
           scroll with it — it's a sibling of the scroll host, not a
           child. */}
         <div className="absolute top-1 right-1 z-20 flex items-center gap-1 text-xs">
-          {PagePreview && (
+          {scoreFiles && song && (
             <button
-              onClick={() => setPagePreviewOpen(true)}
-              className="px-2 py-0.5 rounded bg-amber-700 text-white hover:bg-amber-600"
-              title="Dev only: try the page view"
+              ref={expandButtonRef}
+              onClick={() => setFullViewOpen(true)}
+              className="flex items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+              title="Full screen sheet music (F)"
+              aria-label="Full screen sheet music"
             >
-              pages (preview)
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
             </button>
           )}
-          {PagePreview && pagePreviewOpen && scoreFiles && song && (
+          {fullViewOpen && scoreFiles && song && (
             <Suspense fallback={null}>
-              <PagePreview
+              <ScoreFullView
+                title={song.title}
                 files={scoreFiles}
-                songId={song.id}
+                parts={parts}
+                hiddenPartIds={hiddenPartIds}
+                onHiddenPartIdsChange={setHiddenPartIds}
                 repeatAfterDcDs={song.repeatAfterDcDs ?? false}
-                onClose={() => setPagePreviewOpen(false)}
+                onClose={closeFullView}
               />
             </Suspense>
           )}
-          {parts.length > 0 && (
-            <div ref={partsMenuRef} className="relative">
-              <button
-                onClick={() => setPartsMenuOpen((v) => !v)}
-                className={`px-2 py-0.5 rounded ${hiddenPartIds.size > 0 ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                title="Pick which instrument parts to display"
-              >
-                parts ({parts.length - hiddenPartIds.size}/{parts.length})
-              </button>
-              {partsMenuOpen && (
-                <div
-                  className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded border border-gray-700 bg-gray-900 p-1 shadow-lg"
-                  role="menu"
-                >
-                  {parts.map((p) => {
-                    const on = !draftHiddenPartIds.has(p.id);
-                    const isLastVisible = on && parts.length - draftHiddenPartIds.size <= 1;
-                    return (
-                      <label
-                        key={p.id}
-                        className={`flex items-center gap-2 rounded px-2 py-1 text-gray-200 ${isLastVisible ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-800'}`}
-                        title={isLastVisible ? 'At least one part must stay visible' : undefined}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          disabled={isLastVisible}
-                          onChange={() => toggleDraftPart(p.id)}
-                        />
-                        <span className="truncate">{p.name}</span>
-                      </label>
-                    );
-                  })}
-                  <div className="mt-1 border-t border-gray-700 pt-1">
-                    <button
-                      onClick={applyPartsDraft}
-                      disabled={!draftDiffers}
-                      className={`w-full rounded px-2 py-1 text-xs ${draftDiffers ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
-                      title="Apply the part selection and redraw the score"
-                    >
-                      apply
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <PartsMenu parts={parts} hiddenPartIds={hiddenPartIds} onApply={setHiddenPartIds} />
           <div ref={settingsMenuRef} className="relative">
             <button
               onClick={() => setSettingsMenuOpen((v) => !v)}

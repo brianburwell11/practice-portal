@@ -1,21 +1,17 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
 import { useLyricsStore } from '../../store/lyricsStore';
-import { useLongPress } from '../../hooks/useLongPress';
 import { WaveformTimeline } from './WaveformTimeline';
 import { MasterSliders } from './MasterSliders';
 import { Skeleton } from '../ui/Loading';
+import { formatTime } from '../../utils/formatTime';
+import { measureBeatAt } from '../../audio/tempoUtils';
+import { LoopButton, PlayPauseButton, StopButton } from './TransportButtons';
 
 import type { TapMapEntry } from '../../audio/types';
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
 
 function parseTimeDigits(digits: string): number | null {
   if (!digits) return null;
@@ -31,22 +27,6 @@ function formatTimeInput(digits: string): string {
   const s = padded.slice(-2);
   const m = padded.slice(0, -2) || '0';
   return `${parseInt(m, 10)}:${s}`;
-}
-
-function getMeasureBeat(tapMap: TapMapEntry[] | undefined, position: number): { measure: number; beat: number } | null {
-  if (!tapMap || tapMap.length === 0) return null;
-  let measure = 0;
-  let beat = 0;
-  for (const entry of tapMap) {
-    if (entry.time > position) break;
-    if (entry.type === 'section' || entry.type === 'measure') {
-      measure++;
-      beat = 1;
-    } else {
-      beat++;
-    }
-  }
-  return measure > 0 ? { measure, beat } : null;
 }
 
 function measureBeatToTime(tapMap: TapMapEntry[] | undefined, targetMeasure: number, targetBeat: number): number | null {
@@ -147,37 +127,6 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
   const [beatEditValue, setBeatEditValue] = useState('');
   const [editingTime, setEditingTime] = useState(false);
   const [timeEditValue, setTimeEditValue] = useState('');
-  const handleLoopTap = useCallback(() => {
-    if (loopA !== null && loopB !== null) {
-      engine.setLoopEnabled(!loopEnabled);
-    } else if (loopA !== null) {
-      engine.setLoop(loopA, position);
-    } else {
-      engine.setLoop(position, null);
-    }
-  }, [engine, loopA, loopB, loopEnabled, position]);
-
-  const handleLoopDoubleTap = useCallback(() => {
-    engine.clearLoop();
-  }, [engine]);
-
-  const loopHandlers = useLongPress(handleLoopTap, handleLoopDoubleTap);
-  /** The loop button's tooltip and accessible name. `verb` is click or tap. */
-  const loopLabel = (verb: string) =>
-    loopA !== null && loopB !== null
-      ? `Loop ${formatTime(loopA)} – ${formatTime(loopB)}${loopEnabled ? '' : ' (off)'}. ${verb} to turn ${loopEnabled ? 'off' : 'on'}, long-press to clear.`
-      : loopA !== null
-        ? `Loop starts at ${formatTime(loopA)}. ${verb} to set where it ends.`
-        : 'Set where the loop starts';
-
-  const handlePlayPauseTap = useCallback(() => {
-    playing ? engine.pause() : engine.play();
-  }, [engine, playing]);
-  const handlePlayPauseLongPress = useCallback(() => {
-    engine.stop();
-  }, [engine]);
-  const playPauseHandlers = useLongPress(handlePlayPauseTap, handlePlayPauseLongPress);
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -248,42 +197,9 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
       <div className="hidden md:flex md:flex-col md:gap-1 md:shrink-0">
         {/* Transport buttons — centered over sliders */}
         <div className="flex items-center justify-center gap-2">
-          <button
-            className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-lg transition-colors"
-            disabled={disabled}
-            onClick={() => engine.stop()}
-            title="Stop"
-            aria-label="Stop"
-          >
-            &#9632;
-          </button>
-          <button
-            className="w-10 h-10 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-lg transition-colors"
-            disabled={disabled}
-            onClick={() => (playing ? engine.pause() : engine.play())}
-            title={playing ? 'Pause' : 'Play'}
-            aria-label={playing ? 'Pause' : 'Play'}
-          >
-            {playing ? '\u2759\u2759' : '\u25B6'}
-          </button>
-          <button
-            className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              loopA !== null && loopB !== null
-                ? loopEnabled
-                  ? 'bg-yellow-500 hover:bg-yellow-400 text-gray-900'
-                  : 'bg-yellow-500/40 hover:bg-yellow-500/50 text-yellow-200'
-                : loopA !== null
-                  ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
-                  : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-            }`}
-            disabled={disabled}
-            {...loopHandlers}
-            title={loopLabel('Click')}
-            aria-label={loopLabel('Click')}
-            aria-pressed={loopA !== null && loopB !== null ? loopEnabled : undefined}
-          >
-            &#x21BB;
-          </button>
+          <StopButton />
+          <PlayPauseButton />
+          <LoopButton verb="Click" />
         </div>
 
         {/* Volume + Speed sliders */}
@@ -332,7 +248,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
           {(() => {
             const hasTapMap = selectedSong?.tapMap && selectedSong.tapMap.length > 0;
             if (!hasTapMap) return null;
-            const mb = getMeasureBeat(selectedSong?.tapMap, position);
+            const mb = measureBeatAt(selectedSong?.tapMap, position);
             const measure = mb?.measure ?? 0;
             const beat = mb?.beat ?? 0;
 
@@ -426,33 +342,8 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
 
       {/* Mobile: transport buttons (row 2) */}
       <div className="flex items-center justify-center gap-2 mt-2 md:hidden">
-        <button
-          className="w-12 h-12 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-lg transition-colors"
-          disabled={disabled}
-          {...playPauseHandlers}
-          title={playing ? 'Pause (long-press to stop)' : 'Play (long-press to stop)'}
-          aria-label={playing ? 'Pause' : 'Play'}
-        >
-          {playing ? '\u2759\u2759' : '\u25B6'}
-        </button>
-        <button
-          className={`w-12 h-12 rounded-lg flex items-center justify-center text-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-            loopA !== null && loopB !== null
-              ? loopEnabled
-                ? 'bg-yellow-500 hover:bg-yellow-400 text-gray-900'
-                : 'bg-yellow-500/40 hover:bg-yellow-500/50 text-yellow-200'
-              : loopA !== null
-                ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-          }`}
-          disabled={disabled}
-          {...loopHandlers}
-          title={loopLabel('Tap')}
-          aria-label={loopLabel('Tap')}
-          aria-pressed={loopA !== null && loopB !== null ? loopEnabled : undefined}
-        >
-          &#x21BB;
-        </button>
+        <PlayPauseButton size="lg" longPressStops />
+        <LoopButton size="lg" verb="Tap" />
         {/* Mobile controls toggle — shows/hides mixer + volume/speed sliders below lyrics */}
         <button
           className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
@@ -543,7 +434,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
           {(() => {
             const hasTapMap = selectedSong?.tapMap && selectedSong.tapMap.length > 0;
             if (!hasTapMap) return null;
-            const mb = getMeasureBeat(selectedSong?.tapMap, position);
+            const mb = measureBeatAt(selectedSong?.tapMap, position);
             const measure = mb?.measure ?? 0;
             const beat = mb?.beat ?? 0;
             const startMeasureEdit = () => {
