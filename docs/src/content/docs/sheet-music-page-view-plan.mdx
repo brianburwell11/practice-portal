@@ -111,5 +111,12 @@ The strip is drawn by muse-encore too, in MuseScore's continuous view (the whole
 
 ## Phase 7: Tests and docs
 
-- [ ] Tests for score position mapping, bounded unzip, `sheetMusicUrl` validation and the measure bounds cache
-- [ ] Page view section in the tech stack page, and refresh the stale sheet music items in `TODO.md`
+- [x] Vitest 5 (`npm test`) with its own `vitest.config.ts` (happy-dom for `DOMParser`), so tests never load the API plugin or touch the database
+- [x] `scorePosition.test.ts`: positions, repeats and jumps, past the end, and the old strip cursor math kept as a reference and compared on 20,000 random cases
+- [x] `safeUnzip.test.ts`: a valid `.mxl`, plain XML, a zip bomb, a bomb whose header lies about its size, too many entries, a truncated file, no score, and the total cap on `.mscz` entries
+- [x] `schema.test.ts`: score filenames kept, and URLs, paths and protocol-relative links (`//evil.example/x.mxl`) dropped
+- [x] `continuousPanelPlacement.test.ts`: the sticky panel rides with the header, pins, never reaches the playhead, and cuts off the names when too wide (placement moved into its own module for this)
+- [x] `unfoldRepeats.test.ts`: the docs' sample scores, including repeats, voltas and D.S. al Coda
+- [x] Checked that the tests catch breakage: disabling the inflate limit or nudging the cursor math fails them
+- [x] `tech-stack.mdx` rewritten for MuseScore engraving, the page view and phones; `TODO.md` section 6 refreshed
+- Not covered: the measure-position cache needs muse-encore's fonts in the test runner; it's checked by the Node smoke tests in this plan instead

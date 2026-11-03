@@ -33,9 +33,16 @@
 
 ## 6. Sheet Music Display (MusicXML / MuseScore)
 
-- Synced to playback — highlight current position in the score
-- Support MusicXML import (some .musicxml files already in the repo)
-- Possible MuseScore file support
+Shipped: synced scrolling strip, a page view and full screen, phones, and
+MuseScore files drawn exactly as MuseScore lays them out. See the docs page
+`sheet-music-page-view-plan`. Still open:
+
+- Host extra score fonts (e.g. Bebas Neue) and warn on upload when a score
+  names a font the app doesn't have
+- Check on a real iPhone: safe areas, the screen staying awake, the home
+  screen app
+- Before merging to main: where the app's browser source is published
+  (muse-encore is GPL-3.0)
 
 ## 7. Setlists
 
