@@ -95,20 +95,27 @@ The TapMap Editor itself (`src/components/marker-editor/`) is admin-only, keyboa
 
 ## Scrolling sheet music
 
-The scrolling score is the feature I'm most pleased with. It renders the current song's MusicXML and keeps it scrolled so the current measure sits under a fixed playhead, like karaoke for sheet music. Windowed mode instead shows a static page of N bars and advances a page at a time when the playhead crosses the right edge. You can also click anywhere to seek to that measure.
+The scrolling score is the feature I'm most pleased with. It keeps the current song's score scrolled so the current measure sits under a fixed playhead, like karaoke for sheet music. Windowed mode instead shows a static page of N bars and advances a page at a time when the playhead crosses the right edge. You can also click anywhere to seek to that measure. There's also a full screen page view, and on phones that's the only view.
 
-The stack underneath: **[OpenSheetMusicDisplay](https://opensheetmusicdisplay.org/) (OSMD)** parses the MusicXML and renders to SVG. I wrap it in `src/components/sheet/InfiniteScoreRenderer.tsx`, which configures OSMD for a single horizontal staffline (`renderSingleHorizontalStaffline: true`, `drawingParameters: 'compacttight'`, `EngravingRules.NewSystemAtXMLNewSystemAttribute = false`, and a bumped `SheetMaximumWidth`). The renderer reports back per-measure x-pixel positions and an `InfiniteBeatStamp` timeline.
+**Engraving: MuseScore's own engine.** I started on [OpenSheetMusicDisplay](https://opensheetmusicdisplay.org/), but I write my charts in MuseScore and wanted them to look exactly like they do there. The engraving now comes from [MuseEncore](https://github.com/pstaender/muse-encore), a TypeScript port of MuseScore Studio 4.7's layout and paint engine. It's GPL-3.0, vendored as a git submodule pinned to a commit I've reviewed (`vendor/muse-encore`). Vite compiles its TypeScript through an alias, and my type checker only sees a short declaration file of the functions I use (`src/types/muse-encore.d.ts`), because its code uses enums my compiler settings reject. It loads on demand, in its own chunk.
 
-Then `src/components/sheet/ScrollingScore.tsx` does the sync math. It listens to the transport position via a Zustand selector (no RAF loop), maps the current time through the tapMap to get an unfolded measure index, resolves that through the repeat-unfold table to a *written* measure index, and lerps an x-pixel between the barlines of the current and next measures.
+The big lesson was that **MusicXML can't look like MuseScore**: it doesn't carry system breaks, spacing, style or the little manual nudges. So when I upload a `.mscz`, the server converts it to MusicXML with the MuseScore CLI *and* keeps the original next to it. The `.mscz` is what gets drawn; the MusicXML still drives the repeat structure. Rendered side by side with MuseScore's own export, every staff, note and barline lands in the same place.
 
-**The gnarly bit**: OSMD renders to SVG, but its internal "unit" coordinate system doesn't round-trip cleanly into the host's pixel space at arbitrary zoom levels. Measures reported in OSMD units were landing a bar-and-a-half off where the actual glyphs were drawn. The workaround in `InfiniteScoreRenderer.tsx` is to walk the rendered DOM and measure barlines via `getBoundingClientRect`, and to re-measure the preamble (clef + key sig + time sig) by iterating every `<text>` and `<path>` inside a cloned SVG and finding the rightmost glyph before the first note. Slower on paper than trusting OSMD's coordinate system, but every downstream calculation — playhead position, bbox, click-to-jump — stays in one coordinate space: host pixels.
+Uploaded files are untrusted, and muse-encore unzips without size limits, so it never sees an uploaded archive. `src/utils/safeUnzip.ts` reads the zip's directory first, caps entry count and size, and stops inflating once the real output passes the limit, whatever the header claims. For a `.mscz` it keeps only the score, its style and its pictures, and re-zips them, uncompressed, for muse-encore.
+
+`src/components/sheet/page/museEncoreEngine.ts` wraps it all: open, lay out (MuseScore's pages, a reflow to a width, or the continuous one-line view), draw a region, and measure rectangles.
+
+**The strip** (`EngravedStripRenderer.tsx`) is MuseScore's continuous view, drawn into canvas tiles as they scroll into view. Barline positions come straight from the measure rectangles; measure 1 starts at its first beat, not at the clef. The pinned header on the left is MuseScore's own *continuous panel*: staff names, then the clef, key and time signature in force, so a key change shows up as the music gets there. It's sticky, riding along with the score's real header until it reaches the edge, and it never reaches the playhead.
+
+**The page view** (`page/PageScoreView.tsx`) shows MuseScore's exact pages, or re-wraps the music to the screen width on a phone. It highlights the current measure, follows playback (turning the page early when the next measure played, even a repeat target, is out of view), pauses follow when you scroll, and supports tap to seek and pinch zoom. It opens full screen with a compact transport docked below (`page/ScoreFullView.tsx`), from an expand button or <kbd>F</kbd> on desktop, or the sheet music button in the transport on a phone, where it also keeps the screen awake while playing.
+
+**The sync math** lives in one place, `src/components/sheet/scorePosition.ts`: the transport time goes through the tapMap to a *played* measure, through the repeat-unfold table to a *written* measure, plus how far through it. The strip and the page view both use it, through `useScorePosition`, so their cursors always agree.
 
 Supporting infrastructure:
 
 - A `ResizeObserver` on the scroll host plus `window.resize` and `orientationchange` listeners trigger a re-derive of the window-mode bars-per-page, since viewport reflows don't always refire RO.
-- A "sticky preamble" overlay mounts a cloned SVG fragment clipped to the preamble width, slid leftward with the scroll until it pins at x=0. Without this, the key signature scrolls off-screen on a long piece.
 - A `ref`-based scroll-lock distinguishes user scrolls from programmatic ones and holds the viewport still while playback catches up.
-- The parts dropdown drives a `visiblePartIds` set that the renderer applies by mutating each instrument's `Visible` flag on the cached OSMD instance and re-rendering — no full reload.
+- The parts menu (`PartsMenu.tsx`) hides instruments by turning off their parts in muse-encore and laying out again; the selection is shared by the strip and the page view and saved per song.
 
 ## The repeat / jump unfolder
 
@@ -118,7 +125,7 @@ It parses the MusicXML into a per-measure structure (`parseMusicXML`) capturing 
 
 Priorities per measure (matching the research post at `docs/src/content/docs/sheet-music-repeats.mdx`): Fine → To-Coda → D.C./D.S. → backward-repeat → volta gate. The output is consumed in `ScrollingScore.tsx`: given an unfolded measure index `u`, look up `srcIndex` to know which written measure's x-pixel to use. Without this, clicking measure 9 of a score with a repeat block would seek to the ninth unfolded bar — usually not measure 9 at all.
 
-The per-song `repeatAfterDcDs` flag (default false) flips whether internal repeats re-fire after a D.C./D.S. jump, because there's no universal convention for that and different songs want different behavior. The renderer caches the parsed structure so flipping the flag re-runs `unfold` without re-fetching or re-rendering the SVG.
+The per-song `repeatAfterDcDs` flag (default false) flips whether internal repeats re-fire after a D.C./D.S. jump, because there's no universal convention for that and different songs want different behavior. The renderer caches the parsed structure so flipping the flag re-runs `unfold` without re-fetching or re-drawing the score. (MuseEncore can work out repeats too, but its MusicXML import drops some D.S. al Coda jumps, so the cursor keeps using this.)
 
 ## Mixer, lyrics, waveform
 
@@ -133,6 +140,7 @@ Everything above shares a `FOCUS_LEFT_NUDGE_PX` constant — the lyric reading p
 - **Tailwind v4** via `@tailwindcss/vite`. No `tailwind.config.js` — configuration lives inline in `src/index.css` (the v4 convention). CSS variables drive per-band theming: each band ships its own `colors.background` / `colors.text` values, the app sets them as `--band-bg` / `--band-text` at the root, and every utility that reads them (`bg-[var(--band-bg)]`, etc.) repaints on band switch.
 - **[Radix UI](https://www.radix-ui.com/) Slider primitives** for the tempo / volume controls, wrapped in a custom `TouchSlider` (`src/components/ui/TouchSlider.tsx`) that adds mobile-specific gesture locking: on touchstart I measure whether the user's first 8 pixels of movement are mostly-horizontal (adjust slider) or mostly-vertical (scroll the page) and commit to one axis for the gesture's lifetime. Without this, fiddling with a slider on a phone constantly fights the page scroll.
 - **ESLint** via flat config with `typescript-eslint` and `eslint-plugin-react-hooks`, run as a pre-commit via a git hook wired up in the `prepare` script.
+- **[Vitest](https://vitest.dev/)** for unit tests (`npm test`), with its own `vitest.config.ts` so tests never load the API plugin (or the database). The sheet music math, the safe unzip, the score filename rules and the repeat unfolder are covered.
 
 ## Docs site: Astro + Starlight-ish pattern
 

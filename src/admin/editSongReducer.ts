@@ -42,7 +42,8 @@ export type EditSongAction =
   | { type: 'SET_SAVE_SUCCESS' }
   | { type: 'RESET_DIRTY' }
   | { type: 'SET_UPLOAD_PROGRESS'; progress: UploadProgress | null }
-  | { type: 'SET_SHEET_MUSIC_URL'; url: string | undefined }
+  /** Sets or (all undefined) clears the score and its original MuseScore file. */
+  | { type: 'SET_SHEET_MUSIC'; fields: Pick<SongConfig, 'sheetMusicUrl' | 'sheetMusicMsczUrl' | 'sheetMusicModified'> }
   | { type: 'SET_REPEAT_AFTER_DC_DS'; value: boolean };
 
 export const initialEditState: EditSongState = {
@@ -242,8 +243,8 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
     case 'SET_UPLOAD_PROGRESS':
       return { ...state, uploadProgress: action.progress };
 
-    case 'SET_SHEET_MUSIC_URL':
-      return updateConfig(state, { sheetMusicUrl: action.url });
+    case 'SET_SHEET_MUSIC':
+      return updateConfig(state, action.fields);
     case 'SET_REPEAT_AFTER_DC_DS':
       // Drop the field when unchecked so saved configs stay clean.
       return updateConfig(state, {

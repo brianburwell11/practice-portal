@@ -15,24 +15,35 @@ interface Persisted {
   trackingMode: TrackingMode;
   scoreZoom: number;
   windowBars: number;
-  equalBeatWidthOverride: boolean | null; // null = follow song config
   showPlayhead: boolean;
+  /** Page view zoom: 1 = pages fit the width (or, reflowed, MuseScore's 100%). */
+  pageZoom: number;
+  /** Page view: white-on-dark pages. */
+  pageInvert: boolean;
 }
 
 interface SheetMusicState extends Persisted {
+  /** Sheet music full screen is open (not saved: every visit starts closed). */
+  fullViewOpen: boolean;
+  setFullViewOpen: (open: boolean) => void;
   setTrackingMode: (m: TrackingMode) => void;
   setScoreZoom: (z: number) => void;
   setWindowBars: (n: number) => void;
-  setEqualBeatWidthOverride: (v: boolean | null) => void;
   setShowPlayhead: (v: boolean) => void;
+  setPageZoom: (z: number) => void;
+  setPageInvert: (v: boolean) => void;
 }
+
+export const PAGE_ZOOM_MIN = 0.5;
+export const PAGE_ZOOM_MAX = 3;
 
 const DEFAULTS: Persisted = {
   trackingMode: 'karaoke',
   scoreZoom: 0.95,
   windowBars: 4,
-  equalBeatWidthOverride: null,
   showPlayhead: true,
+  pageZoom: 1,
+  pageInvert: false,
 };
 
 function loadInitial(): Persisted {
@@ -56,11 +67,14 @@ function persist(state: Persisted): void {
 
 export const useSheetMusicStore = create<SheetMusicState>((set, get) => ({
   ...loadInitial(),
+  fullViewOpen: false,
+  setFullViewOpen: (open) => set({ fullViewOpen: open }),
   setTrackingMode: (m) => { set({ trackingMode: m }); persist(getPersisted(get())); },
   setScoreZoom: (z) => { set({ scoreZoom: z }); persist(getPersisted(get())); },
   setWindowBars: (n) => { set({ windowBars: n }); persist(getPersisted(get())); },
-  setEqualBeatWidthOverride: (v) => { set({ equalBeatWidthOverride: v }); persist(getPersisted(get())); },
   setShowPlayhead: (v) => { set({ showPlayhead: v }); persist(getPersisted(get())); },
+  setPageZoom: (z) => { set({ pageZoom: Math.min(PAGE_ZOOM_MAX, Math.max(PAGE_ZOOM_MIN, z)) }); persist(getPersisted(get())); },
+  setPageInvert: (v) => { set({ pageInvert: v }); persist(getPersisted(get())); },
 }));
 
 function getPersisted(s: SheetMusicState): Persisted {
@@ -68,7 +82,8 @@ function getPersisted(s: SheetMusicState): Persisted {
     trackingMode: s.trackingMode,
     scoreZoom: s.scoreZoom,
     windowBars: s.windowBars,
-    equalBeatWidthOverride: s.equalBeatWidthOverride,
     showPlayhead: s.showPlayhead,
+    pageZoom: s.pageZoom,
+    pageInvert: s.pageInvert,
   };
 }

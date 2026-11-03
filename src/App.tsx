@@ -297,15 +297,12 @@ export default function App() {
           <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
         )}
 
-        {/* Scrolling sheet music \u2014 desktop only for now (md+). Hidden
+        {/* Sheet music: the scrolling strip on wider screens, a button that
+            opens it full screen on phones (ScrollingScore decides). Hidden
             under any of the on-page editors to give the editor full
-            vertical space. The current viewport/scroll math isn't usable
-            on narrow screens and needs a dedicated mobile pass before we
-            expose it there. */}
+            vertical space. */}
         {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && !sheetMinimized && (
-          <div className="hidden md:contents">
-            <ScrollingScore />
-          </div>
+          <ScrollingScore />
         )}
 
         {/* Editor replaces mixer when open */}

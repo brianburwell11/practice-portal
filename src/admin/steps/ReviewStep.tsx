@@ -6,7 +6,7 @@ import { songConfigSchema } from '../../config/schema';
 import { uploadFileWithProgress, uploadFormWithProgress } from '../utils/uploadWithProgress';
 import { retryStem, uploadStems, waitForStems, type StemJobState } from '../utils/stemJobs';
 import { StemProgress } from '../components/StemProgress';
-import { prepareSheetMusicUpload } from '../utils/sheetMusic';
+import { prepareSheetMusicUpload, sheetMusicConfigFields } from '../utils/sheetMusic';
 import { dataUrl } from '../../utils/url';
 import { useBandStore } from '../../store/bandStore';
 import { slugify } from '../../utils/deriveId';
@@ -66,7 +66,6 @@ export function ReviewStep({ state, dispatch, onSaved, onAddAnother }: Props) {
         );
         if (!convertResult.ok) throw new Error(convertResult.error ?? 'MSCZ conversion failed');
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
-        transcodedConfig = { ...transcodedConfig, sheetMusicUrl: filename };
       } else {
         const { blob, filename } = prepared;
         const presignRes = await fetch('/api/r2/presign', {
@@ -93,8 +92,8 @@ export function ReviewStep({ state, dispatch, onSaved, onAddAnother }: Props) {
           }});
         });
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
-        transcodedConfig = { ...transcodedConfig, sheetMusicUrl: filename };
       }
+      transcodedConfig = { ...transcodedConfig, ...sheetMusicConfigFields(prepared) };
     }
 
     const configRes = await fetch(`/api/bands/${bandId}/songs/${state.id}/config`, {

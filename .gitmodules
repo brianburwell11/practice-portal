@@ -1,0 +1,3 @@
+[submodule "vendor/muse-encore"]
+	path = vendor/muse-encore
+	url = https://github.com/pstaender/muse-encore.git

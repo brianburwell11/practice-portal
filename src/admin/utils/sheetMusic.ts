@@ -75,8 +75,41 @@ export function canonicalSheetMusicName(file: File): string | null {
 }
 
 /**
+ * Where the server keeps the original `.mscz` of a converted score:
+ * `<name>.mxl` → `<name>.mscz` (same rule as `msczCompanionName` on the server).
+ */
+export function msczCompanionName(mxlFilename: string): string {
+  return mxlFilename.replace(/\.mxl$/, '.mscz');
+}
+
+/** A file's last-modified date as YYYY-MM-DD in local time, like MuseScore's `$M`. */
+export function fileModifiedDate(file: File): string {
+  const d = new Date(file.lastModified);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * The song-config fields for an uploaded score. A `.mscz` upload keeps the
+ * original next to the converted `.mxl`; any other upload clears them.
+ */
+export function sheetMusicConfigFields(prepared: PreparedUpload): {
+  sheetMusicUrl: string;
+  sheetMusicMsczUrl: string | undefined;
+  sheetMusicModified: string | undefined;
+} {
+  return prepared.mode === 'server-convert'
+    ? {
+      sheetMusicUrl: prepared.filename,
+      sheetMusicMsczUrl: msczCompanionName(prepared.filename),
+      sheetMusicModified: fileModifiedDate(prepared.file),
+    }
+    : { sheetMusicUrl: prepared.filename, sheetMusicMsczUrl: undefined, sheetMusicModified: undefined };
+}
+
+/**
  * META-INF/container.xml — the MXL pointer file that tells readers
- * (OSMD, MuseScore, etc.) where the MusicXML root is inside the archive.
+ * (MuseScore and others) where the MusicXML root is inside the archive.
  * Content must be exact per the MusicXML 4.0 spec.
  */
 const MXL_CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -136,7 +169,7 @@ export async function prepareSheetMusicUpload(
     return { mode: 'direct', blob: file, filename };
   }
 
-  // Plain-XML MusicXML — zip it. JSZip default deflate is fine; OSMD reads
+  // Plain-XML MusicXML — zip it. JSZip default deflate is fine; readers take
   // standard ZIPs (no need for the "stored first-entry" optimization that
   // the MusicXML spec's appendix describes).
   const xmlText = await file.text();

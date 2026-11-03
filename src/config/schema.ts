@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+/** A sheet-music file in a song's folder, as the app names them (`wiggle-sooza.mxl`).
+ *  A bare filename: no slashes, no scheme, so it can only ever resolve inside
+ *  `{bandId}/songs/{songId}/`. */
+export const SCORE_FILENAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\.(mxl|musicxml|xml|mscz)$/i;
+
+/** The original MuseScore file kept next to a converted score. */
+export const MSCZ_FILENAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\.mscz$/i;
+
 export const stemConfigSchema = z.object({
   id: z.string(),
   label: z.string(),
@@ -118,15 +126,23 @@ export const songConfigSchema = z.object({
   navLinks: z.array(navLinkConfigSchema).optional(),
   videos: z.array(videoSchema).optional(),
   tags: z.array(z.string().min(1).max(40)).optional(),
-  /** Path (relative to the song's audio base) of a MusicXML score to render
-   *  in the scrolling-score panel. If absent, the panel is hidden. */
-  sheetMusicUrl: z.string().optional(),
+  /** Filename of the song's score in its R2 folder (`{bandId}/songs/{songId}/`).
+   *  If absent, the score panel is hidden. Only bare score filenames are
+   *  accepted: URLs and paths would let the player fetch from anywhere, so an
+   *  invalid value is dropped (on load and on save) rather than failing the
+   *  whole song config. */
+  sheetMusicUrl: z.string().regex(SCORE_FILENAME).optional().catch(undefined),
+  /** Filename of the original MuseScore file (`.mscz`) the score was
+   *  converted from, kept next to it. When present it is what gets drawn,
+   *  exactly as MuseScore lays it out; `sheetMusicUrl` still drives the
+   *  repeat structure. Same rules as `sheetMusicUrl`. */
+  sheetMusicMsczUrl: z.string().regex(MSCZ_FILENAME).optional().catch(undefined),
+  /** Last-modified date (YYYY-MM-DD) of the uploaded MuseScore file, for
+   *  scores whose header or footer shows it (MuseScore's `$M`). */
+  sheetMusicModified: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().catch(undefined),
   /** Seconds of silence / count-in before the score's first downbeat. When
    *  absent, falls back to the first measure-tap time in tapMap. */
   audioOffsetSeconds: z.number().optional(),
-  /** Force OSMD's FixedMeasureWidth flag for this song. Dense songs should
-   *  leave this off; sparse songs benefit from turning it on. */
-  equalBeatWidth: z.boolean().optional(),
   /** When true, internal repeats (`|: :|`, voltas) are re-taken after a
    *  D.C. / D.S. jump. Default (unset / false) matches the usual convention
    *  where internal repeats are honored only on the first pass and the

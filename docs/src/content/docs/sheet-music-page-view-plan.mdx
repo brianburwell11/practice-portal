@@ -1,0 +1,122 @@
+---
+title: "Sheet Music Page View: Implementation Plan"
+description: "Full-page sheet music overlay and a mobile score view, rendered with muse-encore, while keeping the constant scrolling strip."
+pubDate: "Nov 03 2026"
+tags: ["sheet-music", "mobile", "security", "implementation", "plan"]
+---
+
+The scrolling strip (OSMD, karaoke and windowed modes) stays as it is. This plan adds a full-screen page view with a compact waveform and transport docked at the bottom, and uses the same view on phones, where the score is hidden today. Pages are engraved by [muse-encore](https://github.com/pstaender/muse-encore), a TypeScript port of the MuseScore Studio 4.7.5 engraving engine. Each phase is its own commit.
+
+## Licensing
+
+muse-encore is **GPL-3.0-only**. Bundling it means the browser bundle is distributed under the GPL. The server, database and user data stay proprietary, so a subscription model still works.
+
+- [ ] Vendor muse-encore at a pinned commit with its `LICENSE` and SPDX headers intact
+- [ ] License the client (`src/`) under GPL-3.0, keep `server/` proprietary, and document the split in the README
+- [ ] Check that no server-only code ends up in the client bundle
+- [ ] Add a third-party licenses page and a source link for the deployed client
+
+## Phase 1: Security hardening
+
+Found while reviewing the current sheet music path and muse-encore.
+
+- [x] Restrict `sheetMusicUrl` to a score filename, and stop fetching absolute or protocol-relative URLs in the player
+- [x] Validate `sheetMusicUrl` on the server when song config is saved
+- [x] Bounded `.mxl` unzip: cap entry count, declared and actual uncompressed size, and reject a missing root file
+- [ ] Hand muse-encore already-unzipped, size-checked MusicXML, so its unbounded `unzipSync` never sees untrusted archives
+- [x] Strip scripts, event handlers and `foreignObject` from the cloned clef strip SVG
+- [x] CSP already allows `worker-src 'self' blob:` and `font-src 'self' data:`, so no change was needed (it is still report-only; enforcing is a separate change)
+- [ ] Review the upstream diff on every muse-encore bump (it is about 600k lines, AI-assisted)
+
+## Phase 2: Spike and go/no-go
+
+muse-encore is vendored as a git submodule at `vendor/muse-encore`, pinned to `3eadb65`. Vite compiles its TypeScript through a `muse-encore` alias, and `tsc` only sees the hand-written declarations in `src/types/muse-encore.d.ts`, because our compiler settings reject its enums. Its only npm dependencies are `fflate` and `opentype.js` (both MIT, pinned to its versions). A dev-only **pages (spike)** button in the score panel opens the render.
+
+- [x] Vendor the library and wrap it (`src/components/sheet/page/museEncoreEngine.ts`): lazy load, fit-width layout, region drawing, measure rectangles in written order
+- [x] Node smoke test on the docs samples: `Wiggle.mxl` (93 measures, 6 parts) imports in 263 ms, lays out in 605 ms and re-lays out at a new width in 249 ms on a desktop, with bounds for every measure
+- [x] Repeat order: muse-encore matches `unfold` on `Wiggle.mxl`, but on `roadmap-test.mxl` its MusicXML import drops the D.S. al Coda jump. **Decision: the cursor keeps using our `unfold`** (which also has the per-song `repeatAfterDcDs` setting) and takes only measure positions from muse-encore
+- [x] Compare engraving with OSMD on real songs: re-laying out **MusicXML** is only a little better than OSMD, because MusicXML doesn't carry MuseScore's breaks, spacing, style or manual adjustments
+- [x] **Render the original `.mscz` instead.** Our bounded reader extracts only the root `.mscx`, `score_style.mss` and `Pictures/*`, re-zips them uncompressed, and hands that to `loadScore`, so muse-encore never unzips an uploaded archive. Tested on `Wiggle - SOOZA.mscz`, `roadmap-test.mscz` and *Coco* (120 measures, 15 pages: load 44 ms, page layout 392 ms). Measure counts match the `.mxl` exactly, and the native file's repeat order matches `unfold`, D.S. al Coda included
+- [x] Exactness check on *Coco* page 1 against MuseScore 4.7.6's own export (300 dpi, rasterized in Chrome): every staff, note, beam, barline and system is in the same place. Two gaps:
+  - fonts the score names that muse-encore doesn't bundle (the title's **Bebas Neue**) fall back to a substitute
+  - the `$M` (last modified date) footer macro prints `YYYY-MM-DD`
+- [x] Keep the original `.mscz` on upload, as `<name>.mscz` next to `<name>.mxl`, stored only after MuseScore converts it. New song fields `sheetMusicMsczUrl` (bare `.mscz` filename) and `sheetMusicModified` (the file's date). Replacing or removing a score deletes both files. The `.mxl` still drives `unfold`
+- [ ] Register extra fonts the scores use (self-hosted, OFL), and warn on upload when a score names a font the app doesn't have
+- [x] Fill in `$M` from the file's modified date, recorded at upload (substituted into the style's headers and footers before muse-encore reads it)
+- [ ] Layout time on iPhone Safari under 1.5 s for a typical chart
+- [ ] Font cost: every font and style file (16.4 MB) loads on first open, including six music fonts we don't use. Measure on a phone; trimming it means patching the loader
+- [ ] Check that hiding parts (part show flags) carries over the strip's hidden parts
+- [x] Decide: muse-encore, rendering the `.mscz` when a song has one (exact pages on desktop, reflowed to the screen width on phones) and the `.mxl` otherwise. Existing songs get their `.mscz` by re-uploading in Edit Song
+
+## Phase 2b: MuseScore engraving in the scrolling strip
+
+The strip is drawn by muse-encore too, in MuseScore's continuous view (the whole score on one line), from the `.mscz` when the song has one. **OSMD is gone**: MuseScore's layout is the only one, so the "classic" renderer, the engraving setting, and the natural/equal-beat spacing options (and the per-song `equalBeatWidth` field) are removed.
+
+- [x] `EngravedStripRenderer` replaces the OSMD renderer (same scroll host, pads and outputs; it reports its scroll host itself, since it loads lazily)
+- [x] Barlines from muse-encore's measure rectangles; measure 1 starts at its first beat, not at the clef
+- [x] Canvas tiles drawn as they scroll into view, far ones dropped
+- [x] Page margins cropped by scanning a 12 dpi render for ink
+- [x] Pinned preamble: MuseScore's continuous panel (muse-encore's `drawContinuousPanel`, a port of MuseScore's `ContinuousPanel`): the staff names and brackets, then each staff's clef, key and time signature **in force at the reading point**, so it changes when the music does, plus the measure number. It is sticky: it rides over the score's own header as it scrolls (placed where the header begins, so it matches it exactly) and stops at the strip's left edge, instead of the header scrolling away and the panel snapping in. It never reaches the karaoke playhead (or the window's first bar): when it's too wide, it shifts left and the start of the names is cut off, and while the header is still under the playhead it isn't shown. It paints only when its contents change, into a full-height scratch canvas (muse-encore sets the canvas transform itself), and the strip's cropped band is copied to the one shown. The playhead stays above it
+- [x] Hidden parts by instrument order, ids from the MusicXML
+- [x] Remove OSMD (`InfiniteScoreRenderer`, the package, the SVG-copy preamble), the engraving setting and the spacing options
+- [x] MuseEncore and its fonts on the licenses page
+- [ ] Check in the browser: karaoke and windowed scrolling, click to seek, hidden parts, zoom, songs with and without a `.mscz`, and an error message (not a blank strip) when a score can't be drawn
+
+## Phase 3: Shared score position hook
+
+- [x] Extract the position math into `scorePosition.ts` (pure: `scorePositionAt` gives `{ playedIndex, writtenIndex, fraction, jumpsNext }`, or past the end; `firstPlayedIndex` maps a written measure to its first time through) and `useScorePosition.ts` (the hook: transport position and the song's tapMap)
+- [x] `ScrollingScore` uses the hook. Checked against the old inline math on 200,000 random cases (repeats, jumps, tapMaps longer or shorter than the score, missing barlines): identical
+- [x] Two simplifications that change nothing: the cursor always slides to the current written measure's closing barline (the old jump branch always reached the same value), and `audioOffset` is gone from the strip (it was added and subtracted again)
+- [ ] Check in the browser: karaoke and windowed scrolling, repeats and D.S./coda, click to seek, scrolling ahead during playback
+
+## Phase 4: Page view renderer
+
+`src/components/sheet/page/PageScoreView.tsx`. Until the overlay exists, a dev-only **pages (preview)** button in the score panel opens it in a panel over the bottom of the screen (replacing the Phase 2 spike).
+
+- [x] Engine: fit-width layout, region drawing, measure rectangles, and each measure's first-beat x (every system starts with its own clef and key, so the cursor starts at the first beat, not the measure's edge)
+- [x] Layout modes: exact pages (fit to the width, capped at 160% so big screens don't show giant notes) or reflowed to the width; `auto` reflows below 700 px
+- [x] Canvas tiles (up to 1024 px tall), drawn one per frame as they near the view, cleared when far, DPR-aware
+- [x] Re-layout on resize and rotation (debounced), keeping the measure at the top of the view in place
+- [x] Measure highlight from the first beat and a cursor line, from `useScorePosition`; snaps on repeats and jumps
+- [x] Follow: keeps the current system near the top; past 60% of a measure it makes sure the next measure played (a repeat or jump target too) is in view, so the page turns early. Pages wider than the view follow sideways too
+- [x] Wheel, swipe, arrow keys or the scrollbar pause follow; it resumes 3 s after the last one while playing, or with the Follow button
+- [x] Tap or click a measure to jump to its first time through (a drag doesn't count)
+- [x] Zoom: ctrl/⌘+wheel (and trackpad pinch) and two-finger pinch, previewed with CSS and laid out again at the end, keeping the measure under the fingers in place
+- [x] Inverted pages for dark mode (the cursor colors stay true); page zoom and invert are saved settings
+- [x] Parts hidden in the strip are hidden here too
+- [x] Checked in the browser and on a phone
+
+## Phase 5: Full-screen overlay (desktop)
+
+- [x] `ScoreFullView`: the page view full screen (a portal dialog), with a toolbar (layout, zoom, dark pages, parts, close) and a compact transport docked at the bottom
+- [x] Escape closes it and focus goes back to the expand button; focus stays inside while open. It doesn't swallow keys, so the player's shortcuts (space, loop keys) still work, which is why it isn't built on the shared `Modal`
+- [x] `CompactTransport`: stop, play, the A/B loop, a short waveform (seek, drag loops) and time plus measure|beat; bigger buttons and long-press to stop on touch screens
+- [x] Shared transport pieces instead of copies: `StopButton`, `PlayPauseButton`, `LoopButton` (`TransportButtons.tsx`), `formatTime`, `measureBeatAt`; `TransportBar` uses them too
+- [x] `WaveformTimeline compact`: shorter, and not marked `data-waveform-timeline`, so notes, lyrics and the strip keep lining up on the main waveform
+- [x] Expand button in the strip header and an `F` shortcut (toggles; ignored while typing or with modifier keys); replaces the dev preview
+- [x] `PartsMenu` pulled out of the strip and shared; hidden parts change live in both views
+- [x] Safe-area padding for the notch and home indicator
+- [x] Checked in the browser
+
+## Phase 6: Mobile
+
+- [x] Below 768 px there is no strip: a **sheet music** button in the transport's phone row (left of bookmarks, only when the song has a score) opens the full screen view. `ScrollingScore` decides with `useMediaQuery`, and `App` no longer hides the panel with CSS. Before, phones mounted the hidden strip and quietly downloaded and laid out the score for nothing; now the strip never loads there
+- [x] The button uses the same icon as the minimized sheet music chip on desktop (`SheetMusicIcon`: a treble clef over a faint staff; the clef is the engraved glyph from Leland, MuseScore's music font); the full screen open state is in the sheet music store so the transport can open it
+- [x] `auto` reflows below 700 px; at 100% a phone fits about 2 to 4 bars per system, and pinch zoom adjusts it
+- [x] The dock: bigger buttons, long-press to stop, safe-area insets (from Phase 5)
+- [x] Re-layout on rotation (the view's resize handling, from Phase 4)
+- [x] Screen Wake Lock while the full screen view is open and playing (`useWakeLock`), asked for again on coming back to the app; nothing happens where it isn't supported
+- [x] Parts on phones: the page view reports the score's parts, so saved hidden parts load and the parts menu works without the strip
+- [x] Checked in Chrome's device mode (a real iPhone still to do: safe areas, wake lock, home screen app)
+
+## Phase 7: Tests and docs
+
+- [x] Vitest 5 (`npm test`) with its own `vitest.config.ts` (happy-dom for `DOMParser`), so tests never load the API plugin or touch the database
+- [x] `scorePosition.test.ts`: positions, repeats and jumps, past the end, and the old strip cursor math kept as a reference and compared on 20,000 random cases
+- [x] `safeUnzip.test.ts`: a valid `.mxl`, plain XML, a zip bomb, a bomb whose header lies about its size, too many entries, a truncated file, no score, and the total cap on `.mscz` entries
+- [x] `schema.test.ts`: score filenames kept, and URLs, paths and protocol-relative links (`//evil.example/x.mxl`) dropped
+- [x] `continuousPanelPlacement.test.ts`: the sticky panel rides with the header, pins, never reaches the playhead, and cuts off the names when too wide (placement moved into its own module for this)
+- [x] `unfoldRepeats.test.ts`: the docs' sample scores, including repeats, voltas and D.S. al Coda
+- [x] Checked that the tests catch breakage: disabling the inflate limit or nudging the cursor math fails them
+- [x] `tech-stack.mdx` rewritten for MuseScore engraving, the page view and phones; `TODO.md` section 6 refreshed
+- Not covered: the measure-position cache needs muse-encore's fonts in the test runner; it's checked by the Node smoke tests in this plan instead

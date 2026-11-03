@@ -1,18 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
 import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
-import { measureStartTimes, currentMeasureIndex } from '../../audio/tempoUtils';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { r2Url } from '../../utils/url';
+import { MSCZ_FILENAME, SCORE_FILENAME } from '../../config/schema';
 import {
   loadSheetMusicSongState,
   saveSheetMusicSongState,
 } from '../../utils/sheetMusicSongStorage';
-import { InfiniteScoreRenderer, type InfiniteBeatStamp, type PartInfo } from './InfiniteScoreRenderer';
 import type { UnfoldedStep } from '../../audio/unfoldRepeats';
+import { firstPlayedIndex, PAST_END } from './scorePosition';
+import { useScorePosition } from './useScorePosition';
+import type { ContinuousPanel, PartInfo } from './EngravedStripRenderer';
+import { placePanel, type PanelBox } from './continuousPanelPlacement';
+import { PartsMenu } from './PartsMenu';
+
+// Drawn by MuseScore's own engraving engine, loaded on demand.
+const EngravedStripRenderer = lazy(() => import('./EngravedStripRenderer').then((m) => ({ default: m.EngravedStripRenderer })));
+
+// Sheet music full screen (the page view with a docked transport), loaded when opened.
+const ScoreFullView = lazy(() => import('./page/ScoreFullView').then((m) => ({ default: m.ScoreFullView })));
 
 /** Pixels to nudge the left focus point right of the waveform's left edge.
  *  Keep in sync with the same constant in `LyricsDisplay.tsx` so the
@@ -26,8 +37,7 @@ const FOCUS_LEFT_NUDGE_PX = 24;
 const FOCUS_RIGHT_NUDGE_PX = 32;
 
 /** Fixed leading pad (px) reserved inside the scroll host before the
- *  first note. Must match the `leadingPadPx` prop passed to
- *  `InfiniteScoreRenderer`. Using a viewport fraction would shrink on
+ *  first note. Passed to the renderer as `leadingPadPx`. Using a viewport fraction would shrink on
  *  resize and shift every cached `measureXs` value — so every measure
  *  in the score is a fixed px constant. */
 const LEADING_PAD_PX = 180;
@@ -45,26 +55,23 @@ const LEADING_PAD_PX = 180;
  *   - Playhead line is always rendered full-system height, 2 px wide,
  *     colored with a soft glow so it's visible with or without the bbox.
  *
- * Sync plumbing mirrors `LyricsDisplay`: we read `useTransportStore.position`
- * via a Zustand selector (no RAF loop) and update scroll / bbox state in a
- * useEffect on position change.
+ * Sync plumbing mirrors `LyricsDisplay`: `useScorePosition` reads the
+ * transport position via a Zustand selector (no RAF loop) and turns it into
+ * a measure and a fraction through it; scroll / bbox state follows in a
+ * useEffect on that.
  */
 export function ScrollingScore() {
   const song = useSongStore((s) => s.selectedSong);
   const currentBand = useBandStore((s) => s.currentBand);
-  const position = useTransportStore((s) => s.position);
   const playing = useTransportStore((s) => s.playing);
   const engine = useAudioEngine();
   const trackingMode = useSheetMusicStore((s) => s.trackingMode);
   const scoreZoom = useSheetMusicStore((s) => s.scoreZoom);
-  const equalBeatWidthOverride = useSheetMusicStore((s) => s.equalBeatWidthOverride);
   const showPlayhead = useSheetMusicStore((s) => s.showPlayhead);
   const setTrackingMode = useSheetMusicStore((s) => s.setTrackingMode);
   const setScoreZoom = useSheetMusicStore((s) => s.setScoreZoom);
-  const setEqualBeatWidthOverride = useSheetMusicStore((s) => s.setEqualBeatWidthOverride);
   const setShowPlayhead = useSheetMusicStore((s) => s.setShowPlayhead);
 
-  const [timeline, setTimeline] = useState<InfiniteBeatStamp[]>([]);
   const [measureXs, setMeasureXs] = useState<number[]>([]);
   /** Unfolded playback order derived from the MusicXML's repeat / jump
    *  markers. Maps the "audio-side" unfolded index `u` → the written
@@ -72,28 +79,24 @@ export function ScrollingScore() {
    *  Empty array when the score has no repeats (or the parser failed) —
    *  in that case callers fall back to `srcIdx = u`. */
   const [unfolded, setUnfolded] = useState<UnfoldedStep[]>([]);
+  const { measureTimes, scorePosition } = useScorePosition(unfolded, Math.max(0, measureXs.length - 1));
   const [scrollHost, setScrollHost] = useState<HTMLDivElement | null>(null);
   const [cursorPx, setCursorPx] = useState<number | null>(0);
   const [bbox, setBbox] = useState<{ leftPx: number; widthPx: number } | null>(null);
   const [trainGrayLeftPx, setTrainGrayLeftPx] = useState(0);
   const [trainGrayRightStartPx, setTrainGrayRightStartPx] = useState<number | null>(null);
   const [windowAnchor, setWindowAnchor] = useState(0);
-  /** Viewport-x where the sticky preamble (clef/key/time) sits. Slides
-   *  left with the scroll in karaoke mode until it hits 0, then pins. */
-  const [stickyPreambleLeftPx, setStickyPreambleLeftPx] = useState(0);
-  /** Width of the preamble (clef+key sig), in SVG-local px. Derived from
-   *  the first measure's barline position minus the leading-pad spacer,
-   *  minus an estimate of the time signature width (which lives after the
-   *  key signature but is excluded from the sticky region). */
-  const [preambleWidth, setPreambleWidth] = useState(0);
-  /** Live SVG ref — stored in state so a useEffect can re-mount the clone
-   *  whenever either the SVG OR the host div changes. */
-  const [liveSvg, setLiveSvg] = useState<SVGSVGElement | null>(null);
-  /** Host div for the cloned preamble SVG. Stored via a ref callback so
-   *  we get a re-render when it mounts/unmounts (the overlay is
-   *  conditionally rendered, so this can appear after the SVG-ready
-   *  callback already fired). */
-  const [preambleHost, setPreambleHost] = useState<HTMLDivElement | null>(null);
+  /** MuseScore's continuous panel (staff names, then the clef, key and time
+   *  signature in force), from the renderer, and where it's shown. */
+  const [panel, setPanel] = useState<ContinuousPanel | null>(null);
+  const panelRef = useRef<ContinuousPanel | null>(null);
+  useEffect(() => { panelRef.current = panel; }, [panel]);
+  const [panelBox, setPanelBox] = useState<PanelBox | null>(null);
+  const panelWidthRef = useRef(0);
+  /** Host div for the panel's canvas. Stored via a ref callback so we get a
+   *  re-render when it mounts/unmounts (the overlay is conditionally
+   *  rendered, so it can appear after the panel arrived). */
+  const [panelHost, setPanelHost] = useState<HTMLDivElement | null>(null);
   /** Incremented on window resize / scroll-host resize. Used as a sync-effect
    *  dependency so window-mode re-derives how many bars fit when the
    *  viewport changes (browser resize, mobile rotate, etc.). */
@@ -109,12 +112,38 @@ export function ScrollingScore() {
   const [parts, setParts] = useState<PartInfo[]>([]);
   /** Subset of part ids the user has hidden. Empty = show all. */
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(new Set());
-  const [partsMenuOpen, setPartsMenuOpen] = useState(false);
-  /** Pending checkbox state inside the open dropdown. Changes don't apply
-   *  until the user hits the apply button — closing the menu any other way
-   *  discards them. Synced from `hiddenPartIds` on each open. */
-  const [draftHiddenPartIds, setDraftHiddenPartIds] = useState<Set<string>>(new Set());
-  const partsMenuRef = useRef<HTMLDivElement | null>(null);
+  // Full screen open state is shared: on phones the transport's sheet music button opens it.
+  const fullViewOpen = useSheetMusicStore((s) => s.fullViewOpen);
+  const setFullViewOpen = useSheetMusicStore((s) => s.setFullViewOpen);
+  /** Wide enough for the scrolling strip (Tailwind's md). Narrower, there
+   *  is no strip (it's never loaded): the transport's sheet music button
+   *  opens the full screen view instead. */
+  const wide = useMediaQuery('(min-width: 768px)');
+  // Close it if the panel goes away (an editor opened), so it doesn't pop up again later.
+  useEffect(() => () => setFullViewOpen(false), [setFullViewOpen]);
+  const fullViewOpenRef = useRef(false);
+  useEffect(() => { fullViewOpenRef.current = fullViewOpen; }, [fullViewOpen]);
+  const expandButtonRef = useRef<HTMLButtonElement | null>(null);
+  const closeFullView = useCallback(() => {
+    setFullViewOpen(false);
+    // Give focus back to what opened it.
+    requestAnimationFrame(() => expandButtonRef.current?.focus());
+  }, [setFullViewOpen]);
+  // F opens or closes it (not while typing, and not with modifier keys).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'f' && e.key !== 'F') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return;
+      if (t instanceof HTMLElement && t.isContentEditable) return;
+      e.preventDefault();
+      if (fullViewOpenRef.current) closeFullView();
+      else setFullViewOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeFullView, setFullViewOpen]);
   /** Gear-panel open state + click-outside container ref. */
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const settingsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -161,32 +190,33 @@ export function ScrollingScore() {
   const draggingRef = useRef(false);
   const suppressClickRef = useRef(false);
 
-  // Resolve the score URL. Following the rest of the codebase's R2 convention:
-  // the field in the song config is a *filename* (e.g. "score.musicxml") that
-  // lives alongside the song's other files at `{bandId}/songs/{songId}/`. If
-  // the caller already supplied an absolute URL (starts with "http" or "/"),
-  // we pass it through unchanged — useful for external hosting.
+  // Resolve the score URL. The field in the song config is a *filename*
+  // (e.g. "score.mxl") that lives alongside the song's other files at
+  // `{bandId}/songs/{songId}/`. Anything else (absolute or protocol-relative
+  // URLs, paths) is refused, so a song config can't point the player at
+  // another host.
   const sheetMusicUrl = useMemo(() => {
     const raw = song?.sheetMusicUrl;
-    if (!raw) return undefined;
-    if (/^https?:\/\//.test(raw) || raw.startsWith('/')) return raw;
+    if (!raw || !SCORE_FILENAME.test(raw)) return undefined;
     if (!currentBand || !song) return undefined;
     return r2Url(`${currentBand.id}/songs/${song.id}/${raw}`);
   }, [song, currentBand]);
-  const effectiveEqualBeatWidth = equalBeatWidthOverride ?? song?.equalBeatWidth ?? false;
 
-  // tapMap-based measure-start timeline
-  const measureTimes = useMemo(() => measureStartTimes(song?.tapMap), [song?.tapMap]);
+  // The original MuseScore file, when the song keeps one, is what gets drawn
+  // (exactly as MuseScore lays it out); the .mxl gives the repeat structure.
+  // Same filename rules as the score itself.
+  const scoreFiles = useMemo(() => {
+    if (!sheetMusicUrl || !song || !currentBand) return null;
+    const mscz = song.sheetMusicMsczUrl;
+    return {
+      mxlUrl: sheetMusicUrl,
+      msczUrl: mscz && MSCZ_FILENAME.test(mscz) ? r2Url(`${currentBand.id}/songs/${song.id}/${mscz}`) : undefined,
+      modified: song.sheetMusicModified,
+    };
+  }, [sheetMusicUrl, song, currentBand]);
 
-  // Audio offset: explicit field in song config, else the first measure-tap time
-  const audioOffset = useMemo(() => {
-    if (!song) return 0;
-    if (typeof song.audioOffsetSeconds === 'number') return song.audioOffsetSeconds;
-    return measureTimes[0] ?? 0;
-  }, [song, measureTimes]);
 
-  const handleReady = useCallback((_osmd: any) => { /* reserved for future hook-ins */ }, []);
-  const handleTimeline = useCallback((tl: InfiniteBeatStamp[]) => setTimeline(tl), []);
+
   const handleMeasureXs = useCallback((xs: number[]) => setMeasureXs(xs), []);
   const handleUnfoldedOrder = useCallback((steps: UnfoldedStep[]) => setUnfolded(steps), []);
   const handleParts = useCallback((ps: PartInfo[]) => {
@@ -196,13 +226,9 @@ export function ScrollingScore() {
     pendingSavedPartIdsRef.current = null;
     const available = new Set(ps.map((p) => p.id));
     const filtered = saved.filter((id) => available.has(id));
-    // OSMD needs at least one visible instrument.
+    // At least one part stays visible.
     if (filtered.length >= ps.length) return;
     setHiddenPartIds(new Set(filtered));
-  }, []);
-
-  const handleSvgReady = useCallback((svg: SVGSVGElement | null) => {
-    setLiveSvg(svg);
   }, []);
 
   // Compute the visible-part set that drives the renderer. Memoized so
@@ -214,100 +240,20 @@ export function ScrollingScore() {
     return s;
   }, [parts, hiddenPartIds]);
 
-  const toggleDraftPart = useCallback((id: string) => {
-    setDraftHiddenPartIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-        return next;
-      }
-      // OSMD needs at least one visible instrument — refuse to hide the
-      // last one instead of silently keeping it visible.
-      const remainingVisible = parts.length - next.size - 1;
-      if (remainingVisible < 1) return prev;
-      next.add(id);
-      return next;
-    });
-  }, [parts.length]);
-
-  const applyPartsDraft = useCallback(() => {
-    setHiddenPartIds(new Set(draftHiddenPartIds));
-    setPartsMenuOpen(false);
-  }, [draftHiddenPartIds]);
-
-  // True when the draft and committed selections diverge. Drives the
-  // apply button's enabled + highlighted state.
-  const draftDiffers = useMemo(() => {
-    if (draftHiddenPartIds.size !== hiddenPartIds.size) return true;
-    for (const id of draftHiddenPartIds) if (!hiddenPartIds.has(id)) return true;
-    return false;
-  }, [draftHiddenPartIds, hiddenPartIds]);
-
-  // Bootstrap + refine the sticky preamble.
-  //
-  // This has to handle a chicken-and-egg: the sticky-preamble wrapper
-  // only renders when `preambleWidth > 0`, and `preambleHost` only
-  // populates once the wrapper is in the DOM. So we first compute a
-  // `fallback` width (first-note-x minus a small gap) and set that,
-  // which lets the wrapper render. On the next effect run, both
-  // `liveSvg` and `preambleHost` are available and we refine the width
-  // via DOM measurement — walk every <text>/<path> in the clone and
-  // find the rightmost glyph whose right edge lies in the preamble
-  // region (before the first note). That gives a pixel-accurate cutoff
-  // at any zoom or time-signature width.
+  // Mount the panel's canvas in its overlay.
   useEffect(() => {
-    if (!scrollHost || timeline.length === 0) {
-      preambleHost?.replaceChildren();
-      setPreambleWidth(0);
-      return;
-    }
-    const spacerPx = LEADING_PAD_PX;
-    const firstNoteLocalX = timeline[0].xPx - spacerPx;
-    const PADDING_PX = 6;
-    const fallback = Math.max(40, firstNoteLocalX - PADDING_PX);
+    if (!panelHost) return;
+    if (panel) panelHost.replaceChildren(panel.canvas);
+    else panelHost.replaceChildren();
+  }, [panelHost, panel]);
 
-    // Step 1: bootstrap. If the host or SVG isn't ready, set the
-    // fallback width so the wrapper renders and the host ref populates.
-    if (!preambleHost || !liveSvg) {
-      preambleHost?.replaceChildren();
-      setPreambleWidth(fallback);
-      return;
-    }
-
-    // Step 2: mount the clone and refine via DOM measurement.
-    const clone = liveSvg.cloneNode(true) as SVGSVGElement;
-    clone.querySelectorAll('[id*="cursor"], [id*="Cursor"]').forEach((el) => el.remove());
-    clone.style.display = 'block';
-    preambleHost.replaceChildren(clone);
-
-    let rightmostEdge = 0;
-    const glyphs = clone.querySelectorAll('text, path');
-    for (const el of Array.from(glyphs)) {
-      let bbox: DOMRect | null = null;
-      try { bbox = (el as SVGGraphicsElement).getBBox(); } catch { /* detached */ }
-      if (!bbox) continue;
-      const right = bbox.x + bbox.width;
-      // Exclude staff-line paths and anything past the first note. Staff
-      // lines span the full score width so the `right < firstNoteLocalX`
-      // filter keeps them out automatically.
-      if (right > rightmostEdge && right < firstNoteLocalX - 3) {
-        rightmostEdge = right;
-      }
-    }
-
-    const measured = rightmostEdge > 0 ? rightmostEdge + PADDING_PX : fallback;
-    setPreambleWidth(Math.max(40, Math.min(measured, firstNoteLocalX - 2)));
-  }, [liveSvg, preambleHost, scrollHost, timeline, resizeTick]);
-
-  // Grab a handle to the renderer's scroll host the first time we render.
-  // InfiniteScoreRenderer's root element *is* the scroll host, so we just
-  // capture it via a ref callback on the wrapper.
-  const rendererWrapperRef = useCallback((el: HTMLDivElement | null) => {
-    if (!el) { setScrollHost(null); return; }
-    const host = el.querySelector('div[style*="overflow-x: auto"]') as HTMLDivElement | null
-      ?? el.firstElementChild as HTMLDivElement | null;
-    setScrollHost(host);
-  }, [sheetMusicUrl, scoreZoom, effectiveEqualBeatWidth]);
+  // Place a new panel (a new score, zoom or part selection) right away,
+  // not only on the next tick or scroll.
+  useEffect(() => {
+    if (!scrollHost) return;
+    panelWidthRef.current = 0;
+    setPanelBox(placePanel(panel, scrollHost.scrollLeft, focusLeftPxRef.current, panelWidthRef));
+  }, [panel, scrollHost]);
 
   // Reset the window anchor whenever the song changes
   useEffect(() => { setWindowAnchor(0); }, [sheetMusicUrl]);
@@ -328,12 +274,11 @@ export function ScrollingScore() {
   // Reset the parts list + selection on song change so stale part ids
   // from the previous score don't leak into the new one's visibility.
   // Also seed `pendingSavedPartIdsRef` from localStorage so `handleParts`
-  // can re-apply the user's last selection for this song once OSMD
+  // can re-apply the user's last selection for this song once the renderer
   // finishes discovering the parts.
   useEffect(() => {
     setParts([]);
     setHiddenPartIds(new Set());
-    setPartsMenuOpen(false);
     setUnfolded([]);
     const songId = song?.id;
     const saved = songId ? loadSheetMusicSongState(songId) : null;
@@ -358,20 +303,7 @@ export function ScrollingScore() {
     return () => clearTimeout(handle);
   }, [song?.id, hiddenPartIds, parts.length]);
 
-  // Close the parts dropdown when clicking outside it
-  useEffect(() => {
-    if (!partsMenuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      const el = partsMenuRef.current;
-      if (el && !el.contains(e.target as Node)) setPartsMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [partsMenuOpen]);
-
   // Close the settings (gear) dropdown when clicking outside it.
-  // Same pattern as the parts menu — independent state + ref so both can
-  // close on their own outside-click without interfering with each other.
   useEffect(() => {
     if (!settingsMenuOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -381,12 +313,6 @@ export function ScrollingScore() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [settingsMenuOpen]);
-
-  // Sync the dropdown's draft checkboxes from the committed selection
-  // whenever the menu opens, so a prior unapplied draft can't leak in.
-  useEffect(() => {
-    if (partsMenuOpen) setDraftHiddenPartIds(new Set(hiddenPartIds));
-  }, [partsMenuOpen, hiddenPartIds]);
 
   // Track scroll-host + waveform sizes so the window-bars-per-page
   // calculation updates on browser resize / device rotation / layout shift.
@@ -431,65 +357,35 @@ export function ScrollingScore() {
   // subscription. This is the same pattern LyricsDisplay uses: no RAF loop,
   // just re-derive state when `position` changes.
   useEffect(() => {
-    if (!scrollHost || timeline.length === 0 || measureXs.length < 2) return;
+    if (!scrollHost || measureXs.length < 2) return;
 
-    const t = position - audioOffset;
-
-    // `mIdx` is the UNFOLDED measure index — `measureTimes` comes from the
-    // tapMap, which is keyed to the unfolded audio (one entry per audible
-    // downbeat), so `currentMeasureIndex` returns `u` directly.
-    //
-    // For x-pixel math, resolve `u` through the unfold table to get
-    // the matching WRITTEN measure index (`srcIdx`). On scores without
-    // repeats `unfolded` is empty and `srcIdx === u`, which is the
-    // pre-existing behavior.
+    // `mIdx` is the PLAYED (unfolded) measure index, which the tapMap is
+    // keyed to; `srcIdx` is the WRITTEN measure it shows, which `measureXs`
+    // is keyed to (see `scorePosition.ts`).
     let mIdx = 0;
     let srcIdx = 0;
-    let srcIdxNext = 0;
     let cursorContentX: number;
-    // Number of measures the rendered score actually covers. For scores
-    // with repeats this is the unfolded length; without repeats it's the
-    // written-measure count (measureXs carries a trailing sentinel, so
-    // `length - 1` is the count). A tapMap with more entries than this
-    // advances `mIdx` past the score's last measure — we detect that and
-    // hide the playhead/bbox instead of letting the cursor math wrap.
-    const scoreMeasureCount = unfolded.length > 0
-      ? unfolded.length
-      : Math.max(0, measureXs.length - 1);
-    if (measureTimes.length >= 2) {
-      mIdx = currentMeasureIndex(t + audioOffset, measureTimes);
-      if (mIdx >= scoreMeasureCount) {
-        // Past the end of the rendered score. Leave scroll where it is,
-        // hide the playhead, and drop the window-mode bbox. Without this
-        // guard `measureXs[srcIdx]` is undefined and the `?? 0` fallback
-        // snaps the playhead to x = 0 (i.e. the top of the song).
-        pastEndRef.current = true;
-        setCursorPx(null);
-        setBbox(null);
-        measureRangeRef.current = null;
-        setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX - scrollHost.scrollLeft));
-        return;
-      }
+    if (scorePosition === PAST_END) {
+      // Past the end of the rendered score (the tapMap has more measures
+      // than the score). Leave scroll where it is, hide the playhead, and
+      // drop the window-mode bbox, rather than snapping to the top.
+      pastEndRef.current = true;
+      setCursorPx(null);
+      setBbox(null);
+      measureRangeRef.current = null;
+      setPanelBox(placePanel(panelRef.current, scrollHost.scrollLeft, focusLeftPxRef.current, panelWidthRef));
+      return;
+    }
+    if (scorePosition) {
       pastEndRef.current = false;
-      const step = unfolded.length > 0 ? unfolded[mIdx] : undefined;
-      srcIdx = step?.srcIndex ?? mIdx;
-      const nextStep = unfolded.length > 0 ? unfolded[mIdx + 1] : undefined;
-      srcIdxNext = nextStep?.srcIndex ?? (mIdx + 1);
-      const t0 = measureTimes[mIdx];
-      const t1 = measureTimes[mIdx + 1] ?? t0 + 1;
-      const frac = Math.max(0, Math.min(1, (t + audioOffset - t0) / Math.max(0.001, t1 - t0)));
+      mIdx = scorePosition.playedIndex;
+      srcIdx = scorePosition.writtenIndex;
+      // Slide across the current written measure, to its closing barline.
+      // On a repeat or jump the cursor then snaps to the next played measure
+      // at its downbeat, instead of sliding through the music in between.
       const x0 = measureXs[srcIdx] ?? 0;
-      // If the next unfolded measure is a jump target (repeat back,
-      // D.C., D.S., coda, or volta skip), don't lerp across the gap —
-      // that would slide the playhead visibly backward or forward
-      // through the current bar. Instead, lerp to the END of the
-      // current written measure; the snap to the jump destination
-      // happens discontinuously at the next measure onset.
-      const isJump = srcIdxNext !== srcIdx + 1;
-      const x1 = isJump
-        ? (measureXs[srcIdx + 1] ?? x0)
-        : (measureXs[srcIdxNext] ?? x0);
-      cursorContentX = x0 + frac * (x1 - x0);
+      const x1 = measureXs[srcIdx + 1] ?? x0;
+      cursorContentX = x0 + scorePosition.fraction * (x1 - x0);
     } else {
       // No tapMap measures: fall back to the first measure's x and freeze
       cursorContentX = measureXs[0] ?? 0;
@@ -627,16 +523,11 @@ export function ScrollingScore() {
       setTrainGrayRightStartPx(Math.min(rightEndInViewport, focusRightPx));
     }
 
-    // Sticky preamble position — same math for both modes.
-    // Karaoke: `spacerPx - scrollLeft` slides the preamble left until it
-    // pins at 0 once the original preamble would have scrolled off.
-    // Window: `scrollLeft` is large on pages 2+ (anchor > 0), so the max
-    // clamp pins it at 0; on page 1 (anchor === 0) scrollLeft is 0, so
-    // this evaluates to spacerPx — but page 1 doesn't render the sticky
-    // anyway (the natural preamble is already visible).
-    setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX - scrollHost.scrollLeft));
+    // The continuous panel: sticky at the strip's left edge, never reaching
+    // the reading point (the karaoke playhead, or the window's first bar).
+    setPanelBox(placePanel(panelRef.current, scrollHost.scrollLeft, focusLeftPxRef.current, panelWidthRef));
   }, [
-    position, audioOffset, scrollHost, timeline, measureXs, measureTimes,
+    scorePosition, scrollHost, measureXs,
     trackingMode, windowAnchor, resizeTick, playing, unfolded,
   ]);
 
@@ -679,20 +570,15 @@ export function ScrollingScore() {
           const contentX = scrollHost.scrollLeft + focusLeftPxRef.current;
           const writtenIdx = findMeasureAtX(contentX, xs);
           // resumeAtMeasureRef and lockedAnchorRef are compared against
-          // `mIdx` (UNFOLDED index) in the sync effect, so convert the
-          // clicked WRITTEN measure to its first unfolded occurrence.
-          const uf = unfoldedRef.current;
-          let unfoldedIdx = writtenIdx;
-          if (uf.length > 0) {
-            const first = uf.findIndex((s) => s.srcIndex === writtenIdx);
-            if (first >= 0) unfoldedIdx = first;
-          }
+          // `mIdx` (PLAYED index) in the sync effect, so convert the
+          // scrolled-to WRITTEN measure to its first played occurrence.
+          const unfoldedIdx = firstPlayedIndex(writtenIdx, unfoldedRef.current);
           resumeAtMeasureRef.current = unfoldedIdx;
           if (trackingModeRef.current === 'window') lockedAnchorRef.current = unfoldedIdx;
         }
       }
       if (!playingRef.current) {
-        setStickyPreambleLeftPx(Math.max(0, LEADING_PAD_PX - scrollHost.scrollLeft));
+        setPanelBox(placePanel(panelRef.current, scrollHost.scrollLeft, focusLeftPxRef.current, panelWidthRef));
         if (!pastEndRef.current) {
           setCursorPx(cursorContentXRef.current - scrollHost.scrollLeft);
           const range = measureRangeRef.current;
@@ -744,16 +630,11 @@ export function ScrollingScore() {
       const contentX = (e.clientX - hostRect.left) + scrollHost.scrollLeft;
       const writtenIdx = findMeasureAtX(contentX, xs);
       // `findMeasureAtX` returns a WRITTEN measure index. `times` is
-      // keyed in UNFOLDED order (one entry per audible downbeat), so we
-      // need to resolve the click to the first unfolded occurrence of
-      // that written measure — otherwise clicking m.9 on a score with
-      // repeats seeks to the 9th *unfolded* measure, which is usually
-      // not m.9 at all.
-      let unfoldedIdx = writtenIdx;
-      if (uf.length > 0) {
-        const first = uf.findIndex((s) => s.srcIndex === writtenIdx);
-        if (first >= 0) unfoldedIdx = first;
-      }
+      // keyed in PLAYED order (one entry per audible downbeat), so resolve
+      // the click to the first played occurrence of that written measure;
+      // otherwise clicking m.9 on a score with repeats seeks to the 9th
+      // *played* measure, which is usually not m.9 at all.
+      const unfoldedIdx = firstPlayedIndex(writtenIdx, uf);
       const mIdx = Math.max(0, Math.min(unfoldedIdx, times.length - 1));
       engineRef.current?.seek(times[mIdx]);
     };
@@ -773,6 +654,25 @@ export function ScrollingScore() {
 
   if (!sheetMusicUrl) return null;
 
+  const fullView = fullViewOpen && scoreFiles && song && (
+    <Suspense fallback={null}>
+      <ScoreFullView
+        title={song.title}
+        files={scoreFiles}
+        parts={parts}
+        hiddenPartIds={hiddenPartIds}
+        onHiddenPartIdsChange={setHiddenPartIds}
+        onParts={handleParts}
+        repeatAfterDcDs={song.repeatAfterDcDs ?? false}
+        onClose={closeFullView}
+      />
+    </Suspense>
+  );
+
+  // Phones: no strip. The transport's sheet music button opens the full
+  // screen view (pages re-wrapped to the screen).
+  if (!wide) return fullView || null;
+
   // Loading-only placeholder height. Once the score is rendered the
   // scroll host auto-sizes to the SVG, so this only controls the
   // height of the "loading…" spinner area, not the final layout.
@@ -785,14 +685,15 @@ export function ScrollingScore() {
   const overlay = (
     <>
       {/* Playhead line — full-system height, toggleable. Hidden (cursorPx
-          null) when playback has advanced past the last rendered measure. */}
+          null) when playback has advanced past the last rendered measure.
+          Above the sticky preamble, so nothing can cover it. */}
       {showPlayhead && cursorPx !== null && (
         <div style={{
           position: 'absolute', top: 0, bottom: 0,
           left: cursorPx - 1, width: 2,
           background: PLAYHEAD_COLOR, opacity: 0.9,
           boxShadow: `0 0 6px rgba(34,211,238,0.6)`,
-          pointerEvents: 'none', zIndex: 5,
+          pointerEvents: 'none', zIndex: 7,
         }} />
       )}
       {/* Window-mode bbox — spans the current measure */}
@@ -824,21 +725,19 @@ export function ScrollingScore() {
           pointerEvents: 'none', zIndex: 3,
         }} />
       )}
-      {/* Sticky preamble — a clipped clone of the rendered SVG's first
-          `preambleWidth` pixels (clef + key sig + time sig). Opaque so
-          it covers the original score when the two overlap.
-          Karaoke: slides left with the scroll until it pins at left=0.
-          Window: hidden on page 1 (the natural preamble is visible) and
-          always pinned at left=0 on pages 2+ (same visual as karaoke
-          when pinned). */}
-      {preambleWidth > 0 && (trackingMode === 'karaoke' || (trackingMode === 'window' && windowAnchor > 0)) && (
+      {/* MuseScore's continuous panel: the staff names, then the clef, key
+          and time signature in force, changing as the music does. Sticky:
+          it rides over the score's own header as it scrolls, then stays at
+          the strip's left edge. It never reaches the reading point (if it's
+          too wide, the start of the names is cut off). */}
+      {panelBox && (
         <div style={{
           position: 'absolute', top: 0, bottom: 0,
-          left: stickyPreambleLeftPx, width: preambleWidth,
+          left: panelBox.left, width: panelBox.width,
           overflow: 'hidden', pointerEvents: 'none', zIndex: 6,
           background: '#fff',
         }}>
-          <div ref={setPreambleHost} style={{ position: 'absolute', top: 0, left: 0 }} />
+          <div ref={setPanelHost} style={{ position: 'absolute', top: 0, left: panelBox.offset }} />
         </div>
       )}
     </>
@@ -853,53 +752,22 @@ export function ScrollingScore() {
           scroll with it — it's a sibling of the scroll host, not a
           child. */}
         <div className="absolute top-1 right-1 z-20 flex items-center gap-1 text-xs">
-          {parts.length > 0 && (
-            <div ref={partsMenuRef} className="relative">
-              <button
-                onClick={() => setPartsMenuOpen((v) => !v)}
-                className={`px-2 py-0.5 rounded ${hiddenPartIds.size > 0 ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                title="Pick which instrument parts to display"
-              >
-                parts ({parts.length - hiddenPartIds.size}/{parts.length})
-              </button>
-              {partsMenuOpen && (
-                <div
-                  className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded border border-gray-700 bg-gray-900 p-1 shadow-lg"
-                  role="menu"
-                >
-                  {parts.map((p) => {
-                    const on = !draftHiddenPartIds.has(p.id);
-                    const isLastVisible = on && parts.length - draftHiddenPartIds.size <= 1;
-                    return (
-                      <label
-                        key={p.id}
-                        className={`flex items-center gap-2 rounded px-2 py-1 text-gray-200 ${isLastVisible ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-800'}`}
-                        title={isLastVisible ? 'At least one part must stay visible' : undefined}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          disabled={isLastVisible}
-                          onChange={() => toggleDraftPart(p.id)}
-                        />
-                        <span className="truncate">{p.name}</span>
-                      </label>
-                    );
-                  })}
-                  <div className="mt-1 border-t border-gray-700 pt-1">
-                    <button
-                      onClick={applyPartsDraft}
-                      disabled={!draftDiffers}
-                      className={`w-full rounded px-2 py-1 text-xs ${draftDiffers ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
-                      title="Apply the part selection and redraw the score"
-                    >
-                      apply
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+          {scoreFiles && song && (
+            <button
+              ref={expandButtonRef}
+              onClick={() => setFullViewOpen(true)}
+              className="flex items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+              title="Full screen sheet music (F)"
+              aria-label="Full screen sheet music"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+            </button>
           )}
+          {fullView}
+          <PartsMenu parts={parts} hiddenPartIds={hiddenPartIds} onApply={setHiddenPartIds} />
           <div ref={settingsMenuRef} className="relative">
             <button
               onClick={() => setSettingsMenuOpen((v) => !v)}
@@ -940,23 +808,6 @@ export function ScrollingScore() {
                       className={`flex-1 px-2 py-0.5 rounded ${trackingMode === 'window' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
                       title="Show a page of measures at a time; advance when filled"
                     >windowed</button>
-                  </div>
-                </div>
-
-                {/* Spacing */}
-                <div className="mb-2">
-                  <div className="mb-1 text-[10px] uppercase tracking-wide text-gray-500">Spacing</div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => setEqualBeatWidthOverride(false)}
-                      className={`flex-1 px-2 py-0.5 rounded ${!effectiveEqualBeatWidth ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                      title="Space measures based on how many notes they contain"
-                    >natural</button>
-                    <button
-                      onClick={() => setEqualBeatWidthOverride(true)}
-                      className={`flex-1 px-2 py-0.5 rounded ${effectiveEqualBeatWidth ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                      title="Make every measure the same width"
-                    >equal-beat</button>
                   </div>
                 </div>
 
@@ -1008,22 +859,24 @@ export function ScrollingScore() {
             </svg>
           </button>
         </div>
-      <div ref={rendererWrapperRef} style={{ position: 'relative' }}>
-        <InfiniteScoreRenderer
-          url={sheetMusicUrl}
-          height={minRenderHeight}
-          zoom={scoreZoom}
-          equalBeatWidth={effectiveEqualBeatWidth}
-          leadingPadPx={LEADING_PAD_PX}
-          onReady={handleReady}
-          onTimeline={handleTimeline}
-          onMeasureXs={handleMeasureXs}
-          onSvgReady={handleSvgReady}
-          onParts={handleParts}
-          onUnfoldedOrder={handleUnfoldedOrder}
-          visiblePartIds={visiblePartIds}
-          repeatAfterDcDs={song?.repeatAfterDcDs ?? false}
-        />
+      <div style={{ position: 'relative' }}>
+        {scoreFiles && (
+          <Suspense fallback={<div style={{ minHeight: minRenderHeight, background: '#fff', borderRadius: 6 }} />}>
+            <EngravedStripRenderer
+              files={scoreFiles}
+              height={minRenderHeight}
+              zoom={scoreZoom}
+              leadingPadPx={LEADING_PAD_PX}
+              onScrollHost={setScrollHost}
+              onMeasureXs={handleMeasureXs}
+              onPanel={setPanel}
+              onParts={handleParts}
+              onUnfoldedOrder={handleUnfoldedOrder}
+              visiblePartIds={visiblePartIds}
+              repeatAfterDcDs={song?.repeatAfterDcDs ?? false}
+            />
+          </Suspense>
+        )}
         {/* Overlay — sibling of the scroll host (NOT inside it) so the
             playhead stays fixed to the viewport instead of scrolling with
             the score content. `inset: 0` stretches it to the wrapper's

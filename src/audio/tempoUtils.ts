@@ -132,3 +132,20 @@ export function generateBeatGrid(
 
   return grid;
 }
+
+/** The 1-based measure and beat at `position` (seconds), by the tapMap; null before the first measure. */
+export function measureBeatAt(tapMap: TapMapEntry[] | undefined, position: number): { measure: number; beat: number } | null {
+  if (!tapMap || tapMap.length === 0) return null;
+  let measure = 0;
+  let beat = 0;
+  for (const entry of tapMap) {
+    if (entry.time > position) break;
+    if (entry.type === 'section' || entry.type === 'measure') {
+      measure++;
+      beat = 1;
+    } else {
+      beat++;
+    }
+  }
+  return measure > 0 ? { measure, beat } : null;
+}
