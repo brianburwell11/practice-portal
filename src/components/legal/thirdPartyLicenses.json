@@ -126,6 +126,12 @@
     "url": "https://github.com/frenic/csstype"
   },
   {
+    "name": "fflate",
+    "version": "0.8.3",
+    "license": "MIT",
+    "url": "https://github.com/101arrowz/fflate"
+  },
+  {
     "name": "immediate",
     "version": "3.0.6",
     "license": "MIT",
@@ -166,6 +172,12 @@
     "version": "1.9.9",
     "license": "BSD-3-Clause",
     "url": "https://github.com/opensheetmusicdisplay/opensheetmusicdisplay"
+  },
+  {
+    "name": "opentype.js",
+    "version": "2.0.0",
+    "license": "MIT",
+    "url": "https://github.com/opentypejs/opentype.js"
   },
   {
     "name": "pako",

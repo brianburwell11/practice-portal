@@ -168,6 +168,32 @@ export function extractMusicXml(bytes: Uint8Array, limits: ZipLimits = DEFAULT_Z
 }
 
 /**
+ * The entries of an archive whose names pass `accept`, inflated under
+ * `limits` (per entry) and `maxTotalBytes` (all of them together). Entries
+ * that don't pass `accept` are never inflated.
+ */
+export function extractEntries(
+  bytes: Uint8Array,
+  accept: (name: string) => boolean,
+  maxTotalBytes: number,
+  limits: ZipLimits = DEFAULT_ZIP_LIMITS,
+): Map<string, Uint8Array> {
+  if (bytes.length > limits.maxArchiveBytes) throw new UnsafeArchiveError('Score file is too large');
+  const out = new Map<string, Uint8Array>();
+  let total = 0;
+  for (const entry of listEntries(bytes, limits)) {
+    if (entry.name.endsWith('/') || !accept(entry.name)) continue;
+    // Check the declared size first so an obvious bomb is refused before inflating.
+    if (total + entry.uncompressedSize > maxTotalBytes) throw new UnsafeArchiveError('Score file is too large');
+    const data = readEntry(bytes, entry, limits);
+    total += data.length;
+    if (total > maxTotalBytes) throw new UnsafeArchiveError('Score file is too large');
+    out.set(entry.name, data);
+  }
+  return out;
+}
+
+/**
  * Score bytes (zipped `.mxl` or plain MusicXML) to MusicXML text, with the
  * same size limits for both.
  */

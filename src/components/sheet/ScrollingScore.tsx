@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
@@ -14,6 +14,11 @@ import {
 } from '../../utils/sheetMusicSongStorage';
 import { InfiniteScoreRenderer, type InfiniteBeatStamp, type PartInfo } from './InfiniteScoreRenderer';
 import type { UnfoldedStep } from '../../audio/unfoldRepeats';
+
+// TEMPORARY (Phase 2 spike, dev only): muse-encore page render for comparison.
+const ScorePageSpike = import.meta.env.DEV
+  ? lazy(() => import('./page/ScorePageSpike').then((m) => ({ default: m.ScorePageSpike })))
+  : null;
 
 /** Pixels to nudge the left focus point right of the waveform's left edge.
  *  Keep in sync with the same constant in `LyricsDisplay.tsx` so the
@@ -111,6 +116,7 @@ export function ScrollingScore() {
   /** Subset of part ids the user has hidden. Empty = show all. */
   const [hiddenPartIds, setHiddenPartIds] = useState<Set<string>>(new Set());
   const [partsMenuOpen, setPartsMenuOpen] = useState(false);
+  const [spikeOpen, setSpikeOpen] = useState(false);
   /** Pending checkbox state inside the open dropdown. Changes don't apply
    *  until the user hits the apply button — closing the menu any other way
    *  discards them. Synced from `hiddenPartIds` on each open. */
@@ -854,6 +860,25 @@ export function ScrollingScore() {
           scroll with it — it's a sibling of the scroll host, not a
           child. */}
         <div className="absolute top-1 right-1 z-20 flex items-center gap-1 text-xs">
+          {ScorePageSpike && (
+            <button
+              onClick={() => setSpikeOpen(true)}
+              className="px-2 py-0.5 rounded bg-amber-700 text-white hover:bg-amber-600"
+              title="Dev only: render this score with muse-encore"
+            >
+              pages (spike)
+            </button>
+          )}
+          {ScorePageSpike && spikeOpen && (
+            <Suspense fallback={null}>
+              <ScorePageSpike
+                url={sheetMusicUrl}
+                unfolded={unfolded}
+                hiddenPartIndices={parts.filter((p) => hiddenPartIds.has(p.id)).map((p) => p.index)}
+                onClose={() => setSpikeOpen(false)}
+              />
+            </Suspense>
+          )}
           {parts.length > 0 && (
             <div ref={partsMenuRef} className="relative">
               <button
