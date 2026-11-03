@@ -16,6 +16,10 @@ interface Persisted {
   scoreZoom: number;
   windowBars: number;
   showPlayhead: boolean;
+  /** Page view zoom: 1 = pages fit the width (or, reflowed, MuseScore's 100%). */
+  pageZoom: number;
+  /** Page view: white-on-dark pages. */
+  pageInvert: boolean;
 }
 
 interface SheetMusicState extends Persisted {
@@ -23,13 +27,20 @@ interface SheetMusicState extends Persisted {
   setScoreZoom: (z: number) => void;
   setWindowBars: (n: number) => void;
   setShowPlayhead: (v: boolean) => void;
+  setPageZoom: (z: number) => void;
+  setPageInvert: (v: boolean) => void;
 }
+
+export const PAGE_ZOOM_MIN = 0.5;
+export const PAGE_ZOOM_MAX = 3;
 
 const DEFAULTS: Persisted = {
   trackingMode: 'karaoke',
   scoreZoom: 0.95,
   windowBars: 4,
   showPlayhead: true,
+  pageZoom: 1,
+  pageInvert: false,
 };
 
 function loadInitial(): Persisted {
@@ -57,6 +68,8 @@ export const useSheetMusicStore = create<SheetMusicState>((set, get) => ({
   setScoreZoom: (z) => { set({ scoreZoom: z }); persist(getPersisted(get())); },
   setWindowBars: (n) => { set({ windowBars: n }); persist(getPersisted(get())); },
   setShowPlayhead: (v) => { set({ showPlayhead: v }); persist(getPersisted(get())); },
+  setPageZoom: (z) => { set({ pageZoom: Math.min(PAGE_ZOOM_MAX, Math.max(PAGE_ZOOM_MIN, z)) }); persist(getPersisted(get())); },
+  setPageInvert: (v) => { set({ pageInvert: v }); persist(getPersisted(get())); },
 }));
 
 function getPersisted(s: SheetMusicState): Persisted {
@@ -65,5 +78,7 @@ function getPersisted(s: SheetMusicState): Persisted {
     scoreZoom: s.scoreZoom,
     windowBars: s.windowBars,
     showPlayhead: s.showPlayhead,
+    pageZoom: s.pageZoom,
+    pageInvert: s.pageInvert,
   };
 }

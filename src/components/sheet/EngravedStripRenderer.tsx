@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { parseMusicXML, unfold, type MusicXMLStructure, type UnfoldedStep } from '../../audio/unfoldRepeats';
-import { fetchSongScore, ScoreEngine, type SongScoreFiles } from './page/museEncoreEngine';
+import { fetchSongScore, ScoreEngine, scorePartIds, type SongScoreFiles } from './page/museEncoreEngine';
 
 /** Canvas tiles: the continuous line is far wider than one canvas may be. */
 const TILE_CSS_PX = 1024;
@@ -51,12 +51,6 @@ interface Layout {
   top: number;
   widthPx: number;
   heightPx: number;
-}
-
-/** MusicXML part ids in instrument order (the strip's saved hidden parts use them). */
-function partIdsOf(xml: string): string[] {
-  const doc = new DOMParser().parseFromString(xml, 'application/xml');
-  return Array.from(doc.querySelectorAll('score-part')).map((el) => el.getAttribute('id') ?? '');
 }
 
 /**
@@ -141,7 +135,7 @@ export function EngravedStripRenderer({
         }
         const e = await ScoreEngine.open(source, { mode: 'line' });
         if (cancelled) return;
-        const ids = partIdsOf(xml);
+        const ids = scorePartIds(xml);
         const parts = e.parts().map((p, i) => ({
           id: ids.length === e.parts().length && ids[i] ? ids[i] : `P${i + 1}`,
           name: p.name,

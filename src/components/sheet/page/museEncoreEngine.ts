@@ -19,7 +19,7 @@
  * are kept, and they are re-zipped uncompressed for `loadScore`, which then
  * unzips an archive we built.
  */
-import type { MasterScore, PlayalongMeasure } from 'muse-encore';
+import type { MasterScore } from 'muse-encore';
 import { zipSync } from 'fflate';
 import { extractEntries, isZip, scoreBytesToXml, UnsafeArchiveError } from '../../../utils/safeUnzip';
 
@@ -169,10 +169,12 @@ export class ScoreEngine {
   }
 
   private bounds: { top: number; bottom: number } | null = null;
+  private beatStarts: (number | null)[] | null = null;
 
   private invalidate(): void {
     this.rects = null;
     this.bounds = null;
+    this.beatStarts = null;
   }
 
   /**
@@ -254,6 +256,21 @@ export class ScoreEngine {
     return rects;
   }
 
+  /**
+   * Where each written measure's first beat is (x in inches on its page),
+   * past any clef, key or time signature at the start of its system, or
+   * null. Built once per layout.
+   */
+  measureBeatStarts(): (number | null)[] {
+    if (this.beatStarts) return this.beatStarts;
+    const starts: (number | null)[] = [];
+    for (let m = this.score.firstMeasure(); m; m = m.nextMeasure()) {
+      starts.push(this.me.playbackCursorBounds(this.score, m.tick().ticks())?.x ?? null);
+    }
+    this.beatStarts = starts;
+    return starts;
+  }
+
   /** Where the first measure's first beat is (inches): past the clef, key and time signature. */
   firstBeatX(): number | null {
     const m = this.score.firstMeasure();
@@ -265,14 +282,6 @@ export class ScoreEngine {
     const rects = this.measureRects();
     return rects.findIndex((r) => !!r && r.page === page
       && x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height);
-  }
-
-  /** Written measure indices in the order muse-encore would play them (repeats expanded). */
-  playedOrder(): number[] {
-    const indexByTick = new Map<number, number>();
-    let i = 0;
-    for (let m = this.score.firstMeasure(); m; m = m.nextMeasure()) indexByTick.set(m.tick().ticks(), i++);
-    return this.me.playalongMeasures(this.score).map((pm: PlayalongMeasure) => indexByTick.get(pm.tick) ?? -1);
   }
 
   parts(): { name: string; shown: boolean }[] {
@@ -321,4 +330,10 @@ export async function fetchSongScore(files: SongScoreFiles): Promise<{ xml: stri
   const xml = scoreBytesToXml(mxl);
   const source: ScoreSource = mscz ? { kind: 'mscz', bytes: mscz, modified: files.modified } : { kind: 'musicxml', xml };
   return { xml, source };
+}
+
+/** MusicXML part ids in instrument order (saved hidden parts use them). */
+export function scorePartIds(xml: string): string[] {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  return Array.from(doc.querySelectorAll('score-part')).map((el) => el.getAttribute('id') ?? '');
 }

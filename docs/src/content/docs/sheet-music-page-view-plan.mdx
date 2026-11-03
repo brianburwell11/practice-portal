@@ -71,14 +71,20 @@ The strip is drawn by muse-encore too, in MuseScore's continuous view (the whole
 
 ## Phase 4: Page view renderer
 
-- [ ] `museEncoreEngine`: lazy load, fit-width layout, draw a region, measure bounds cache, measure hit test
-- [ ] Canvas per page, drawn only when visible, DPR-aware, tiled above a pixel cap
-- [ ] Re-layout on resize and rotation, keeping the reading position
-- [ ] Measure highlight and cursor line, snapping on repeats and jumps
-- [ ] Auto-follow with a lookahead, paused by user scroll or touch, resumed after idle or with a Follow button
-- [ ] Tap or click a measure to seek
-- [ ] Pinch and ctrl/⌘+wheel zoom
-- [ ] Optional inverted pages for dark mode
+`src/components/sheet/page/PageScoreView.tsx`. Until the overlay exists, a dev-only **pages (preview)** button in the score panel opens it in a panel over the bottom of the screen (replacing the Phase 2 spike).
+
+- [x] Engine: fit-width layout, region drawing, measure rectangles, and each measure's first-beat x (every system starts with its own clef and key, so the cursor starts at the first beat, not the measure's edge)
+- [x] Layout modes: exact pages (fit to the width, capped at 160% so big screens don't show giant notes) or reflowed to the width; `auto` reflows below 700 px
+- [x] Canvas tiles (up to 1024 px tall), drawn one per frame as they near the view, cleared when far, DPR-aware
+- [x] Re-layout on resize and rotation (debounced), keeping the measure at the top of the view in place
+- [x] Measure highlight from the first beat and a cursor line, from `useScorePosition`; snaps on repeats and jumps
+- [x] Follow: keeps the current system near the top; past 60% of a measure it makes sure the next measure played (a repeat or jump target too) is in view, so the page turns early. Pages wider than the view follow sideways too
+- [x] Wheel, swipe, arrow keys or the scrollbar pause follow; it resumes 3 s after the last one while playing, or with the Follow button
+- [x] Tap or click a measure to jump to its first time through (a drag doesn't count)
+- [x] Zoom: ctrl/⌘+wheel (and trackpad pinch) and two-finger pinch, previewed with CSS and laid out again at the end, keeping the measure under the fingers in place
+- [x] Inverted pages for dark mode (the cursor colors stay true); page zoom and invert are saved settings
+- [x] Parts hidden in the strip are hidden here too
+- [x] Checked in the browser and on a phone
 
 ## Phase 5: Full-screen overlay (desktop)
 
