@@ -7,6 +7,7 @@ import { useLyricsStore } from '../../store/lyricsStore';
 import { useLongPress } from '../../hooks/useLongPress';
 import { WaveformTimeline } from './WaveformTimeline';
 import { MasterSliders } from './MasterSliders';
+import { Skeleton } from '../ui/Loading';
 
 import type { TapMapEntry } from '../../audio/types';
 
@@ -74,6 +75,47 @@ function measureBeatToTime(tapMap: TapMapEntry[] | undefined, targetMeasure: num
   return null;
 }
 
+// A made-up waveform for the placeholder: bar heights in %, the same every load.
+const SKELETON_BARS = Array.from({ length: 64 }, (_, i) =>
+  Math.round(45 + 25 * Math.sin(i * 0.45) + 15 * Math.sin(i * 1.7 + 1)),
+);
+
+/**
+ * The waveform and overview strip's shape while the first song loads, the
+ * same size as `WaveformTimeline`. Once stems are downloading, how many have
+ * arrived runs along the bottom.
+ */
+function WaveformSkeleton({ progress }: { progress: { loaded: number; total: number } | null }) {
+  return (
+    <div className="flex flex-col gap-0.5" role="status">
+      <span className="sr-only">
+        {progress ? `Loading stems, ${progress.loaded} of ${progress.total}` : 'Loading the song'}
+      </span>
+      {/* Marked as the waveform: notes, lyrics and the score line up on its
+          left edge, and look it up by this attribute. */}
+      <div aria-hidden="true" data-waveform-timeline className="h-[80px] md:h-[108px] rounded bg-gray-800/60 flex items-center gap-[3px] px-2 overflow-hidden motion-safe:animate-pulse">
+        {SKELETON_BARS.map((h, i) => (
+          <div key={i} className="flex-1 min-w-[2px] rounded-full bg-gray-700" style={{ height: `${h}%` }} />
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-5 relative rounded overflow-hidden border border-gray-700/50">
+          <Skeleton className="absolute inset-0 rounded-none" />
+          {progress && (
+            <div
+              className="absolute inset-y-0 left-0 bg-blue-500/50 transition-all"
+              style={{ width: `${Math.round((progress.loaded / progress.total) * 100)}%` }}
+            />
+          )}
+        </div>
+        {progress && (
+          <span className="text-xs text-gray-500 shrink-0 font-mono">{progress.loaded}/{progress.total}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface TransportBarProps {
   showSliders: boolean;
   onToggleSliders: () => void;
@@ -83,7 +125,6 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
   const engine = useAudioEngine();
   const { playing, position, duration, loopA, loopB, loopEnabled, toggleFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
-  const stemLoading = useSongStore((s) => s.loading);
   const loadProgress = useSongStore((s) => s.loadProgress);
   const mixerStems = useMixerStore((s) => s.stems);
   const globalSoloActive = useMixerStore((s) => s.globalSoloActive);
@@ -94,6 +135,8 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
   const clearMuteGroup = useMixerStore((s) => s.clearMuteGroup);
 
   const disabled = !selectedSong;
+  // A song on its way in, the first or the next: placeholders for the waveform and time.
+  const songLoading = useSongStore((s) => s.loading || (!s.selectedSong && !s.manifest));
   const [showBookmark, setShowBookmark] = useState(false);
   const lyricsMobileVisible = useLyricsStore((s) => s.mobileVisible);
   const toggleLyricsMobileVisible = useLyricsStore((s) => s.toggleMobileVisible);
@@ -250,22 +293,14 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
       {/* Waveform + timestamp — full width on mobile (row 1), flex-1 on desktop */}
       <div className="md:flex-1 md:min-w-0 flex items-center gap-2">
         <div className="flex-1 min-w-0">
-          {stemLoading && loadProgress ? (
-            <div className="flex items-center gap-2">
-              <div className="flex-1 bg-gray-700 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full transition-all"
-                  style={{ width: `${Math.round((loadProgress.loaded / loadProgress.total) * 100)}%` }}
-                />
-              </div>
-              <span className="text-xs text-gray-500 shrink-0">
-                {loadProgress.loaded}/{loadProgress.total}
-              </span>
-            </div>
-          ) : (
-            <WaveformTimeline />
-          )}
+          {songLoading ? <WaveformSkeleton progress={loadProgress} /> : <WaveformTimeline />}
         </div>
+        {songLoading ? (
+          <div className="hidden md:flex md:flex-col md:items-center md:gap-2 shrink-0">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-10" />
+          </div>
+        ) : (
         <div className="hidden md:flex md:flex-col md:items-center font-mono text-sm text-gray-300 shrink-0 -mt-1">
           <div>
             {editingTime ? (
@@ -386,6 +421,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
             );
           })()}
         </div>
+        )}
       </div>
 
       {/* Mobile: transport buttons (row 2) */}

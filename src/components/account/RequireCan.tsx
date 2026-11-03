@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { signInHref, useSessionStore } from '../../store/sessionStore';
 import { useBandStore } from '../../store/bandStore';
+import { PageLoader } from '../ui/Loading';
 
 interface Props {
   /** A capability in the band on screen, or 'signedIn' / 'platformAdmin' for site-wide pages. */
@@ -22,7 +23,7 @@ export function RequireCan({ need, children }: Props) {
     load();
   }, [load]);
 
-  if (!loaded) return <div className="min-h-screen bg-page text-gray-400 p-8">Loading…</div>;
+  if (!loaded) return <PageLoader />;
 
   const allowed = need === 'signedIn' ? !!user : need === 'platformAdmin' ? platformAdmin : can(bandId, need);
   if (allowed) return <>{children}</>;

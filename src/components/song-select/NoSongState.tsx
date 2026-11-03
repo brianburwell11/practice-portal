@@ -3,6 +3,7 @@ import { useBandStore } from '../../store/bandStore';
 import { useCan } from '../../store/sessionStore';
 import { useSongStore } from '../../store/songStore';
 import { useSongLoader } from './SongList';
+import { MixerSkeleton } from '../mixer/MixerSkeleton';
 
 /**
  * What fills the screen before a song is playing: a failed load and its
@@ -34,7 +35,7 @@ export function NoSongState({ onInvite }: { onInvite: () => void }) {
     );
   }
 
-  if (!manifest || loading) return <Centered><p className="text-gray-500">Loading…</p></Centered>;
+  if (!manifest || loading) return <MixerSkeleton />;
 
   if (manifest.songs.length === 0) {
     if (!canAddSong) {

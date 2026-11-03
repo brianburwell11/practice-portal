@@ -9,6 +9,7 @@ import { useSessionStore } from '../../store/sessionStore';
 import { AccountMenu } from '../account/AccountMenu';
 import { RequestAccess } from '../account/RequestAccess';
 import { NotFound } from '../NotFound';
+import { PageLoader } from '../ui/Loading';
 import { bandPageTitle } from '../../utils/pageTitle';
 
 /**
@@ -128,11 +129,7 @@ export function BandApp() {
   }
 
   if (!currentBand || guestPending) {
-    return (
-      <div className="min-h-screen bg-page text-gray-400 p-8">
-        Loading...
-      </div>
-    );
+    return <PageLoader />;
   }
 
   return <Outlet />;
