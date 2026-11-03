@@ -10,6 +10,10 @@ export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
   plugins: [react(), tailwindcss(), basicSsl(), configApiPlugin()],
   server: { host: true },
+  // Scan only the app for dependencies to pre-bundle. By default Vite scans
+  // every .html in the project, which includes muse-encore's own viewer and
+  // editor apps under vendor/ and their uninstalled dependencies.
+  optimizeDeps: { entries: ['index.html'] },
   resolve: {
     alias: {
       // GPL-3.0 engraving engine, vendored as a submodule pinned to a reviewed
