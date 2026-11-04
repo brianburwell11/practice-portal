@@ -25,7 +25,8 @@ import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { db as defaultDb } from '../db/client';
 import * as schema from '../db/schema';
 import { HttpError } from './http';
-import { r2PublicUrl } from './r2';
+import { getR2Client, r2HeadEtag, r2PublicUrl } from './r2';
+import { memo } from './cache';
 
 export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
 
@@ -240,6 +241,10 @@ async function read(key: string, d: Db, viewer: Viewer | typeof UNCHECKED): Prom
         .where(and(liveSongs(band.id), eq(schema.song.mediaPrefix, `${k.band}/songs/${k.song}`)));
       if (!row) return null;
       if (k.file === 'notes' && viewer !== UNCHECKED) return notesForViewers(row.notes, d);
+      // Served configs say which version of each media file they point at.
+      if (k.file === 'config' && viewer !== UNCHECKED && row.config) {
+        return withMediaVersions(row.config, `${k.band}/songs/${k.song}`);
+      }
       return row[k.file] ?? null;
     }
 
@@ -261,6 +266,35 @@ async function read(key: string, d: Db, viewer: Viewer | typeof UNCHECKED): Prom
       return row?.config ?? null;
     }
   }
+}
+
+/** How long an object's ETag is trusted. Any write, and a finished transcode, clears it sooner. */
+const ETAG_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * The config with `mediaVersions`: a short content version (from R2's ETag)
+ * for each stem and score file it names, so the app can cache them offline
+ * and know exactly when one changes. Files R2 doesn't have, or no R2 at all
+ * (local scratch runs), simply have none.
+ */
+async function withMediaVersions(config: unknown, prefix: string): Promise<unknown> {
+  if (!getR2Client()) return config;
+  const c = config as { stems?: { file?: string }[]; sheetMusicUrl?: string; sheetMusicMsczUrl?: string };
+  const files = [
+    ...(c.stems ?? []).map((s) => s.file),
+    c.sheetMusicUrl,
+    c.sheetMusicMsczUrl,
+  ].filter((f): f is string => typeof f === 'string' && f.length > 0 && !f.includes('/'));
+  const versions: Record<string, string> = {};
+  await Promise.all([...new Set(files)].map(async (file) => {
+    try {
+      const etag = await memo(`etag:${prefix}/${file}`, () => r2HeadEtag(`${prefix}/${file}`), ETAG_TTL_MS);
+      if (etag) versions[file] = etag.replace(/[^A-Za-z0-9-]/g, '').slice(0, 16);
+    } catch (err) {
+      console.error(`[documents] media version of ${prefix}/${file} failed:`, err);
+    }
+  }));
+  return Object.keys(versions).length ? { ...(config as object), mediaVersions: versions } : config;
 }
 
 // ----------------------------------------------------------------- mirror

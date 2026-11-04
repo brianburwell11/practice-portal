@@ -32,3 +32,6 @@ dist-ssr
 
 # Standalone server bundle (npm run build:server)
 dist-server
+
+# Built from sw/sw.ts by `npm run build:sw`
+public/sw.js

@@ -150,7 +150,10 @@ export class AudioEngine {
         if (localFile) {
           arrayBuffer = await localFile.arrayBuffer();
         } else {
-          const url = `${basePath}/${encodeURIComponent(stemConfig.file)}`;
+          // `?v=` is the file's content version: the offline cache keeps a
+          // stem under it, and a replaced stem gets a new one.
+          const version = config.mediaVersions?.[stemConfig.file];
+          const url = `${basePath}/${encodeURIComponent(stemConfig.file)}${version ? `?v=${encodeURIComponent(version)}` : ''}`;
           const response = await fetch(url);
           arrayBuffer = await response.arrayBuffer();
         }

@@ -116,6 +116,8 @@ export interface SongConfig {
   sheetMusicMsczUrl?: string;
   /** YYYY-MM-DD last-modified date of that MuseScore file. */
   sheetMusicModified?: string;
+  /** Served, never stored: content version per media file (see schema). */
+  mediaVersions?: Record<string, string>;
   audioOffsetSeconds?: number;
   /** When true, internal repeats / voltas are re-taken on the return
    *  pass after a D.C. / D.S. jump. Default (unset / false) matches

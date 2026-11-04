@@ -15,14 +15,26 @@ import type { SongScoreFiles } from './page/museEncoreEngine';
  */
 export function songScoreFiles(
   bandId: string | undefined,
-  song: { id: string; sheetMusicUrl?: string; sheetMusicMsczUrl?: string; sheetMusicModified?: string } | null | undefined,
+  song: {
+    id: string;
+    sheetMusicUrl?: string;
+    sheetMusicMsczUrl?: string;
+    sheetMusicModified?: string;
+    mediaVersions?: Record<string, string>;
+  } | null | undefined,
 ): SongScoreFiles | null {
   const mxl = song?.sheetMusicUrl;
   if (!bandId || !song || !mxl || !SCORE_FILENAME.test(mxl)) return null;
   const mscz = song.sheetMusicMsczUrl;
+  // `?v=` is the file's content version (see `mediaVersions`): the offline
+  // cache keeps the file under it.
+  const url = (file: string) => {
+    const v = song.mediaVersions?.[file];
+    return r2Url(`${bandId}/songs/${song.id}/${file}`) + (v ? `?v=${encodeURIComponent(v)}` : '');
+  };
   return {
-    mxlUrl: r2Url(`${bandId}/songs/${song.id}/${mxl}`),
-    msczUrl: mscz && MSCZ_FILENAME.test(mscz) ? r2Url(`${bandId}/songs/${song.id}/${mscz}`) : undefined,
+    mxlUrl: url(mxl),
+    msczUrl: mscz && MSCZ_FILENAME.test(mscz) ? url(mscz) : undefined,
     modified: song.sheetMusicModified,
   };
 }

@@ -18,6 +18,7 @@ import * as schema from '../../db/schema';
 import { ffprobe, measureLoudness, transcodeToOpus, type LoudnessInfo } from '../media/ffmpeg';
 import { errorMessage } from '../http';
 import { getR2Client, r2DeleteKey, r2DownloadToFile, r2ListKeys, r2PutFile } from '../r2';
+import { clearCache } from '../cache';
 
 type Job = typeof schema.job.$inferSelect;
 
@@ -139,6 +140,8 @@ async function run(job: Job): Promise<void> {
     await db().update(schema.job)
       .set({ status: 'done', progress: 1, result, error: null, lockedAt: null, updatedAt: now, finishedAt: now })
       .where(and(eq(schema.job.id, job.id), eq(schema.job.status, 'running')));
+    // A new or replaced stem changes its song's media versions.
+    clearCache();
   } catch (err) {
     const message = String(errorMessage(err) ?? err).slice(0, 500);
     console.error(`[worker] job ${job.id} failed (attempt ${job.attempts}):`, message);

@@ -7,7 +7,7 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts', 'server/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'server/**/*.test.ts', 'sw/**/*.test.ts'],
     // Server tests start with `// @vitest-environment node`.
     environment: 'happy-dom',
   },
