@@ -5,6 +5,7 @@ import { useSheetMusicStore } from '../../../store/sheetMusicStore';
 import { useTransportStore } from '../../../store/transportStore';
 import { firstPlayedIndex, PAST_END, writtenOf } from '../scorePosition';
 import { useScorePosition } from '../useScorePosition';
+import { scoreCanvasDpr } from '../canvasScale';
 import type { PartInfo } from '../EngravedStripRenderer';
 import { fetchSongScore, preloadScoreEngine, ScoreEngine, scorePartIds, type MeasureRect, type SongScoreFiles } from './museEncoreEngine';
 
@@ -17,6 +18,9 @@ const GUTTER_PX = 12;
 const MAX_FIT_SCALE = 1.6 * CSS_DPI;
 /** Below this width, 'auto' reflows the music to the screen instead of showing pages. */
 const REFLOW_BELOW_PX = 700;
+/** On a screen shorter than this (a phone in landscape), 'auto' reflows too:
+ *  a whole page there is tiny, and its tiles are huge. */
+const SHORT_SCREEN_PX = 500;
 /** Follow resumes this long after the last scroll, swipe or wheel. */
 const FOLLOW_RESUME_MS = 3000;
 /** A press that moves less than this is a tap (seek), not a drag. */
@@ -208,7 +212,8 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!engine || width <= 0 || !viewport) return;
-    const mode = layoutMode === 'auto' ? (width < REFLOW_BELOW_PX ? 'fit-width' : 'page') : layoutMode;
+    const reflow = width < REFLOW_BELOW_PX || window.innerHeight < SHORT_SCREEN_PX;
+    const mode = layoutMode === 'auto' ? (reflow ? 'fit-width' : 'page') : layoutMode;
     const usable = Math.max(100, width - 2 * GUTTER_PX);
 
     let scale: number;
@@ -267,7 +272,7 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
     const viewport = viewportRef.current;
     const layer = pagesLayerRef.current;
     if (!engine || !geometry || !viewport || !layer) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = scoreCanvasDpr();
     const dpi = geometry.scale * dpr;
     const queue = new Set<HTMLElement>();
     let frame = 0;

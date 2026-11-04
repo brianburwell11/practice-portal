@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { parseMusicXML, unfold, type MusicXMLStructure, type UnfoldedStep } from '../../audio/unfoldRepeats';
+import { scoreCanvasDpr } from './canvasScale';
 import { fetchSongScore, preloadScoreEngine, ScoreEngine, scorePartIds, type SongScoreFiles } from './page/museEncoreEngine';
 
 /** Canvas tiles: the continuous line is far wider than one canvas may be. */
@@ -197,7 +198,7 @@ export function EngravedStripRenderer({
     engine.setHiddenParts(hidden);
 
     const scale = CSS_DPI * zoom;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = scoreCanvasDpr();
     const page = engine.pageSize(0);
     const bounds = engine.contentBounds();
     const rects = engine.measureRects();

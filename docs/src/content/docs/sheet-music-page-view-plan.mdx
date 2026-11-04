@@ -108,6 +108,14 @@ The strip is drawn by muse-encore too, in MuseScore's continuous view (the whole
 - [x] Screen Wake Lock while the full screen view is open and playing (`useWakeLock`), asked for again on coming back to the app; nothing happens where it isn't supported
 - [x] Parts on phones: the page view reports the score's parts, so saved hidden parts load and the parts menu works without the strip
 - [x] Checked in Chrome's device mode (a real iPhone still to do: safe areas, wake lock, home screen app)
+- [x] **Rotation fix (found on a home screen iPhone):** rotating with full screen open made play/pause stop playback instead.
+  - **Cause:** landscape made the phone count as wide, which rebuilt the full screen view, loaded the strip behind it, and switched "auto" to full pages drawn at 3× density. The page was busy for long enough that the play button's 500 ms long-press timer fired before the tap's release was handled, so taps became "stop".
+  - **Fixes:**
+    - long-press is now measured from the events' own timestamps (it acts on release)
+    - the full screen view keeps its place in the tree, so rotation doesn't rebuild it
+    - touch screens don't load the strip under an open full screen view
+    - "auto" reflows on screens under 500 px tall
+    - score canvases are drawn at no more than 2× density
 
 ## Phase 7: Tests and docs
 

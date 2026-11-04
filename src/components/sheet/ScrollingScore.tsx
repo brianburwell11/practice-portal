@@ -118,6 +118,11 @@ export function ScrollingScore() {
    *  is no strip (it's never loaded): the transport's sheet music button
    *  opens the full screen view instead. */
   const wide = useMediaQuery('(min-width: 768px)');
+  /** Touch screens (phones, tablets) don't load the strip under an open full
+   *  screen view: rotating a phone to landscape made it "wide" and started
+   *  the strip loading behind the overlay. Mouse-driven screens keep it, so
+   *  closing full screen there is instant. */
+  const touchScreen = useMediaQuery('(pointer: coarse)');
   // Close it if the panel goes away (an editor opened), so it doesn't pop up again later.
   useEffect(() => () => setFullViewOpen(false), [setFullViewOpen]);
   const fullViewOpenRef = useRef(false);
@@ -649,8 +654,11 @@ export function ScrollingScore() {
   );
 
   // Phones: no strip. The transport's sheet music button opens the full
-  // screen view (pages re-wrapped to the screen).
-  if (!wide) return fullView || null;
+  // screen view (pages re-wrapped to the screen). The full screen view is
+  // always the last child, in the same place whichever way it goes, so
+  // rotating a phone (which flips `wide`) doesn't rebuild it.
+  const showStrip = wide && !(fullViewOpen && touchScreen);
+  if (!showStrip) return <>{null}{fullView}</>;
 
   // Loading-only placeholder height. Once the score is rendered the
   // scroll host auto-sizes to the SVG, so this only controls the
@@ -723,6 +731,7 @@ export function ScrollingScore() {
   );
 
   return (
+    <>
     <div className="relative border-b border-gray-800">
       {/* Gear + parts triggers — absolutely positioned in the top-right so
           the score renders flush with the top of the panel. Both triggers
@@ -745,7 +754,6 @@ export function ScrollingScore() {
               </svg>
             </button>
           )}
-          {fullView}
           <PartsMenu parts={parts} hiddenPartIds={hiddenPartIds} onApply={setHiddenPartIds} />
           <div ref={settingsMenuRef} className="relative">
             <button
@@ -870,6 +878,8 @@ export function ScrollingScore() {
         </div>
       </div>
     </div>
+    {fullView}
+    </>
   );
 }
 
