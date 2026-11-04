@@ -78,7 +78,7 @@ The strip is drawn by muse-encore too, in MuseScore's continuous view (the whole
 - [x] Canvas tiles (up to 1024 px tall), drawn one per frame as they near the view, cleared when far, DPR-aware
 - [x] Re-layout on resize and rotation (debounced), keeping the measure at the top of the view in place
 - [x] Measure highlight from the first beat and a cursor line, from `useScorePosition`; snaps on repeats and jumps
-- [x] Follow: keeps the current system near the top; past 60% of a measure it makes sure the next measure played (a repeat or jump target too) is in view, so the page turns early. Pages wider than the view follow sideways too
+- [x] Follow: jumps to the next system with a short (150 ms) ease-out glide of its own, the same on phones and desktop (browsers' smooth scrolling was slow on phones, and restarting it every tick made it creep); keeps the current system near the top; past 60% of a measure it makes sure the next measure played (a repeat or jump target too) is in view, so the page turns early. Pages wider than the view follow sideways too
 - [x] Wheel, swipe, arrow keys or the scrollbar pause follow; it resumes 3 s after the last one while playing, or with the Follow button
 - [x] Tap or click a measure to jump to its first time through (a drag doesn't count)
 - [x] Zoom: ctrl/⌘+wheel (and trackpad pinch) and two-finger pinch, previewed with CSS and laid out again at the end, keeping the measure under the fingers in place

@@ -23,6 +23,8 @@ const FOLLOW_RESUME_MS = 3000;
 const TAP_SLOP_PX = 6;
 /** Past this far through a measure, follow makes sure the next measure played is in view too. */
 const LOOKAHEAD_FRACTION = 0.6;
+/** How long a follow jump to the next system takes (ms): quick, but not a blink. */
+const GLIDE_MS = 150;
 
 export type PageLayoutMode = 'auto' | 'page' | 'fit-width';
 
@@ -107,6 +109,12 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
   const [geometry, setGeometry] = useState<Geometry | null>(null);
   const [followPaused, setFollowPaused] = useState(false);
   const lastUserScrollRef = useRef(0);
+  /** The follow jump in progress, if any. */
+  const glideRef = useRef<Glide | null>(null);
+  useEffect(() => {
+    const glide = glideRef;
+    return () => cancelGlide(glide);
+  }, []);
   const anchorRef = useRef<Anchor | null>(null);
 
   const writtenCount = geometry?.measures.length ?? 0;
@@ -331,17 +339,21 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
       const next = geometry.measures[writtenOf(scorePosition.playedIndex + 1, unfolded)];
       if (next && next.top !== cur.top && (next.top < top || next.top + next.height > top + vh)) need = true;
     }
-    const targetTop = need ? Math.max(0, cur.top - 0.12 * vh) : top;
+    // Clamped to how far the view can scroll, so a target it can't reach
+    // (near the end) doesn't restart the jump on every tick.
+    const maxTop = Math.max(0, viewport.scrollHeight - vh);
+    const targetTop = need ? Math.min(maxTop, Math.max(0, cur.top - 0.12 * vh)) : top;
 
     // Pages wider than the view: keep the cursor across from the left third.
     const cw = viewport.clientWidth;
     const left = viewport.scrollLeft;
+    const maxLeft = Math.max(0, viewport.scrollWidth - cw);
     const targetLeft = cursor.lineX < left + 40 || cursor.lineX > left + cw - 40
-      ? Math.max(0, cursor.lineX - cw / 3)
+      ? Math.min(maxLeft, Math.max(0, cursor.lineX - cw / 3))
       : left;
 
-    if (targetTop !== top || targetLeft !== left) {
-      viewport.scrollTo({ top: targetTop, left: targetLeft, behavior: 'smooth' });
+    if (Math.abs(targetTop - top) >= 1 || Math.abs(targetLeft - left) >= 1) {
+      glideTo(viewport, targetTop, targetLeft, glideRef);
     }
   }, [cursor, geometry, scorePosition, followPaused, playing, unfolded]);
 
@@ -349,7 +361,12 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const pause = () => { lastUserScrollRef.current = Date.now(); setFollowPaused(true); };
+    const pause = () => {
+      lastUserScrollRef.current = Date.now();
+      setFollowPaused(true);
+      // The reader takes over: stop any follow jump in progress.
+      cancelGlide(glideRef);
+    };
     const onWheel = (e: WheelEvent) => { if (!e.ctrlKey && !e.metaKey) pause(); };
     const onKey = (e: KeyboardEvent) => {
       if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) pause();
@@ -553,6 +570,50 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
       )}
     </div>
   );
+}
+
+/** A follow jump in progress: where it's heading, and its animation frame. */
+interface Glide {
+  top: number;
+  left: number;
+  frame: number;
+}
+
+/**
+ * Scrolls `viewport` to (`top`, `left`) in `GLIDE_MS` with an ease-out, like a
+ * page turn. Browsers' own smooth scrolling is too slow for this on phones,
+ * and restarts on each call, which made follow creep to the next system. A
+ * call for the target already being glided to does nothing; a new target
+ * takes over from wherever the view is. Instant with reduced motion.
+ */
+function glideTo(viewport: HTMLElement, top: number, left: number, ref: { current: Glide | null }): void {
+  const current = ref.current;
+  if (current && Math.abs(current.top - top) < 1 && Math.abs(current.left - left) < 1) return;
+  cancelGlide(ref);
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    viewport.scrollTop = top;
+    viewport.scrollLeft = left;
+    return;
+  }
+  const fromTop = viewport.scrollTop;
+  const fromLeft = viewport.scrollLeft;
+  const start = performance.now();
+  const glide: Glide = { top, left, frame: 0 };
+  const step = (now: number) => {
+    const p = Math.min(1, (now - start) / GLIDE_MS);
+    const eased = 1 - (1 - p) ** 3;
+    viewport.scrollTop = fromTop + (top - fromTop) * eased;
+    viewport.scrollLeft = fromLeft + (left - fromLeft) * eased;
+    if (p < 1) glide.frame = requestAnimationFrame(step);
+    else if (ref.current === glide) ref.current = null;
+  };
+  glide.frame = requestAnimationFrame(step);
+  ref.current = glide;
+}
+
+function cancelGlide(ref: { current: Glide | null }): void {
+  if (ref.current) cancelAnimationFrame(ref.current.frame);
+  ref.current = null;
 }
 
 function clampZoom(z: number): number {
