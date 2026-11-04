@@ -33,13 +33,19 @@ const CONTENT_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  // The sheet music engine's fonts and MuseScore style files (about 12 MB).
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.mss': 'application/xml; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
   '.wasm': 'application/wasm',
   '.map': 'application/json; charset=utf-8',
 };
 
-const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.webmanifest', '.svg', '.txt', '.xml', '.map']);
+// TrueType/OpenType fonts aren't compressed inside (unlike woff/woff2), so
+// gzip roughly halves them; each is compressed once, then kept in memory.
+const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.webmanifest', '.svg', '.txt', '.xml', '.map', '.ttf', '.otf', '.mss']);
 
 /** Vite fingerprints everything under `assets/`, so it never changes in place. */
 const IMMUTABLE = 'public, max-age=31536000, immutable';

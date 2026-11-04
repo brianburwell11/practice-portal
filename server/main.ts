@@ -19,6 +19,7 @@ import http from 'node:http';
 import { createApiHandler, sendJson } from './adapters/nodeApi';
 import { createStaticHandler } from './adapters/staticFiles';
 import { pageTitleFor } from './core/pageTitles';
+import { memo } from './core/cache';
 import { startWorker, stopWorker } from './core/jobs/worker';
 import { drainEmails } from './core/email';
 
@@ -29,7 +30,12 @@ const STATIC_DIR = process.env.STATIC_DIR ?? 'dist';
 // (Phase 6). Until this server holds R2 write credentials (Phase 8c), the
 // routes that touch R2 also fail closed for want of them.
 const handleApi = createApiHandler();
-const handleStatic = createStaticHandler(STATIC_DIR, { pageTitle: pageTitleFor });
+// Titles are cached briefly by URL (server/core/cache.ts), so index.html
+// doesn't wait on the database. Invite links carry a secret token: not kept.
+const cachedPageTitle = (pathname: string, query: URLSearchParams) => pathname.startsWith('/invite/')
+  ? pageTitleFor(pathname, query)
+  : memo(`title:${pathname}?${query}`, () => pageTitleFor(pathname, query));
+const handleStatic = createStaticHandler(STATIC_DIR, { pageTitle: cachedPageTitle });
 
 const CANONICAL_HOST = process.env.CANONICAL_HOST?.trim().toLowerCase() || undefined;
 

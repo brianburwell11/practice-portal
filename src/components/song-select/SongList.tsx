@@ -12,6 +12,7 @@ import { useLyricsStore } from '../../store/lyricsStore';
 import { useNotesStore } from '../../store/notesStore';
 import { toast } from '../../store/dialogStore';
 import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
+import { warmSongScore } from '../sheet/scoreFiles';
 
 export function useSongLoader() {
   const engine = useAudioEngine();
@@ -53,6 +54,16 @@ export function useSongLoader() {
       const configData = await res.json();
       const config = songConfigSchema.parse(configData);
 
+      // Lyrics, notes and the score start downloading now, alongside the
+      // audio, instead of after it has all decoded. They're shown once the
+      // song is selected.
+      const fetchJson = (file: string) => fetch(dataUrl(`${bandId}/songs/${entry.id}/${file}`))
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      const lyricsData = fetchJson('lyrics.json');
+      const notesData = fetchJson('notes.json');
+      warmSongScore(bandId, config);
+
       const audioBase = entry.audioBasePath ?? r2Url(`${bandId}/songs/${entry.id}`);
       await engine.loadSong(config, audioBase, (loaded, total) => {
         setLoadProgress(loaded, total);
@@ -60,17 +71,8 @@ export function useSongLoader() {
 
       setSelectedSong(config);
 
-      // Load lyrics (non-blocking)
-      fetch(dataUrl(`${bandId}/songs/${entry.id}/lyrics.json`))
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => useLyricsStore.getState().setLyrics(data?.lines ?? []))
-        .catch(() => useLyricsStore.getState().setLyrics([]));
-
-      // Load timestamp notes (non-blocking)
-      fetch(dataUrl(`${bandId}/songs/${entry.id}/notes.json`))
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => useNotesStore.getState().load(bandId!, entry.id, data?.notes ?? []))
-        .catch(() => useNotesStore.getState().load(bandId!, entry.id, []));
+      lyricsData.then((data) => useLyricsStore.getState().setLyrics(data?.lines ?? []));
+      notesData.then((data) => useNotesStore.getState().load(bandId!, entry.id, data?.notes ?? []));
 
       // In a setlist, `#n` is the song's place in it. Otherwise the song is
       // `?song=<slug>`, in the query so the server sees it and link previews

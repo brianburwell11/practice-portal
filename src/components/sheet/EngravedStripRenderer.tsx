@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { parseMusicXML, unfold, type MusicXMLStructure, type UnfoldedStep } from '../../audio/unfoldRepeats';
-import { fetchSongScore, ScoreEngine, scorePartIds, type SongScoreFiles } from './page/museEncoreEngine';
+import { fetchSongScore, preloadScoreEngine, ScoreEngine, scorePartIds, type SongScoreFiles } from './page/museEncoreEngine';
 
 /** Canvas tiles: the continuous line is far wider than one canvas may be. */
 const TILE_CSS_PX = 1024;
@@ -139,7 +139,8 @@ export function EngravedStripRenderer({
     setLayout(null);
     (async () => {
       try {
-        const { xml, source } = await fetchSongScore(files);
+        // The score and the engine (code and fonts) download together.
+        const [{ xml, source }] = await Promise.all([fetchSongScore(files), preloadScoreEngine()]);
         if (cancelled) return;
         try {
           structureRef.current = parseMusicXML(xml);

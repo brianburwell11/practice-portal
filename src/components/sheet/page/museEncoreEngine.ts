@@ -137,6 +137,16 @@ function loadEngine(): Promise<{ me: MuseEncore; fontsMs: number }> {
   return enginePromise;
 }
 
+/**
+ * Starts loading the engine and its fonts without waiting for them, so they
+ * download while something else (the song's audio, the score file) does.
+ * Resolves when they're ready; never rejects (a failure is retried by
+ * whoever needs the engine next).
+ */
+export function preloadScoreEngine(): Promise<void> {
+  return loadEngine().then(() => undefined, () => undefined);
+}
+
 export class ScoreEngine {
   private layoutKey = '';
   private rects: (MeasureRect | null)[] | null = null;

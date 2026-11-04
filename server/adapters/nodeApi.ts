@@ -6,10 +6,12 @@
  * the matched route, and write the `CoreResponse` back.
  */
 import { createHash } from 'node:crypto';
+import zlib from 'node:zlib';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { parseCookies } from '../core/auth/cookies';
 import { GUEST_COOKIE, guestTokens, resolveGuests, type GuestGrant } from '../core/auth/guests';
-import { resolveSession, SESSION_COOKIE } from '../core/auth/sessions';
+import { hashToken, resolveSession, SESSION_COOKIE } from '../core/auth/sessions';
+import { clearCache, memo } from '../core/cache';
 import { matchRoute, runRoute } from '../core/router';
 import { clientIp, hit, limitFor } from '../core/rateLimit';
 import { HttpError } from '../core/http';
@@ -59,7 +61,9 @@ async function resolveGuestCookie(cookies: Record<string, string>): Promise<Gues
   const tokens = guestTokens(cookies[GUEST_COOKIE]);
   if (!tokens.length || !process.env.DATABASE_URL) return [];
   try {
-    return await resolveGuests(tokens);
+    // Cached briefly (server/core/cache.ts): every request carries the cookie.
+    const key = `guests:${tokens.map(hashToken).sort().join(',')}`;
+    return await memo(key, () => resolveGuests(tokens));
   } catch (err) {
     console.error('[auth] guest link lookup failed:', err);
     return [];
@@ -70,7 +74,9 @@ async function resolveActor(cookies: Record<string, string>): Promise<Actor | un
   const token = cookies[SESSION_COOKIE];
   if (!token || !process.env.DATABASE_URL) return undefined;
   try {
-    return await resolveSession(token);
+    // Cached briefly (server/core/cache.ts): every request carries the cookie.
+    // Signing out is a write, which clears the cache.
+    return await memo(`session:${hashToken(token)}`, () => resolveSession(token));
   } catch (err) {
     // A database hiccup makes this request anonymous rather than failing it.
     console.error('[auth] session lookup failed:', err);
@@ -91,12 +97,19 @@ function sendCacheableJson(req: IncomingMessage, res: ServerResponse, { status, 
   // A signed-in or guest response may differ per person, so no shared cache may keep it.
   res.setHeader('Cache-Control', personal ? 'private, no-cache' : 'no-cache');
   res.setHeader('ETag', etag);
+  res.setHeader('Vary', 'Accept-Encoding');
   if (req.headers['if-none-match'] === etag) {
     res.statusCode = 304;
     res.end();
     return;
   }
   res.statusCode = status;
+  // A song config with its tapMap runs to tens of KB of very repetitive JSON.
+  if (text.length > 1024 && /\bgzip\b/.test(String(req.headers['accept-encoding'] ?? ''))) {
+    res.setHeader('Content-Encoding', 'gzip');
+    res.end(zlib.gzipSync(text));
+    return;
+  }
   res.end(text);
 }
 
@@ -190,6 +203,10 @@ export function createApiHandler() {
       }
     } finally {
       if (tmpDir) removeScratchDir(tmpDir);
+      // Anything that may have written makes every cached read stale: every
+      // non-GET request, and the sign-in routes, which create sessions and
+      // accept invites on GET.
+      if ((req.method !== 'GET' && req.method !== 'HEAD') || route.name.startsWith('auth.')) clearCache();
     }
     return true;
   };

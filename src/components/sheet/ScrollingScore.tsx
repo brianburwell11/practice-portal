@@ -6,8 +6,7 @@ import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { r2Url } from '../../utils/url';
-import { MSCZ_FILENAME, SCORE_FILENAME } from '../../config/schema';
+import { songScoreFiles } from './scoreFiles';
 import {
   loadSheetMusicSongState,
   saveSheetMusicSongState,
@@ -190,32 +189,12 @@ export function ScrollingScore() {
   const draggingRef = useRef(false);
   const suppressClickRef = useRef(false);
 
-  // Resolve the score URL. The field in the song config is a *filename*
-  // (e.g. "score.mxl") that lives alongside the song's other files at
-  // `{bandId}/songs/{songId}/`. Anything else (absolute or protocol-relative
-  // URLs, paths) is refused, so a song config can't point the player at
-  // another host.
-  const sheetMusicUrl = useMemo(() => {
-    const raw = song?.sheetMusicUrl;
-    if (!raw || !SCORE_FILENAME.test(raw)) return undefined;
-    if (!currentBand || !song) return undefined;
-    return r2Url(`${currentBand.id}/songs/${song.id}/${raw}`);
-  }, [song, currentBand]);
-
-  // The original MuseScore file, when the song keeps one, is what gets drawn
-  // (exactly as MuseScore lays it out); the .mxl gives the repeat structure.
-  // Same filename rules as the score itself.
-  const scoreFiles = useMemo(() => {
-    if (!sheetMusicUrl || !song || !currentBand) return null;
-    const mscz = song.sheetMusicMsczUrl;
-    return {
-      mxlUrl: sheetMusicUrl,
-      msczUrl: mscz && MSCZ_FILENAME.test(mscz) ? r2Url(`${currentBand.id}/songs/${song.id}/${mscz}`) : undefined,
-      modified: song.sheetMusicModified,
-    };
-  }, [sheetMusicUrl, song, currentBand]);
-
-
+  // The song's score files (bare filenames in its own folder only, so a song
+  // config can't point the player at another host). The original MuseScore
+  // file, when the song keeps one, is what gets drawn; the .mxl gives the
+  // repeat structure.
+  const scoreFiles = useMemo(() => songScoreFiles(currentBand?.id, song), [song, currentBand]);
+  const sheetMusicUrl = scoreFiles?.mxlUrl;
 
   const handleMeasureXs = useCallback((xs: number[]) => setMeasureXs(xs), []);
   const handleUnfoldedOrder = useCallback((steps: UnfoldedStep[]) => setUnfolded(steps), []);
