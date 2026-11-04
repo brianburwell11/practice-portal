@@ -69,23 +69,31 @@ Measured against production on Nov 3 2026 (over `practice-portal.fly.dev` with t
 
 ## Part B: offline cache on devices
 
-Songs are cached as you play them, capped at 500 MB, least recently used dropped first.
+Songs are cached as you play them, capped at 500 MB, least recently used dropped first. It's on only in builds made with `VITE_OFFLINE_CACHE=1`.
 
-- [ ] **Versioned media URLs:**
-  - `mediaVersion` from `song.updated_at` on every config (no backfill), plus a per-stem `v` (a hash of the encoded file) from the transcode worker and a `sheetMusicVersion` for scores.
-  - The app adds `?v=` to media URLs, and the media route ignores it.
-- [ ] **The service worker:**
+- [x] **Versioned media URLs, from content.**
+  - Served song configs carry `mediaVersions`: for each stem and score file, a short version taken from R2's ETag (the MD5 of the file).
+  - The app adds it to media URLs as `?v=`, and the media route ignores it.
+  - **Changed from the plan:** the song's `updated_at` would have re-downloaded every stem whenever someone edited notes or lyrics. ETags change only when the file does, and need no backfill.
+  - ETags are looked up in parallel and cached for an hour. Any write clears them, and so does a finished transcode, so a replaced stem gets its new version straight away.
+  - The save handler drops `mediaVersions`, so it's never stored.
+- [x] **The service worker** (`sw/sw.ts`, built to `public/sw.js` by `npm run build:sw`, run by `build` and `dev`, not committed):
   - hashed assets: cache-first
-  - pages: network-first, cached when offline
-  - `/api/data` and `/api/me`: network-first with a cached fallback
-  - versioned media: cache-first, keyed by the plain same-origin URL, never by a signed R2 URL
-  - unversioned media: not cached
-- [ ] **500 MB cap:** whole songs evicted least recently used first, with bookkeeping in IndexedDB. The app asks the browser to keep its storage (`navigator.storage.persist()`).
-- [ ] **Safety:**
-  - Sign-out clears everything, with `Clear-Site-Data` as a backstop.
-  - Bands you've left are purged on the next online start.
-  - No offline media after 30 days without checking in.
-  - Kill switch: setting `OFFLINE_CACHE_DISABLED=1` serves a worker that clears all caches and unregisters itself.
-- [ ] Presigned score uploads get `immutable` caching (safe once URLs are versioned).
-- [ ] **Account menu:** "Offline songs: n MB of 500 MB" and a Clear button.
-- [ ] **Rollout:** behind `VITE_OFFLINE_CACHE`, first in development, then production.
+  - pages: network-first, cached for offline
+  - `/api/data` and `/api/me`: network-first, with a cached copy offline marked `X-Offline-Cache: 1`
+  - versioned song media: cache-first, kept under the plain same-origin URL, never a signed R2 URL
+  - root-level files (manifest, icons, the SoundTouch processor): network-first
+  - everything else, including dev-server modules, sign-in and writes: untouched
+- [x] **500 MB cap:** whole songs evicted, least recently played first, never the one being stored (`sw/eviction.ts`, tested). Bookkeeping lives in IndexedDB (`sw/store.ts`, shared by the worker and the app). The app asks the browser to keep the storage (`navigator.storage.persist()`).
+- [x] **Safety:**
+  - Sign-out clears every `pp-` cache and record first.
+  - A real (not offline) `registry.json` load records a check-in and drops cached songs of bands no longer listed.
+  - Cached songs aren't played after 30 days without a check-in.
+  - Kill switch: `OFFLINE_CACHE_DISABLED=1` makes `/sw.js` a worker that deletes the caches, unregisters itself and reloads open pages.
+  - A build without the flag also removes the worker and clears the cache.
+  - **Changed from the plan:** no `Clear-Site-Data: "storage"` on sign-out, because it would also wipe each device's saved settings (mixer, sheet music, hidden parts). Sign-out clears the offline cache directly instead.
+- [x] **Account menu:** "Offline songs: n MB of 500 MB on this device", with a Clear button.
+- [x] Tests: `sw/eviction.test.ts` (eviction and media paths).
+- **Not done:** `immutable` on presigned score uploads. The browser's upload would have to send the signed header exactly, or R2 refuses it; not worth the risk now that scores are versioned.
+- [ ] Check in the browser (DevTools > Application): stems in Cache Storage after playing, a reload with no network bytes, offline playback, a replaced stem, sign-out clearing, the 500 MB cap.
+- [ ] **Rollout:** set `VITE_OFFLINE_CACHE=1` as a Fly build argument, deploy, and check on an iPhone home screen app.
