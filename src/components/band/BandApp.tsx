@@ -10,6 +10,7 @@ import { AccountMenu } from '../account/AccountMenu';
 import { RequestAccess } from '../account/RequestAccess';
 import { NotFound } from '../NotFound';
 import { PageLoader } from '../ui/Loading';
+import { noteBandsVerified } from '../../offline/offline';
 import { bandPageTitle } from '../../utils/pageTitle';
 
 /**
@@ -55,8 +56,12 @@ export function BandApp() {
   useEffect(() => {
     if (bandsManifest || guestPending) return;
     fetch(dataUrl('registry.json'))
-      .then((r) => r.json())
-      .then((data) => setBandsManifest(bandsManifestSchema.parse(data)))
+      .then(async (r) => {
+        const manifest = bandsManifestSchema.parse(await r.json());
+        // The offline cache checks in, and drops bands no longer listed.
+        noteBandsVerified(r, manifest.bands.map((b) => b.id));
+        setBandsManifest(manifest);
+      })
       .catch((err) => setError(String(err)));
   }, [bandsManifest, setBandsManifest, guestPending]);
 

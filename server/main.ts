@@ -19,6 +19,7 @@ import http from 'node:http';
 import { createApiHandler, sendJson } from './adapters/nodeApi';
 import { createStaticHandler } from './adapters/staticFiles';
 import { pageTitleFor } from './core/pageTitles';
+import { memo } from './core/cache';
 import { startWorker, stopWorker } from './core/jobs/worker';
 import { drainEmails } from './core/email';
 
@@ -29,7 +30,12 @@ const STATIC_DIR = process.env.STATIC_DIR ?? 'dist';
 // (Phase 6). Until this server holds R2 write credentials (Phase 8c), the
 // routes that touch R2 also fail closed for want of them.
 const handleApi = createApiHandler();
-const handleStatic = createStaticHandler(STATIC_DIR, { pageTitle: pageTitleFor });
+// Titles are cached briefly by URL (server/core/cache.ts), so index.html
+// doesn't wait on the database. Invite links carry a secret token: not kept.
+const cachedPageTitle = (pathname: string, query: URLSearchParams) => pathname.startsWith('/invite/')
+  ? pageTitleFor(pathname, query)
+  : memo(`title:${pathname}?${query}`, () => pageTitleFor(pathname, query));
+const handleStatic = createStaticHandler(STATIC_DIR, { pageTitle: cachedPageTitle });
 
 const CANONICAL_HOST = process.env.CANONICAL_HOST?.trim().toLowerCase() || undefined;
 
@@ -44,8 +50,32 @@ function redirectsToCanonical(host: string | undefined): boolean {
   return name !== CANONICAL_HOST && (name.endsWith('.fly.dev') || name === `www.${CANONICAL_HOST}`);
 }
 
+/**
+ * The offline cache's kill switch. With OFFLINE_CACHE_DISABLED=1, browsers
+ * checking for a new service worker (every load) get this one instead: it
+ * deletes everything the offline cache kept, unregisters itself, and reloads
+ * open pages so they run without it. Its records in IndexedDB are cleared by
+ * the app on its next load (a build without the cache, or after sign-out).
+ */
+const KILL_SERVICE_WORKER = `
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil((async () => {
+  for (const name of await caches.keys()) if (name.startsWith('pp-')) await caches.delete(name);
+  await self.registration.unregister();
+  for (const client of await self.clients.matchAll({ type: 'window' })) client.navigate(client.url);
+})()));
+`;
+
 async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const pathname = (req.url ?? '/').split('?')[0];
+
+  if (pathname === '/sw.js' && process.env.OFFLINE_CACHE_DISABLED === '1') {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.end(KILL_SERVICE_WORKER);
+    return;
+  }
 
   if (pathname === '/healthz') {
     sendJson(res, { status: 200, body: { status: 'ok' } });

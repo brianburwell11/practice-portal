@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ROLE_LABELS, signInHref, useSessionStore } from '../../store/sessionStore';
 import { HomeScreenGuide } from '../HomeScreen';
+import { OfflineSongs } from '../../offline/OfflineSongs';
 import { isPhone, isStandalone, useInstallPrompt } from '../../utils/homeScreen';
 
 interface Props {
@@ -179,6 +180,7 @@ export function AccountMenu({ bandId }: Props) {
               Add to home screen
             </button>
           )}
+          <OfflineSongs />
           <Link to="/account" onClick={() => setOpen(false)} className="block w-full text-left px-4 py-2 hover:bg-gray-800">
             Account settings
           </Link>

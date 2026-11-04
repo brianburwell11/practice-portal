@@ -24,6 +24,8 @@ interface Discography {
 export async function saveSongConfig(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, songId } = req.params;
   const validated = songConfigSchema.parse(req.body);
+  // Media versions are worked out when the config is served, never stored.
+  delete validated.mediaVersions;
   await writeJson(`${bandId}/songs/${songId}/config.json`, validated);
   return ok();
 }

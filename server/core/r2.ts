@@ -205,6 +205,21 @@ export async function r2HeadSize(key: string): Promise<number | null> {
   }
 }
 
+/**
+ * An object's ETag (for a single-part upload, the MD5 of its content) without
+ * the quotes, or null if there's no such object.
+ */
+export async function r2HeadEtag(key: string): Promise<string | null> {
+  const { r2, bucket } = requireR2();
+  try {
+    const head = await r2.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return head.ETag?.replace(/"/g, '') ?? null;
+  } catch (err) {
+    if (isNoSuchKey(err)) return null;
+    throw err;
+  }
+}
+
 /** Stream an object to a local file — raw stems can be hundreds of megabytes. */
 export async function r2DownloadToFile(key: string, filePath: string): Promise<void> {
   const { r2, bucket } = requireR2();

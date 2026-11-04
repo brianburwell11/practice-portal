@@ -19,12 +19,16 @@ import { PageLoader } from './components/ui/Loading.tsx'
 
 import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage, SiteAdminPage } from './admin/lazyPages.ts'
 import { App, BandApp, HelpGuide, HelpIndex } from './lazyPages.ts'
+import { setupOfflineCache } from './offline/offline.ts'
 
 const adminFallback = <PageLoader label="Loading admin" />;
 
 const pageFallback = <PageLoader />;
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
+
+// The offline cache (on only in builds with VITE_OFFLINE_CACHE=1).
+setupOfflineCache();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

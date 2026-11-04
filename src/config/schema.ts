@@ -143,6 +143,13 @@ export const songConfigSchema = z.object({
   /** Seconds of silence / count-in before the score's first downbeat. When
    *  absent, falls back to the first measure-tap time in tapMap. */
   audioOffsetSeconds: z.number().optional(),
+  /**
+   * Served, never stored: a short content version per media file of the song
+   * (stems and scores), from R2's ETag. The app adds it to media URLs as
+   * `?v=`, so an offline copy is replaced exactly when the file changes.
+   * The config save handler drops it.
+   */
+  mediaVersions: z.record(z.string(), z.string().regex(/^[A-Za-z0-9-]{1,40}$/)).optional().catch(undefined),
   /** When true, internal repeats (`|: :|`, voltas) are re-taken after a
    *  D.C. / D.S. jump. Default (unset / false) matches the usual convention
    *  where internal repeats are honored only on the first pass and the

@@ -1,4 +1,5 @@
 import { isPlatformAdmin } from '../access';
+import { memo, viewerKey } from '../cache';
 import { canReadBandMedia } from '../documents';
 import { HttpError } from '../http';
 import { r2PresignGet } from '../r2';
@@ -28,7 +29,10 @@ export async function readMedia(req: CoreRequest): Promise<CoreResponse> {
   const viewer = folder === 'assets'
     ? { siteAdmin: true }
     : { userId: req.actor?.userId, guestBandIds: req.guests?.map((g) => g.bandId), siteAdmin: isPlatformAdmin(req.actor) };
-  if (!(await canReadBandMedia(band, viewer))) throw new HttpError(404, 'Not found');
+  // Cached briefly per band and viewer (server/core/cache.ts): a song asks
+  // for every stem at once.
+  const allowed = await memo(`media:${viewerKey(viewer)}:${band}`, () => canReadBandMedia(band, viewer));
+  if (!allowed) throw new HttpError(404, 'Not found');
 
   return {
     status: 302,

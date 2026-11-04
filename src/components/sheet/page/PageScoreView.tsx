@@ -6,7 +6,7 @@ import { useTransportStore } from '../../../store/transportStore';
 import { firstPlayedIndex, PAST_END, writtenOf } from '../scorePosition';
 import { useScorePosition } from '../useScorePosition';
 import type { PartInfo } from '../EngravedStripRenderer';
-import { fetchSongScore, ScoreEngine, scorePartIds, type MeasureRect, type SongScoreFiles } from './museEncoreEngine';
+import { fetchSongScore, preloadScoreEngine, ScoreEngine, scorePartIds, type MeasureRect, type SongScoreFiles } from './museEncoreEngine';
 
 const CSS_DPI = 96;
 /** Canvas tiles are at most this tall (CSS px), so a long page never needs one huge bitmap. */
@@ -137,7 +137,8 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
     setGeometry(null);
     (async () => {
       try {
-        const { xml, source } = await fetchSongScore(files);
+        // The score and the engine (code and fonts) download together.
+        const [{ xml, source }] = await Promise.all([fetchSongScore(files), preloadScoreEngine()]);
         if (cancelled) return;
         try {
           structureRef.current = parseMusicXML(xml);

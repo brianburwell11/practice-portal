@@ -5,8 +5,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --open",
-    "build": "tsx scripts/gen-licenses.ts && tsc -b && vite build",
+    "dev": "npm run build:sw && vite --open",
+    "build": "tsx scripts/gen-licenses.ts && tsc -b && npm run build:sw && vite build",
+    "build:sw": "esbuild sw/sw.ts --bundle --format=iife --target=es2020 --minify --outfile=public/sw.js --log-level=warning",
     "lint": "eslint .",
     "test": "vitest run",
     "preview": "vite preview",

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { clearOfflineCache } from '../offline/offline';
 import { useBandStore } from './bandStore';
 
 export type BandRole = 'owner' | 'manager' | 'editor' | 'member';
@@ -97,6 +98,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   signOut: async () => {
+    // Songs kept offline go with the account: this may be a shared device.
+    await clearOfflineCache();
     await fetch('/api/auth/logout', { method: 'POST' });
     // A full load of the home page, so every cached band list and document is
     // refetched as anonymous — and a Members-only band isn't left on screen.

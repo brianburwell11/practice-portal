@@ -1,0 +1,99 @@
+---
+title: "Faster Loading with Caching: Implementation Plan"
+description: "Where Practice Portal's load time goes, and the caching that cuts it: a short-lived server cache, compression, parallel loading, and an offline cache on devices."
+pubDate: "Nov 03 2026"
+tags: ["performance", "caching", "server", "pwa", "implementation", "plan"]
+---
+
+## Where the time went
+
+Measured against production on Nov 3 2026 (over `practice-portal.fly.dev` with the canonical `Host` header):
+
+- **Static files were already fine.** `index.html` takes 0.17 s, and hashed `/assets/*` are `immutable` for a year.
+- **`/api/data` documents were slow.** A 190-byte `registry.json` took 0.4 to 2.2 s, and even a 304 took 0.6 s. Every request rebuilt the document from Postgres (Neon), and startup makes about five of them in a row before a song loads.
+- **Media access checks** queried Neon on every request too, once per stem.
+- **Song open was serial:** config, then all stems, then decoding one at a time, and only then lyrics, notes and the score.
+- **Audio was re-downloaded every 6 hours.** The presigned R2 URL is re-signed per 6-hour window, and browsers cache by URL.
+- **The sheet music fonts (about 12 MB) were sent uncompressed.**
+
+## Cost and complexity
+
+- **Hosting cost: none.** No new services. The server cache uses a few MB of memory.
+- **Part A complexity: low.** One rule keeps the cache correct: every write clears it.
+  - This relies on running a single Fly machine (`--ha=false`). With two, each would keep its own cache, and a write on one could take up to 30 s to show on the other.
+- **Part B complexity: moderate to high.** A service worker is code that stays installed on each device, so it needs versioned media URLs, eviction, clearing on sign-out, purging on loss of membership, and a kill switch.
+- **On devices:** up to 500 MB of storage, and no CPU or battery when idle.
+- **Left out:** keeping the Fly machine and Neon awake (removes cold starts, but costs money) and a CDN (a big change for private media).
+
+## Part A: server cache, compression, parallel loading
+
+- [x] `server/core/cache.ts`: a 30-second in-memory cache, at most 1,000 entries, least recently used dropped first.
+  - **Shared lookups:** concurrent misses share one lookup, and failures aren't kept.
+  - **Copies:** values are cloned on the way out, so no caller can change what the next one gets.
+- [x] **What it caches:**
+  - documents (`/api/data`), keyed by document and viewer (user, site admin, guest links)
+  - media access checks, by band and viewer
+  - session and guest-link lookups, by token hash
+  - page titles, by URL (not invite links)
+
+  Write handlers' read-modify-write reads (`readDocumentUnchecked`) aren't cached.
+- [x] **The rule:** every write request clears the whole cache, and so do the sign-in routes, which write on GET. Any write it can't see (a script) is picked up within 30 s.
+- [x] **Compression:**
+  - `.ttf` and `.otf` are served as fonts and gzipped; `.mss` as XML.
+  - JSON API responses over 1 KB are gzipped too.
+- [x] **Song open in parallel:**
+  - Lyrics, notes and the score files start downloading with the audio instead of after it.
+  - On desktop, unless sheet music is minimized, the engine and its fonts load while the audio decodes.
+  - The score views fetch the score and start the engine together.
+- [x] Tests:
+  - `server/core/cache.test.ts`: expiry, shared lookups, failures not kept, clearing, copies, the size cap, viewer keys
+  - `server/adapters/nodeApi.cache.test.ts`: a write request clears the cache even when it's refused, and a read doesn't
+- [ ] Check in the browser, deploy, and measure production
+- Not changed: `band.json` still waits for `registry.json`, because it's addressed by the band's internal id, which only the registry gives. With the cache, both are quick.
+
+### Measured on the dev server (same API code, same Neon)
+
+| Request | First (miss) | Repeat (cached) |
+|---|---|---|
+| `registry.json` | 123 ms | 4–7 ms |
+| `band.json` | 227 ms | 3–6 ms |
+| `discography.json` | 855 ms | 5–6 ms |
+| `setlists/index.json` | 358 ms | 5–6 ms |
+| media access check (per stem) | 122 ms | 8 ms |
+
+| Transfer | Before | After |
+|---|---|---|
+| A song config | 10.5 KB | 2.3 KB (gzip) |
+| FreeSerif font | 3.3 MB | 1.8 MB (gzip) |
+| All sheet music fonts | 12 MB | 6 MB (gzip) |
+
+## Part B: offline cache on devices
+
+Songs are cached as you play them, capped at 500 MB, least recently used dropped first. It's on only in builds made with `VITE_OFFLINE_CACHE=1`.
+
+- [x] **Versioned media URLs, from content.**
+  - Served song configs carry `mediaVersions`: for each stem and score file, a short version taken from R2's ETag (the MD5 of the file).
+  - The app adds it to media URLs as `?v=`, and the media route ignores it.
+  - **Changed from the plan:** the song's `updated_at` would have re-downloaded every stem whenever someone edited notes or lyrics. ETags change only when the file does, and need no backfill.
+  - ETags are looked up in parallel and cached for an hour. Any write clears them, and so does a finished transcode, so a replaced stem gets its new version straight away.
+  - The save handler drops `mediaVersions`, so it's never stored.
+- [x] **The service worker** (`sw/sw.ts`, built to `public/sw.js` by `npm run build:sw`, run by `build` and `dev`, not committed):
+  - hashed assets: cache-first
+  - pages: network-first, cached for offline
+  - `/api/data` and `/api/me`: network-first, with a cached copy offline marked `X-Offline-Cache: 1`
+  - versioned song media: cache-first, kept under the plain same-origin URL, never a signed R2 URL
+  - root-level files (manifest, icons, the SoundTouch processor): network-first
+  - everything else, including dev-server modules, sign-in and writes: untouched
+- [x] **500 MB cap:** whole songs evicted, least recently played first, never the one being stored (`sw/eviction.ts`, tested). Bookkeeping lives in IndexedDB (`sw/store.ts`, shared by the worker and the app). The app asks the browser to keep the storage (`navigator.storage.persist()`).
+- [x] **Safety:**
+  - Sign-out clears every `pp-` cache and record first.
+  - A real (not offline) `registry.json` load records a check-in and drops cached songs of bands no longer listed.
+  - Cached songs aren't played after 30 days without a check-in.
+  - Kill switch: `OFFLINE_CACHE_DISABLED=1` makes `/sw.js` a worker that deletes the caches, unregisters itself and reloads open pages.
+  - A build without the flag also removes the worker and clears the cache.
+  - **Changed from the plan:** no `Clear-Site-Data: "storage"` on sign-out, because it would also wipe each device's saved settings (mixer, sheet music, hidden parts). Sign-out clears the offline cache directly instead.
+- [x] **Account menu:** "Offline songs: n MB of 500 MB on this device", with a Clear button.
+- [x] Tests: `sw/eviction.test.ts` (eviction and media paths).
+- **Not done:** `immutable` on presigned score uploads. The browser's upload would have to send the signed header exactly, or R2 refuses it; not worth the risk now that scores are versioned.
+- [ ] Check in the browser (DevTools > Application): stems in Cache Storage after playing, a reload with no network bytes, offline playback, a replaced stem, sign-out clearing, the 500 MB cap.
+- [ ] **Rollout:** set `VITE_OFFLINE_CACHE=1` as a Fly build argument, deploy, and check on an iPhone home screen app.
