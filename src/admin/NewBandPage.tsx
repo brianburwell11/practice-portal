@@ -6,6 +6,7 @@ import { bandsManifestSchema } from '../config/schema';
 import { dataUrl } from '../utils/url';
 import { generateUniqueBandId } from '../utils/bandId';
 import { dedupeSlug } from '../utils/dedupeSlug';
+import { shrinkLogo } from '../utils/shrinkLogo';
 import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
 
 // The portal's own: `--color-brand`, `--color-page` and the body text in
@@ -139,7 +140,8 @@ export default function NewBandPage() {
 
       if (pendingLogoFile) {
         const formData = new FormData();
-        formData.append('logo', pendingLogoFile, pendingLogoFile.name);
+        const logo = await shrinkLogo(pendingLogoFile);
+        formData.append('logo', logo, logo.name);
         const uploadRes = await fetch(`/api/bands/${finalDraft.id}/logo`, {
           method: 'POST',
           body: formData,

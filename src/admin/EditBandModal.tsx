@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { RESERVED_ROUTES, isReservedRoute } from '../config/reservedRoutes';
 import { useBandStore } from '../store/bandStore';
 import { dedupeSlug } from '../utils/dedupeSlug';
+import { shrinkLogo } from '../utils/shrinkLogo';
 import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
 
 function nameToSlug(name: string) {
@@ -122,7 +123,8 @@ export function EditBandModal({ band, onClose }: Props) {
     setError(null);
     try {
       const formData = new FormData();
-      formData.append('logo', file, file.name);
+      const logo = await shrinkLogo(file);
+      formData.append('logo', logo, logo.name);
       const res = await fetch(`/api/bands/${draft.id}/logo`, {
         method: 'POST',
         body: formData,
