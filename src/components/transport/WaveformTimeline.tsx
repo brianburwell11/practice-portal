@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
@@ -576,10 +577,14 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       if (dragEditorEntryRef.current) {
         const { index, time } = dragEditorEntryRef.current;
         // Only commit a move if the pointer actually moved enough
-        // to qualify as a drag. A plain click just selects.
+        // to qualify as a drag. A plain click just selects; on touch a
+        // tap also moves playback to the marker, like tapping a row in
+        // the section list.
         if (didDragRef.current) {
           moveMarkerEntry(index, time);
           suppressClickRef.current = true;
+        } else if (isCoarse) {
+          engine.seek(time);
         }
         dragEditorEntryRef.current = null;
         dragStartRef.current = null;
@@ -1142,15 +1147,24 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
             </div>
           );
         })()}
-        {markerContextMenu && contextMenuEntry && (
+        {/* Rendered on document.body so the waveform's overflow-hidden
+            box can't crop it; placed at the click and kept on screen. */}
+        {markerContextMenu && contextMenuEntry && createPortal(
           <div
             data-marker-context-menu
-            className="absolute z-30 rounded border border-gray-600 bg-gray-800 shadow-lg text-xs text-gray-100 overflow-hidden"
-            style={{
-              left: Math.max(0, Math.min(markerContextMenu.x, sizeRef.current.width - 220)),
-              top: Math.max(0, Math.min(markerContextMenu.y, sizeRef.current.height - 220)),
-              minWidth: 200,
+            ref={(el) => {
+              const canvas = canvasRef.current;
+              if (!el || !canvas) return;
+              const r = canvas.getBoundingClientRect();
+              const pad = 8;
+              const left = Math.min(r.left + markerContextMenu.x, window.innerWidth - el.offsetWidth - pad);
+              const top = Math.min(r.top + markerContextMenu.y, window.innerHeight - el.offsetHeight - pad);
+              el.style.left = `${Math.max(pad, left)}px`;
+              el.style.top = `${Math.max(pad, top)}px`;
+              el.style.visibility = 'visible';
             }}
+            className="fixed z-[100] rounded border border-gray-600 bg-gray-800 shadow-lg text-xs text-gray-100 overflow-hidden"
+            style={{ minWidth: 200, visibility: 'hidden' }}
             onPointerDown={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
           >
@@ -1214,7 +1228,8 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
                 })}
               </>
             )}
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
 

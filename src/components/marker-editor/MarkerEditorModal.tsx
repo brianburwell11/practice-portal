@@ -20,7 +20,7 @@ import { measureBeatAt } from '../../audio/tempoUtils';
 export function MarkerEditorModal() {
   const {
     isOpen, tapMap, dirty, selectedIndex,
-    close, importTapMap, addEntry, deleteEntry, undo, onComplete,
+    close, importTapMap, addEntry, deleteEntry, updateEntryType, setSelectedIndex, undo, onComplete,
   } = useMarkerEditorStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const setSelectedSong = useSongStore((s) => s.setSelectedSong);
@@ -223,6 +223,7 @@ export function MarkerEditorModal() {
   const btn = 'px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-gray-300 transition-colors';
   const menuItem = 'block w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 disabled:opacity-40 transition-colors';
   const nextSectionLabel = autoLabelSection(tapMap);
+  const selectedEntry = selectedIndex !== null ? tapMap[selectedIndex] : undefined;
   // What a tap at the playhead would become: the next measure number and
   // the next beat within the current measure (sections count as measures,
   // same as the transport bar's measure|beat readout).
@@ -317,34 +318,59 @@ export function MarkerEditorModal() {
         <div className="mt-3 max-w-2xl w-full mx-auto px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2">
           <div className="grid grid-cols-3 gap-2">
             <TapPadButton
-              label="Section"
+              label="+ Section"
               sublabel={nextSectionLabel}
               color="bg-amber-500 text-gray-900"
               onFire={() => tap('section')}
             />
             <TapPadButton
-              label="Measure"
+              label="+ Measure"
               sublabel={String(nextMeasure)}
               color="bg-blue-700 text-white"
               onFire={() => tap('measure')}
             />
             <TapPadButton
-              label="Beat"
+              label="+ Beat"
               sublabel={String(nextBeat)}
               color="bg-gray-600 text-white"
               onFire={() => tap('beat')}
             />
           </div>
-          <div className="flex gap-2">
+          {selectedEntry && selectedIndex !== null ? (
+            /* A marker is selected (tap it on the waveform or in the
+               list): change its type in place, keeping its time. */
+            <div className="grid grid-cols-4 gap-2">
+              {(['section', 'measure', 'beat'] as const).map((type) => (
+                <button
+                  key={type}
+                  className={`${btn} py-2.5 ${selectedEntry.type === type ? 'ring-1 ring-white/60 text-white' : ''}`}
+                  disabled={selectedEntry.type === type}
+                  onClick={() =>
+                    updateEntryType(
+                      selectedIndex,
+                      type,
+                      type === 'section' && !selectedEntry.label ? autoLabelSection(tapMap) : undefined,
+                    )
+                  }
+                >
+                  {type === 'section' ? 'Section' : type === 'measure' ? 'Measure' : 'Beat'}
+                </button>
+              ))}
+              <button
+                className={`${btn} py-2.5 text-red-300`}
+                onClick={() => deleteEntry(selectedIndex)}
+              >
+                Delete
+              </button>
+            </div>
+          ) : null}
+          <div className="flex items-center gap-2">
             <button className={`${btn} flex-1 py-2.5`} onClick={undo}>
               Undo
             </button>
-            {selectedIndex !== null && (
-              <button
-                className={`${btn} flex-1 py-2.5 text-red-300`}
-                onClick={() => deleteEntry(selectedIndex)}
-              >
-                Delete selected
+            {selectedEntry && (
+              <button className={`${btn} flex-1 py-2.5`} onClick={() => setSelectedIndex(null)}>
+                Deselect {selectedEntry.type === 'section' ? `section ${selectedEntry.label ?? ''}`.trim() : selectedEntry.type}
               </button>
             )}
           </div>
