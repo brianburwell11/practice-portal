@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
@@ -11,8 +11,19 @@ import { buildMusicXmlContent } from '../../audio/musicXmlExporter';
 import { renderStereoDownmix } from '../../audio/mixdown';
 import { encodeWav, interleaveStereo } from '../../admin/utils/audioConvert';
 import { confirmDialog, confirmDiscard } from '../../store/dialogStore';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { TapPadButton } from '../ui/TapPadButton';
+import type { TapMapEntry } from '../../audio/types';
+import { useTransportStore } from '../../store/transportStore';
+import { measureBeatAt } from '../../audio/tempoUtils';
 
-export function MarkerEditorModal() {
+interface MarkerEditorModalProps {
+  /** Phones with the mixer open: drop the section list so the mixer
+   *  and the tap pads share the screen. */
+  compact?: boolean;
+}
+
+export function MarkerEditorModal({ compact = false }: MarkerEditorModalProps) {
   const {
     isOpen, tapMap, dirty, selectedIndex,
     close, importTapMap, addEntry, deleteEntry, undo, onComplete,
@@ -25,6 +36,28 @@ export function MarkerEditorModal() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const coarse = useMediaQuery('(pointer: coarse)');
+  const position = useTransportStore((s) => s.position);
+
+  // Add an entry of the given type at the live playhead. Shared by the
+  // S/M/B keys and the touch pads.
+  const tap = useCallback((type: TapMapEntry['type']) => {
+    const time = engine.clock.currentTime;
+    if (type === 'section') addEntry({ time, type, label: autoLabelSection(tapMap) });
+    else addEntry({ time, type });
+  }, [engine, tapMap, addEntry]);
+
+  // Close the More menu on outside tap/click
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (!moreMenuRef.current?.contains(e.target as Node)) setMoreOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [moreOpen]);
 
   // Keyboard shortcuts \u2014 S/M/B add an entry at the current playhead,
   // Backspace/Delete removes the selected one, Z (or Cmd/Ctrl+Z) undoes.
@@ -50,18 +83,13 @@ export function MarkerEditorModal() {
       const key = e.key.toUpperCase();
       if (key === 'Z') { undo(); return; }
 
-      const currentPos = engine.clock.currentTime;
-      if (key === 'S') {
-        addEntry({ time: currentPos, type: 'section', label: autoLabelSection(tapMap) });
-      } else if (key === 'M') {
-        addEntry({ time: currentPos, type: 'measure' });
-      } else if (key === 'B') {
-        addEntry({ time: currentPos, type: 'beat' });
-      }
+      if (key === 'S') tap('section');
+      else if (key === 'M') tap('measure');
+      else if (key === 'B') tap('beat');
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, selectedIndex, tapMap, engine, addEntry, deleteEntry, undo]);
+  }, [isOpen, selectedIndex, tap, deleteEntry, undo]);
 
   if (!isOpen || (!selectedSong && !onComplete)) return null;
 
@@ -198,21 +226,49 @@ export function MarkerEditorModal() {
     }
   };
 
+  const btn = 'px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-gray-300 transition-colors';
+  const menuItem = 'block w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 disabled:opacity-40 transition-colors';
+  const nextSectionLabel = autoLabelSection(tapMap);
+  // What a tap at the playhead would become: the next measure number and
+  // the next beat within the current measure (sections count as measures,
+  // same as the transport bar's measure|beat readout).
+  const mb = measureBeatAt(tapMap, position);
+  const nextMeasure = (mb?.measure ?? 0) + 1;
+  const nextBeat = mb
+    ? mb.beat + 1
+    : tapMap.filter((e) => e.type === 'beat' && e.time <= position).length + 1;
+
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className={`${compact ? 'flex-none md:flex-1' : 'flex-1'} flex flex-col min-h-0`}>
       {/* Toolbar \u2014 mirrors the LyricsEditor layout: actions left/right,
-          centered title, no song name (shown in the header above). */}
-      <div className="relative flex items-center justify-between px-5 py-2">
-        <h2 className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-100 pointer-events-none">
+          centered title, no song name (shown in the header above). On
+          phones the file actions collapse into a More menu. */}
+      <div className="relative flex items-center justify-between gap-2 px-3 md:px-5 py-2">
+        <h2 className="absolute inset-0 hidden md:flex items-center justify-center text-sm font-semibold text-gray-100 pointer-events-none">
           Edit TapMap
         </h2>
-        <div className="flex items-center gap-2 relative z-10">
-          <button
-            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
-            onClick={() => fileInputRef.current?.click()}
-          >
+        <div className="flex items-center gap-2 relative z-10 min-w-0">
+          <button className={`${btn} hidden md:inline-block`} onClick={() => fileInputRef.current?.click()}>
             Import .xsc
           </button>
+          <div ref={moreMenuRef} className="relative md:hidden">
+            <button className={btn} onClick={() => setMoreOpen((v) => !v)}>
+              More ▾
+            </button>
+            {moreOpen && (
+              <div className="absolute left-0 top-full mt-1 z-20 min-w-[12rem] rounded border border-gray-600 bg-gray-800 shadow-lg py-1">
+                <button className={menuItem} onClick={() => { setMoreOpen(false); fileInputRef.current?.click(); }}>
+                  Import .xsc
+                </button>
+                <button className={menuItem} disabled={tapMap.length === 0 || exporting} onClick={() => { setMoreOpen(false); handleExportXsc(); }}>
+                  {exporting ? 'Exporting…' : 'Export .xsc'}
+                </button>
+                <button className={menuItem} disabled={tapMap.length === 0 || exporting} onClick={() => { setMoreOpen(false); handleExportMusicXml(); }}>
+                  Export MusicXML
+                </button>
+              </div>
+            )}
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -221,7 +277,7 @@ export function MarkerEditorModal() {
             onChange={handleImportXsc}
           />
           {error && (
-            <span className="text-xs text-red-400 ml-2">{error}</span>
+            <span className="text-xs text-red-400 ml-2 truncate">{error}</span>
           )}
         </div>
         <div className="flex items-center gap-2 relative z-10">
@@ -233,7 +289,7 @@ export function MarkerEditorModal() {
             {saving ? 'Saving...' : 'Save'}
           </button>
           <button
-            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-gray-300 transition-colors"
+            className={`${btn} hidden md:inline-block`}
             onClick={handleExportXsc}
             disabled={tapMap.length === 0 || exporting}
             title="Download a Transcribe! .xsc plus a stereo downmix .wav of the current mixer state"
@@ -241,17 +297,14 @@ export function MarkerEditorModal() {
             {exporting ? 'Exporting…' : 'Export .xsc'}
           </button>
           <button
-            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-gray-300 transition-colors"
+            className={`${btn} hidden md:inline-block`}
             onClick={handleExportMusicXml}
             disabled={tapMap.length === 0 || exporting}
             title="Download a blank single-staff MusicXML file with rehearsal marks at each section"
           >
             Export MusicXML
           </button>
-          <button
-            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm text-gray-300 transition-colors"
-            onClick={handleClose}
-          >
+          <button className={btn} onClick={handleClose}>
             Close
           </button>
         </div>
@@ -261,23 +314,62 @@ export function MarkerEditorModal() {
           between the toolbar and the footer. Internal scroll kicks in
           when rows exceed that space; `min-h-0` keeps the flex child
           from growing past its parent and pushing the page taller. */}
-      <div className="flex-1 min-h-0 overflow-y-auto mt-3 max-w-2xl w-full mx-auto rounded-lg border border-gray-700">
+      <div className={`flex-1 min-h-0 overflow-y-auto mt-3 max-w-2xl w-full mx-auto rounded-lg border border-gray-700 ${compact ? 'hidden md:block' : ''}`}>
         <SectionList />
       </div>
 
-      {/* Footer hints — mirrors the LyricsEditor footer style so the
-          two editors feel like the same family. `mt-auto` pins it to
-          the bottom of the flex column so the panel's breathing room
-          sits between the list and the footer. */}
-      <div className="mt-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-5 py-2 text-[10px] text-gray-600 border-t border-gray-700">
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">S</kbd> section</span>
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">M</kbd> measure</span>
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">B</kbd> beat</span>
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">click</kbd> select</span>
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">drag</kbd> move</span>
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Del</kbd> remove</span>
-        <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘Z</kbd> undo</span>
-      </div>
+      {coarse ? (
+        /* Touch pads \u2014 the S/M/B keys for phones and tablets. */
+        <div className="mt-3 max-w-2xl w-full mx-auto px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <TapPadButton
+              label="Section"
+              sublabel={nextSectionLabel}
+              color="bg-amber-500 text-gray-900"
+              onFire={() => tap('section')}
+            />
+            <TapPadButton
+              label="Measure"
+              sublabel={String(nextMeasure)}
+              color="bg-blue-700 text-white"
+              onFire={() => tap('measure')}
+            />
+            <TapPadButton
+              label="Beat"
+              sublabel={String(nextBeat)}
+              color="bg-gray-600 text-white"
+              onFire={() => tap('beat')}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button className={`${btn} flex-1 py-2.5`} onClick={undo}>
+              Undo
+            </button>
+            {selectedIndex !== null && (
+              <button
+                className={`${btn} flex-1 py-2.5 text-red-300`}
+                onClick={() => deleteEntry(selectedIndex)}
+              >
+                Delete selected
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Footer hints \u2014 mirrors the LyricsEditor footer style so the
+            two editors feel like the same family. `mt-auto` pins it to
+            the bottom of the flex column so the panel's breathing room
+            sits between the list and the footer. */
+        <div className="mt-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-5 py-2 text-[10px] text-gray-600 border-t border-gray-700">
+          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">S</kbd> section</span>
+          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">M</kbd> measure</span>
+          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">B</kbd> beat</span>
+          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">click</kbd> select</span>
+          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">drag</kbd> move</span>
+          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Del</kbd> remove</span>
+          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘Z</kbd> undo</span>
+        </div>
+      )}
     </div>
   );
 }

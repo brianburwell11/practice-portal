@@ -204,14 +204,18 @@ export default function App() {
               );
             })()}
           </div>
-          <div className="w-full order-last flex justify-center md:w-auto md:order-none md:absolute md:left-1/2 md:-translate-x-1/2">
-            <SetlistNav />
-          </div>
+          {/* The TapMap editor hides the song and setlist pickers so a
+              stray tap can't switch songs mid-session. */}
+          {!markerEditorOpen && (
+            <div className="w-full order-last flex justify-center md:w-auto md:order-none md:absolute md:left-1/2 md:-translate-x-1/2">
+              <SetlistNav />
+            </div>
+          )}
           {/* One right-aligned group. Two separate ml-auto items would split
               the free space and push the setlist picker behind the centered
               song picker. */}
           <div className="ml-auto flex items-center gap-3">
-            <SetlistDropdown />
+            {!markerEditorOpen && <SetlistDropdown />}
             <AccountMenu bandId={currentBand?.id} />
           </div>
         </header>
@@ -224,7 +228,7 @@ export default function App() {
         )}
 
         {/* Admin toolbar: menus for what you may do here, plus nav links */}
-        {(canManage || activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length) ? (
+        {!markerEditorOpen && (canManage || activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length) ? (
           <AdminRibbon
             setlistNavLinks={activeSetlist?.navLinks}
             songNavLinks={selectedSong?.navLinks}
@@ -285,6 +289,7 @@ export default function App() {
         <TransportBar
           showSliders={mobileControlsOpen}
           onToggleSliders={() => setMobileControlsOpen((v) => !v)}
+          minimal={markerEditorOpen}
         />
 
         {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
@@ -307,7 +312,16 @@ export default function App() {
 
         {/* Editor replaces mixer when open */}
         {markerEditorOpen ? (
-          <MarkerEditorModal />
+          <>
+            {/* Phones: the mixer button shows the mixer above the tap
+                pads (the section list steps aside to make room). */}
+            {mobileControlsOpen && (
+              <div className="contents md:hidden">
+                <MixerPanel />
+              </div>
+            )}
+            <MarkerEditorModal compact={mobileControlsOpen} />
+          </>
         ) : lyricsEditorOpen ? (
           <LyricsEditorModal />
         ) : showEditBandModal && currentBand ? (

@@ -102,9 +102,11 @@ function WaveformSkeleton({ progress }: { progress: { loaded: number; total: num
 interface TransportBarProps {
   showSliders: boolean;
   onToggleSliders: () => void;
+  /** TapMap editing on phones: only play/pause and the mixer button. */
+  minimal?: boolean;
 }
 
-export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps) {
+export function TransportBar({ showSliders, onToggleSliders, minimal = false }: TransportBarProps) {
   const engine = useAudioEngine();
   const { playing, position, duration, loopA, loopB, loopEnabled, toggleFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
@@ -353,7 +355,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
       {/* Mobile: transport buttons (row 2) */}
       <div className="flex items-center justify-center gap-2 mt-2 md:hidden">
         <PlayPauseButton size="lg" longPressStops />
-        <LoopButton size="lg" verb="Tap" />
+        {!minimal && <LoopButton size="lg" verb="Tap" />}
         {/* Mobile controls toggle — shows/hides mixer + volume/speed sliders below lyrics */}
         <button
           className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
@@ -372,7 +374,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
         </button>
 
         {/* Mobile sheet music: opens it full screen (only when the song has a score) */}
-        {hasSheetMusic && <button
+        {!minimal && hasSheetMusic && <button
           className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
             sheetMusicOpen ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
@@ -385,7 +387,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
         </button>}
 
         {/* Mobile bookmark toggle */}
-        <button
+        {!minimal && <button
           className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
             showBookmark ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
@@ -397,10 +399,10 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
           </svg>
-        </button>
+        </button>}
 
         {/* Mobile lyrics toggle — only when song has lyrics */}
-        {hasLyrics && <button
+        {!minimal && hasLyrics && <button
           className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
             lyricsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
@@ -425,7 +427,7 @@ export function TransportBar({ showSliders, onToggleSliders }: TransportBarProps
       )}
 
       {/* Mobile: bookmark panel (position, measure/beat, section jump) */}
-      {showBookmark && (
+      {showBookmark && !minimal && (
         <div className="mt-2 md:hidden flex items-center justify-center gap-4">
           <div className="font-mono text-sm text-gray-300">
             {editingTime ? (
