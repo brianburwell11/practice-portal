@@ -11,6 +11,12 @@
   /* `PageLoader`'s mark: hidden for a beat, so a quick load shows nothing,
      then breathing. */
   --animate-loader: loader-appear 0.6s ease-out 0.25s backwards, loader-breathe 3.2s ease-in-out 0.85s infinite;
+  /* A quick pop to confirm something changed off-screen (setlist tab count). */
+  --animate-pop: pop 0.35s ease-out;
+}
+
+@keyframes pop {
+  40% { transform: scale(1.35); }
 }
 
 @keyframes loader-appear {

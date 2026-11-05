@@ -11,6 +11,8 @@ import { generateId } from '../utils/generateId';
 import { CamelotWheel } from '../components/CamelotWheel';
 import type { SetlistConfig, SetlistEntry, NavLinkConfig } from '../audio/types';
 import { confirmDiscard } from '../store/dialogStore';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useSortableList } from '../hooks/useSortableList';
 
 /** Legacy setlist ids are prefixed with "setlist-". New-format ids are
  *  opaque base62 (7 chars) with no prefix. Detecting the legacy shape
@@ -130,22 +132,45 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const [filterPos, setFilterPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  // Drag-and-drop state
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dropIdx, setDropIdx] = useState<number | null>(null);
+  // Layout: phones get a full-screen sheet with Songs / Setlist tabs;
+  // touch devices get bigger targets and tap-to-add rows.
+  const isPhone = !useMediaQuery('(min-width: 768px)');
+  const isWide = useMediaQuery('(min-width: 1024px)');
+  const coarse = useMediaQuery('(pointer: coarse)');
+  const [mobileTab, setMobileTab] = useState<'songs' | 'setlist'>('songs');
+  /** Bumped on each add so the Setlist tab count can pop. */
+  const [addPulse, setAddPulse] = useState(0);
 
-  // Nav link drag-to-reorder state
-  const [linkDragIdx, setLinkDragIdx] = useState<number | null>(null);
-  const [linkDropIdx, setLinkDropIdx] = useState<number | null>(null);
+  // Drag-to-reorder (pointer based, so it works on touch too)
+  const entrySort = useSortableList(
+    useCallback((from: number, to: number) => {
+      setEntries((prev) => {
+        const next = [...prev];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        return next;
+      });
+    }, []),
+  );
+  const linkSort = useSortableList(
+    useCallback((from: number, to: number) => {
+      setNavLinks((prev) => {
+        const next = [...prev];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        return next;
+      });
+    }, []),
+  );
 
   // Close filter dropdown on click outside
   useEffect(() => {
     if (!filterOpen) return;
-    const handler = (e: MouseEvent) => {
+    const handler = (e: PointerEvent) => {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
   }, [filterOpen]);
 
   const openFilter = useCallback(() => {
@@ -407,26 +432,10 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     }
   };
 
-  // Drag-and-drop handlers
-  const onDragStart = (idx: number) => setDragIdx(idx);
-  const onDragOver = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    setDropIdx(idx);
+  const addSong = (id: string) => {
+    setEntries((prev) => [...prev, { type: 'song', songId: id }]);
+    setAddPulse((n) => n + 1);
   };
-  const onDragEnd = () => {
-    if (dragIdx !== null && dropIdx !== null && dragIdx !== dropIdx) {
-      setEntries((prev) => {
-        const next = [...prev];
-        const [moved] = next.splice(dragIdx, 1);
-        next.splice(dropIdx, 0, moved);
-        return next;
-      });
-    }
-    setDragIdx(null);
-    setDropIdx(null);
-  };
-
-  const addSong = (id: string) => setEntries((prev) => [...prev, { type: 'song', songId: id }]);
   const addSetHeading = () => {
     const setNum = entries.filter((e) => e.type === 'heading').length + 1;
     setEntries((prev) => [...prev, { type: 'heading', label: `Set ${setNum}` }]);
@@ -468,14 +477,14 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      className="fixed inset-0 z-50 flex items-stretch md:items-center justify-center bg-black/70"
       onClick={requestClose}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === 'Escape') requestClose();
       }}
     >
-      {wheelOpen && (
+      {wheelOpen && isWide && (
         <div
           className="absolute hidden lg:block bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-3"
           style={{
@@ -505,12 +514,23 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="setlist-modal-title"
-        className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[85vh] flex flex-col"
+        className="bg-gray-900 md:border border-gray-700 md:rounded-lg shadow-xl w-full md:max-w-2xl md:mx-4 h-[100dvh] md:h-auto md:max-h-[85vh] flex flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="setlist-modal-title" className="text-lg font-semibold shrink-0 mb-4">
-          {isEdit ? 'Edit Setlist' : 'Create Setlist'}
-        </h2>
+        <div className="flex items-center justify-between shrink-0 mb-4">
+          <h2 id="setlist-modal-title" className="text-lg font-semibold">
+            {isEdit ? 'Edit Setlist' : 'Create Setlist'}
+          </h2>
+          <button
+            type="button"
+            onClick={requestClose}
+            disabled={saving}
+            className="md:hidden -mr-2 w-10 h-10 flex items-center justify-center text-2xl leading-none text-gray-400 hover:text-gray-200"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </div>
 
         {loading ? (
           <div className="text-sm text-gray-400">Loading...</div>
@@ -528,26 +548,35 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                   onDoubleClick={() => {
                     if (isCopy && !name && copySourceName) setName(`${copySourceName} (copy)`);
                   }}
-                  className={`w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 ${
-                    isCopy && !name && copySourceName ? 'pr-32' : ''
+                  className={`w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-base md:text-sm text-gray-200 focus:outline-none focus:border-blue-500 ${
+                    isCopy && !name && copySourceName && !coarse ? 'pr-32' : ''
                   }`}
                   placeholder={isCopy && copySourceName ? `${copySourceName} (copy)` : 'Friday Night Gig'}
-                  autoFocus
+                  autoFocus={!coarse}
                   disabled={saving}
                 />
-                {isCopy && !name && copySourceName && (
+                {isCopy && !name && copySourceName && !coarse && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-gray-500 pointer-events-none select-none">
                     double click to use
                   </span>
                 )}
               </div>
+              {isCopy && !name && copySourceName && coarse && (
+                <button
+                  type="button"
+                  onClick={() => setName(`${copySourceName} (copy)`)}
+                  className="mt-2 px-3 py-1.5 rounded-full bg-gray-800 border border-gray-600 text-sm text-gray-300"
+                >
+                  Use "{copySourceName} (copy)"
+                </button>
+              )}
               {nameCollidesWithSource && (
                 <p className="mt-1 text-xs text-red-400">Pick a name different from the original setlist.</p>
               )}
             </div>
 
             {/* URL slug + set length on one row */}
-            <div className="flex items-end gap-3">
+            <div className="flex flex-col md:flex-row md:items-end gap-3">
               <div className="flex-1 min-w-0">
                 <label className="block text-sm text-gray-400 mb-1">
                   URL slug{' '}
@@ -556,7 +585,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                   </span>
                 </label>
                 <div className={`flex items-center gap-0 w-full bg-gray-800 border rounded focus-within:border-blue-500 ${slugCollides ? 'border-red-500' : 'border-gray-600'}`}>
-                  <span className="pl-3 py-2 text-gray-500 font-mono text-xs select-none whitespace-nowrap">
+                  <span className="hidden md:inline pl-3 py-2 text-gray-500 font-mono text-xs select-none whitespace-nowrap">
                     /{currentBand?.route ?? ''}?setlist=
                   </span>
                   <input
@@ -566,15 +595,19 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                       setSlug(cleanSlugInput(e.target.value));
                       setSlugEdited(true);
                     }}
-                    className="flex-1 min-w-0 bg-transparent border-0 px-1 py-2 text-sm text-gray-200 font-mono focus:outline-none"
+                    className="flex-1 min-w-0 bg-transparent border-0 px-3 md:px-1 py-2 text-base md:text-sm text-gray-200 font-mono focus:outline-none"
                     placeholder={dedupeSlug(slugify(name || 'Friday Night Gig'), takenSlugs)}
                     disabled={saving}
                   />
                 </div>
+                <p className="md:hidden mt-1 text-xs text-gray-500 font-mono break-all">
+                  /{currentBand?.route ?? ''}?setlist={slug || '...'}
+                </p>
                 {slugCollides && (
                   <p className="mt-1 text-xs text-red-400">This URL slug is already taken by another setlist.</p>
                 )}
               </div>
+              <div className="flex items-end gap-3">
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Set Length</label>
                 <input
@@ -602,7 +635,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                       setDesiredLengthSeconds(null);
                     }
                   }}
-                  className="w-20 bg-gray-800 border border-gray-600 rounded px-2 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+                  className="w-24 md:w-20 bg-gray-800 border border-gray-600 rounded px-2 py-2 text-base md:text-sm text-gray-200 focus:outline-none focus:border-blue-500"
                   placeholder="HH:MM:SS"
                   disabled={saving}
                 />
@@ -616,11 +649,40 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                   </span>
                 );
               })()}
+              </div>
             </div>
 
-            <div className="flex gap-4">
+            {isPhone && (
+              <div className="sticky top-0 z-10 bg-gray-900 py-1 -my-1">
+                <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-gray-800" role="tablist">
+                  {(['songs', 'setlist'] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      aria-selected={mobileTab === tab}
+                      onClick={() => setMobileTab(tab)}
+                      className={`py-2 rounded-md text-sm font-medium transition-colors ${
+                        mobileTab === tab ? 'bg-gray-600 text-white' : 'text-gray-400'
+                      }`}
+                    >
+                      {tab === 'songs' ? 'Songs' : (
+                        <>
+                          Setlist{' '}
+                          <span key={addPulse} className={`inline-block ${addPulse > 0 ? 'animate-pop' : ''}`}>
+                            ({songCount})
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col md:flex-row gap-4">
               {/* Song picker */}
-              <div className="w-1/2 space-y-2">
+              <div className={`md:w-1/2 space-y-2 ${isPhone && mobileTab !== 'songs' ? 'hidden' : ''}`}>
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium text-gray-400">Available Songs</h3>
                   <div className="flex items-center gap-1">
@@ -651,8 +713,12 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                   {filterOpen && createPortal(
                     <div
                       ref={filterRef}
-                      className="fixed z-[100] bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 space-y-3"
-                      style={{ width: 220, top: filterPos.top, left: filterPos.left }}
+                      className={
+                        isPhone
+                          ? 'fixed z-[100] inset-x-0 bottom-0 bg-gray-800 border-t border-gray-600 rounded-t-xl shadow-xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 max-h-[70dvh] overflow-y-auto'
+                          : 'fixed z-[100] bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 space-y-3'
+                      }
+                      style={isPhone ? undefined : { width: 220, top: filterPos.top, left: filterPos.left }}
                       onClick={(e) => e.stopPropagation()}
                     >
                       {/* Sort */}
@@ -662,7 +728,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                           <select
                             value={sortMode}
                             onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
-                            className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 md:py-0.5 text-base md:text-xs text-gray-200 focus:outline-none focus:border-blue-500"
                           >
                             <option value="title">Title</option>
                             <option value="duration">Duration</option>
@@ -671,7 +737,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                           <select
                             value={sortDir}
                             onChange={(e) => setSortDir(e.target.value as typeof sortDir)}
-                            className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 md:py-0.5 text-base md:text-xs text-gray-200 focus:outline-none focus:border-blue-500"
                           >
                             <option value="asc">Ascending</option>
                             <option value="desc">Descending</option>
@@ -710,7 +776,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                           <select
                             value={durationMode}
                             onChange={(e) => setDurationMode(e.target.value as typeof durationMode)}
-                            className="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 md:py-0.5 text-base md:text-xs text-gray-200 focus:outline-none focus:border-blue-500"
                           >
                             <option value="">No filter</option>
                             <option value="longer">Longer than</option>
@@ -724,7 +790,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                               type="text"
                               value={durationText}
                               onChange={(e) => setDurationText(e.target.value)}
-                              className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                              className="flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 md:py-0.5 text-base md:text-xs text-gray-200 focus:outline-none focus:border-blue-500"
                               placeholder="3:00"
                             />
                           )}
@@ -751,7 +817,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                                     if (next.has(k)) next.delete(k); else next.add(k);
                                     return next;
                                   })}
-                                  className={`px-1.5 py-0.5 rounded text-xs transition-opacity ${selected ? 'ring-1 ring-white/50' : 'opacity-50 hover:opacity-80'}`}
+                                  className={`px-2.5 py-1 md:px-1.5 md:py-0.5 rounded text-sm md:text-xs transition-opacity ${selected ? 'ring-1 ring-white/50' : 'opacity-50 hover:opacity-80'}`}
                                   style={cs ? { backgroundColor: cs.bg, color: cs.color } : { backgroundColor: '#374151', color: '#9ca3af' }}
                                 >
                                   {k}
@@ -776,7 +842,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                                     if (next.has(t)) next.delete(t); else next.add(t);
                                     return next;
                                   })}
-                                  className={`px-1.5 py-0.5 rounded text-xs bg-gray-700 text-gray-300 transition-opacity ${selected ? 'ring-1 ring-white/50' : 'opacity-50 hover:opacity-80'}`}
+                                  className={`px-2.5 py-1 md:px-1.5 md:py-0.5 rounded text-sm md:text-xs bg-gray-700 text-gray-300 transition-opacity ${selected ? 'ring-1 ring-white/50' : 'opacity-50 hover:opacity-80'}`}
                                 >
                                   {t}
                                 </button>
@@ -804,7 +870,24 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                     document.body,
                   )}
                 </div>
-                <div className="space-y-1 overflow-y-auto max-h-60">
+                {wheelOpen && !isWide && (
+                  <div className="relative rounded-lg border border-gray-700 bg-gray-900 p-2">
+                    <button
+                      onClick={() => setWheelOpen(false)}
+                      className="absolute top-1 right-1 w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-300 text-lg leading-none z-10"
+                      aria-label="Close key wheel"
+                    >
+                      ×
+                    </button>
+                    <CamelotWheel
+                      size={Math.min(280, (typeof window !== 'undefined' ? window.innerWidth : 320) - 64)}
+                      onTargetKeysChange={(keys) =>
+                        setWheelTargetKeys(keys && keys.length > 0 ? new Set(keys) : null)
+                      }
+                    />
+                  </div>
+                )}
+                <div className="space-y-1 overflow-y-auto max-h-none md:max-h-60">
                   {displaySongs.map((song) => {
                     const meta = songMeta[song.id];
                     const songCamelot = meta?.key ? toCamelotCode(meta.key) : null;
@@ -814,9 +897,10 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                     return (
                       <div
                         key={song.id}
+                        onClick={coarse && !saving ? () => addSong(song.id) : undefined}
                         className={`flex items-center gap-2 rounded px-3 py-1.5 text-sm transition-colors ${
                           recommended ? '' : 'bg-gray-800'
-                        }`}
+                        } ${coarse ? 'min-h-11 cursor-pointer active:brightness-125 select-none' : ''}`}
                         style={
                           recHue !== null
                             ? {
@@ -842,9 +926,10 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                           );
                         })()}
                         <button
-                          onClick={() => addSong(song.id)}
+                          onClick={(e) => { e.stopPropagation(); addSong(song.id); }}
                           disabled={saving}
-                          className="text-blue-400 hover:text-blue-300 text-lg leading-none shrink-0"
+                          aria-label={`Add ${song.title}`}
+                          className={`text-blue-400 hover:text-blue-300 text-lg leading-none shrink-0 ${coarse ? 'w-10 h-10 -my-2 -mr-2 flex items-center justify-center text-2xl' : ''}`}
                         >
                           +
                         </button>
@@ -867,7 +952,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
               </div>
 
               {/* Setlist order */}
-              <div className="w-1/2 space-y-2">
+              <div className={`md:w-1/2 space-y-2 ${isPhone && mobileTab !== 'setlist' ? 'hidden' : ''}`}>
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium text-gray-400">
                     Setlist Order ({songCount} songs)
@@ -876,7 +961,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                     <span className="text-xs text-gray-500">{formatDuration(totalSeconds)} total</span>
                   )}
                 </div>
-                <div className="space-y-1 overflow-y-auto max-h-60">
+                <div className="space-y-1 overflow-y-auto max-h-none md:max-h-60">
                   {entries.map((entry, i) => {
                     const isHeading = entry.type === 'heading';
                     if (!isHeading) songNumber++;
@@ -891,35 +976,31 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                       wheelTargetKeys !== null && setlistCamelot !== null && wheelTargetKeys.has(setlistCamelot);
                     const setlistRecHue = setlistRecommended && setlistKey ? getCamelotHue(setlistKey) : null;
 
+                    const isDragging = entrySort.dragIdx === i;
                     return (
                       <div
                         key={`${isHeading ? 'h' : 's'}-${i}`}
-                        draggable
-                        onDragStart={() => onDragStart(i)}
-                        onDragOver={(e) => onDragOver(e, i)}
-                        onDragEnd={onDragEnd}
-                        className={`flex items-center gap-2 rounded px-3 py-1.5 text-sm transition-opacity ${
+                        ref={entrySort.rowRef(i)}
+                        className={`flex items-center gap-2 rounded px-3 py-1.5 text-sm ${
                           isHeading
                             ? 'bg-gray-700/60 border border-gray-600 font-semibold text-gray-200'
                             : setlistRecHue !== null ? '' : 'bg-gray-800'
-                        } ${
-                          dragIdx === i ? 'opacity-40' : ''
-                        } ${dropIdx === i && dragIdx !== null && setlistRecHue === null ? 'ring-1 ring-blue-500' : ''}`}
-                        style={
-                          setlistRecHue !== null
+                        } ${isDragging ? 'shadow-lg ring-1 ring-blue-500' : ''} ${coarse ? 'min-h-11' : ''}`}
+                        style={{
+                          ...(setlistRecHue !== null
                             ? {
                                 backgroundColor: `hsl(${setlistRecHue} 50% 22%)`,
-                                boxShadow:
-                                  dropIdx === i && dragIdx !== null
-                                    ? `0 0 0 1px hsl(${setlistRecHue} 80% 65%), 0 0 0 2px rgb(59 130 246)`
-                                    : `0 0 0 1px hsl(${setlistRecHue} 80% 65%)`,
+                                boxShadow: `0 0 0 1px hsl(${setlistRecHue} 80% 65%)`,
                               }
-                            : undefined
-                        }
+                            : {}),
+                          ...entrySort.rowStyle(i),
+                        }}
                       >
                         <span
-                          className="text-gray-600 cursor-grab active:cursor-grabbing select-none"
+                          {...entrySort.handleProps(i)}
+                          className={`text-gray-600 cursor-grab active:cursor-grabbing select-none ${coarse ? 'w-10 h-10 -my-2 -ml-2 flex items-center justify-center text-base' : ''}`}
                           title="Drag to reorder"
+                          aria-label="Drag to reorder"
                         >
                           &#x2630;
                         </span>
@@ -930,7 +1011,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                               type="text"
                               value={entry.label}
                               onChange={(e) => updateHeadingLabel(i, e.target.value)}
-                              className="flex-1 bg-transparent border-none text-sm font-semibold text-gray-200 focus:outline-none px-0"
+                              className="flex-1 min-w-0 bg-transparent border-none text-base md:text-sm font-semibold text-gray-200 focus:outline-none px-0"
                               disabled={saving}
                             />
                             {setInfo && setInfo.seconds > 0 && (
@@ -963,7 +1044,8 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                         <button
                           onClick={() => removeEntry(i)}
                           disabled={saving}
-                          className="text-gray-500 hover:text-red-400 text-sm shrink-0"
+                          aria-label="Remove"
+                          className={`text-gray-500 hover:text-red-400 text-sm shrink-0 ${coarse ? 'w-10 h-10 -my-2 -mr-2 flex items-center justify-center text-lg' : ''}`}
                         >
                           &times;
                         </button>
@@ -972,7 +1054,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                   })}
                   {entries.length === 0 && (
                     <div className="text-sm text-gray-500">
-                      Add songs from the left
+                      {isPhone ? 'Add songs from the Songs tab' : 'Add songs from the left'}
                     </div>
                   )}
                 </div>
@@ -986,32 +1068,27 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
               {navLinks.map((link, i) => (
                 <div
                   key={i}
-                  draggable
-                  onDragStart={() => setLinkDragIdx(i)}
-                  onDragOver={(e) => { e.preventDefault(); setLinkDropIdx(i); }}
-                  onDragEnd={() => {
-                    if (linkDragIdx !== null && linkDropIdx !== null && linkDragIdx !== linkDropIdx) {
-                      setNavLinks((prev) => {
-                        const next = [...prev];
-                        const [moved] = next.splice(linkDragIdx, 1);
-                        next.splice(linkDropIdx, 0, moved);
-                        return next;
-                      });
-                    }
-                    setLinkDragIdx(null);
-                    setLinkDropIdx(null);
-                  }}
-                  className={`flex items-center gap-2 bg-gray-800 rounded px-3 py-1.5 text-sm transition-opacity ${
-                    linkDragIdx === i ? 'opacity-40' : ''
-                  } ${linkDropIdx === i && linkDragIdx !== null ? 'ring-1 ring-blue-500' : ''}`}
+                  ref={linkSort.rowRef(i)}
+                  style={linkSort.rowStyle(i)}
+                  className={`flex items-center gap-2 bg-gray-800 rounded px-3 py-1.5 text-sm ${
+                    linkSort.dragIdx === i ? 'shadow-lg ring-1 ring-blue-500' : ''
+                  }`}
                 >
-                  <span className="text-gray-600 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder">&#x2630;</span>
+                  <span
+                    {...linkSort.handleProps(i)}
+                    className={`text-gray-600 cursor-grab active:cursor-grabbing select-none ${coarse ? 'w-10 h-10 -my-2 -ml-2 flex items-center justify-center text-base' : ''}`}
+                    title="Drag to reorder"
+                    aria-label="Drag to reorder"
+                  >
+                    &#x2630;
+                  </span>
+                  <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={link.title}
                     maxLength={40}
                     onChange={(e) => setNavLinks((prev) => prev.map((l, j) => j === i ? { ...l, title: e.target.value } : l))}
-                    className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
+                    className="sm:flex-1 min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-base md:text-xs focus:outline-none focus:border-blue-500"
                     placeholder="Title"
                     aria-label="Link title"
                     disabled={saving}
@@ -1024,28 +1101,30 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                       const fixed = ensureProtocol(e.target.value.trim());
                       if (fixed !== link.url) setNavLinks((prev) => prev.map((l, j) => j === i ? { ...l, url: fixed } : l));
                     }}
-                    className="flex-[2] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
+                    className="sm:flex-[2] min-w-0 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-base md:text-xs focus:outline-none focus:border-blue-500"
                     placeholder="https://..."
                     aria-label="Link address"
                     disabled={saving}
                   />
+                  </div>
                   <button
                     onClick={() => setNavLinks((prev) => prev.filter((_, j) => j !== i))}
                     disabled={saving}
-                    className="text-gray-500 hover:text-red-400 text-sm shrink-0"
+                    aria-label="Remove link"
+                    className={`text-gray-500 hover:text-red-400 text-sm shrink-0 ${coarse ? 'w-10 h-10 -my-2 -mr-2 flex items-center justify-center text-lg' : ''}`}
                   >
                     &times;
                   </button>
                 </div>
               ))}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <input
                   type="text"
                   value={newLinkTitle}
                   maxLength={40}
                   onChange={(e) => setNewLinkTitle(e.target.value)}
                   placeholder="Link title"
-                  className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-blue-500"
+                  className="sm:flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-base md:text-xs focus:outline-none focus:border-blue-500"
                   disabled={saving}
                 />
                 <input
@@ -1053,7 +1132,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                   value={newLinkUrl}
                   onChange={(e) => setNewLinkUrl(e.target.value)}
                   placeholder="https://..."
-                  className="flex-[2] bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-blue-500"
+                  className="sm:flex-[2] min-w-0 bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-base md:text-xs focus:outline-none focus:border-blue-500"
                   disabled={saving}
                 />
                 <button
@@ -1063,7 +1142,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                     setNewLinkTitle('');
                     setNewLinkUrl('');
                   }}
-                  className="px-2 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-xs"
+                  className="px-2 py-2 sm:py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm sm:text-xs"
                 >
                   Add
                 </button>
@@ -1077,7 +1156,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
             )}
             </div>
 
-            <div className="flex justify-end gap-3 shrink-0 mt-4">
+            <div className="flex justify-end gap-3 shrink-0 mt-4 [&>button]:flex-1 md:[&>button]:flex-none">
               <button
                 onClick={onClose}
                 disabled={saving}
