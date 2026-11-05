@@ -102,12 +102,12 @@ function WaveformSkeleton({ progress }: { progress: { loaded: number; total: num
 interface TransportBarProps {
   showSliders: boolean;
   onToggleSliders: () => void;
-  /** An on-page editor is open. Phones show only play/pause, plus the
-   *  mixer button for the TapMap editor. */
-  minimal?: 'tapmap' | 'lyrics';
+  /** An on-page editor is open: phones show only play/pause with the
+   *  volume and speed sliders beside it. */
+  minimal?: boolean;
 }
 
-export function TransportBar({ showSliders, onToggleSliders, minimal }: TransportBarProps) {
+export function TransportBar({ showSliders, onToggleSliders, minimal = false }: TransportBarProps) {
   const engine = useAudioEngine();
   const { playing, position, duration, loopA, loopB, loopEnabled, toggleFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
@@ -354,11 +354,13 @@ export function TransportBar({ showSliders, onToggleSliders, minimal }: Transpor
       </div>
 
       {/* Mobile: transport buttons (row 2) */}
-      <div className="flex items-center justify-center gap-2 mt-2 md:hidden">
+      <div className={`flex items-center gap-2 mt-2 md:hidden ${minimal ? '' : 'justify-center'}`}>
         <PlayPauseButton size="lg" longPressStops />
+        {/* Editors: volume and speed sit right of play/pause, always shown */}
+        {minimal && <MasterSliders className="flex-1 min-w-0 ml-1" />}
         {!minimal && <LoopButton size="lg" verb="Tap" />}
         {/* Mobile controls toggle — shows/hides mixer + volume/speed sliders below lyrics */}
-        {minimal !== 'lyrics' && <button
+        {!minimal && <button
           className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
             showSliders ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
@@ -423,7 +425,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal }: Transpor
       </div>
 
       {/* Mobile: collapsible volume + speed sliders */}
-      {showSliders && (
+      {showSliders && !minimal && (
         <MasterSliders className="mt-2 md:hidden" />
       )}
 

@@ -17,13 +17,7 @@ import type { TapMapEntry } from '../../audio/types';
 import { useTransportStore } from '../../store/transportStore';
 import { measureBeatAt } from '../../audio/tempoUtils';
 
-interface MarkerEditorModalProps {
-  /** Phones with the mixer open: drop the section list so the mixer
-   *  and the tap pads share the screen. */
-  compact?: boolean;
-}
-
-export function MarkerEditorModal({ compact = false }: MarkerEditorModalProps) {
+export function MarkerEditorModal() {
   const {
     isOpen, tapMap, dirty, selectedIndex,
     close, importTapMap, addEntry, deleteEntry, undo, onComplete,
@@ -239,7 +233,7 @@ export function MarkerEditorModal({ compact = false }: MarkerEditorModalProps) {
     : tapMap.filter((e) => e.type === 'beat' && e.time <= position).length + 1;
 
   return (
-    <div className={`${compact ? 'flex-none md:flex-1' : 'flex-1'} flex flex-col min-h-0`}>
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar \u2014 mirrors the LyricsEditor layout: actions left/right,
           centered title, no song name (shown in the header above). On
           phones the file actions collapse into a More menu. */}
@@ -314,7 +308,7 @@ export function MarkerEditorModal({ compact = false }: MarkerEditorModalProps) {
           between the toolbar and the footer. Internal scroll kicks in
           when rows exceed that space; `min-h-0` keeps the flex child
           from growing past its parent and pushing the page taller. */}
-      <div className={`flex-1 min-h-0 overflow-y-auto mt-3 max-w-2xl w-full mx-auto rounded-lg border border-gray-700 ${compact ? 'hidden md:block' : ''}`}>
+      <div className="flex-1 min-h-0 overflow-y-auto mt-3 max-w-2xl w-full mx-auto rounded-lg border border-gray-700">
         <SectionList />
       </div>
 

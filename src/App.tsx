@@ -291,7 +291,7 @@ export default function App() {
         <TransportBar
           showSliders={mobileControlsOpen}
           onToggleSliders={() => setMobileControlsOpen((v) => !v)}
-          minimal={markerEditorOpen ? 'tapmap' : lyricsEditorOpen ? 'lyrics' : undefined}
+          minimal={editorFocus}
         />
 
         {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
@@ -317,16 +317,7 @@ export default function App() {
 
         {/* Editor replaces mixer when open */}
         {markerEditorOpen ? (
-          <>
-            {/* Phones: the mixer button shows the mixer above the tap
-                pads (the section list steps aside to make room). */}
-            {mobileControlsOpen && (
-              <div className="contents md:hidden">
-                <MixerPanel />
-              </div>
-            )}
-            <MarkerEditorModal compact={mobileControlsOpen} />
-          </>
+          <MarkerEditorModal />
         ) : lyricsEditorOpen ? (
           <LyricsEditorModal />
         ) : showEditBandModal && currentBand ? (
