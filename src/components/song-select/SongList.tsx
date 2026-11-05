@@ -359,7 +359,7 @@ export function SongSelectDropdown() {
 
   return (
     <select
-      className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 w-48 shrink text-center md:text-left md:w-auto md:shrink-0"
+      className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 flex-1 min-w-0 text-center md:flex-initial md:text-left md:w-auto md:shrink-0"
       value={inSetlist ? String(activeIndex) : (selectedSong?.id ?? '')}
       onChange={(e) => {
         if (inSetlist) {
@@ -409,7 +409,7 @@ function collectionsOf(songs: SongManifestEntry[]): { tag: string; count: number
 }
 
 /** Setlist picker dropdown — rendered inside AudioEngineContext.Provider */
-export function SetlistDropdown() {
+export function SetlistDropdown({ className = 'ml-auto' }: { className?: string } = {}) {
   const currentBand = useBandStore((s) => s.currentBand);
   const setlistIndex = useSetlistStore((s) => s.index);
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
@@ -483,7 +483,7 @@ export function SetlistDropdown() {
 
   return (
     <select
-      className="ml-auto bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500"
+      className={`bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 ${className}`}
       value={activeSetlist?.id ?? (activeTag ? TAG_PREFIX + activeTag : '')}
       onChange={(e) => handleSetlistChange(e.target.value)}
       aria-label="Setlist or collection"
@@ -525,8 +525,8 @@ export function SetlistNav() {
   };
 
   return (
-    <div className="flex items-center gap-1 md:gap-3 w-full md:w-auto md:max-w-none">
-      <div className="flex-1 md:flex-initial text-left py-2 px-3 md:px-0">
+    <div className="flex items-center gap-1 md:gap-3 flex-1 min-w-0 md:flex-initial md:w-auto md:max-w-none">
+      <div className="shrink-0 text-left py-2 px-2 md:px-0">
         {activeSetlist && (
           <button
             disabled={!prevSong || loading}
@@ -543,7 +543,7 @@ export function SetlistNav() {
         )}
       </div>
       <SongSelectDropdown />
-      <div className="flex-1 md:flex-initial text-right py-2 px-3 md:px-0">
+      <div className="shrink-0 text-right py-2 px-2 md:px-0">
         {activeSetlist && (
           <button
             disabled={!nextSong || loading}

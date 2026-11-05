@@ -31,6 +31,7 @@ import { useSetlistStore } from './store/setlistStore';
 import { Link, useNavigate } from 'react-router-dom';
 import practicePortalLogo from './assets/practice-portal-logo.png';
 import { useMixerPersistence } from './hooks/useMixerPersistence';
+import { useMediaQuery } from './hooks/useMediaQuery';
 
 
 const SetlistModal = lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })));
@@ -88,6 +89,9 @@ export default function App() {
   // The on-page editors hide the pickers, the ribbon and most transport
   // buttons so a stray tap can't switch songs mid-session.
   const editorFocus = markerEditorOpen || lyricsEditorOpen;
+  // Phones and desktop lay the header out differently (one picker each,
+  // so their effects don't run twice).
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   const currentBand = useBandStore((s) => s.currentBand);
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -150,6 +154,60 @@ export default function App() {
 
   const bandRoute = currentBand?.route ?? '';
 
+  // The admin actions, shown as the ribbon on desktop and the ☰ menu on phones.
+  const showAdmin = !editorFocus && !!(canManage || activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length);
+  const adminProps = {
+    setlistNavLinks: activeSetlist?.navLinks,
+    songNavLinks: selectedSong?.navLinks,
+    hasBand: !!currentBand,
+    hasSong: !!selectedSong,
+    hasSetlist: !!activeSetlist,
+    onManageMembers: () => setShowMembersModal(true),
+    onEditBand: async () => {
+      if (lyricsEditorOpen) {
+        const dirty = useLyricsEditorStore.getState().dirty;
+        if (dirty && !(await confirmDiscard(LYRICS_UNSAVED))) return;
+        closeLyricsEditor();
+      }
+      if (markerEditorOpen) {
+        if (markerEditorDirty && !(await confirmDiscard(TAPMAP_UNSAVED))) return;
+        closeMarkerEditor();
+      }
+      setShowEditBandModal(true);
+    },
+    onDeleteBand: () => setShowDeleteBandModal(true),
+    onAddSong: () => navigate(`/${bandRoute}/admin/add-song`),
+    onEditSong: () => selectedSong && navigate(`/${bandRoute}/admin/edit-song/${selectedSong.id}`),
+    onTapMapEditor: async () => {
+      if (!selectedSong) return;
+      if (lyricsEditorOpen) {
+        const dirty = useLyricsEditorStore.getState().dirty;
+        if (dirty && !(await confirmDiscard(LYRICS_UNSAVED))) return;
+        closeLyricsEditor();
+      }
+      openMarkerEditor(selectedSong.tapMap ?? []);
+    },
+    onLyricsEditor: async () => {
+      if (!selectedSong || !currentBand) return;
+      if (markerEditorOpen) {
+        if (markerEditorDirty && !(await confirmDiscard(TAPMAP_UNSAVED))) return;
+        closeMarkerEditor();
+      }
+      setShowEditBandModal(false);
+      fetch(dataUrl(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`))
+        .then((r) => (r.ok ? r.json() : { lines: [] }))
+        .then((data) => openLyricsEditor(data.lines ?? []))
+        .catch(() => openLyricsEditor([]));
+    },
+    onDeleteSong: () => setShowDeleteModal(true),
+    onAddSetlist: () => { setEditSetlistId(undefined); setCopySetlistId(undefined); setShowSetlistModal(true); },
+    onEditSetlist: () => { if (activeSetlist) { setEditSetlistId(activeSetlist.id); setCopySetlistId(undefined); setShowSetlistModal(true); } },
+    onCopySetlist: () => { if (activeSetlist) { setEditSetlistId(undefined); setCopySetlistId(activeSetlist.id); setShowSetlistModal(true); } },
+    onDeleteSetlist: () => setShowDeleteSetlistModal(true),
+    onViewAllSetlists: () => setShowViewAllSetlistsModal(true),
+    onCopyGuestLink: () => { if (currentBand && activeSetlist) copyGuestLink(currentBand.id, activeSetlist.slug ?? activeSetlist.id); },
+  };
+
   return (
     <AudioEngineContext.Provider value={engine}>
       <div
@@ -161,10 +219,10 @@ export default function App() {
       >
         {/* Header */}
         <header
-          className="px-4 py-3 border-b border-gray-700 flex flex-wrap items-center gap-y-2 md:relative"
+          className="px-3 py-2 md:px-4 md:py-3 border-b border-gray-700 flex flex-wrap items-center gap-y-1.5 md:relative"
           style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
             {/* Practice Portal's own mark: back to the band picker. */}
             <Link
               to="/"
@@ -175,7 +233,7 @@ export default function App() {
               <img
                 src={practicePortalLogo}
                 alt="Practice Portal home"
-                className="h-10 w-auto drop-shadow-[0_2px_4px_rgba(0,0,0,0.35)]"
+                className="h-8 md:h-10 w-auto drop-shadow-[0_2px_4px_rgba(0,0,0,0.35)]"
               />
             </Link>
             {(() => {
@@ -184,13 +242,13 @@ export default function App() {
                 <img
                   src={currentBand.logo}
                   alt={currentBand.name}
-                  className="h-10 object-contain"
+                  className="h-8 md:h-10 max-w-[45vw] md:max-w-none object-contain"
                 />
               ) : (
                 currentBand?.name ?? 'Practice Portal'
               );
               return (
-                <h1 className={currentBand?.logo ? 'flex' : 'text-lg font-semibold tracking-tight'}>
+                <h1 className={currentBand?.logo ? 'flex min-w-0' : 'text-base md:text-lg font-semibold tracking-tight truncate'}>
                   {currentBand?.website ? (
                     <a
                       href={safeHref(currentBand.website)}
@@ -209,15 +267,18 @@ export default function App() {
             })()}
           </div>
           {!editorFocus && (
-            <div className="w-full order-last flex justify-center md:w-auto md:order-none md:absolute md:left-1/2 md:-translate-x-1/2">
+            <div className="w-full order-last flex items-center gap-2 md:w-auto md:order-none md:absolute md:left-1/2 md:-translate-x-1/2">
+              {/* Phones: setlist picker shares the song row */}
+              {!isDesktop && <SetlistDropdown className="shrink-0 max-w-[38%] px-2" />}
               <SetlistNav />
             </div>
           )}
           {/* One right-aligned group. Two separate ml-auto items would split
               the free space and push the setlist picker behind the centered
               song picker. */}
-          <div className="ml-auto flex items-center gap-3">
-            {!editorFocus && <SetlistDropdown />}
+          <div className="ml-auto flex items-center gap-2 md:gap-3">
+            {!editorFocus && isDesktop && <SetlistDropdown />}
+            {showAdmin && !isDesktop && <AdminRibbon variant="menu" {...adminProps} />}
             <AccountMenu bandId={currentBand?.id} />
           </div>
         </header>
@@ -229,60 +290,9 @@ export default function App() {
           />
         )}
 
-        {/* Admin toolbar: menus for what you may do here, plus nav links */}
-        {!editorFocus && (canManage || activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length) ? (
-          <AdminRibbon
-            setlistNavLinks={activeSetlist?.navLinks}
-            songNavLinks={selectedSong?.navLinks}
-            hasBand={!!currentBand}
-            hasSong={!!selectedSong}
-            hasSetlist={!!activeSetlist}
-            onManageMembers={() => setShowMembersModal(true)}
-            onEditBand={async () => {
-              if (lyricsEditorOpen) {
-                const dirty = useLyricsEditorStore.getState().dirty;
-                if (dirty && !(await confirmDiscard(LYRICS_UNSAVED))) return;
-                closeLyricsEditor();
-              }
-              if (markerEditorOpen) {
-                if (markerEditorDirty && !(await confirmDiscard(TAPMAP_UNSAVED))) return;
-                closeMarkerEditor();
-              }
-              setShowEditBandModal(true);
-            }}
-            onDeleteBand={() => setShowDeleteBandModal(true)}
-            onAddSong={() => navigate(`/${bandRoute}/admin/add-song`)}
-            onEditSong={() => selectedSong && navigate(`/${bandRoute}/admin/edit-song/${selectedSong.id}`)}
-            onTapMapEditor={async () => {
-              if (!selectedSong) return;
-              if (lyricsEditorOpen) {
-                const dirty = useLyricsEditorStore.getState().dirty;
-                if (dirty && !(await confirmDiscard(LYRICS_UNSAVED))) return;
-                closeLyricsEditor();
-              }
-              openMarkerEditor(selectedSong.tapMap ?? []);
-            }}
-            onLyricsEditor={async () => {
-              if (!selectedSong || !currentBand) return;
-              if (markerEditorOpen) {
-                if (markerEditorDirty && !(await confirmDiscard(TAPMAP_UNSAVED))) return;
-                closeMarkerEditor();
-              }
-              setShowEditBandModal(false);
-              fetch(dataUrl(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`))
-                .then((r) => (r.ok ? r.json() : { lines: [] }))
-                .then((data) => openLyricsEditor(data.lines ?? []))
-                .catch(() => openLyricsEditor([]));
-            }}
-            onDeleteSong={() => setShowDeleteModal(true)}
-            onAddSetlist={() => { setEditSetlistId(undefined); setCopySetlistId(undefined); setShowSetlistModal(true); }}
-            onEditSetlist={() => { if (activeSetlist) { setEditSetlistId(activeSetlist.id); setCopySetlistId(undefined); setShowSetlistModal(true); } }}
-            onCopySetlist={() => { if (activeSetlist) { setEditSetlistId(undefined); setCopySetlistId(activeSetlist.id); setShowSetlistModal(true); } }}
-            onDeleteSetlist={() => setShowDeleteSetlistModal(true)}
-            onViewAllSetlists={() => setShowViewAllSetlistsModal(true)}
-            onCopyGuestLink={() => { if (currentBand && activeSetlist) copyGuestLink(currentBand.id, activeSetlist.slug ?? activeSetlist.id); }}
-          />
-        ) : null}
+        {/* Admin toolbar: menus for what you may do here, plus nav links.
+            Phones get the same things from the ☰ menu in the header. */}
+        {showAdmin && isDesktop && <AdminRibbon {...adminProps} />}
 
         {/* Song loader (headless — runs effects only) */}
         <SongList />

@@ -27,6 +27,9 @@ interface Props {
   onViewAllSetlists?: () => void;
   /** Copy the band's guest link, opening on the current setlist. */
   onCopyGuestLink?: () => void;
+  /** `ribbon`: the row of menus under the header (desktop). `menu`: a ☰
+   *  button for the header that opens everything in one sheet (phones). */
+  variant?: 'ribbon' | 'menu';
 }
 
 interface MenuEntry {
@@ -88,8 +91,10 @@ export function AdminRibbon({
   onDeleteSetlist,
   onViewAllSetlists,
   onCopyGuestLink,
+  variant = 'ribbon',
 }: Props) {
   const [open, setOpen] = useState<DropdownId>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const ribbonRef = useRef<HTMLDivElement>(null);
 
@@ -160,6 +165,87 @@ export function AdminRibbon({
   const menus = allMenus
     .map((m) => ({ ...m, items: m.items.filter((i) => i.show) }))
     .filter((m) => m.items.length > 0);
+
+  if (variant === 'menu') {
+    const links = [
+      ...(setlistNavLinks ?? []).map((l) => ({ ...l, key: `sl-${l.url}` })),
+      ...(songNavLinks ?? []).map((l) => ({ ...l, key: `sg-${l.url}` })),
+    ];
+    const row = 'block w-full text-left px-4 py-3 text-base';
+    return (
+      <>
+        <button
+          onClick={() => setSheetOpen(true)}
+          className="w-10 h-10 -my-1 flex items-center justify-center rounded-lg text-gray-300 hover:bg-gray-700/50"
+          aria-label="Menu"
+          aria-haspopup="dialog"
+          aria-expanded={sheetOpen}
+        >
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" />
+          </svg>
+        </button>
+        {sheetOpen && (
+          <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={() => setSheetOpen(false)}>
+            <div
+              role="dialog"
+              aria-label="Menu"
+              className="w-full max-h-[85dvh] overflow-y-auto rounded-t-2xl bg-gray-900 border-t border-gray-700 pb-[max(1rem,env(safe-area-inset-bottom))]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-center pt-3 pb-1" aria-hidden="true">
+                <div className="h-1 w-10 rounded-full bg-gray-700" />
+              </div>
+              {menus.map((menu) => (
+                <div key={menu.id} className="py-1">
+                  <div className="px-4 pt-2 pb-1 text-xs uppercase tracking-wide text-gray-500">{menu.label}</div>
+                  {menu.items.map((item) => (
+                    <button
+                      key={item.label}
+                      onClick={item.enabled ? () => { setSheetOpen(false); item.onClick?.(); } : undefined}
+                      aria-disabled={!item.enabled}
+                      className={`${row} ${
+                        item.enabled
+                          ? item.danger ? 'text-red-300 active:bg-gray-800' : 'text-gray-200 active:bg-gray-800'
+                          : 'text-gray-600'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              ))}
+              {links.length > 0 && (
+                <div className="py-1 border-t border-gray-800">
+                  <div className="px-4 pt-2 pb-1 text-xs uppercase tracking-wide text-gray-500">Links</div>
+                  {links.map((link) => (
+                    <a
+                      key={link.key}
+                      href={safeHref(link.url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`${row} text-gray-200 active:bg-gray-800`}
+                    >
+                      {link.title}
+                    </a>
+                  ))}
+                </div>
+              )}
+              <div className="py-1 border-t border-gray-800">
+                <button
+                  onClick={() => { setSheetOpen(false); setShowHelp(true); }}
+                  className={`${row} text-gray-200 active:bg-gray-800`}
+                >
+                  Help
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      </>
+    );
+  }
 
   return (
     <div
