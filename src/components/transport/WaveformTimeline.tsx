@@ -171,7 +171,9 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
   );
 
   // Lyric marker drag state
-  const dragLyricRef = useRef<{ index: number; time: number } | null>(null);
+  /** A lyric marker under the pointer: `moved` once it's dragged past a
+   *  few pixels, so a plain click seeks instead of re-saving the time. */
+  const dragLyricRef = useRef<{ index: number; time: number; startX: number; moved: boolean } | null>(null);
   // TapMap editor entry drag state \u2014 mirrors the lyric-marker pattern.
   const dragEditorEntryRef = useRef<{ index: number; time: number } | null>(null);
   // Note marker drag state — held in a ref for high-frequency updates;
@@ -424,7 +426,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       const lyricHit = hitTestLyricMarker(x);
       if (lyricHit !== null) {
         e.preventDefault();
-        dragLyricRef.current = { index: lyricHit, time: lyricsLines[lyricHit].time! };
+        dragLyricRef.current = { index: lyricHit, time: lyricsLines[lyricHit].time!, startX: e.clientX, moved: false };
         didDragRef.current = false;
         suppressClickRef.current = false;
         return;
@@ -491,10 +493,14 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         return;
       }
 
-      // Single pointer: drag lyric marker
+      // Single pointer: drag lyric marker (past a small threshold, so a
+      // shaky click still counts as a click)
       if (dragLyricRef.current) {
+        const drag = dragLyricRef.current;
+        if (!drag.moved && Math.abs(e.clientX - drag.startX) < 4) return;
+        drag.moved = true;
         const seconds = pixelToSeconds(x, sizeRef.current.width);
-        dragLyricRef.current.time = Math.max(0, Math.min(seconds, duration || 0));
+        drag.time = Math.max(0, Math.min(seconds, duration || 0));
         suppressClickRef.current = true;
         return;
       }
@@ -591,11 +597,19 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         return;
       }
 
-      // End lyric marker drag
+      // End lyric marker drag. A click without a drag moves playback to
+      // that line (the lyrics preview follows) and selects it for timing.
       if (dragLyricRef.current) {
-        moveLyricLine(dragLyricRef.current.index, dragLyricRef.current.time);
+        const { index, time, moved } = dragLyricRef.current;
+        if (moved) {
+          moveLyricLine(index, time);
+          suppressClickRef.current = true;
+        } else {
+          engine.seek(time);
+          setFollowPlayhead(true);
+          useLyricsEditorStore.getState().selectLine(index);
+        }
         dragLyricRef.current = null;
-        suppressClickRef.current = true;
         dragStartRef.current = null;
         return;
       }
