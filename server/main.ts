@@ -22,6 +22,7 @@ import { pageTitleFor } from './core/pageTitles';
 import { memo } from './core/cache';
 import { startWorker, stopWorker } from './core/jobs/worker';
 import { drainEmails } from './core/email';
+import { flushUptime, startUptime } from './core/costs/uptime';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const STATIC_DIR = process.env.STATIC_DIR ?? 'dist';
@@ -141,6 +142,8 @@ server.listen(PORT, () => {
   console.log(`practice-portal listening on :${PORT} (serving ${STATIC_DIR})`);
   // Background jobs (Phase 9) run in this process, one at a time.
   startWorker();
+  // Running time, for the cost estimate on /admin.
+  startUptime();
 });
 
 // Fly sends SIGINT on deploy/stop by default, Docker sends SIGTERM. Stop
@@ -151,7 +154,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     // A job in hand is abandoned; it goes back to the queue once it's stale.
     stopWorker();
     // Emails sent in the background still go out before the process ends.
-    server.close(() => void drainEmails().then(() => process.exit(0)));
+    server.close(() => void Promise.all([drainEmails(), flushUptime()]).then(() => process.exit(0)));
     setTimeout(() => process.exit(1), 10_000).unref();
   });
 }

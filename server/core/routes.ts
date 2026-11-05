@@ -56,7 +56,7 @@ import {
 import { blockEmail, getEmailBlock } from './handlers/emailBlock';
 import { createNote, deleteNote, updateNote } from './handlers/notes';
 import { deleteSetlist, saveSetlist } from './handlers/setlists';
-import { adminBands, adminUsers, emailUser } from './handlers/siteAdmin';
+import { adminBands, adminCosts, adminUsers, emailUser } from './handlers/siteAdmin';
 import { createStemUploads, getStemJobs, queueStemUploads, retryStemJob } from './handlers/stems';
 import {
   deleteSong,
@@ -389,6 +389,15 @@ export const routes: RouteDef[] = [
     handler: adminUsers,
     errorStatus: 500,
     errorMessage: 'Couldn’t load users',
+  },
+  {
+    name: 'admin.costs',
+    access: 'platformAdmin',
+    method: 'GET',
+    pattern: /^\/api\/admin\/costs$/,
+    handler: adminCosts,
+    errorStatus: 500,
+    errorMessage: 'Couldn’t estimate costs',
   },
   {
     name: 'admin.email_user',

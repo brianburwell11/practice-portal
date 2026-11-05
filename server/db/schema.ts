@@ -11,6 +11,7 @@ import {
   boolean,
   check,
   customType,
+  date,
   index,
   integer,
   jsonb,
@@ -284,6 +285,8 @@ export const job = pgTable('job', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   /** Set when claimed and on every progress write; a stale one means the worker died. */
   lockedAt: timestamp('locked_at', { withTimezone: true }),
+  /** When the worker last claimed it: `finished_at - started_at` is the run's machine time (the cost estimate). */
+  startedAt: timestamp('started_at', { withTimezone: true }),
   finishedAt: timestamp('finished_at', { withTimezone: true }),
 }, (t) => [
   check('job_kind_check', sql`${t.kind} in ('transcode_stem')`),
@@ -360,3 +363,15 @@ export const auditLog = pgTable('audit_log', {
   check('audit_log_actor_kind_check', sql`${t.actorKind} in ('user','grant','system','support')`),
   index('audit_log_band_at_idx').on(t.bandId, t.at.desc()),
 ]);
+
+/**
+ * How long the server machine ran, per UTC day, for the cost estimate on
+ * /admin (Fly bills per second while a machine runs). Written by
+ * `server/core/costs/uptime.ts` on Fly only, so local dev against the shared
+ * database doesn't count.
+ */
+export const machineUptime = pgTable('machine_uptime', {
+  day: date('day').notNull(),
+  machineId: text('machine_id').notNull(),
+  seconds: integer('seconds').notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.day, t.machineId] })]);

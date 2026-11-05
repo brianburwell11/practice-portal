@@ -114,7 +114,7 @@ async function claim(): Promise<Job | null> {
     const now = new Date();
     const [job] = await tx.update(schema.job).set({
       status: 'running', attempts: sql`${schema.job.attempts} + 1`, progress: 0, error: null,
-      lockedAt: now, updatedAt: now,
+      lockedAt: now, startedAt: now, updatedAt: now,
     }).where(eq(schema.job.id, next.id)).returning();
     return job;
   });

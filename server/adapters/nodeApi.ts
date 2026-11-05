@@ -12,6 +12,7 @@ import { parseCookies } from '../core/auth/cookies';
 import { GUEST_COOKIE, guestTokens, resolveGuests, type GuestGrant } from '../core/auth/guests';
 import { hashToken, resolveSession, SESSION_COOKIE } from '../core/auth/sessions';
 import { clearCache, memo } from '../core/cache';
+import { maybeFlushUptime } from '../core/costs/uptime';
 import { matchRoute, runRoute } from '../core/router';
 import { clientIp, hit, limitFor } from '../core/rateLimit';
 import { HttpError } from '../core/http';
@@ -207,6 +208,8 @@ export function createApiHandler() {
       // non-GET request, and the sign-in routes, which create sessions and
       // accept invites on GET.
       if ((req.method !== 'GET' && req.method !== 'HEAD') || route.name.startsWith('auth.')) clearCache();
+      // The database is awake now, so it's a cheap moment to record uptime.
+      maybeFlushUptime();
     }
     return true;
   };

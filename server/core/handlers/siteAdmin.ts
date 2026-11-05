@@ -6,18 +6,25 @@
  *   GET /api/admin/users   every user: when they joined, signed in and were
  *                          last seen, and their role in each band. Deleted
  *                          accounts are only counted.
+ *   GET /api/admin/costs   this month's estimated costs, by service and by
+ *                          band (server/core/costs/estimate.ts)
  *
  * Storage is measured by listing each band's R2 prefix, only when the
- * dashboard asks: nothing runs in the background, and nothing is kept.
+ * dashboard asks: nothing runs in the background. The two band routes share
+ * one measurement for a minute; `?fresh=1` measures again.
  */
 import { and, count, eq, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '../../db/client';
 import * as schema from '../../db/schema';
 import { isPlatformAdmin } from '../access';
+import { memo } from '../cache';
+import { estimateCosts, loadUsage } from '../costs/estimate';
 import { ADMIN_FROM, emailEnabled, escapeHtml, htmlEmail, isBlocked, sendEmail } from '../email';
 import { HttpError, json } from '../http';
 import { r2StorageBytes } from '../r2';
 import type { CoreRequest, CoreResponse } from '../types';
+
+const MEASURE_TTL_MS = 60_000;
 
 /** A band's R2 usage, or null where R2 isn't configured. */
 async function storageOf(legacyId: string): Promise<{ bytes: number; files: number } | null> {
@@ -37,7 +44,8 @@ async function countsByBand(table: typeof schema.song | typeof schema.setlist): 
   return new Map(rows.map((r) => [r.bandId, r.n]));
 }
 
-export async function adminBands(): Promise<CoreResponse> {
+/** Every band with its counts and R2 storage. */
+async function measureBands() {
   const bands = await db().select({
     id: schema.band.id,
     legacyId: schema.band.legacyId,
@@ -59,22 +67,36 @@ export async function adminBands(): Promise<CoreResponse> {
   ]);
   const storage = await Promise.all(bands.map((b) => (b.legacyId ? storageOf(b.legacyId) : null)));
 
-  return json({
-    bands: bands.map((b, i) => ({
-      id: b.id,
-      slug: b.slug,
-      name: b.name,
-      visibility: b.visibility,
-      createdAt: b.createdAt,
-      owner: { name: b.ownerName, email: b.ownerEmail },
-      songs: songs.get(b.id) ?? 0,
-      setlists: setlists.get(b.id) ?? 0,
-      // Members plus the Owner, who has no membership row.
-      people: (members.get(b.id) ?? 0) + 1,
-      storageBytes: storage[i]?.bytes ?? null,
-      storageFiles: storage[i]?.files ?? null,
-    })),
-  });
+  return bands.map((b, i) => ({
+    id: b.id,
+    slug: b.slug,
+    name: b.name,
+    visibility: b.visibility,
+    createdAt: b.createdAt,
+    owner: { name: b.ownerName, email: b.ownerEmail },
+    songs: songs.get(b.id) ?? 0,
+    setlists: setlists.get(b.id) ?? 0,
+    // Members plus the Owner, who has no membership row.
+    people: (members.get(b.id) ?? 0) + 1,
+    storageBytes: storage[i]?.bytes ?? null,
+    storageFiles: storage[i]?.files ?? null,
+  }));
+}
+
+/** `measureBands`, shared by the dashboard's requests for a minute. `fresh` measures again. */
+let measureRound = 0;
+function measuredBands(fresh: boolean) {
+  if (fresh) measureRound++;
+  return memo(`admin:bands:${measureRound}`, measureBands, MEASURE_TTL_MS);
+}
+
+export async function adminBands(req: CoreRequest): Promise<CoreResponse> {
+  return json({ bands: await measuredBands(req.query.get('fresh') === '1') });
+}
+
+export async function adminCosts(req: CoreRequest): Promise<CoreResponse> {
+  const bands = await measuredBands(req.query.get('fresh') === '1');
+  return json(estimateCosts(await loadUsage(bands)));
 }
 
 export async function adminUsers(): Promise<CoreResponse> {

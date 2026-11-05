@@ -34,6 +34,43 @@ interface AdminUser {
   bands: { slug: string; name: string; role: string }[];
 }
 
+interface ServiceCost {
+  key: string;
+  label: string;
+  usage: number;
+  unit: string;
+  freeLimit: number | null;
+  listUsd: number;
+  billedUsd: number;
+}
+
+interface BandCost {
+  bandId: string;
+  weight: number;
+  directListUsd: number;
+  sharedListUsd: number;
+  listUsd: number;
+  billedUsd: number;
+}
+
+interface Costs {
+  month: string;
+  daysElapsed: number;
+  daysInMonth: number;
+  machineSeconds: number | null;
+  services: ServiceCost[];
+  listUsd: number;
+  billedUsd: number;
+  bands: BandCost[];
+}
+
+const usd = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
+
+function formatUsage(n: number, unit: string): string {
+  const digits = n === 0 || n >= 100 ? 0 : n >= 10 ? 1 : 2;
+  return `${n.toLocaleString(undefined, { maximumFractionDigits: digits })} ${unit}`;
+}
+
 const roleLabel = (key: string) => ROLES.find((r) => r.key === key)?.label ?? key;
 
 function formatBytes(bytes: number | null): string {
@@ -92,10 +129,15 @@ function Dashboard() {
   const [deletedCount, setDeletedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [measuring, setMeasuring] = useState(true);
+  const [costs, setCosts] = useState<Costs | null>(null);
 
-  const loadBands = useCallback(() => {
-    return getJson<{ bands: AdminBand[] }>('/api/admin/bands')
+  // Costs use the bands' storage, which the server keeps for a minute: asked
+  // after the bands, so measuring again happens once.
+  const loadBands = useCallback((fresh = false) => {
+    return getJson<{ bands: AdminBand[] }>(`/api/admin/bands${fresh ? '?fresh=1' : ''}`)
       .then((d) => setBands(d.bands))
+      .then(() => getJson<Costs>('/api/admin/costs'))
+      .then(setCosts)
       .catch((err) => setError(err.message))
       .finally(() => setMeasuring(false));
   }, []);
@@ -121,7 +163,13 @@ function Dashboard() {
           <h1 className="text-3xl font-bold text-gray-100">Site admin</h1>
         </header>
         {error && <p className="rounded border border-red-700 bg-red-900/30 px-3 py-2 text-sm text-red-300">{error}</p>}
-        <BandsSection bands={bands} measuring={measuring} onRefresh={() => { setMeasuring(true); loadBands(); }} />
+        <CostsSection costs={costs} />
+        <BandsSection
+          bands={bands}
+          costs={costs}
+          measuring={measuring}
+          onRefresh={() => { setMeasuring(true); loadBands(true); }}
+        />
         <UsersSection users={users} deletedCount={deletedCount} />
       </div>
     </div>
@@ -137,7 +185,83 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function BandsSection({ bands, measuring, onRefresh }: { bands: AdminBand[] | null; measuring: boolean; onRefresh: () => void }) {
+function CostsSection({ costs }: { costs: Costs | null }) {
+  const month = costs
+    ? new Date(`${costs.month}-01T12:00:00Z`).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })
+    : '';
+  return (
+    <section className="space-y-4">
+      <h2 className="text-xl font-semibold text-gray-100">Costs {costs && <span className="text-gray-500 font-normal">({month})</span>}</h2>
+      {!costs ? (
+        <p className="text-gray-500">Loading…</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl">
+            <Stat label="Estimated bill" value={usd.format(costs.billedUsd)} />
+            <Stat label="At list price" value={usd.format(costs.listUsd)} />
+            <Stat
+              label="Machine uptime"
+              value={costs.machineSeconds === null ? 'Not yet' : `${Math.round(costs.machineSeconds / 3600)} h`}
+            />
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-gray-800">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-900 text-left text-gray-300">
+                <tr>
+                  {['Service', 'Projected use', 'Free allowance', 'List price', 'Estimated bill'].map((h, i) => (
+                    <th key={h} scope="col" className={`px-3 py-2 font-semibold whitespace-nowrap ${i >= 3 ? 'text-right' : ''}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {costs.services.map((s) => {
+                  const used = s.freeLimit ? Math.min(1, s.usage / s.freeLimit) : null;
+                  return (
+                    <tr key={s.key} className="border-t border-gray-800">
+                      <td className="px-3 py-2 text-gray-100 whitespace-nowrap">{s.label}</td>
+                      <td className="px-3 py-2 tabular-nums whitespace-nowrap">{formatUsage(s.usage, s.unit)}</td>
+                      <td className="px-3 py-2">
+                        {used === null ? (
+                          <span className="text-gray-600">None</span>
+                        ) : (
+                          <div className="flex items-center gap-2 min-w-[9rem]">
+                            <div className="h-1.5 w-20 rounded bg-gray-800" role="img" aria-label={`${Math.round(used * 100)}% of the free allowance`}>
+                              <div
+                                className={`h-full rounded ${used >= 0.9 ? 'bg-red-500' : used >= 0.7 ? 'bg-amber-400' : 'bg-blue-500'}`}
+                                style={{ width: `${Math.max(used * 100, used > 0 ? 2 : 0)}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-500 whitespace-nowrap">{formatUsage(s.freeLimit!, s.unit)}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">{usd.format(s.listUsd)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-gray-100">{usd.format(s.billedUsd)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-500">
+            Projected from the first {Math.floor(costs.daysElapsed)} of {costs.daysInMonth} days of the month (UTC). List
+            price is what the same use would cost on a paid plan with no free allowance. R2 operations, bandwidth and the
+            stopped machine’s disk aren’t counted.
+            {costs.machineSeconds === null && ' Machine uptime is recorded from the next deploy on, so the machine shows nothing until then.'}
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+function BandsSection({ bands, costs, measuring, onRefresh }: {
+  bands: AdminBand[] | null;
+  costs: Costs | null;
+  measuring: boolean;
+  onRefresh: () => void;
+}) {
+  const costOf = useMemo(() => new Map((costs?.bands ?? []).map((c) => [c.bandId, c])), [costs]);
   const sorted = useMemo(() => [...(bands ?? [])].sort((a, b) => a.name.localeCompare(b.name)), [bands]);
   const total = (k: 'songs' | 'storageBytes') => sorted.reduce((sum, b) => sum + (b[k] ?? 0), 0);
 
@@ -166,8 +290,8 @@ function BandsSection({ bands, measuring, onRefresh }: { bands: AdminBand[] | nu
             <table className="w-full text-sm">
               <thead className="bg-gray-900 text-left text-gray-300">
                 <tr>
-                  {['Band', 'Owner', 'Visibility', 'Songs', 'Setlists', 'People', 'Storage', 'Created', ''].map((h, i) => (
-                    <th key={h || 'go'} scope="col" className={`px-3 py-2 font-semibold whitespace-nowrap ${i >= 3 && i <= 6 ? 'text-right' : ''}`}>{h}</th>
+                  {['Band', 'Owner', 'Visibility', 'Songs', 'Setlists', 'People', 'Storage', 'Cost/mo', 'Created', ''].map((h, i) => (
+                    <th key={h || 'go'} scope="col" className={`px-3 py-2 font-semibold whitespace-nowrap ${i >= 3 && i <= 7 ? 'text-right' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -189,6 +313,7 @@ function BandsSection({ bands, measuring, onRefresh }: { bands: AdminBand[] | nu
                     <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap" title={b.storageFiles !== null ? `${b.storageFiles} files` : 'Couldn’t measure'}>
                       {formatBytes(b.storageBytes)}
                     </td>
+                    <BandCostCell cost={costOf.get(b.id)} />
                     <td className="px-3 py-2 whitespace-nowrap"><When at={b.createdAt} /></td>
                     <td className="px-3 py-2 text-right">
                       {/* A full load, so the band opens with the Owner's controls (support access). */}
@@ -214,11 +339,25 @@ function BandsSection({ bands, measuring, onRefresh }: { bands: AdminBand[] | nu
             The arrow opens a band with the Owner’s access. You won’t appear in its
             members, and what you change there is logged as support.
           </p>
+          <p className="text-xs text-gray-500">
+            Cost/mo is the band’s share of the estimated bill: what it uses on its own (storage, emails, transcoding) plus
+            a share of the rest, weighted by its songs, people and storage. Hover for list prices.
+          </p>
           <p className="text-xs text-gray-500">Storage counts everything in the band’s folder: audio, sheet music, logo and backups of its data. It’s measured each time this page loads.</p>
         </>
       )}
     </section>
   );
+}
+
+function BandCostCell({ cost }: { cost: BandCost | undefined }) {
+  if (!cost) return <td className="px-3 py-2 text-right text-gray-600">?</td>;
+  const title = [
+    `List price ${usd.format(cost.listUsd)}:`,
+    `${usd.format(cost.directListUsd)} its own use,`,
+    `${usd.format(cost.sharedListUsd)} share of the rest (${Math.round(cost.weight * 100)}%)`,
+  ].join(' ');
+  return <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap" title={title}>{usd.format(cost.billedUsd)}</td>;
 }
 
 function UsersSection({ users, deletedCount }: { users: AdminUser[] | null; deletedCount: number }) {
