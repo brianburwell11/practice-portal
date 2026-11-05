@@ -84,6 +84,10 @@ export default function App() {
   const closeLyricsEditor = useLyricsEditorStore((s) => s.close);
   const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
   const editorLines = useLyricsEditorStore((s) => s.lines);
+  const lyricsEditorMode = useLyricsEditorStore((s) => s.mode);
+  // The on-page editors hide the pickers, the ribbon and most transport
+  // buttons so a stray tap can't switch songs mid-session.
+  const editorFocus = markerEditorOpen || lyricsEditorOpen;
   const currentBand = useBandStore((s) => s.currentBand);
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -204,9 +208,7 @@ export default function App() {
               );
             })()}
           </div>
-          {/* The TapMap editor hides the song and setlist pickers so a
-              stray tap can't switch songs mid-session. */}
-          {!markerEditorOpen && (
+          {!editorFocus && (
             <div className="w-full order-last flex justify-center md:w-auto md:order-none md:absolute md:left-1/2 md:-translate-x-1/2">
               <SetlistNav />
             </div>
@@ -215,7 +217,7 @@ export default function App() {
               the free space and push the setlist picker behind the centered
               song picker. */}
           <div className="ml-auto flex items-center gap-3">
-            {!markerEditorOpen && <SetlistDropdown />}
+            {!editorFocus && <SetlistDropdown />}
             <AccountMenu bandId={currentBand?.id} />
           </div>
         </header>
@@ -228,7 +230,7 @@ export default function App() {
         )}
 
         {/* Admin toolbar: menus for what you may do here, plus nav links */}
-        {!markerEditorOpen && (canManage || activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length) ? (
+        {!editorFocus && (canManage || activeSetlist?.navLinks?.length || selectedSong?.navLinks?.length) ? (
           <AdminRibbon
             setlistNavLinks={activeSetlist?.navLinks}
             songNavLinks={selectedSong?.navLinks}
@@ -289,7 +291,7 @@ export default function App() {
         <TransportBar
           showSliders={mobileControlsOpen}
           onToggleSliders={() => setMobileControlsOpen((v) => !v)}
-          minimal={markerEditorOpen}
+          minimal={markerEditorOpen ? 'tapmap' : lyricsEditorOpen ? 'lyrics' : undefined}
         />
 
         {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
@@ -298,8 +300,11 @@ export default function App() {
         {/* Lyrics display \u2014 hidden when the tapMap or band editors
             occupy the page. Stays visible under the lyrics editor so
             the admin can sync against the live karaoke view. */}
-        {!markerEditorOpen && !showEditBandModal && (
-          <LyricsDisplay overrideLines={lyricsEditorOpen ? editorLines : undefined} />
+        {!markerEditorOpen && !showEditBandModal && !(lyricsEditorOpen && lyricsEditorMode === 'lyrics') && (
+          <LyricsDisplay
+            overrideLines={lyricsEditorOpen ? editorLines : undefined}
+            only={lyricsEditorOpen ? 'desktop' : undefined}
+          />
         )}
 
         {/* Sheet music: the scrolling strip on wider screens, a button that

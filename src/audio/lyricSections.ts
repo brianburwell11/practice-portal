@@ -17,6 +17,15 @@ const SECTION_RE = new RegExp(
 
 const INSTRUMENTAL_RE = /^\s*(?:#instrumental|\[\s*instrumental\s*\])\s*$/i;
 
+/** Marks where the lyrics stop: once its time passes, the song view
+ *  moves on to a blank line instead of holding the last lyric. */
+export const END_MARKER = '#END';
+const END_RE = /^\s*#end\s*$/i;
+
+export function isEndMarker(text: string): boolean {
+  return END_RE.test(text);
+}
+
 const LEGACY_BRACKET_RE = /^\s*\[.*\]\s*$/;
 
 export function isSectionMarker(text: string): boolean {

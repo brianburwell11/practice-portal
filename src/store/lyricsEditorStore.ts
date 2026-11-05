@@ -1,42 +1,55 @@
 import { create } from 'zustand';
 import type { LyricsLine } from '../audio/lyricsTypes';
-import { isAdminAnnotation, isInstrumentalAnnotation } from '../audio/lyricSections';
+import { END_MARKER, isAdminAnnotation, isInstrumentalAnnotation } from '../audio/lyricSections';
 
 const MAX_UNDO = 50;
 
+export type LyricsEditorMode = 'lyrics' | 'timing';
+
+/** An undo step: the lines plus where the sync cursor was, so undo puts
+ *  you back on the line you were timing rather than at the top. */
+interface Snapshot {
+  lines: LyricsLine[];
+  currentSyncIndex: number;
+}
+
 interface LyricsEditorState {
   isOpen: boolean;
+  /** Lyrics = edit the words in a text box. Timing = stamp and tune times. */
+  mode: LyricsEditorMode;
   lines: LyricsLine[];
   dirty: boolean;
-  undoStack: LyricsLine[][];
-  redoStack: LyricsLine[][];
+  undoStack: Snapshot[];
+  redoStack: Snapshot[];
+  /** The next line to stamp. */
   currentSyncIndex: number;
-  selectedIndices: Set<number>;
-  focusedIndex: number | null;
+  /** The line the nudge and replay controls act on. */
+  reviewIndex: number | null;
 
   open: (lines: LyricsLine[]) => void;
   close: () => void;
-  updateLine: (index: number, text: string) => void;
-  insertLineAfter: (index: number, line?: LyricsLine) => void;
-  insertLines: (index: number, newLines: LyricsLine[]) => void;
+  setMode: (mode: LyricsEditorMode) => void;
+  /** Replace the lines from the text box. No undo step: entering Lyrics
+   *  mode pushed one for the whole editing session. */
+  replaceLines: (lines: LyricsLine[]) => void;
+  /** Replace the lines from an import, as one undo step. */
+  importLines: (lines: LyricsLine[]) => void;
   syncLine: (index: number, time: number) => void;
+  /** Add an end-of-lyrics marker after the last line, timed at `time`. */
+  cueEnd: (time: number) => void;
+  /** Step the sync target back to the previous stampable line and clear its time. */
+  stepBack: () => void;
   moveLine: (index: number, time: number) => void;
-  unsyncLine: (index: number) => void;
-  unsyncSelected: () => void;
-  deleteSelected: () => void;
-  deleteLine: (index: number) => void;
-  setCurrentSyncIndex: (index: number) => void;
-  setSelectedIndices: (indices: Set<number>) => void;
-  setFocusedIndex: (index: number | null) => void;
+  nudgeLine: (index: number, delta: number) => void;
+  /** Point the sync cursor (and the review line) at a row. */
+  selectLine: (index: number) => void;
   undo: () => void;
   redo: () => void;
-  moveLineInDirection: (direction: 'up' | 'down') => void;
-  duplicateLines: () => void;
-  selectAll: () => void;
-  importLines: (lines: LyricsLine[]) => void;
 }
 
-function nextNonBlankIndex(lines: LyricsLine[], from: number): number {
+/** The first line at or after `from` that can carry a time (skips blank
+ *  lines and section markers). `lines.length` when there is none. */
+export function nextNonBlankIndex(lines: LyricsLine[], from: number): number {
   for (let i = from; i < lines.length; i++) {
     if (lines[i].instrumental) return i;
     if (lines[i].text === '') continue;
@@ -47,289 +60,174 @@ function nextNonBlankIndex(lines: LyricsLine[], from: number): number {
   return lines.length;
 }
 
-function pushUndo(stack: LyricsLine[][], snapshot: LyricsLine[]): LyricsLine[][] {
+function hasContent(lines: LyricsLine[]): boolean {
+  return nextNonBlankIndex(lines, 0) < lines.length;
+}
+
+function push(stack: Snapshot[], snapshot: Snapshot): Snapshot[] {
   const next = [...stack, snapshot];
   if (next.length > MAX_UNDO) next.shift();
   return next;
 }
 
+const snap = (s: LyricsEditorState): Snapshot => ({ lines: s.lines, currentSyncIndex: s.currentSyncIndex });
+
+/** Fields every undoable edit sets alongside its own changes. */
+const edited = (s: LyricsEditorState) => ({
+  undoStack: push(s.undoStack, snap(s)),
+  redoStack: [] as Snapshot[],
+  dirty: true,
+});
+
 const initialState = {
   isOpen: false,
+  mode: 'lyrics' as LyricsEditorMode,
   lines: [] as LyricsLine[],
   dirty: false,
-  undoStack: [] as LyricsLine[][],
-  redoStack: [] as LyricsLine[][],
+  undoStack: [] as Snapshot[],
+  redoStack: [] as Snapshot[],
   currentSyncIndex: 0,
-  selectedIndices: new Set<number>(),
-  focusedIndex: null as number | null,
+  reviewIndex: null as number | null,
 };
 
 export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
   ...initialState,
 
-  open: (lines) => {
-    // Ensure at least one empty row to start editing
-    const initial = lines.length > 0 ? lines : [{ text: '', time: null }];
+  open: (lines) =>
     set({
+      ...initialState,
       isOpen: true,
-      lines: initial,
-      dirty: false,
-      undoStack: [],
-      redoStack: [],
-      currentSyncIndex: nextNonBlankIndex(initial, 0),
-      selectedIndices: new Set<number>(),
-      focusedIndex: null,
-    });
-  },
+      // No words yet: start in the text box. Otherwise go straight to timing.
+      mode: hasContent(lines) ? 'timing' : 'lyrics',
+      lines,
+      currentSyncIndex: nextNonBlankIndex(lines, 0),
+    }),
 
-  close: () => set({ ...initialState, selectedIndices: new Set<number>() }),
+  close: () => set({ ...initialState }),
 
-  updateLine: (index, text) =>
-    set((state) => {
-      const updated = state.lines.map((l, i) =>
-        i === index ? { ...l, text, instrumental: false } : l,
+  setMode: (mode) =>
+    set((s) => {
+      if (mode === s.mode) return s;
+      if (mode === 'lyrics') {
+        // One undo step covers the whole text editing session.
+        return { mode, undoStack: push(s.undoStack, snap(s)), redoStack: [] };
+      }
+      // Back to timing: resume at the first line that still needs a time.
+      const firstUntimed = s.lines.findIndex(
+        (l, i) => l.time === null && nextNonBlankIndex(s.lines, i) === i,
       );
-      return { lines: updated, dirty: true };
-    }),
-
-  insertLineAfter: (index, line) =>
-    set((state) => {
-      const newLine = line ?? { text: '', time: null };
-      const updated = [
-        ...state.lines.slice(0, index + 1),
-        newLine,
-        ...state.lines.slice(index + 1),
-      ];
-      // Adjust currentSyncIndex if insertion was at or before it
-      const newSyncIdx = index + 1 <= state.currentSyncIndex
-        ? state.currentSyncIndex + 1
-        : state.currentSyncIndex;
       return {
-        undoStack: pushUndo(state.undoStack, state.lines),
-        redoStack: [],
-        lines: updated,
-        currentSyncIndex: newSyncIdx,
-        dirty: true,
+        mode,
+        currentSyncIndex: firstUntimed >= 0 ? firstUntimed : s.lines.length,
+        reviewIndex: null,
       };
     }),
 
-  insertLines: (index, newLines) =>
-    set((state) => {
-      const updated = [
-        ...state.lines.slice(0, index + 1),
-        ...newLines,
-        ...state.lines.slice(index + 1),
-      ];
-      const newSyncIdx = index + 1 <= state.currentSyncIndex
-        ? state.currentSyncIndex + newLines.length
-        : state.currentSyncIndex;
-      return {
-        undoStack: pushUndo(state.undoStack, state.lines),
-        redoStack: [],
-        lines: updated,
-        currentSyncIndex: newSyncIdx,
-        dirty: true,
-      };
-    }),
+  replaceLines: (lines) => set({ lines, dirty: true }),
+
+  importLines: (lines) =>
+    set((s) => ({
+      ...edited(s),
+      lines,
+      currentSyncIndex: nextNonBlankIndex(lines, 0),
+      reviewIndex: null,
+    })),
 
   syncLine: (index, time) =>
-    set((state) => {
-      const updated = state.lines.map((l, i) =>
-        i === index ? { ...l, time } : l,
-      );
+    set((s) => {
+      const lines = s.lines.map((l, i) => (i === index ? { ...l, time } : l));
       return {
-        undoStack: pushUndo(state.undoStack, state.lines),
-        redoStack: [],
-        lines: updated,
-        currentSyncIndex: nextNonBlankIndex(updated, index + 1),
-        dirty: true,
+        ...edited(s),
+        lines,
+        currentSyncIndex: nextNonBlankIndex(lines, index + 1),
+        reviewIndex: index,
+      };
+    }),
+
+  cueEnd: (time) =>
+    set((s) => {
+      // Trailing blank lines are just the end of the text box.
+      let end = s.lines.length;
+      while (end > 0 && s.lines[end - 1].text === '' && !s.lines[end - 1].instrumental) end--;
+      const lines = [...s.lines.slice(0, end), { text: END_MARKER, time }];
+      return {
+        ...edited(s),
+        lines,
+        currentSyncIndex: lines.length,
+        reviewIndex: lines.length - 1,
+      };
+    }),
+
+  stepBack: () =>
+    set((s) => {
+      let prev = -1;
+      for (let i = s.currentSyncIndex - 1; i >= 0; i--) {
+        if (nextNonBlankIndex(s.lines, i) === i) { prev = i; break; }
+      }
+      if (prev < 0) return s;
+      return {
+        ...edited(s),
+        lines: s.lines.map((l, i) => (i === prev ? { ...l, time: null } : l)),
+        currentSyncIndex: prev,
+        reviewIndex: prev,
       };
     }),
 
   moveLine: (index, time) =>
-    set((state) => ({
-      undoStack: pushUndo(state.undoStack, state.lines),
-      redoStack: [],
-      lines: state.lines.map((l, i) =>
-        i === index ? { ...l, time } : l,
-      ),
-      dirty: true,
+    set((s) => ({
+      ...edited(s),
+      lines: s.lines.map((l, i) => (i === index ? { ...l, time } : l)),
     })),
 
-  unsyncLine: (index) =>
-    set((state) => ({
-      undoStack: pushUndo(state.undoStack, state.lines),
-      redoStack: [],
-      lines: state.lines.map((l, i) =>
-        i === index ? { ...l, time: null } : l,
-      ),
-      dirty: true,
-    })),
-
-  unsyncSelected: () =>
-    set((state) => {
-      if (state.selectedIndices.size === 0) return state;
+  nudgeLine: (index, delta) =>
+    set((s) => {
+      const line = s.lines[index];
+      if (!line || line.time === null) return s;
+      // Stay between the neighbouring timed lines so the order holds.
+      let lo = 0;
+      let hi = Number.POSITIVE_INFINITY;
+      for (let i = index - 1; i >= 0; i--) {
+        if (s.lines[i].time !== null) { lo = s.lines[i].time! + 0.01; break; }
+      }
+      for (let i = index + 1; i < s.lines.length; i++) {
+        if (s.lines[i].time !== null) { hi = s.lines[i].time! - 0.01; break; }
+      }
+      const time = Math.round(Math.min(hi, Math.max(lo, line.time + delta)) * 1000) / 1000;
+      if (time === line.time) return s;
       return {
-        undoStack: pushUndo(state.undoStack, state.lines),
-        redoStack: [],
-        lines: state.lines.map((l, i) =>
-          state.selectedIndices.has(i) ? { ...l, time: null } : l,
-        ),
-        selectedIndices: new Set<number>(),
-        dirty: true,
+        ...edited(s),
+        lines: s.lines.map((l, i) => (i === index ? { ...l, time } : l)),
       };
     }),
 
-  deleteSelected: () =>
-    set((state) => {
-      if (state.selectedIndices.size === 0) return state;
-      const updated = state.lines.filter((_, i) => !state.selectedIndices.has(i));
-      const final = updated.length > 0 ? updated : [{ text: '', time: null }];
-      return {
-        undoStack: pushUndo(state.undoStack, state.lines),
-        redoStack: [],
-        lines: final,
-        currentSyncIndex: Math.min(state.currentSyncIndex, final.length - 1),
-        selectedIndices: new Set<number>(),
-        dirty: true,
-      };
-    }),
-
-  deleteLine: (index) =>
-    set((state) => {
-      const updated = state.lines.filter((_, i) => i !== index);
-      const final = updated.length > 0 ? updated : [{ text: '', time: null }];
-      return {
-        undoStack: pushUndo(state.undoStack, state.lines),
-        redoStack: [],
-        lines: final,
-        currentSyncIndex: Math.min(state.currentSyncIndex, final.length - 1),
-        selectedIndices: new Set<number>(),
-        dirty: true,
-      };
-    }),
-
-  setCurrentSyncIndex: (index) => set({ currentSyncIndex: index }),
-
-  setSelectedIndices: (indices) => set({ selectedIndices: indices }),
-
-  setFocusedIndex: (index) => set({ focusedIndex: index }),
+  selectLine: (index) => set({ currentSyncIndex: index, reviewIndex: index }),
 
   undo: () =>
-    set((state) => {
-      if (state.undoStack.length === 0) return state;
-      const stack = [...state.undoStack];
-      const previous = stack.pop()!;
+    set((s) => {
+      if (s.undoStack.length === 0) return s;
+      const stack = [...s.undoStack];
+      const prev = stack.pop()!;
       return {
         undoStack: stack,
-        redoStack: pushUndo(state.redoStack, state.lines),
-        lines: previous,
-        currentSyncIndex: nextNonBlankIndex(previous, 0),
+        redoStack: push(s.redoStack, snap(s)),
+        lines: prev.lines,
+        currentSyncIndex: prev.currentSyncIndex,
+        reviewIndex: null,
         dirty: true,
       };
     }),
 
   redo: () =>
-    set((state) => {
-      if (state.redoStack.length === 0) return state;
-      const stack = [...state.redoStack];
+    set((s) => {
+      if (s.redoStack.length === 0) return s;
+      const stack = [...s.redoStack];
       const next = stack.pop()!;
       return {
         redoStack: stack,
-        undoStack: pushUndo(state.undoStack, state.lines),
-        lines: next,
-        currentSyncIndex: nextNonBlankIndex(next, 0),
-        dirty: true,
-      };
-    }),
-
-  moveLineInDirection: (direction) =>
-    set((state) => {
-      const indices = state.focusedIndex !== null
-        ? [state.focusedIndex]
-        : [...state.selectedIndices].sort((a, b) => a - b);
-      if (indices.length === 0) return state;
-
-      const min = indices[0];
-      const max = indices[indices.length - 1];
-      if (direction === 'up' && min === 0) return state;
-      if (direction === 'down' && max === state.lines.length - 1) return state;
-
-      const delta = direction === 'up' ? -1 : 1;
-      const newLines = [...state.lines];
-      const ordered = direction === 'up' ? indices : [...indices].reverse();
-      for (const idx of ordered) {
-        [newLines[idx], newLines[idx + delta]] = [newLines[idx + delta], newLines[idx]];
-      }
-
-      const movedSet = new Set(indices);
-      let newSyncIndex = state.currentSyncIndex;
-      if (movedSet.has(state.currentSyncIndex)) {
-        newSyncIndex = state.currentSyncIndex + delta;
-      } else if (direction === 'up' && state.currentSyncIndex === min - 1) {
-        newSyncIndex = state.currentSyncIndex + indices.length;
-      } else if (direction === 'down' && state.currentSyncIndex === max + 1) {
-        newSyncIndex = state.currentSyncIndex - indices.length;
-      }
-
-      return {
-        undoStack: pushUndo(state.undoStack, state.lines),
-        redoStack: [],
-        lines: newLines,
-        dirty: true,
-        focusedIndex: state.focusedIndex !== null ? state.focusedIndex + delta : null,
-        selectedIndices: new Set([...state.selectedIndices].map((i) => i + delta)),
-        currentSyncIndex: Math.max(0, Math.min(newLines.length - 1, newSyncIndex)),
-      };
-    }),
-
-  duplicateLines: () =>
-    set((state) => {
-      const indices = state.focusedIndex !== null
-        ? [state.focusedIndex]
-        : [...state.selectedIndices].sort((a, b) => a - b);
-      if (indices.length === 0) return state;
-
-      const copies = indices.map((i) => ({ ...state.lines[i], time: null }));
-      const insertAfter = indices[indices.length - 1];
-      const newLines = [
-        ...state.lines.slice(0, insertAfter + 1),
-        ...copies,
-        ...state.lines.slice(insertAfter + 1),
-      ];
-
-      const newSyncIdx = insertAfter + 1 <= state.currentSyncIndex
-        ? state.currentSyncIndex + copies.length
-        : state.currentSyncIndex;
-
-      return {
-        undoStack: pushUndo(state.undoStack, state.lines),
-        redoStack: [],
-        lines: newLines,
-        dirty: true,
-        currentSyncIndex: newSyncIdx,
-        focusedIndex: state.focusedIndex !== null ? insertAfter + 1 : null,
-        selectedIndices: state.focusedIndex === null
-          ? new Set(copies.map((_, j) => insertAfter + 1 + j))
-          : new Set<number>(),
-      };
-    }),
-
-  selectAll: () =>
-    set((state) => ({
-      selectedIndices: new Set(state.lines.map((_, i) => i)),
-    })),
-
-  importLines: (newLines) =>
-    set((state) => {
-      const final = newLines.length > 0 ? newLines : [{ text: '', time: null }];
-      return {
-        undoStack: pushUndo(state.undoStack, state.lines),
-        redoStack: [],
-        lines: final,
-        currentSyncIndex: nextNonBlankIndex(final, 0),
-        selectedIndices: new Set<number>(),
-        focusedIndex: null,
+        undoStack: push(s.undoStack, snap(s)),
+        lines: next.lines,
+        currentSyncIndex: next.currentSyncIndex,
+        reviewIndex: null,
         dirty: true,
       };
     }),

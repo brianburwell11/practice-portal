@@ -3,7 +3,7 @@ import { useAudioEngine } from '../hooks/useAudioEngine';
 import { useTransportStore } from '../store/transportStore';
 import { useLyricsStore } from '../store/lyricsStore';
 import { usePanelMinimizeStore } from '../store/panelMinimizeStore';
-import { isSectionMarker, isInstrumentalAnnotation } from '../audio/lyricSections';
+import { isSectionMarker, isInstrumentalAnnotation, isEndMarker } from '../audio/lyricSections';
 import type { LyricsLine } from '../audio/lyricsTypes';
 
 const PRE_SHIFT_MS = 500;
@@ -20,12 +20,17 @@ const FOCUS_LEFT_NUDGE_PX = 24;
 
 interface LyricsDisplayProps {
   overrideLines?: LyricsLine[];
+  /** Render just one of the tracks. The lyrics editor shows the desktop
+   *  track above itself and the phone track (always on, whatever the
+   *  listener's lyrics toggle) inside, under its toolbar. */
+  only?: 'desktop' | 'mobile';
 }
 
-export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
+export function LyricsDisplay({ overrideLines, only }: LyricsDisplayProps) {
   const position = useTransportStore((s) => s.position);
   const storeLines = useLyricsStore((s) => s.lines);
-  const mobileVisible = useLyricsStore((s) => s.mobileVisible);
+  const mobileToggled = useLyricsStore((s) => s.mobileVisible);
+  const mobileVisible = only === 'mobile' || (only !== 'desktop' && mobileToggled);
   const desktopMinimized = usePanelMinimizeStore((s) =>
     s.items.some((x) => x.kind === 'panel' && x.id === 'lyrics'),
   );
@@ -75,13 +80,14 @@ export function LyricsDisplay({ overrideLines }: LyricsDisplayProps) {
 
   return (
     <>
-      {!desktopMinimized && (
+      {!desktopMinimized && only !== 'mobile' && (
         <HorizontalTrack lines={lines} targetIndex={targetIndex} className="hidden md:block" />
       )}
       <VerticalTrack
         lines={lines}
         targetIndex={targetIndex}
         visible={mobileVisible}
+        compact={only === 'mobile'}
         className={mobileVisible ? 'md:hidden' : 'hidden'}
       />
     </>
@@ -254,7 +260,7 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
                 key={i}
                 ref={(el) => { itemRefs.current[i] = el; }}
                 onClick={() => { if (line.time !== null) engine.seek(line.time); }}
-                className={`text-sm transition-all duration-300 shrink-0 cursor-pointer hover:text-gray-100 ${
+                className={`text-sm transition-all duration-300 shrink-0 cursor-pointer hover:text-gray-100 ${isEndMarker(line.text) ? 'inline-block w-24' : ''} ${
                   instrumental
                     ? isCurrent
                       ? 'mx-3 text-gray-100 font-medium'
@@ -268,7 +274,7 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
                         : 'text-gray-500'
                 }`}
               >
-                {instrumental ? <InstrumentalIcon /> : line.text}
+                {instrumental ? <InstrumentalIcon /> : isEndMarker(line.text) ? null : line.text}
               </span>
             );
           })}
@@ -293,8 +299,11 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
 const MOBILE_LINE_HEIGHT = 40;
 const MOBILE_VISIBLE_LINES = 6;
 const MOBILE_CONTAINER_HEIGHT = MOBILE_LINE_HEIGHT * MOBILE_VISIBLE_LINES;
+/** The editor's preview: previous, current and next line only, so the
+ *  timing controls stay on screen. */
+const MOBILE_COMPACT_HEIGHT = MOBILE_LINE_HEIGHT * 3;
 
-function VerticalTrack({ lines, targetIndex, visible = true, className }: TrackProps & { visible?: boolean }) {
+function VerticalTrack({ lines, targetIndex, visible = true, compact = false, className }: TrackProps & { visible?: boolean; compact?: boolean }) {
   const engine = useAudioEngine();
   const playing = useTransportStore((s) => s.playing);
 
@@ -419,9 +428,13 @@ function VerticalTrack({ lines, targetIndex, visible = true, className }: TrackP
       ref={containerRef}
       className={`relative overflow-hidden ${className ?? ''}`}
       style={{
-        height: MOBILE_CONTAINER_HEIGHT,
-        maskImage: 'linear-gradient(to bottom, transparent 0%, black 16.67%, black 83.33%, transparent 100%)',
-        WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16.67%, black 83.33%, transparent 100%)',
+        height: compact ? MOBILE_COMPACT_HEIGHT : MOBILE_CONTAINER_HEIGHT,
+        maskImage: compact
+          ? 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)'
+          : 'linear-gradient(to bottom, transparent 0%, black 16.67%, black 83.33%, transparent 100%)',
+        WebkitMaskImage: compact
+          ? 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)'
+          : 'linear-gradient(to bottom, transparent 0%, black 16.67%, black 83.33%, transparent 100%)',
         touchAction: 'none',
       }}
       onPointerDown={handlePointerDown}
@@ -457,7 +470,7 @@ function VerticalTrack({ lines, targetIndex, visible = true, className }: TrackP
               }`}
               style={{ height: MOBILE_LINE_HEIGHT }}
             >
-              {isInstrumentalLine(line) ? <InstrumentalIcon /> : line.text}
+              {isInstrumentalLine(line) ? <InstrumentalIcon /> : isEndMarker(line.text) ? null : line.text}
             </div>
           );
         })}

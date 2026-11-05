@@ -102,11 +102,12 @@ function WaveformSkeleton({ progress }: { progress: { loaded: number; total: num
 interface TransportBarProps {
   showSliders: boolean;
   onToggleSliders: () => void;
-  /** TapMap editing on phones: only play/pause and the mixer button. */
-  minimal?: boolean;
+  /** An on-page editor is open. Phones show only play/pause, plus the
+   *  mixer button for the TapMap editor. */
+  minimal?: 'tapmap' | 'lyrics';
 }
 
-export function TransportBar({ showSliders, onToggleSliders, minimal = false }: TransportBarProps) {
+export function TransportBar({ showSliders, onToggleSliders, minimal }: TransportBarProps) {
   const engine = useAudioEngine();
   const { playing, position, duration, loopA, loopB, loopEnabled, toggleFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
@@ -357,7 +358,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
         <PlayPauseButton size="lg" longPressStops />
         {!minimal && <LoopButton size="lg" verb="Tap" />}
         {/* Mobile controls toggle — shows/hides mixer + volume/speed sliders below lyrics */}
-        <button
+        {minimal !== 'lyrics' && <button
           className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
             showSliders ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
@@ -371,7 +372,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
             <line x1="12" y1="21" x2="12" y2="8" /><line x1="12" y1="4" x2="12" y2="3" /><line x1="10" y1="8" x2="14" y2="8" />
             <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="18" y1="16" x2="22" y2="16" />
           </svg>
-        </button>
+        </button>}
 
         {/* Mobile sheet music: opens it full screen (only when the song has a score) */}
         {!minimal && hasSheetMusic && <button
