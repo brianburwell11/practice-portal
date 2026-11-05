@@ -37,10 +37,22 @@ export function MarkerEditorModal() {
 
   // Add an entry of the given type at the live playhead. Shared by the
   // S/M/B keys and the touch pads.
+  const listRef = useRef<HTMLDivElement>(null);
   const tap = useCallback((type: TapMapEntry['type']) => {
     const time = engine.clock.currentTime;
     if (type === 'section') addEntry({ time, type, label: autoLabelSection(tapMap) });
     else addEntry({ time, type });
+    // Bring the section row this tap landed in (or created) into view.
+    requestAnimationFrame(() => {
+      const list = listRef.current;
+      if (!list) return;
+      let row: HTMLElement | null = null;
+      for (const el of list.querySelectorAll<HTMLElement>('[data-section-time]')) {
+        if (Number(el.dataset.sectionTime) <= time) row = el;
+        else break;
+      }
+      row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
   }, [engine, tapMap, addEntry]);
 
   // Close the More menu on outside tap/click
@@ -309,7 +321,7 @@ export function MarkerEditorModal() {
           between the toolbar and the footer. Internal scroll kicks in
           when rows exceed that space; `min-h-0` keeps the flex child
           from growing past its parent and pushing the page taller. */}
-      <div className="flex-1 min-h-0 overflow-y-auto mt-3 max-w-2xl w-full mx-auto rounded-lg border border-gray-700">
+      <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto mt-3 max-w-2xl w-full mx-auto rounded-lg border border-gray-700">
         <SectionList />
       </div>
 

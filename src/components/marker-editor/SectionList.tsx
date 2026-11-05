@@ -141,6 +141,7 @@ export function SectionList() {
               return (
                 <tr
                   key={`${tapMapIdx}-${entry.time}`}
+                  data-section-time={entry.time}
                   className={`border-b border-gray-700/50 cursor-pointer transition-colors ${
                     isSelected
                       ? 'bg-blue-900/30'
