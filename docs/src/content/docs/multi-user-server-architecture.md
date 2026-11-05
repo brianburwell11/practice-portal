@@ -252,6 +252,21 @@ Two decisions that constrain later phases:
 
 The failure mode to watch: exceeding a monthly free limit **suspends compute until the next billing month** rather than billing you. Good for a hobby budget, bad for uptime — Phase 11's uptime checks should cover it.
 
+### Cost estimate on /admin
+
+The site admin dashboard estimates this month's bill (`GET /api/admin/costs`, `server/core/costs/`), by service and by band. Usage so far is projected to the whole month.
+
+| Service | Measured from | Per band |
+|---|---|---|
+| Fly machine | `machine_uptime`: seconds the server ran per UTC day, written on Fly only (at shutdown, and at most every 15 minutes after a request, so it never wakes Neon) | transcode time (`job.started_at` to `finished_at`); the rest is shared |
+| Neon compute | machine hours × `NEON_CU` (default 0.25) | shared |
+| Neon storage | `pg_database_size` | each band's song and setlist rows (`pg_column_size`) |
+| R2 storage | listing each band's prefix | direct |
+| Resend | invites emailed, access requests and decisions, site admin emails | direct (admin emails are shared) |
+| Domain | `DOMAIN_YEARLY_USD` / 12 | shared |
+
+Shared cost is split by each band's average share of songs, people and storage. The estimated bill applies the free tiers; list price is the same use on a paid plan. Prices live in `server/core/costs/pricing.ts` with the date they were checked. Not counted: R2 operations, bandwidth, the stopped machine's disk.
+
 ### Divergences from the SQL sketch above
 
 Each of these is a deliberate change, not a transcription slip:
