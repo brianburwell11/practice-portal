@@ -17,7 +17,7 @@
  */
 import http from 'node:http';
 import { createApiHandler, sendJson } from './adapters/nodeApi';
-import { createStaticHandler } from './adapters/staticFiles';
+import { createStaticHandler, HSTS } from './adapters/staticFiles';
 import { pageTitleFor } from './core/pageTitles';
 import { memo } from './core/cache';
 import { startWorker, stopWorker } from './core/jobs/worker';
@@ -87,6 +87,8 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
   if (redirectsToCanonical(req.headers.host)) {
     res.statusCode = 308;
     res.setHeader('Location', `https://${CANONICAL_HOST}${req.url ?? '/'}`);
+    // www and *.fly.dev only ever answer with this redirect, so it has to carry HSTS itself.
+    if (process.env.FLY_APP_NAME) res.setHeader('Strict-Transport-Security', HSTS);
     res.end();
     return;
   }
