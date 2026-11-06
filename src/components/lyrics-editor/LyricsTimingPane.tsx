@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useFlash } from '../../hooks/useFlash';
 import { useTransportStore } from '../../store/transportStore';
 import { useLyricsEditorStore, nextNonBlankIndex } from '../../store/lyricsEditorStore';
 import { isSectionMarker, isInstrumentalAnnotation, isEndMarker } from '../../audio/lyricSections';
@@ -38,6 +39,8 @@ export function LyricsTimingPane() {
   } = useLyricsEditorStore();
 
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // Lights up the desktop button whose shortcut was just pressed.
+  const { active: pressed, flash } = useFlash();
 
   // Read the engine clock directly so the stamp matches the keypress or
   // finger-down, not the last UI tick.
@@ -68,13 +71,16 @@ export function LyricsTimingPane() {
       const mod = e.metaKey || e.ctrlKey;
       if (e.key === 'Tab') {
         e.preventDefault();
-        if (e.shiftKey) stepBack(); else stampNext();
+        if (e.shiftKey) { stepBack(); flash('back'); } else { stampNext(); flash('cue'); }
       } else if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault();
-        nudge(e.key === 'ArrowLeft' ? -NUDGE : NUDGE);
+        const left = e.key === 'ArrowLeft';
+        nudge(left ? -NUDGE : NUDGE);
+        flash(left ? 'nudge-' : 'nudge+');
       } else if (!mod && !e.altKey && (e.key === 'r' || e.key === 'R')) {
         e.preventDefault();
         replay();
+        flash('replay');
       } else if (mod && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         if (e.shiftKey) redo(); else undo();
@@ -82,7 +88,7 @@ export function LyricsTimingPane() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [stampNext, stepBack, nudge, replay, undo, redo]);
+  }, [stampNext, stepBack, nudge, replay, undo, redo, flash]);
 
   // Keep the next line to stamp in view.
   useEffect(() => {
@@ -109,7 +115,9 @@ export function LyricsTimingPane() {
           : next.text.trim();
   const cueLabel = done ? 'All lines synced' : cueingEnd ? 'Cue end of lyrics' : 'Cue next line';
 
-  const btn = 'rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-gray-300 transition-colors';
+  const lit = (id: string) => (pressed === id ? 'brightness-150 scale-[0.97]' : '');
+  const kbd = (k: string) => <span className="ml-1 font-mono text-xs opacity-60">({k})</span>;
+  const btn = 'rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-gray-300 transition-[background-color,filter,transform] duration-75';
   const status = (
     <span className="text-xs text-gray-500 whitespace-nowrap">
       {reviewTime !== null && <>Line {reviewIndex! + 1} at <span className="font-mono text-gray-300">{formatPrecise(reviewTime)}</span>, </>}
@@ -207,28 +215,36 @@ export function LyricsTimingPane() {
             <div className="text-center">{status}</div>
           </>
         ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              className="px-4 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium text-gray-900 transition-colors max-w-[16rem] truncate"
-              onClick={stampNext}
-              disabled={done}
-              title="Stamp the highlighted line at the playhead (Tab)"
-            >
-              {cueLabel}
-            </button>
-            <button className={`${btn} px-3 py-1.5`} onClick={stepBack} disabled={currentSyncIndex === 0} title="Shift+Tab">
-              Back a line
-            </button>
-            <button className={`${btn} px-3 py-1.5`} onClick={() => nudge(-NUDGE)} disabled={reviewTime === null} title="Alt+←">
-              −0.1s
-            </button>
-            <button className={`${btn} px-3 py-1.5`} onClick={() => nudge(NUDGE)} disabled={reviewTime === null} title="Alt+→">
-              +0.1s
-            </button>
-            <button className={`${btn} px-3 py-1.5`} onClick={replay} disabled={reviewTime === null} title="R">
-              Replay
-            </button>
-            <span className="ml-auto">{status}</span>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                className={`px-4 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium text-gray-900 transition-[background-color,filter,transform] duration-75 max-w-[18rem] truncate ${lit('cue')}`}
+                onClick={stampNext}
+                disabled={done}
+                title="Stamp the highlighted line at the playhead"
+              >
+                {cueLabel}{!done && kbd('Tab')}
+              </button>
+              <button className={`${btn} px-3 py-1.5 ${lit('back')}`} onClick={stepBack} disabled={currentSyncIndex === 0}>
+                Back a line{kbd('⇧Tab')}
+              </button>
+              <button className={`${btn} px-3 py-1.5 ${lit('nudge-')}`} onClick={() => nudge(-NUDGE)} disabled={reviewTime === null}>
+                −0.1s{kbd('⌥←')}
+              </button>
+              <button className={`${btn} px-3 py-1.5 ${lit('nudge+')}`} onClick={() => nudge(NUDGE)} disabled={reviewTime === null}>
+                +0.1s{kbd('⌥→')}
+              </button>
+              <button className={`${btn} px-3 py-1.5 ${lit('replay')}`} onClick={replay} disabled={reviewTime === null}>
+                Replay{kbd('R')}
+              </button>
+            </div>
+            {/* The line the cue button will stamp, beside the sync count.
+                Reserves its height so the layout doesn't jump when
+                everything is synced. */}
+            <div className="mt-1 flex items-baseline gap-3 min-h-[1rem]">
+              <span className="flex-1 min-w-0 truncate text-xs italic text-gray-500">{nextLabel}</span>
+              {status}
+            </div>
           </div>
         )}
       </div>

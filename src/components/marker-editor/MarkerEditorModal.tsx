@@ -34,6 +34,8 @@ export function MarkerEditorModal() {
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const coarse = useMediaQuery('(pointer: coarse)');
   const position = useTransportStore((s) => s.position);
+  // Bumped when S/M/B fire from the keyboard so the matching pad lights up.
+  const [pulses, setPulses] = useState({ section: 0, measure: 0, beat: 0 });
 
   // Add an entry of the given type at the live playhead. Shared by the
   // S/M/B keys and the touch pads.
@@ -89,9 +91,11 @@ export function MarkerEditorModal() {
       const key = e.key.toUpperCase();
       if (key === 'Z') { undo(); return; }
 
-      if (key === 'S') tap('section');
-      else if (key === 'M') tap('measure');
-      else if (key === 'B') tap('beat');
+      const type = key === 'S' ? 'section' : key === 'M' ? 'measure' : key === 'B' ? 'beat' : null;
+      if (type) {
+        tap(type);
+        setPulses((p) => ({ ...p, [type]: p[type] + 1 }));
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -245,6 +249,40 @@ export function MarkerEditorModal() {
     ? mb.beat + 1
     : tapMap.filter((e) => e.type === 'beat' && e.time <= position).length + 1;
 
+  // Tap pads: the S/M/B keys as buttons. On desktop they show their
+  // shortcut and light up when the key is pressed.
+  const pads = (
+    <div className="grid grid-cols-3 gap-2">
+      <TapPadButton
+        label="+ Section"
+        shortcut={coarse ? undefined : 'S'}
+        sublabel={nextSectionLabel}
+        color="bg-amber-500 text-gray-900"
+        size={coarse ? 'lg' : 'md'}
+        pulse={pulses.section}
+        onFire={() => tap('section')}
+      />
+      <TapPadButton
+        label="+ Measure"
+        shortcut={coarse ? undefined : 'M'}
+        sublabel={String(nextMeasure)}
+        color="bg-blue-700 text-white"
+        size={coarse ? 'lg' : 'md'}
+        pulse={pulses.measure}
+        onFire={() => tap('measure')}
+      />
+      <TapPadButton
+        label="+ Beat"
+        shortcut={coarse ? undefined : 'B'}
+        sublabel={String(nextBeat)}
+        color="bg-gray-600 text-white"
+        size={coarse ? 'lg' : 'md'}
+        pulse={pulses.beat}
+        onFire={() => tap('beat')}
+      />
+    </div>
+  );
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar \u2014 mirrors the LyricsEditor layout: actions left/right,
@@ -326,28 +364,8 @@ export function MarkerEditorModal() {
       </div>
 
       {coarse ? (
-        /* Touch pads \u2014 the S/M/B keys for phones and tablets. */
         <div className="mt-3 max-w-2xl w-full mx-auto px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2">
-          <div className="grid grid-cols-3 gap-2">
-            <TapPadButton
-              label="+ Section"
-              sublabel={nextSectionLabel}
-              color="bg-amber-500 text-gray-900"
-              onFire={() => tap('section')}
-            />
-            <TapPadButton
-              label="+ Measure"
-              sublabel={String(nextMeasure)}
-              color="bg-blue-700 text-white"
-              onFire={() => tap('measure')}
-            />
-            <TapPadButton
-              label="+ Beat"
-              sublabel={String(nextBeat)}
-              color="bg-gray-600 text-white"
-              onFire={() => tap('beat')}
-            />
-          </div>
+          {pads}
           {selectedEntry && selectedIndex !== null ? (
             /* A marker is selected (tap it on the waveform or in the
                list): change its type in place, keeping its time. */
@@ -388,10 +406,12 @@ export function MarkerEditorModal() {
           </div>
         </div>
       ) : (
-        /* Footer hints \u2014 mirrors the LyricsEditor footer style so the
+        <>
+          <div className="mt-3 mb-3 max-w-2xl w-full mx-auto">{pads}</div>
+          {/* Footer hints \u2014 mirrors the LyricsEditor footer style so the
             two editors feel like the same family. `mt-auto` pins it to
             the bottom of the flex column so the panel's breathing room
-            sits between the list and the footer. */
+            sits between the list and the footer. */}
         <div className="mt-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-5 py-2 text-[10px] text-gray-600 border-t border-gray-700">
           <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">S</kbd> section</span>
           <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">M</kbd> measure</span>
@@ -401,6 +421,7 @@ export function MarkerEditorModal() {
           <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Del</kbd> remove</span>
           <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘Z</kbd> undo</span>
         </div>
+        </>
       )}
     </div>
   );
