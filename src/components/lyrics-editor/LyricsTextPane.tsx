@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLyricsEditorStore, nextNonBlankIndex } from '../../store/lyricsEditorStore';
 import { LYRIC_SECTIONS, isEndMarker } from '../../audio/lyricSections';
 import { linesToText, mergeLyricTimes, textToLines } from '../../audio/lyricsMerge';
@@ -17,7 +17,29 @@ export function LyricsTextPane() {
   const [baseline] = useState(() => lines);
   const [text, setText] = useState(() => linesToText(lines));
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
+  // Width of the textarea's text column, so the gutter's hidden copy of
+  // each line wraps exactly where the textarea does.
+  const [textWidth, setTextWidth] = useState<number | null>(null);
   const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const measure = () => {
+      const cs = getComputedStyle(ta);
+      setTextWidth(ta.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(ta);
+    return () => ro.disconnect();
+  }, []);
+
+  const syncGutter = () => {
+    if (gutterRef.current && textareaRef.current) gutterRef.current.scrollTop = textareaRef.current.scrollTop;
+  };
+  useLayoutEffect(syncGutter, [text, textWidth]);
   const sectionMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -92,15 +114,35 @@ export function LyricsTextPane() {
         </span>
       </div>
 
-      <textarea
-        ref={textareaRef}
-        value={text}
-        onChange={(e) => update(e.target.value)}
-        placeholder={'Paste or type the lyrics here, one line per lyric.\n\nLeave a blank line between sections.'}
-        spellCheck={false}
-        autoCapitalize="sentences"
-        className="flex-1 min-h-[8rem] w-full resize-none rounded-lg border border-gray-700 bg-gray-900/60 p-3 text-base md:text-sm leading-relaxed text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
-      />
+      <div className="flex-1 min-h-[8rem] flex rounded-lg border border-gray-700 bg-gray-900/60 overflow-hidden focus-within:border-blue-500">
+        {/* Line numbers. Each row holds an invisible copy of its line at the
+            textarea's width, so a wrapped lyric pushes the next number down. */}
+        <div ref={gutterRef} aria-hidden className="w-10 shrink-0 overflow-hidden select-none border-r border-gray-800">
+          <div className="py-3">
+            {text.split('\n').map((line, i) => (
+              <div key={i} className="flex items-baseline">
+                <span className="w-10 shrink-0 pr-2 text-right text-xs font-mono text-gray-600">{i + 1}</span>
+                <span
+                  className="invisible shrink-0 whitespace-pre-wrap break-words text-base md:text-sm leading-relaxed"
+                  style={textWidth !== null ? { width: textWidth } : undefined}
+                >
+                  {line || ' '}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={(e) => update(e.target.value)}
+          onScroll={syncGutter}
+          placeholder={'Paste or type the lyrics here, one line per lyric.\n\nLeave a blank line between sections.'}
+          spellCheck={false}
+          autoCapitalize="sentences"
+          className="flex-1 min-w-0 resize-none bg-transparent px-3 py-3 text-base md:text-sm leading-relaxed text-gray-200 placeholder-gray-600 focus:outline-none"
+        />
+      </div>
 
       <p className="mt-2 text-xs text-gray-500">
         One lyric per line. Blank lines are gaps. Lines like #VERSE are section markers and never show in the song view. #END marks where the lyrics stop.
