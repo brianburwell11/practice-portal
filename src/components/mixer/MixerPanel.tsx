@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState, useRef } from 'react';
+import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import { useCan } from '../../store/sessionStore';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
@@ -198,6 +198,24 @@ export function MixerPanel() {
     s.items.some((x) => x.kind === 'panel' && x.id === 'mixer'),
   );
   const minimizePanel = usePanelMinimizeStore((s) => s.minimizePanel);
+  const restorePanel = usePanelMinimizeStore((s) => s.restorePanel);
+
+  // `x` shows or hides the mixer (minimizes it to the ribbon). Not while
+  // typing, and not Cmd/Ctrl+X, which is cut.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'x' && e.key !== 'X') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const t = e.target;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return;
+      if (t instanceof HTMLElement && t.isContentEditable) return;
+      e.preventDefault();
+      if (minimized) restorePanel('mixer');
+      else minimizePanel('mixer');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [minimized, minimizePanel, restorePanel]);
   // The minimized ribbon is fixed over the page's bottom edge (desktop only).
   const ribbonVisible = usePanelMinimizeStore((s) => s.items.length > 0);
 
