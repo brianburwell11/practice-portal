@@ -17,6 +17,23 @@ export function isAudioFile(filename: string): boolean {
   return audioExtensionsSet.has(ext);
 }
 
+/**
+ * Largest raw stem the server accepts. Mirrors `MAX_STEM_BYTES` in
+ * `server/core/handlers/stems.ts`; checking here stops the browser from
+ * decoding a huge file it can't upload anyway.
+ */
+export const MAX_STEM_BYTES = 1024 * 1024 * 1024;
+
+/** Error text for files over {@link MAX_STEM_BYTES}, or null if none are. */
+export function oversizedStemsMessage(files: File[]): string | null {
+  const names = files.filter((f) => f.size > MAX_STEM_BYTES).map((f) => `"${f.name}"`);
+  if (names.length === 0) return null;
+  const limit = `${MAX_STEM_BYTES / 1024 ** 3} GB`;
+  return names.length === 1
+    ? `${names[0]} is over the ${limit} limit for a stem, so it was skipped.`
+    : `${names.join(', ')} are over the ${limit} limit for a stem, so they were skipped.`;
+}
+
 function toKebab(str: string): string {
   return str
     .toLowerCase()

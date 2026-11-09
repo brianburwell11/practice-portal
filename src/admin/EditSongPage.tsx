@@ -2,7 +2,7 @@ import { useReducer, useEffect, useMemo, useRef, useState, useCallback } from 'r
 import { useParams, useNavigate } from 'react-router-dom';
 import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema } from '../config/schema';
-import { detectStem, isAudioFile } from './utils/stemDetection';
+import { detectStem, isAudioFile, oversizedStemsMessage } from './utils/stemDetection';
 import { getAudioInfo } from './utils/audioConvert';
 import { uploadFileWithProgress, uploadFormWithProgress } from './utils/uploadWithProgress';
 import { uploadStems, waitForStems, type StemJobState } from './utils/stemJobs';
@@ -22,7 +22,7 @@ import { TagInput } from './TagInput';
 import { SongKeyInput } from './SongKeyInput';
 import { StemColorPicker } from './StemColorPicker';
 import { MixerOrderEditor, shouldShowMixerOrderEditor } from './components/MixerOrderEditor';
-import { confirmDiscard } from '../store/dialogStore';
+import { confirmDiscard, toast } from '../store/dialogStore';
 
 const groupColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
@@ -169,6 +169,8 @@ export default function EditSongPage() {
       const file = e.target.files?.[0];
       e.target.value = '';
       if (!file || !isAudioFile(file.name)) return;
+      const tooBig = oversizedStemsMessage([file]);
+      if (tooBig) { toast(tooBig, 'error'); return; }
       const detected = detectStem(file.name);
       // Deduplicate ID against existing stems
       const existingIds = new Set(state.config?.stems.map((s) => s.id) ?? []);

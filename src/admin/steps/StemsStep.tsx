@@ -1,6 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import type { WizardState, WizardAction, StemEntry } from '../wizardReducer';
-import { audioExtensions, detectStem, deduplicateLabels, isAudioFile, sortStems } from '../utils/stemDetection';
+import {
+  audioExtensions, detectStem, deduplicateLabels, isAudioFile, MAX_STEM_BYTES, oversizedStemsMessage, sortStems,
+} from '../utils/stemDetection';
 import { getAudioInfo } from '../utils/audioConvert';
 import { previewStem } from '../utils/stemPreview';
 import { StemColorPicker } from '../StemColorPicker';
@@ -35,6 +37,7 @@ export function StemsStep({ state, dispatch }: Props) {
   const filesInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
   const [previewingIdx, setPreviewingIdx] = useState<number | null>(null);
@@ -47,7 +50,9 @@ export function StemsStep({ state, dispatch }: Props) {
   const [selectedStemIds, setSelectedStemIds] = useState<Set<string>>(new Set());
 
   const handleFiles = useCallback(
-    async (files: File[]) => {
+    async (picked: File[]) => {
+      setFileError(oversizedStemsMessage(picked));
+      const files = picked.filter((f) => f.size <= MAX_STEM_BYTES);
       if (files.length === 0) return;
       setLoading(true);
       try {
@@ -62,6 +67,8 @@ export function StemsStep({ state, dispatch }: Props) {
         }
         const duration = infos[0].duration;
         dispatch({ type: 'SET_STEMS', stems, durationSeconds: Math.round(duration * 100) / 100 });
+      } catch {
+        setFileError('Couldn’t read one of these files as audio. Try exporting it again as WAV or MP3.');
       } finally {
         setLoading(false);
       }
@@ -206,6 +213,9 @@ export function StemsStep({ state, dispatch }: Props) {
           </>
         )}
       </div>
+      {fileError && (
+        <p role="alert" className="-mt-4 text-sm text-red-400">{fileError}</p>
+      )}
 
       {/* Normalize toggle — applies ffmpeg loudnorm during transcode.
           Tooltip explains the trade-off so curators can opt out for
