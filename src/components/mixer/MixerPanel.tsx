@@ -242,7 +242,10 @@ export function MixerPanel() {
   return (
     // Desktop: pinned to the bottom left, clear of the minimized ribbon.
     <div
-      className={`flex-1 p-4 overflow-auto md:flex md:flex-col md:justify-end ${minimized ? 'md:hidden' : ''}`}
+      // Desktop: grows to fill leftover height (so it sits at the bottom)
+      // but never shrinks below its content, so a tall score pushes it down
+      // the page's scroll instead of squeezing it away.
+      className={`flex-1 p-4 overflow-auto md:flex-[1_0_auto] md:overflow-visible md:flex md:flex-col md:justify-end ${minimized ? 'md:hidden' : ''}`}
       style={isDesktop && ribbonVisible ? { paddingBottom: `calc(1rem + ${MINIMIZED_RIBBON_HEIGHT}px)` } : undefined}
     >
       {/* Global mute/solo + save defaults. On desktop, indented past the
