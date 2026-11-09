@@ -8,6 +8,9 @@ import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useLongPress } from '../../hooks/useLongPress';
 import { ChannelStrip } from './ChannelStrip';
 import { GroupStrip } from './GroupStrip';
+import { DesktopChannelStrip, StripHeader } from './DesktopChannelStrip';
+import { DesktopGroupStrip } from './DesktopGroupStrip';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { MixerSkeleton } from './MixerSkeleton';
 import { resolveMixerOrder } from '../../audio/mixerOrder';
 
@@ -15,6 +18,8 @@ type SaveState = 'idle' | 'pending' | 'cancelled' | 'saving' | 'saved' | 'error'
 
 export function MixerPanel() {
   const engine = useAudioEngine();
+  // Desktop gets Logic-style vertical strips; phones keep the cards.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   // Saving the mix as the song's defaults rewrites its stems.
   const canSaveMix = useCan('song.audio.write');
   const selectedSong = useSongStore((s) => s.selectedSong);
@@ -199,7 +204,7 @@ export function MixerPanel() {
   if (songLoading) return <MixerSkeleton className={minimized ? 'md:hidden' : ''} />;
 
   return (
-    <div className={`flex-1 p-4 overflow-auto ${minimized ? 'md:hidden' : ''}`}>
+    <div className={`flex-1 p-4 overflow-auto md:flex md:flex-col ${minimized ? 'md:hidden' : ''}`}>
       {/* Global mute/solo + save defaults */}
       <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3">
         {/* Mobile-only full-width reset bar, above the M/S buttons */}
@@ -336,16 +341,27 @@ export function MixerPanel() {
         </button>
       </div>
 
-      {/* Groups and ungrouped stems, in user-configured display order */}
-      <div className="flex flex-col md:flex-row gap-3 md:flex-wrap md:items-start">
+      {/* Groups and ungrouped stems, in user-configured display order. Desktop:
+          one row of vertical strips filling the panel's height, scrolling
+          sideways when it overflows. */}
+      <div
+        className={isDesktop
+          ? 'flex flex-row flex-nowrap gap-1.5 h-[300px] shrink-0 overflow-x-auto pb-1'
+          : 'flex flex-col gap-3'}
+      >
+        {isDesktop && <StripHeader />}
         {mixerItems.map((item) => {
           if (item.kind === 'group') {
             const stemConfigs = item.group.stemIds
               .map((id) => selectedSong.stems.find((s) => s.id === id))
               .filter((s) => s != null);
-            return <GroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />;
+            return isDesktop
+              ? <DesktopGroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />
+              : <GroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />;
           }
-          return <ChannelStrip key={item.id} stemConfig={item.stem} />;
+          return isDesktop
+            ? <DesktopChannelStrip key={item.id} stemConfig={item.stem} />
+            : <ChannelStrip key={item.id} stemConfig={item.stem} />;
         })}
       </div>
     </div>
