@@ -123,7 +123,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   }, [wheelOpen]);
   const [filterKeys, setFilterKeys] = useState<Set<string>>(new Set());
   const [filterTags, setFilterTags] = useState<Set<string>>(new Set());
-  const [allowDuplicates, setAllowDuplicates] = useState(true);
+  const [allowDuplicates, setAllowDuplicates] = useState(false);
   const [durationMode, setDurationMode] = useState<'' | 'longer' | 'shorter' | 'fits'>('');
   const [durationText, setDurationText] = useState('');
   const [sortMode, setSortMode] = useState<'title' | 'duration' | 'key'>('title');
@@ -140,6 +140,13 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   const [mobileTab, setMobileTab] = useState<'songs' | 'setlist'>('songs');
   /** Bumped on each add so the Setlist tab count can pop. */
   const [addPulse, setAddPulse] = useState(0);
+  /** Confirms the last add. Each add replaces it, so quick adds don't stack. */
+  const [addedToast, setAddedToast] = useState<{ key: number; message: string } | null>(null);
+  useEffect(() => {
+    if (!addedToast) return;
+    const t = setTimeout(() => setAddedToast(null), 2500);
+    return () => clearTimeout(t);
+  }, [addedToast]);
 
   // Drag-to-reorder (pointer based, so it works on touch too)
   const entrySort = useSortableList(
@@ -296,7 +303,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     (durationMode === 'shorter' && !!parseDuration(durationText)) ||
     (durationMode === 'fits' && timeRemaining !== null && timeRemaining > 0);
 
-  const hasActiveFilters = filterKeys.size > 0 || filterTags.size > 0 || durationActive || !allowDuplicates;
+  const hasActiveFilters = filterKeys.size > 0 || filterTags.size > 0 || durationActive;
 
   // IDs of songs already in the setlist (for the "no duplicates" filter)
   const setlistSongIds = useMemo(() => {
@@ -309,7 +316,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
 
   // Filtered available songs
   const filteredSongs = useMemo(() => {
-    if (!hasActiveFilters) return availableSongs;
+    if (!hasActiveFilters && allowDuplicates) return availableSongs;
     const durSec = parseDuration(durationText);
     return availableSongs.filter((song) => {
       if (!allowDuplicates && setlistSongIds.has(song.id)) return false;
@@ -433,8 +440,13 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
   };
 
   const addSong = (id: string) => {
+    const title = availableSongs.find((s) => s.id === id)?.title ?? 'Song';
     setEntries((prev) => [...prev, { type: 'song', songId: id }]);
     setAddPulse((n) => n + 1);
+    setAddedToast({
+      key: Date.now(),
+      message: `Added “${title}”`,
+    });
   };
   const addSetHeading = () => {
     const setNum = entries.filter((e) => e.type === 'heading').length + 1;
@@ -859,7 +871,6 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                             setFilterTags(new Set());
                             setDurationMode('');
                             setDurationText('');
-                            setAllowDuplicates(true);
                           }}
                           className="text-xs text-gray-500 hover:text-gray-300"
                         >
@@ -938,7 +949,11 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                   })}
                   {filteredSongs.length === 0 && (
                     <div className="text-sm text-gray-500">
-                      {hasActiveFilters ? 'No songs match filters' : 'No songs in this band'}
+                      {hasActiveFilters
+                        ? 'No songs match filters'
+                        : availableSongs.length > 0
+                          ? 'Every song is in the setlist'
+                          : 'No songs in this band'}
                     </div>
                   )}
                 </div>
@@ -1175,6 +1190,17 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
           </>
         )}
       </div>
+      {addedToast && createPortal(
+        <div
+          key={addedToast.key}
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[80] max-w-[calc(100%-2rem)] truncate rounded-full border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-100 shadow-xl pointer-events-none animate-toast-in"
+        >
+          <span className="text-green-400">✓</span> {addedToast.message}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
