@@ -3,6 +3,14 @@ import { useMixerStore } from '../../store/mixerStore';
 import { TouchSlider } from '../ui/TouchSlider';
 import type { StemConfig } from '../../audio/types';
 
+/**
+ * Empty stand-in for a slider row (the `TouchSlider` height), so stereo
+ * stems and groups line up with mono stems, which have a Pan row.
+ */
+export function SliderRowSpacer() {
+  return <div aria-hidden className="h-5 md:h-4" />;
+}
+
 interface ChannelStripProps {
   stemConfig: StemConfig;
 }
@@ -59,7 +67,8 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
     !stemState.soloed;
 
   return (
-    <div className="flex flex-col gap-2 p-3 bg-gray-800 rounded-lg min-w-[230px]">
+    // Transparent border matches the group card's, so the heights line up.
+    <div className="flex flex-col gap-2 p-3 bg-gray-800 rounded-lg min-w-[230px] border border-transparent">
       {/* Label with color indicator and stereo toggle */}
       <div className="flex items-center gap-2">
         {sourceChannels >= 2 ? (
@@ -102,8 +111,10 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
         </span>
       </div>
 
-      {/* Pan slider — hidden in stereo mode */}
-      {!stemState.stereo && (
+      {/* Pan slider — hidden in stereo mode, keeping its row so every card is the same height */}
+      {stemState.stereo ? (
+        <SliderRowSpacer />
+      ) : (
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-500 w-7">Pan</label>
           <TouchSlider min={-1} max={1} step={0.01} value={stemState.pan} onChange={handlePan} onDoubleClick={() => handlePan(0)} label={`${stemConfig.label} pan`} className="flex-1" />

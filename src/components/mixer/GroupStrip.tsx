@@ -1,6 +1,6 @@
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useMixerStore } from '../../store/mixerStore';
-import { ChannelStrip } from './ChannelStrip';
+import { ChannelStrip, SliderRowSpacer } from './ChannelStrip';
 import { TouchSlider } from '../ui/TouchSlider';
 import type { StemGroupConfig, StemConfig } from '../../audio/types';
 
@@ -78,6 +78,9 @@ export function GroupStrip({ groupConfig, stemConfigs }: GroupStripProps) {
             {Math.round(groupState.volume * 100)}
           </span>
         </div>
+
+        {/* No pan for a group; keep the row so it matches a mono stem's height. */}
+        <SliderRowSpacer />
 
         {/* Mute / Solo buttons — neutral body with a colored outline when
             members are in the mute/solo set, plus a diagonal half-fill
