@@ -3,9 +3,9 @@ import { Skeleton } from '../ui/Loading';
 /** The mixer's shape, its M/S bar and a row of channel strips, while a song loads. */
 export function MixerSkeleton({ className = '' }: { className?: string }) {
   return (
-    <div className={`flex-1 p-4 overflow-hidden md:flex md:flex-col ${className}`} role="status">
+    <div className={`flex-1 p-4 overflow-hidden md:flex md:flex-col md:justify-end ${className}`} role="status">
       <span className="sr-only">Loading the song</span>
-      <div className="flex gap-2 w-full md:w-[230px] mb-3">
+      <div className="flex gap-2 w-full md:w-[230px] mb-3 md:ml-[90px]">
         <Skeleton className="flex-1 h-11 md:h-7" />
         <Skeleton className="flex-1 h-11 md:h-7" />
       </div>

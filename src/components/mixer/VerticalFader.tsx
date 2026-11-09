@@ -81,14 +81,16 @@ export function VerticalFader({ value, onChange, resetValue, color, label }: Ver
         value={[value]}
         onValueChange={([v]) => onChange(v)}
         onDoubleClick={() => onChange(resetValue)}
-        aria-label={label}
         className="relative flex flex-col items-center select-none touch-none w-7 h-full"
         title="Double-click to reset"
       >
         <Slider.Track className="relative grow w-1.5 rounded-full bg-gray-900">
           <Slider.Range className="absolute w-full rounded-full" style={{ backgroundColor: color }} />
         </Slider.Track>
+        {/* The label goes on the thumb, the element with role="slider";
+            on Root it would name a wrapper, leaving the slider unnamed. */}
         <Slider.Thumb
+          aria-label={label}
           aria-valuetext={`${formatDb(value)} dB`}
           className="block w-7 h-4 rounded-sm bg-gradient-to-b from-gray-200 to-gray-400 shadow-md border border-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >

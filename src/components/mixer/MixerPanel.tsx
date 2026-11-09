@@ -11,6 +11,7 @@ import { GroupStrip } from './GroupStrip';
 import { DesktopChannelStrip, StripHeader } from './DesktopChannelStrip';
 import { DesktopGroupStrip } from './DesktopGroupStrip';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { MINIMIZED_RIBBON_HEIGHT } from '../MinimizedRibbon';
 import { MixerSkeleton } from './MixerSkeleton';
 import { resolveMixerOrder } from '../../audio/mixerOrder';
 
@@ -197,6 +198,8 @@ export function MixerPanel() {
     s.items.some((x) => x.kind === 'panel' && x.id === 'mixer'),
   );
   const minimizePanel = usePanelMinimizeStore((s) => s.minimizePanel);
+  // The minimized ribbon is fixed over the page's bottom edge (desktop only).
+  const ribbonVisible = usePanelMinimizeStore((s) => s.items.length > 0);
 
   // `NoSongState` (App.tsx) has the screen until a song loads.
   if (!selectedSong) return null;
@@ -204,9 +207,15 @@ export function MixerPanel() {
   if (songLoading) return <MixerSkeleton className={minimized ? 'md:hidden' : ''} />;
 
   return (
-    <div className={`flex-1 p-4 overflow-auto md:flex md:flex-col ${minimized ? 'md:hidden' : ''}`}>
-      {/* Global mute/solo + save defaults */}
-      <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3">
+    // Desktop: pinned to the bottom left, clear of the minimized ribbon.
+    <div
+      className={`flex-1 p-4 overflow-auto md:flex md:flex-col md:justify-end ${minimized ? 'md:hidden' : ''}`}
+      style={isDesktop && ribbonVisible ? { paddingBottom: `calc(1rem + ${MINIMIZED_RIBBON_HEIGHT}px)` } : undefined}
+    >
+      {/* Global mute/solo + save defaults. On desktop, indented past the
+          row-label column (w-[84px] + the strips' gap-1.5) to line up with
+          the first channel strip. */}
+      <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3 md:pl-[90px]">
         {/* Mobile-only full-width reset bar, above the M/S buttons */}
         <button
           onClick={handleResetAll}
