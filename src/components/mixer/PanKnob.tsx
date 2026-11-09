@@ -6,7 +6,7 @@ interface PanKnobProps {
   onChange: (value: number) => void;
   color: string;
   label: string;
-  /** Double-click (and Space/Enter) target: the stem's default pan. */
+  /** Double-click (and Enter) target: the stem's default pan. */
   resetValue: number;
 }
 
@@ -99,7 +99,8 @@ export function PanKnob({ value, onChange, color, label, resetValue }: PanKnobPr
         else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') next = value - step;
         else if (e.key === 'Home') next = -1;
         else if (e.key === 'End') next = 1;
-        else if (e.key === ' ' || e.key === 'Enter') next = resetValue;
+        // Enter, not Space: Space is the app's play/pause key.
+        else if (e.key === 'Enter') next = resetValue;
         if (next === null) return;
         e.preventDefault();
         onChange(clamp(next));
