@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState, useRef } from 'react';
+import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import { useCan } from '../../store/sessionStore';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
@@ -8,6 +8,11 @@ import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useLongPress } from '../../hooks/useLongPress';
 import { ChannelStrip } from './ChannelStrip';
 import { GroupStrip } from './GroupStrip';
+import { DesktopChannelStrip, StripHeader } from './DesktopChannelStrip';
+import { DesktopGroupStrip } from './DesktopGroupStrip';
+import { DesktopMasterStrip } from './DesktopMasterStrip';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { MINIMIZED_RIBBON_HEIGHT } from '../MinimizedRibbon';
 import { MixerSkeleton } from './MixerSkeleton';
 import { resolveMixerOrder } from '../../audio/mixerOrder';
 
@@ -15,6 +20,8 @@ type SaveState = 'idle' | 'pending' | 'cancelled' | 'saving' | 'saved' | 'error'
 
 export function MixerPanel() {
   const engine = useAudioEngine();
+  // Desktop gets Logic-style vertical strips; phones keep the cards.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   // Saving the mix as the song's defaults rewrites its stems.
   const canSaveMix = useCan('song.audio.write');
   const selectedSong = useSongStore((s) => s.selectedSong);
@@ -192,16 +199,59 @@ export function MixerPanel() {
     s.items.some((x) => x.kind === 'panel' && x.id === 'mixer'),
   );
   const minimizePanel = usePanelMinimizeStore((s) => s.minimizePanel);
+  const restorePanel = usePanelMinimizeStore((s) => s.restorePanel);
+
+  // `x` shows or hides the mixer (minimizes it to the ribbon). Not while
+  // typing, and not Cmd/Ctrl+X, which is cut.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'x' && e.key !== 'X') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const t = e.target;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return;
+      if (t instanceof HTMLElement && t.isContentEditable) return;
+      e.preventDefault();
+      if (minimized) restorePanel('mixer');
+      else minimizePanel('mixer');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [minimized, minimizePanel, restorePanel]);
+  // The minimized ribbon is fixed over the page's bottom edge (desktop only).
+  const ribbonVisible = usePanelMinimizeStore((s) => s.items.length > 0);
 
   // `NoSongState` (App.tsx) has the screen until a song loads.
   if (!selectedSong) return null;
   // Switching songs: the next song's shape, not the last song's strips.
   if (songLoading) return <MixerSkeleton className={minimized ? 'md:hidden' : ''} />;
 
+  const strips = mixerItems.map((item) => {
+    if (item.kind === 'group') {
+      const stemConfigs = item.group.stemIds
+        .map((id) => selectedSong.stems.find((s) => s.id === id))
+        .filter((s) => s != null);
+      return isDesktop
+        ? <DesktopGroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />
+        : <GroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />;
+    }
+    return isDesktop
+      ? <DesktopChannelStrip key={item.id} stemConfig={item.stem} />
+      : <ChannelStrip key={item.id} stemConfig={item.stem} />;
+  });
+
   return (
-    <div className={`flex-1 p-4 overflow-auto ${minimized ? 'md:hidden' : ''}`}>
-      {/* Global mute/solo + save defaults */}
-      <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3">
+    // Desktop: pinned to the bottom left, clear of the minimized ribbon.
+    <div
+      // Desktop: grows to fill leftover height (so it sits at the bottom)
+      // but never shrinks below its content, so a tall score pushes it down
+      // the page's scroll instead of squeezing it away.
+      className={`flex-1 p-4 overflow-auto md:flex-[1_0_auto] md:overflow-visible md:flex md:flex-col md:justify-end ${minimized ? 'md:hidden' : ''}`}
+      style={isDesktop && ribbonVisible ? { paddingBottom: `calc(1rem + ${MINIMIZED_RIBBON_HEIGHT}px)` } : undefined}
+    >
+      {/* Global mute/solo + save defaults. On desktop, indented past the
+          row-label column (w-[84px] + the strips' gap-1.5) to line up with
+          the first channel strip. */}
+      <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3 md:pl-[90px]">
         {/* Mobile-only full-width reset bar, above the M/S buttons */}
         <button
           onClick={handleResetAll}
@@ -336,18 +386,25 @@ export function MixerPanel() {
         </button>
       </div>
 
-      {/* Groups and ungrouped stems, in user-configured display order */}
-      <div className="flex flex-col md:flex-row gap-3 md:flex-wrap md:items-start">
-        {mixerItems.map((item) => {
-          if (item.kind === 'group') {
-            const stemConfigs = item.group.stemIds
-              .map((id) => selectedSong.stems.find((s) => s.id === id))
-              .filter((s) => s != null);
-            return <GroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />;
-          }
-          return <ChannelStrip key={item.id} stemConfig={item.stem} />;
-        })}
-      </div>
+      {/* Groups and ungrouped stems, in user-configured display order. Desktop:
+          one row of vertical strips that scrolls sideways when it overflows,
+          with the Master strip pinned to the right outside the scroll. Both
+          get pb-1 (room for the scrollbar) so their rows line up. */}
+      {isDesktop ? (
+        <div className="flex gap-1.5 h-[300px] shrink-0">
+          <div className="flex flex-row flex-nowrap gap-1.5 flex-1 min-w-0 h-full overflow-x-auto pb-1">
+            <StripHeader />
+            {strips}
+          </div>
+          <div className="h-full pb-1 shrink-0">
+            <DesktopMasterStrip />
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {strips}
+        </div>
+      )}
     </div>
   );
 }

@@ -304,43 +304,49 @@ export default function App() {
           minimal={editorFocus}
         />
 
-        {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
-        {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && <NotesLayer />}
+        {/* Everything under the transport scrolls as one column, so a tall
+            score (many instruments) can be scrolled past to the mixer below
+            it instead of squeezing the mixer out of view. The editors fill
+            it (flex-1 min-h-0) and scroll themselves, as before. */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
+          {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && <NotesLayer />}
 
-        {/* Lyrics display \u2014 hidden when the tapMap or band editors
-            occupy the page. Stays visible under the lyrics editor so
-            the admin can sync against the live karaoke view. */}
-        {!markerEditorOpen && !showEditBandModal && !(lyricsEditorOpen && lyricsEditorMode === 'lyrics') && (
-          <LyricsDisplay
-            overrideLines={lyricsEditorOpen ? editorLines : undefined}
-            only={lyricsEditorOpen ? 'desktop' : undefined}
-          />
-        )}
+          {/* Lyrics display \u2014 hidden when the tapMap or band editors
+              occupy the page. Stays visible under the lyrics editor so
+              the admin can sync against the live karaoke view. */}
+          {!markerEditorOpen && !showEditBandModal && !(lyricsEditorOpen && lyricsEditorMode === 'lyrics') && (
+            <LyricsDisplay
+              overrideLines={lyricsEditorOpen ? editorLines : undefined}
+              only={lyricsEditorOpen ? 'desktop' : undefined}
+            />
+          )}
 
-        {/* Sheet music: the scrolling strip on wider screens, a button that
-            opens it full screen on phones (ScrollingScore decides). Hidden
-            under any of the on-page editors to give the editor full
-            vertical space. */}
-        {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && !sheetMinimized && (
-          <ScrollingScore />
-        )}
+          {/* Sheet music: the scrolling strip on wider screens, a button that
+              opens it full screen on phones (ScrollingScore decides). Hidden
+              under any of the on-page editors to give the editor full
+              vertical space. */}
+          {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && !sheetMinimized && (
+            <ScrollingScore />
+          )}
 
-        {/* Editor replaces mixer when open */}
-        {markerEditorOpen ? (
-          <MarkerEditorModal />
-        ) : lyricsEditorOpen ? (
-          <LyricsEditorModal />
-        ) : showEditBandModal && currentBand ? (
-          <Suspense fallback={null}>
-            <EditBandModal band={currentBand} onClose={() => setShowEditBandModal(false)} />
-          </Suspense>
-        ) : !selectedSong ? (
-          <NoSongState onInvite={() => setShowMembersModal(true)} />
-        ) : (
-          <div className={mobileControlsOpen ? 'contents' : 'hidden md:contents'}>
-            <MixerPanel />
-          </div>
-        )}
+          {/* Editor replaces mixer when open */}
+          {markerEditorOpen ? (
+            <MarkerEditorModal />
+          ) : lyricsEditorOpen ? (
+            <LyricsEditorModal />
+          ) : showEditBandModal && currentBand ? (
+            <Suspense fallback={null}>
+              <EditBandModal band={currentBand} onClose={() => setShowEditBandModal(false)} />
+            </Suspense>
+          ) : !selectedSong ? (
+            <NoSongState onInvite={() => setShowMembersModal(true)} />
+          ) : (
+            <div className={mobileControlsOpen ? 'contents' : 'hidden md:contents'}>
+              <MixerPanel />
+            </div>
+          )}
+        </div>
       </div>
       {showDeleteModal && selectedSong && (
         <DeleteSongModal
