@@ -49,7 +49,7 @@ export function StripFrame({
   return (
     <div className={`flex flex-col items-center gap-1 shrink-0 h-full p-1 px-1.5 ${className}`} style={style}>
       <div
-        className="h-5 w-full shrink-0 rounded-sm flex items-center justify-center px-1 text-[11px] font-medium"
+        className="h-5 w-full shrink-0 rounded-sm flex items-center justify-center text-[11px] font-medium"
         style={nameStyle}
       >
         {name}
@@ -77,7 +77,9 @@ export function StripFrame({
 
 /** A colored name block, like Logic's. */
 export function NameBlock({ label }: { label: string }) {
-  return <span className="truncate" title={label}>{label}</span>;
+  // Fills the whole block (leading-5 = its h-5) so hovering anywhere on it
+  // shows the full name, not just over the text.
+  return <span className="block w-full px-1 truncate text-center leading-5" title={label}>{label}</span>;
 }
 
 /** Logic's row labels, in a column pinned to the mixer's left edge. */
@@ -164,7 +166,7 @@ export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelSt
       stackRow={(
         <>
           {stackColor && (
-            <span className="min-w-0 truncate px-1 text-[11px] font-medium leading-none" title={label}>{label}</span>
+            <span className="flex-1 min-w-0 truncate px-1 text-center text-[11px] font-medium leading-4" title={label}>{label}</span>
           )}
           {!c.isAtDefaults && (
             <button
