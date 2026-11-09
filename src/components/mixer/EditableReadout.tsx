@@ -10,6 +10,8 @@ interface EditableReadoutProps {
   /** Names the field for screen readers, e.g. "Kick volume in dB". */
   label: string;
   className?: string;
+  /** Width while editing; narrow it where the readout shares a row. */
+  inputClassName?: string;
 }
 
 /**
@@ -17,7 +19,9 @@ interface EditableReadoutProps {
  * fields. Enter or leaving the field applies it, Escape cancels, and text
  * that doesn't parse puts the old value back.
  */
-export function EditableReadout({ text, parse, onCommit, label, className = '' }: EditableReadoutProps) {
+export function EditableReadout({
+  text, parse, onCommit, label, className = '', inputClassName = 'w-14',
+}: EditableReadoutProps) {
   const [draft, setDraft] = useState<string | null>(null);
   // Set once Enter or Escape has finished the edit, so the blur that can
   // follow as the input unmounts doesn't apply it (again, or after a cancel).
@@ -58,7 +62,7 @@ export function EditableReadout({ text, parse, onCommit, label, className = '' }
       }}
       aria-label={label}
       spellCheck={false}
-      className={`w-14 h-3.5 px-1 text-center leading-none rounded-sm bg-gray-950 ring-1 ring-blue-500 outline-none ${className}`}
+      className={`${inputClassName} h-3.5 px-1 text-center leading-none rounded-sm bg-gray-950 ring-1 ring-blue-500 outline-none ${className}`}
     />
   );
 }

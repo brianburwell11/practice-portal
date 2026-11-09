@@ -22,6 +22,7 @@ export const STRIP_MS_BUTTON = 'flex-1 h-5 text-[11px] leading-none';
 interface StripFrameProps {
   /** The pan knob, the stereo circles, or empty for a group. */
   knob?: ReactNode;
+  /** Shown to the right of the knob. */
   panReadout?: ReactNode;
   fader?: ReactNode;
   dbReadout?: ReactNode;
@@ -61,8 +62,12 @@ export function StripFrame({
       >
         {stackRow}
       </div>
-      <div className="h-7 w-full flex items-center justify-center">{knob}</div>
-      <div className="h-3.5 w-full flex items-center justify-center text-[10px] leading-none font-mono text-gray-400">{panReadout}</div>
+      <div className="h-7 w-full flex items-center justify-center gap-0.5">
+        {knob}
+        {panReadout && (
+          <div className="w-8 flex justify-center text-[10px] leading-none font-mono text-gray-400">{panReadout}</div>
+        )}
+      </div>
       <div className="flex-1 min-h-0 w-full flex justify-center">{fader}</div>
       <div className="h-3.5 w-full flex items-center justify-center text-[10px] leading-none font-mono text-gray-300">{dbReadout}</div>
       <div className="h-5 w-full flex items-center gap-1">{buttons}</div>
@@ -116,7 +121,7 @@ export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelSt
           <span className="block w-4 h-4 rounded-full -ml-1.5" style={{ backgroundColor: color, opacity: 0.7 }} />
         </span>
       ) : (
-        <PanKnob value={stemState.pan} onChange={c.setPan} color={color} label={`${label} pan`} />
+        <PanKnob value={stemState.pan} onChange={c.setPan} resetValue={stemConfig.defaultPan} color={color} label={`${label} pan`} />
       )}
       panReadout={!stemState.stereo && (
         <EditableReadout
@@ -124,6 +129,7 @@ export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelSt
           parse={parsePan}
           onCommit={c.setPan}
           label={`${label} pan`}
+          inputClassName="w-8"
         />
       )}
       fader={(

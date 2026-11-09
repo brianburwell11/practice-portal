@@ -6,6 +6,8 @@ interface PanKnobProps {
   onChange: (value: number) => void;
   color: string;
   label: string;
+  /** Double-click (and Space/Enter) target: the stem's default pan. */
+  resetValue: number;
 }
 
 /** Pixels of vertical drag for the full left-to-right sweep. */
@@ -37,9 +39,9 @@ function valueText(v: number): string {
 
 /**
  * Logic-style pan knob. Drag up/down to turn (Shift for fine), scroll,
- * arrow keys, or double-click to center.
+ * arrow keys, or double-click to go back to the default pan.
  */
-export function PanKnob({ value, onChange, color, label }: PanKnobProps) {
+export function PanKnob({ value, onChange, color, label, resetValue }: PanKnobProps) {
   const drag = useRef<{ y: number; value: number } | null>(null);
   const el = useRef<HTMLDivElement>(null);
   const latest = useRef({ value, onChange });
@@ -74,7 +76,7 @@ export function PanKnob({ value, onChange, color, label }: PanKnobProps) {
       aria-valuemax={1}
       aria-valuenow={value}
       aria-valuetext={valueText(value)}
-      title={`${valueText(value)}. Drag up or down, double-click to center.`}
+      title={`${valueText(value)}. Drag up or down, double-click to reset.`}
       className="cursor-ns-resize rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 touch-none"
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -89,7 +91,7 @@ export function PanKnob({ value, onChange, color, label }: PanKnobProps) {
       }}
       onPointerUp={() => { drag.current = null; }}
       onPointerCancel={() => { drag.current = null; }}
-      onDoubleClick={() => onChange(0)}
+      onDoubleClick={() => onChange(resetValue)}
       onKeyDown={(e) => {
         const step = e.shiftKey ? 0.1 : 0.01;
         let next: number | null = null;
@@ -97,7 +99,7 @@ export function PanKnob({ value, onChange, color, label }: PanKnobProps) {
         else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') next = value - step;
         else if (e.key === 'Home') next = -1;
         else if (e.key === 'End') next = 1;
-        else if (e.key === ' ' || e.key === 'Enter') next = 0;
+        else if (e.key === ' ' || e.key === 'Enter') next = resetValue;
         if (next === null) return;
         e.preventDefault();
         onChange(clamp(next));

@@ -18,7 +18,6 @@ export function MixerSkeleton({ className = '' }: { className?: string }) {
             <Skeleton className="h-5 w-full" />
             <div className="h-4" />
             <Skeleton className="w-7 h-7 rounded-full" />
-            <div className="h-3.5" />
             <Skeleton className="flex-1 w-1.5 rounded-full" />
             <Skeleton className="h-3.5 w-8" />
             <div className="flex gap-1 w-full">

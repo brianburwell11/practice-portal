@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import * as Slider from '@radix-ui/react-slider';
 import { formatDb } from '../../audio/db';
 
@@ -68,12 +69,44 @@ export function FaderScale({ className = 'w-6' }: { className?: string }) {
  * Logic-style vertical volume fader (desktop) with a dB scale on its left.
  * Same 0 to 1.5 linear gain range as the phone slider.
  */
+/**
+ * Gain moved per pixel scrolled: a ~100px mouse-wheel notch moves 0.03,
+ * and a trackpad's small deltas move it smoothly in proportion.
+ */
+const GAIN_PER_PX = 0.0003;
+/** Pixels per `deltaMode` unit: pixels, lines (Firefox), pages. */
+const DELTA_MODE_PX = [1, 33, 800];
+
 export function VerticalFader({ value, onChange, resetValue, color, label }: VerticalFaderProps) {
+  const root = useRef<HTMLSpanElement>(null);
+  const latest = useRef({ value, onChange });
+  useEffect(() => { latest.current = { value, onChange }; });
+
+  // Scroll over the fader to move it. Native and non-passive so it doesn't
+  // also scroll the page; mostly-sideways scrolls pass through so the strip
+  // row can still scroll horizontally.
+  useEffect(() => {
+    const node = root.current;
+    if (!node) return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.deltaY === 0) return;
+      e.preventDefault();
+      const { value: v, onChange: set } = latest.current;
+      const px = e.deltaY * (DELTA_MODE_PX[e.deltaMode] ?? 1);
+      // Rounded to 4 places so floating-point noise doesn't pile up in the saved mix.
+      const next = Math.max(0, Math.min(MAX_GAIN, Math.round((v - px * GAIN_PER_PX) * 10000) / 10000));
+      if (next !== v) set(next);
+    };
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => node.removeEventListener('wheel', onWheel);
+  }, []);
+
   return (
     <div className="flex h-full min-h-[100px] gap-0.5">
       <FaderScale />
 
       <Slider.Root
+        ref={root}
         orientation="vertical"
         min={0}
         max={MAX_GAIN}

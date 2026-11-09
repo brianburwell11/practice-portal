@@ -71,7 +71,7 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
       ) : (
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-500 w-7">Pan</label>
-          <TouchSlider min={-1} max={1} step={0.01} value={stemState.pan} onChange={c.setPan} onDoubleClick={() => c.setPan(0)} label={`${stemConfig.label} pan`} className="flex-1" />
+          <TouchSlider min={-1} max={1} step={0.01} value={stemState.pan} onChange={c.setPan} onDoubleClick={() => c.setPan(stemConfig.defaultPan)} label={`${stemConfig.label} pan`} className="flex-1" />
           <span className="text-xs text-gray-500 w-8 text-right font-mono">{formatPan(stemState.pan)}</span>
         </div>
       )}
