@@ -10,6 +10,7 @@ import { ChannelStrip } from './ChannelStrip';
 import { GroupStrip } from './GroupStrip';
 import { DesktopChannelStrip, StripHeader } from './DesktopChannelStrip';
 import { DesktopGroupStrip } from './DesktopGroupStrip';
+import { DesktopMasterStrip } from './DesktopMasterStrip';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { MINIMIZED_RIBBON_HEIGHT } from '../MinimizedRibbon';
 import { MixerSkeleton } from './MixerSkeleton';
@@ -224,6 +225,20 @@ export function MixerPanel() {
   // Switching songs: the next song's shape, not the last song's strips.
   if (songLoading) return <MixerSkeleton className={minimized ? 'md:hidden' : ''} />;
 
+  const strips = mixerItems.map((item) => {
+    if (item.kind === 'group') {
+      const stemConfigs = item.group.stemIds
+        .map((id) => selectedSong.stems.find((s) => s.id === id))
+        .filter((s) => s != null);
+      return isDesktop
+        ? <DesktopGroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />
+        : <GroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />;
+    }
+    return isDesktop
+      ? <DesktopChannelStrip key={item.id} stemConfig={item.stem} />
+      : <ChannelStrip key={item.id} stemConfig={item.stem} />;
+  });
+
   return (
     // Desktop: pinned to the bottom left, clear of the minimized ribbon.
     <div
@@ -369,28 +384,24 @@ export function MixerPanel() {
       </div>
 
       {/* Groups and ungrouped stems, in user-configured display order. Desktop:
-          one row of vertical strips filling the panel's height, scrolling
-          sideways when it overflows. */}
-      <div
-        className={isDesktop
-          ? 'flex flex-row flex-nowrap gap-1.5 h-[300px] shrink-0 overflow-x-auto pb-1'
-          : 'flex flex-col gap-3'}
-      >
-        {isDesktop && <StripHeader />}
-        {mixerItems.map((item) => {
-          if (item.kind === 'group') {
-            const stemConfigs = item.group.stemIds
-              .map((id) => selectedSong.stems.find((s) => s.id === id))
-              .filter((s) => s != null);
-            return isDesktop
-              ? <DesktopGroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />
-              : <GroupStrip key={item.id} groupConfig={item.group} stemConfigs={stemConfigs} />;
-          }
-          return isDesktop
-            ? <DesktopChannelStrip key={item.id} stemConfig={item.stem} />
-            : <ChannelStrip key={item.id} stemConfig={item.stem} />;
-        })}
-      </div>
+          one row of vertical strips that scrolls sideways when it overflows,
+          with the Master strip pinned to the right outside the scroll. Both
+          get pb-1 (room for the scrollbar) so their rows line up. */}
+      {isDesktop ? (
+        <div className="flex gap-1.5 h-[300px] shrink-0">
+          <div className="flex flex-row flex-nowrap gap-1.5 flex-1 min-w-0 h-full overflow-x-auto pb-1">
+            <StripHeader />
+            {strips}
+          </div>
+          <div className="h-full pb-1 shrink-0">
+            <DesktopMasterStrip />
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {strips}
+        </div>
+      )}
     </div>
   );
 }
