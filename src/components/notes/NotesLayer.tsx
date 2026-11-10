@@ -162,7 +162,7 @@ export function NotesLayer() {
 
   return (
     <div
-      className="pr-4 pb-2 pt-2 flex flex-col md:flex-row md:items-start md:flex-wrap gap-2 shrink-0"
+      className="theme-default pr-4 pb-2 pt-2 flex flex-col md:flex-row md:items-start md:flex-wrap gap-2 shrink-0"
       style={{ paddingLeft: leftPadding ?? 16 }}
     >
       {/* Phones get no minimize (there's no strip to bring notes back from)

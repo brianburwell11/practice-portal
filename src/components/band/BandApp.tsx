@@ -163,7 +163,7 @@ function BandUnavailable({ slug, error, guestError }: { slug: string; error: str
       user={user}
       fallback={<NotFound />}
       frame={(node) => (
-        <div className="min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
+        <div className="theme-default min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
           <div className="absolute top-4 right-4"><AccountMenu /></div>
           <div className="max-w-sm text-center space-y-4">
             {guestError && <p className="text-sm text-amber-300">{guestError}</p>}

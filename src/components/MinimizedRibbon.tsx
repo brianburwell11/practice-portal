@@ -69,7 +69,7 @@ export function MinimizedRibbon() {
 
   return (
     <div
-      className="hidden md:flex"
+      className="theme-default hidden md:flex"
       style={{
         position: 'fixed',
         left: 0,

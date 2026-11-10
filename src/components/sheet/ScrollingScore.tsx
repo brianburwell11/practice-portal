@@ -778,7 +778,7 @@ export function ScrollingScore() {
             </button>
             {settingsMenuOpen && (
               <div
-                className="absolute right-0 top-full mt-1 z-50 w-56 rounded border border-gray-700 bg-gray-900 p-2 shadow-lg text-gray-200"
+                className="theme-default absolute right-0 top-full mt-1 z-50 w-56 rounded border border-gray-700 bg-gray-900 p-2 shadow-lg text-gray-200"
                 role="menu"
               >
                 {/* Tracking mode */}

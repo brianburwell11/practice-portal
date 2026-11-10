@@ -224,7 +224,7 @@ export function SectionList() {
                         return (
                           <div
                             data-section-row-menu
-                            className="absolute right-0 top-full mt-1 z-30 rounded border border-gray-600 bg-gray-800 shadow-lg text-xs text-gray-100 overflow-hidden"
+                            className="theme-default absolute right-0 top-full mt-1 z-30 rounded border border-gray-600 bg-gray-800 shadow-lg text-xs text-gray-100 overflow-hidden"
                             style={{ minWidth: 200 }}
                             onClick={(e) => e.stopPropagation()}
                             onMouseDown={(e) => e.stopPropagation()}

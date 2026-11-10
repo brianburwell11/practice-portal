@@ -145,6 +145,7 @@ export function YouTubeMiniPlayer({
 
   return (
     <div
+      className="theme-default"
       style={{
         position: 'fixed',
         left: pos.x,

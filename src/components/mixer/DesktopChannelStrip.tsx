@@ -14,7 +14,7 @@ import { textOn } from './textOn';
  * above it (pt-1 + h-5 + gap-1 = 1.75rem) blank and outside the card. Used
  * by tracks inside an open stack, whose names move into the band.
  */
-export const CARD_BELOW_NAME = 'linear-gradient(to bottom, transparent 1.75rem, #1f2937 1.75rem)';
+export const CARD_BELOW_NAME = 'linear-gradient(to bottom, transparent 1.75rem, var(--color-gray-800) 1.75rem)';
 
 /** Classes the desktop M/S buttons share, stems and groups alike. */
 export const STRIP_MS_BUTTON = 'flex-1 h-5 text-[11px] leading-none';
@@ -89,7 +89,7 @@ export function StripHeader() {
   );
   return (
     <StripFrame
-      className="w-[84px] sticky left-0 z-10 bg-page"
+      className="w-[84px] sticky left-0 z-10 bg-[var(--band-bg,var(--color-page))]"
       fader={<div className="flex h-full min-h-[100px] w-full justify-end"><FaderScale className="w-8" /></div>}
       knob={label('Pan')}
       dbReadout={label('dB')}

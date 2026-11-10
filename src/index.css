@@ -88,3 +88,50 @@ body {
   30%  { transform: scale(1.04);  box-shadow: 0 0 0 6px rgba(var(--pulse-rgb, 255, 224, 102), 0.55); }
   100% { transform: scale(1);     box-shadow: 0 0 0 0 rgba(var(--pulse-rgb, 255, 224, 102), 0); }
 }
+
+/* Band pages remap the gray scale (and a few accents) to the band's own
+   colors, see utils/bandTheme.ts. Pop-ups and menus opt back into the stock
+   dark look with this class. Values are Tailwind v4's own. In a layer so an
+   element's own text-* utility still wins over the default color here. */
+@layer components {
+.theme-default {
+  --color-gray-50: oklch(98.5% 0.002 247.839);
+  --color-gray-100: oklch(96.7% 0.003 264.542);
+  --color-gray-200: oklch(92.8% 0.006 264.531);
+  --color-gray-300: oklch(87.2% 0.01 258.338);
+  --color-gray-400: oklch(70.7% 0.022 261.325);
+  --color-gray-500: oklch(55.1% 0.027 264.364);
+  --color-gray-600: oklch(44.6% 0.03 256.802);
+  --color-gray-700: oklch(37.3% 0.034 259.733);
+  --color-gray-800: oklch(27.8% 0.033 256.848);
+  --color-gray-900: oklch(21% 0.034 264.665);
+  --color-gray-950: oklch(13% 0.028 261.692);
+  --color-amber-300: oklch(87.9% 0.169 91.605);
+  --color-amber-400: oklch(82.8% 0.189 84.429);
+  --color-amber-500: oklch(76.9% 0.188 70.08);
+  --color-yellow-200: oklch(94.5% 0.129 101.54);
+  --color-yellow-300: oklch(90.5% 0.182 98.111);
+  --color-blue-300: oklch(80.9% 0.105 251.813);
+  --color-blue-400: oklch(70.7% 0.165 254.624);
+  --color-blue-500: oklch(62.3% 0.214 259.815);
+  --color-red-300: oklch(80.8% 0.114 19.571);
+  --color-red-400: oklch(70.4% 0.191 22.216);
+  --color-green-400: oklch(79.2% 0.209 151.711);
+  --color-purple-300: oklch(82.7% 0.119 306.383);
+  --color-orange-400: oklch(75% 0.183 55.934);
+  --band-ink: #e5e7eb;
+  color: #e5e7eb;
+}
+}
+
+/* The mixer's surfaces sit a little further from the page background than
+   other controls, so its strips read as solid. A band theme supplies
+   `--mixer-gray-*`; without one, the stock grays apply. */
+@layer components {
+.mixer-surfaces {
+  --color-gray-600: var(--mixer-gray-600, oklch(44.6% 0.03 256.802));
+  --color-gray-700: var(--mixer-gray-700, oklch(37.3% 0.034 259.733));
+  --color-gray-800: var(--mixer-gray-800, oklch(27.8% 0.033 256.848));
+  --color-gray-900: var(--mixer-gray-900, oklch(21% 0.034 264.665));
+}
+}

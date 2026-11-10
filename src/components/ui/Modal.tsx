@@ -79,7 +79,7 @@ export function Modal({
 
   return (
     <div
-      className={`fixed inset-0 ${zClassName} flex items-center justify-center bg-black/70`}
+      className={`theme-default fixed inset-0 ${zClassName} flex items-center justify-center bg-black/70`}
       // Only a press that starts and ends on the backdrop closes: not a text
       // selection dragged out of the panel.
       onMouseDown={(e) => { if (e.target === e.currentTarget) e.currentTarget.dataset.down = '1'; }}

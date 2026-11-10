@@ -270,7 +270,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             ) : (
               <button
                 onClick={() => { if (playing) engine.pause(); setTimeEditValue(''); setEditingTime(true); }}
-                className="hover:text-white cursor-text"
+                className="hover:text-gray-50 cursor-text"
               >{formatTime(position)}</button>
             )}
             <span> / {formatTime(duration)}</span>
@@ -488,7 +488,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             ) : (
               <button
                 onClick={() => { if (playing) engine.pause(); setTimeEditValue(''); setEditingTime(true); }}
-                className="hover:text-white cursor-text"
+                className="hover:text-gray-50 cursor-text"
               >{formatTime(position)}</button>
             )}
             <span> / {formatTime(duration)}</span>

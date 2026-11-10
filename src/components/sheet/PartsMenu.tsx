@@ -67,7 +67,7 @@ export function PartsMenu({ parts, hiddenPartIds, onApply, className = '' }: Pro
       </button>
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded border border-gray-700 bg-gray-900 p-1 shadow-lg"
+          className="theme-default absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded border border-gray-700 bg-gray-900 p-1 shadow-lg"
           role="menu"
         >
           {parts.map((p) => {

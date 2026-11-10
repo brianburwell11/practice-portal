@@ -189,7 +189,7 @@ export function AdminRibbon({
           </svg>
         </button>
         {sheetOpen && (
-          <div className="fixed inset-0 z-50 flex items-end bg-black/60" onClick={() => setSheetOpen(false)}>
+          <div className="theme-default fixed inset-0 z-50 flex items-end bg-black/60" onClick={() => setSheetOpen(false)}>
             <div
               role="dialog"
               aria-label="Menu"
@@ -267,7 +267,7 @@ export function AdminRibbon({
             {menu.label} <span className="text-base">▾</span>
           </button>
           {open === menu.id && (
-            <div role="menu" aria-label={menu.label} className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+            <div role="menu" aria-label={menu.label} className="theme-default absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
               {menu.items.map((item) => (
                 <MenuItem
                   key={item.label}

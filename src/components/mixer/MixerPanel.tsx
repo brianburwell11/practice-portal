@@ -245,7 +245,7 @@ export function MixerPanel() {
       // Desktop: grows to fill leftover height (so it sits at the bottom)
       // but never shrinks below its content, so a tall score pushes it down
       // the page's scroll instead of squeezing it away.
-      className={`flex-1 p-4 overflow-auto md:flex-[1_0_auto] md:overflow-visible md:flex md:flex-col md:justify-end ${minimized ? 'md:hidden' : ''}`}
+      className={`mixer-surfaces flex-1 p-4 overflow-auto md:flex-[1_0_auto] md:overflow-visible md:flex md:flex-col md:justify-end ${minimized ? 'md:hidden' : ''}`}
       style={isDesktop && ribbonVisible ? { paddingBottom: `calc(1rem + ${MINIMIZED_RIBBON_HEIGHT}px)` } : undefined}
     >
       {/* Global mute/solo + save defaults. On desktop, indented past the
@@ -297,7 +297,7 @@ export function MixerPanel() {
               !anySoloed
                 ? 'bg-gray-800 text-gray-600 border-transparent cursor-default'
                 : globalSoloActive
-                  ? 'bg-yellow-500 text-gray-900 border-yellow-500'
+                  ? 'bg-yellow-500 text-black border-yellow-500'
                   : 'bg-gray-700 text-gray-400 border-yellow-500'
             }`}
           >

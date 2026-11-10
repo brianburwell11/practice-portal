@@ -489,7 +489,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-stretch md:items-center justify-center bg-black/70"
+      className="theme-default fixed inset-0 z-50 flex items-stretch md:items-center justify-center bg-black/70"
       onClick={requestClose}
       onKeyDown={(e) => {
         e.stopPropagation();
@@ -727,8 +727,8 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                       ref={filterRef}
                       className={
                         isPhone
-                          ? 'fixed z-[100] inset-x-0 bottom-0 bg-gray-800 border-t border-gray-600 rounded-t-xl shadow-xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 max-h-[70dvh] overflow-y-auto'
-                          : 'fixed z-[100] bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 space-y-3'
+                          ? 'theme-default fixed z-[100] inset-x-0 bottom-0 bg-gray-800 border-t border-gray-600 rounded-t-xl shadow-xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 max-h-[70dvh] overflow-y-auto'
+                          : 'theme-default fixed z-[100] bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 space-y-3'
                       }
                       style={isPhone ? undefined : { width: 220, top: filterPos.top, left: filterPos.left }}
                       onClick={(e) => e.stopPropagation()}

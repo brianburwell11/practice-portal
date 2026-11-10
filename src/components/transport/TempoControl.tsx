@@ -62,7 +62,7 @@ export function TempoControl() {
             setEditValue(String(Math.round(tempoRatio * 100)));
             setEditing(true);
           }}
-          className="text-xs text-gray-300 font-mono text-right hover:text-white cursor-text"
+          className="text-xs text-gray-300 font-mono text-right hover:text-gray-50 cursor-text"
         >
           {Math.round(tempoRatio * 100)}%
         </button>

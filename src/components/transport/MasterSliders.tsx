@@ -61,7 +61,7 @@ export function MasterSliders({ className = '' }: Props) {
             setVolEditValue(String(Math.round(masterVolume * 100)));
             setVolEditing(true);
           }}
-          className="text-xs text-gray-300 font-mono text-right hover:text-white cursor-text"
+          className="text-xs text-gray-300 font-mono text-right hover:text-gray-50 cursor-text"
         >
           {Math.round(masterVolume * 100)}%
         </button>

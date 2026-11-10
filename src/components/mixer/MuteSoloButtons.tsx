@@ -40,7 +40,7 @@ export function StemMuteSolo({
         aria-pressed={soloed}
         className={`${buttonClassName} rounded font-medium transition-colors border-2 ${
           soloed && globalSoloActive
-            ? 'bg-yellow-500 text-gray-900 border-yellow-500'
+            ? 'bg-yellow-500 text-black border-yellow-500'
             : soloed && !globalSoloActive
               ? 'bg-gray-700 text-gray-400 border-yellow-500'
               : 'bg-gray-700 text-gray-400 hover:bg-gray-600 border-transparent'
@@ -85,7 +85,7 @@ export function GroupMuteSolo({
         } ${
           globalMuteActive && allMuted
             ? 'bg-red-600 text-white'
-            : 'bg-gray-700 hover:bg-gray-600 ' + (mutedCount > 0 && globalMuteActive ? 'text-white' : 'text-gray-300')
+            : 'bg-gray-700 hover:bg-gray-600 ' + (mutedCount > 0 && globalMuteActive ? 'text-gray-50' : 'text-gray-300')
         }`}
         style={
           mutedCount > 0 && globalMuteActive && !allMuted
@@ -103,8 +103,8 @@ export function GroupMuteSolo({
           soloedCount > 0 ? 'border-yellow-500' : 'border-transparent'
         } ${
           globalSoloActive && allSoloed
-            ? 'bg-yellow-500 text-gray-900'
-            : 'bg-gray-700 hover:bg-gray-600 ' + (soloedCount > 0 && globalSoloActive ? 'text-white' : 'text-gray-300')
+            ? 'bg-yellow-500 text-black'
+            : 'bg-gray-700 hover:bg-gray-600 ' + (soloedCount > 0 && globalSoloActive ? 'text-gray-50' : 'text-gray-300')
         }`}
         style={
           soloedCount > 0 && globalSoloActive && !allSoloed

@@ -89,7 +89,7 @@ export function AccountMenu({ bandId }: Props) {
           </button>
         )}
         {guest && open && (
-          <div className="absolute right-0 top-full mt-2 w-64 z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-2 text-sm text-gray-200">
+          <div className="theme-default absolute right-0 top-full mt-2 w-64 z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-2 text-sm text-gray-200">
             <p className="px-4 py-2 text-gray-400">
               A link from {guest.band.name} lets this device play its songs{until ? ` until ${until}` : ''}.
             </p>
@@ -102,7 +102,7 @@ export function AccountMenu({ bandId }: Props) {
           <a
             href={signInHref()}
             aria-label="Sign in with Google"
-            className="inline-flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-white text-gray-800 text-sm font-medium shadow hover:bg-gray-100 shrink-0"
+            className="theme-default inline-flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-white text-gray-800 text-sm font-medium shadow hover:bg-gray-100 shrink-0"
           >
             <GoogleMark />
             {/* Just the G on phones, where the header is already full. */}
@@ -133,7 +133,7 @@ export function AccountMenu({ bandId }: Props) {
         <Avatar name={user.name ?? user.email} url={user.avatarUrl} />
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-64 z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-2 text-sm text-gray-200">
+        <div className="theme-default absolute right-0 mt-2 w-64 z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-2 text-sm text-gray-200">
           <div className="px-4 py-2 border-b border-gray-800">
             <div className="font-medium truncate">{user.name ?? user.email}</div>
             <div className="text-gray-400 truncate">{user.email}</div>
@@ -201,7 +201,7 @@ export function Avatar({ name, url, size = 32 }: { name: string; url: string | n
     return <img src={url} alt="" style={style} className="rounded-full" referrerPolicy="no-referrer" onError={() => setBroken(true)} />;
   }
   return (
-    <span style={style} className="rounded-full bg-gray-600 text-white flex items-center justify-center text-sm font-semibold">
+    <span style={style} className="rounded-full bg-gray-600 text-gray-50 flex items-center justify-center text-sm font-semibold">
       {name.trim()[0]?.toUpperCase() ?? '?'}
     </span>
   );

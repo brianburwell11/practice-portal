@@ -5,6 +5,7 @@ import { useBandStore } from '../store/bandStore';
 import { dedupeSlug } from '../utils/dedupeSlug';
 import { shrinkLogo } from '../utils/shrinkLogo';
 import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
+import { bandTheme } from '../utils/bandTheme';
 
 function nameToSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -26,6 +27,7 @@ export function EditBandModal({ band, onClose }: Props) {
   const bandsManifest = useBandStore((s) => s.bandsManifest);
   const setBandsManifest = useBandStore((s) => s.setBandsManifest);
   const setCurrentBand = useBandStore((s) => s.setCurrentBand);
+  const setPreviewColors = useBandStore((s) => s.setPreviewColors);
   const navigate = useNavigate();
 
   const [draft, setDraft] = useState<BandConfig>({
@@ -60,12 +62,14 @@ export function EditBandModal({ band, onClose }: Props) {
     root.style.setProperty('--band-accent', draft.colors.accent);
     root.style.setProperty('--band-bg', draft.colors.background);
     root.style.setProperty('--band-text', draft.colors.text);
-  }, [draft.colors.primary, draft.colors.accent, draft.colors.background, draft.colors.text]);
+    setPreviewColors({ ...draft.colors });
+  }, [draft.colors, setPreviewColors]);
 
   // On unmount, reapply colors from the (possibly updated) current band so a
   // cancelled edit reverts and a saved edit keeps the new colors.
   useEffect(() => {
     return () => {
+      useBandStore.getState().setPreviewColors(null);
       const current = useBandStore.getState().currentBand;
       if (!current) return;
       const root = document.documentElement;
@@ -207,6 +211,7 @@ export function EditBandModal({ band, onClose }: Props) {
     }
   };
 
+  const draftTheme = useMemo(() => bandTheme(draft.colors), [draft.colors]);
   const colorKeys: (keyof BandColors)[] = ['primary', 'accent', 'background', 'text'];
 
   return (
@@ -353,6 +358,11 @@ export function EditBandModal({ band, onClose }: Props) {
               </label>
             ))}
           </div>
+          {draftTheme?.inkAdjusted && (
+            <p className="text-xs text-gray-400">
+              Text is shown as {draftTheme.ink} so it stays readable on this background.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">

@@ -1233,7 +1233,8 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       <div
         ref={containerRef}
         data-waveform-timeline={compact ? undefined : true}
-        className={`${compact ? 'h-[44px]' : 'h-[80px] md:h-[108px]'} relative rounded overflow-hidden`}
+        // The waveform paints its own dark panel; overlays keep the stock colors.
+        className={`theme-default ${compact ? 'h-[44px]' : 'h-[80px] md:h-[108px]'} relative rounded overflow-hidden`}
         style={{ cursor: cursorStyle, touchAction: 'none' }}
       >
         <canvas

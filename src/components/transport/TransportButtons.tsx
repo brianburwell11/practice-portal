@@ -90,7 +90,7 @@ export function LoopButton({ size = 'md', verb = 'Click' }: { size?: TransportBu
       : 'Set where the loop starts';
   const color = loopA !== null && loopB !== null
     ? loopEnabled
-      ? 'bg-yellow-500 hover:bg-yellow-400 text-gray-900'
+      ? 'bg-yellow-500 hover:bg-yellow-400 text-black'
       : 'bg-yellow-500/40 hover:bg-yellow-500/50 text-yellow-200'
     : loopA !== null
       ? 'bg-yellow-600 hover:bg-yellow-500 text-white'

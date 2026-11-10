@@ -1,11 +1,14 @@
 import { create } from 'zustand';
-import type { BandConfig, BandsManifest } from '../audio/types';
+import type { BandColors, BandConfig, BandsManifest } from '../audio/types';
 
 interface BandState {
   bandsManifest: BandsManifest | null;
   currentBand: BandConfig | null;
   setBandsManifest: (m: BandsManifest) => void;
   setCurrentBand: (b: BandConfig | null) => void;
+  /** Unsaved colors being tried out in the band editor, shown live on the page. */
+  previewColors: BandColors | null;
+  setPreviewColors: (c: BandColors | null) => void;
 }
 
 export const useBandStore = create<BandState>((set) => ({
@@ -13,4 +16,6 @@ export const useBandStore = create<BandState>((set) => ({
   currentBand: null,
   setBandsManifest: (bandsManifest) => set({ bandsManifest }),
   setCurrentBand: (currentBand) => set({ currentBand }),
+  previewColors: null,
+  setPreviewColors: (previewColors) => set({ previewColors }),
 }));

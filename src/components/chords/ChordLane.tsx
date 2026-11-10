@@ -237,7 +237,7 @@ function SlotLane({ chords, className }: LaneProps) {
         </>
       )}
       <div
-        className="absolute inset-y-0 left-0 flex items-center justify-end bg-white/5 border-r-2 border-amber-400/70 pr-2"
+        className="absolute inset-y-0 left-0 flex items-center justify-end bg-gray-50/5 border-r-2 border-amber-400/70 pr-2"
         style={{ width: PHONE_SLOT_PX }}
       >
         {cur && (
@@ -280,7 +280,7 @@ function ChordLabel({
       type="button"
       onClick={() => onSeek(chord.time)}
       title={`Play from ${displayChord(chord.symbol)}`}
-      className={`absolute inset-y-0 left-0 flex items-center whitespace-nowrap hover:text-white ${marker ? 'border-l-2' : ''} ${TONE_CLASS[tone]}`}
+      className={`absolute inset-y-0 left-0 flex items-center whitespace-nowrap hover:text-gray-50 ${marker ? 'border-l-2' : ''} ${TONE_CLASS[tone]}`}
       style={{ transform: `translateX(${left}px)`, paddingLeft: marker ? LABEL_INSET_PX - 2 : 0 }}
     >
       <span className="inline-block origin-left" style={{ fontSize: px, transform: scale !== 1 ? `scale(${scale})` : undefined }}>

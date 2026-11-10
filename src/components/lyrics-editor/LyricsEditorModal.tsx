@@ -115,7 +115,7 @@ export function LyricsEditorModal() {
   const menuItem = 'block w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors';
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="theme-default bg-page flex-1 flex flex-col min-h-0">
       {/* Toolbar: mode switch on the left, file actions and save on the right */}
       <div className="flex items-center justify-between gap-2 px-3 md:px-5 py-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -157,7 +157,7 @@ export function LyricsEditorModal() {
               More ▾
             </button>
             {moreOpen && (
-              <div className="absolute right-0 top-full mt-1 z-20 min-w-[10rem] rounded border border-gray-600 bg-gray-800 shadow-lg py-1">
+              <div className="theme-default absolute right-0 top-full mt-1 z-20 min-w-[10rem] rounded border border-gray-600 bg-gray-800 shadow-lg py-1">
                 <button className={menuItem} onClick={() => { setMoreOpen(false); fileInputRef.current?.click(); }}>
                   Import .txt
                 </button>

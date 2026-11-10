@@ -44,7 +44,7 @@ export function UndoToast() {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center">
-      <div className="pointer-events-auto flex items-center gap-3 rounded-lg bg-gray-900/95 border border-gray-700 px-3 py-2 shadow-lg text-sm text-gray-100">
+      <div className="theme-default pointer-events-auto flex items-center gap-3 rounded-lg bg-gray-900/95 border border-gray-700 px-3 py-2 shadow-lg text-sm text-gray-100">
         <span className="text-gray-300">
           Note deleted: <span className="text-gray-100">{trimmed}</span>
         </span>

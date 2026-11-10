@@ -29,7 +29,7 @@ export function RequireCan({ need, children }: Props) {
   if (allowed) return <>{children}</>;
 
   return (
-    <div className="min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
+    <div className="theme-default min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
       <div className="max-w-sm text-center space-y-4">
         <h1 className="text-xl font-semibold">{user ? 'You don’t have access to this' : 'Sign in to continue'}</h1>
         <p className="text-sm text-gray-400">
@@ -38,7 +38,7 @@ export function RequireCan({ need, children }: Props) {
             : 'This page is for band members who manage songs.'}
         </p>
         {!user && (
-          <a href={signInHref()} className="inline-block px-4 py-2 rounded-lg bg-white text-gray-800 font-medium hover:bg-gray-100">
+          <a href={signInHref()} className="theme-default inline-block px-4 py-2 rounded-lg bg-white text-gray-800 font-medium hover:bg-gray-100">
             Sign in with Google
           </a>
         )}
