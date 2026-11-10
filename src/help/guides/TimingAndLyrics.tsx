@@ -86,7 +86,11 @@ export default function TimingAndLyrics() {
           <Ui>Stamp</Ui> is for parts with no bars to type into, like a free-time intro, or a song without a tap map:
         </p>
         <Steps>
-          <li>Type the chords to place, in order, and press <Ui>Add</Ui>. You can paste a chord sheet too.</li>
+          <li>
+            Type the chords to place, in order, and press <Ui>Add</Ui>. Or use <Ui>Import sheet…</Ui> to paste or
+            upload a whole chord sheet (ChordPro, or chords over lyrics copied from a site like Ultimate Guitar). You’ll
+            see the sections and chords it found before adding them; each section’s name shows in the queue in gold.
+          </li>
           <li>
             Play the song and press <Key>Tab</Key> as each chord starts. <Key>Shift</Key>+<Key>Tab</Key> takes the last
             one back. In the list, <Key>Shift</Key>+click selects a run of chords to delete.

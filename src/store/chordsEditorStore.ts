@@ -11,12 +11,25 @@ const MIN_GAP = 0.01;
 
 export type ChordsEditorMode = 'grid' | 'stamp';
 
+/** A chord waiting to be stamped. `section` marks the first chord of a
+ *  section from an imported sheet, shown as a divider in the queue. */
+export interface QueueItem {
+  symbol: string;
+  section?: string;
+}
+
+/** A stamp made this session: where, and the queue item it used up. */
+interface Stamped {
+  time: number;
+  item: QueueItem;
+}
+
 /** An undo step: the chords plus the stamp queue, so undoing a stamp puts
  *  its chord back in line. */
 interface Snapshot {
   chords: ChordEvent[];
-  queue: string[];
-  stamped: number[];
+  queue: QueueItem[];
+  stamped: Stamped[];
 }
 
 const SNAP_KEY = 'practice-portal.chordSnap';
@@ -41,9 +54,9 @@ interface ChordsEditorState {
   undoStack: Snapshot[];
   redoStack: Snapshot[];
   /** Chords waiting to be stamped, next first. Already normalized. */
-  queue: string[];
-  /** Times stamped this session, oldest first, for Shift+Tab take-back. */
-  stamped: number[];
+  queue: QueueItem[];
+  /** Stamps made this session, oldest first, for Shift+Tab take-back. */
+  stamped: Stamped[];
   /** The chord nudge, replay and delete act on (its time). */
   selected: number | null;
   /** How stamps snap. Remembered per person (this device). */
@@ -57,7 +70,7 @@ interface ChordsEditorState {
   setMode: (mode: ChordsEditorMode) => void;
   /** Remove the chords at `remove` times, add `add`, as one undo step. */
   applyEdit: (remove: number[], add: ChordEvent[], select?: number | null) => void;
-  setQueue: (symbols: string[]) => void;
+  setQueue: (queue: QueueItem[]) => void;
   /** Place the next queued chord at `time`. Returns false if the queue is empty. */
   stamp: (time: number) => boolean;
   /** Undo the last stamp: its chord comes off the lane and back to the queue's front. */
@@ -101,8 +114,8 @@ const initialState = {
   dirty: false,
   undoStack: [] as Snapshot[],
   redoStack: [] as Snapshot[],
-  queue: [] as string[],
-  stamped: [] as number[],
+  queue: [] as QueueItem[],
+  stamped: [] as Stamped[],
   selected: null as number | null,
 };
 
@@ -134,12 +147,12 @@ export const useChordsEditorStore = create<ChordsEditorState>((set, get) => ({
     const s = get();
     if (s.queue.length === 0) return false;
     const t = round3(time);
-    const [symbol, ...rest] = s.queue;
+    const [item, ...rest] = s.queue;
     set({
       ...edited(s),
-      chords: sortChords([...s.chords.filter((c) => !sameSpot(c.time, t)), { symbol, time: t }]),
+      chords: sortChords([...s.chords.filter((c) => !sameSpot(c.time, t)), { symbol: item.symbol, time: t }]),
       queue: rest,
-      stamped: [...s.stamped, t],
+      stamped: [...s.stamped, { time: t, item }],
       selected: t,
     });
     return true;
@@ -147,13 +160,14 @@ export const useChordsEditorStore = create<ChordsEditorState>((set, get) => ({
 
   takeBack: () =>
     set((s) => {
-      const t = s.stamped[s.stamped.length - 1];
-      if (t === undefined) return s;
-      const chord = s.chords.find((c) => sameSpot(c.time, t));
+      const last = s.stamped[s.stamped.length - 1];
+      if (last === undefined) return s;
+      const chord = s.chords.find((c) => sameSpot(c.time, last.time));
       return {
         ...edited(s),
         chords: s.chords.filter((c) => c !== chord),
-        queue: chord ? [chord.symbol, ...s.queue] : s.queue,
+        // Back to the front with its section divider, if it had one.
+        queue: [last.item, ...s.queue],
         stamped: s.stamped.slice(0, -1),
         selected: null,
       };
@@ -170,7 +184,7 @@ export const useChordsEditorStore = create<ChordsEditorState>((set, get) => ({
       return {
         ...edited(s),
         chords: s.chords.map((c, j) => (j === i ? { ...c, time: t } : c)),
-        stamped: s.stamped.map((x) => (sameSpot(x, time) ? t : x)),
+        stamped: s.stamped.map((x) => (sameSpot(x.time, time) ? { ...x, time: t } : x)),
         selected: t,
       };
     }),

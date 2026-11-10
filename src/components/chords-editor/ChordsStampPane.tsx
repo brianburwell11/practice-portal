@@ -7,6 +7,7 @@ import { useSongStore } from '../../store/songStore';
 import { useChordsEditorStore } from '../../store/chordsEditorStore';
 import { beatGrid, cellFor, isFreeTime, isOffGrid, snapTime, type GridLine, type Snap } from '../../audio/chordGrid';
 import { chordsFromText, normalizeChord } from '../../audio/chordSymbols';
+import { ChordSheetImport } from './ChordSheetImport';
 import { TapPadButton } from '../ui/TapPadButton';
 import { formatPrecise } from './time';
 
@@ -57,6 +58,7 @@ export function ChordsStampPane() {
 
   const [text, setText] = useState('');
   const [bad, setBad] = useState<string[]>([]);
+  const [importing, setImporting] = useState(false);
   /** The first chord (time) of a Shift-clicked range; `selected` is the other end. */
   const [rangeAnchor, setRangeAnchor] = useState<number | null>(null);
   const rangeTimes = useMemo(() => {
@@ -68,16 +70,17 @@ export function ChordsStampPane() {
   const { active: pressed, flash } = useFlash();
   const rowRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
 
+  // The quick box is a one-line list (`G Em7 | C D`, or `[G]…[C]`); whole
+  // sheets go through Import sheet, which keeps their lines and sections.
   const addToQueue = () => {
-    const raw = chordsFromText(text);
     const good: string[] = [];
     const rejected: string[] = [];
-    for (const r of raw) {
+    for (const r of chordsFromText(text)) {
       const n = normalizeChord(r);
       if (n) good.push(n);
       else rejected.push(r);
     }
-    setQueue([...queue, ...good]);
+    setQueue([...queue, ...good.map((symbol) => ({ symbol }))]);
     setBad(rejected);
     if (rejected.length === 0) setText('');
   };
@@ -142,7 +145,7 @@ export function ChordsStampPane() {
   const btn = 'rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-gray-300 transition-[background-color,filter,transform] duration-75';
   const lit = (id: string) => (pressed === id ? 'brightness-150 scale-[0.97]' : '');
   const kbd = (k: string) => <span className="ml-1 font-mono text-xs opacity-60">({k})</span>;
-  const stampLabel = next ? `Stamp ${next}` : 'Queue is empty';
+  const stampLabel = next ? `Stamp ${next.symbol}${next.section ? ` (${next.section})` : ''}` : 'Queue is empty';
   const lastStamped = stamped.length > 0;
 
   return (
@@ -158,7 +161,7 @@ export function ChordsStampPane() {
                 addToQueue();
               }
             }}
-            placeholder="Chords to place, in order: G Em7 C D, or paste a ChordPro sheet"
+            placeholder="Chords to place, in order: G Em7 C D"
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
@@ -167,7 +170,19 @@ export function ChordsStampPane() {
           <button type="button" className={`${btn} px-3 py-1.5`} onClick={addToQueue} disabled={!text.trim()}>
             Add
           </button>
+          <button type="button" className={`${btn} px-3 py-1.5`} onClick={() => setImporting((v) => !v)} aria-expanded={importing}>
+            Import sheet…
+          </button>
         </div>
+        {importing && (
+          <ChordSheetImport
+            onClose={() => setImporting(false)}
+            onAdd={(items) => {
+              setQueue([...queue, ...items]);
+              setImporting(false);
+            }}
+          />
+        )}
         {bad.length > 0 && (
           <p className="text-xs text-red-400">Not chord names I know: {bad.join(', ')}. Fix them and press Add again.</p>
         )}
@@ -175,11 +190,13 @@ export function ChordsStampPane() {
           <span className="text-xs text-gray-500">Queue:</span>
           {queue.length === 0 && <span className="text-xs text-gray-600">empty</span>}
           {queue.map((q, i) => (
-            <span
-              key={`${q}-${i}`}
-              className={`rounded px-2 py-0.5 text-sm font-semibold ${i === 0 ? 'bg-cyan-500 text-gray-900' : 'bg-gray-800 text-gray-300'}`}
-            >
-              {q}
+            <span key={i} className="inline-flex items-center gap-1.5">
+              {q.section && <span className={`text-xs font-semibold text-amber-500 ${i > 0 ? 'ml-2' : ''}`}>{q.section}</span>}
+              <span
+                className={`rounded px-2 py-0.5 text-sm font-semibold ${i === 0 ? 'bg-cyan-500 text-gray-900' : 'bg-gray-800 text-gray-300'}`}
+              >
+                {q.symbol}
+              </span>
             </span>
           ))}
           {queue.length > 0 && (

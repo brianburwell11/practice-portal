@@ -33,15 +33,20 @@ describe('chordsEditorStore', () => {
   });
 
   it('stamps the queue in order and takes stamps back to the front', () => {
-    store().setQueue(['Cmaj7', 'D7sus4']);
+    store().setQueue([{ symbol: 'Cmaj7', section: 'Intro' }, { symbol: 'D7sus4' }]);
     expect(store().stamp(1.2345)).toBe(true);
     expect(store().stamp(3)).toBe(true);
     expect(store().stamp(5)).toBe(false); // queue empty
     expect(symbols()).toEqual(['Cmaj7@1.235', 'D7sus4@3', 'G@10', 'C@14']);
     store().takeBack();
-    expect(store().queue).toEqual(['D7sus4']);
+    expect(store().queue).toEqual([{ symbol: 'D7sus4' }]);
+    store().takeBack(); // its section divider comes back with it
+    expect(store().queue).toEqual([{ symbol: 'Cmaj7', section: 'Intro' }, { symbol: 'D7sus4' }]);
+    expect(symbols()).toEqual(['G@10', 'C@14']);
+    store().undo(); // undoing a take-back restores the stamp and the queue
     expect(symbols()).toEqual(['Cmaj7@1.235', 'G@10', 'C@14']);
-    store().undo(); // undoing the take-back restores the stamp and the queue
+    expect(store().queue).toEqual([{ symbol: 'D7sus4' }]);
+    store().undo();
     expect(store().queue).toEqual([]);
     expect(symbols()).toContain('D7sus4@3');
   });

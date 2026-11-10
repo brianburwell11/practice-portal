@@ -329,7 +329,7 @@ describe('Stamp mode', () => {
     const box = host.querySelector('input[placeholder^="Chords to place"]') as HTMLInputElement;
     type(box, 'g  c7 ');
     press(box, 'Enter');
-    expect(store().queue).toEqual(['G', 'C7']);
+    expect(store().queue).toEqual([{ symbol: 'G' }, { symbol: 'C7' }]);
 
     engine.clock.currentTime = 12.38; // snaps to 12.5
     press(window, 'Tab');
@@ -339,7 +339,7 @@ describe('Stamp mode', () => {
 
     press(window, 'Tab', { shiftKey: true });
     expect(chords()).toEqual(['G@12.5']);
-    expect(store().queue).toEqual(['C7']);
+    expect(store().queue).toEqual([{ symbol: 'C7' }]);
   });
 
   it('rejects names it does not know, keeping the good ones', () => {
@@ -347,7 +347,7 @@ describe('Stamp mode', () => {
     const box = host.querySelector('input[placeholder^="Chords to place"]') as HTMLInputElement;
     type(box, 'G Hm D');
     press(box, 'Enter');
-    expect(store().queue).toEqual(['G', 'D']);
+    expect(store().queue).toEqual([{ symbol: 'G' }, { symbol: 'D' }]);
     expect(host.textContent).toContain('Not chord names I know: Hm');
   });
 
@@ -365,5 +365,39 @@ describe('Stamp mode', () => {
     expect(host.textContent).toContain('Delete 2');
     press(window, 'Delete');
     expect(chords()).toEqual(['A@1', 'D@4']);
+  });
+
+  it('imports a pasted sheet into the queue with its sections, then stamps across them', () => {
+    store().setSnap('off');
+    render(ChordsStampPane);
+    const importBtn = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Import sheet…')!;
+    act(() => importBtn.click());
+    const area = host.querySelector('textarea') as HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    act(() => {
+      setter.call(area, '[Intro]\nAm  F  x2\n\n[Chorus]\nC        G\nHold the [Xq]line');
+      area.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const preview = host.querySelector('[aria-label="What was read"]')!.textContent;
+    expect(preview).toContain('Intro');
+    expect(preview).toContain('Chorus');
+    expect(preview).toContain('Skipped, not chord names I know: Xq');
+
+    const add = [...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Add 6 chords'))!;
+    act(() => add.click());
+    expect(store().queue).toEqual([
+      { symbol: 'Am', section: 'Intro' }, { symbol: 'F' }, { symbol: 'Am' }, { symbol: 'F' },
+      { symbol: 'C', section: 'Chorus' }, { symbol: 'G' },
+    ]);
+    expect(host.querySelector('textarea')).toBeNull(); // panel closed
+
+    for (const t of [1, 2, 3, 4]) {
+      engine.clock.currentTime = t;
+      press(window, 'Tab');
+    }
+    expect(host.textContent).toContain('Stamp C (Chorus)');
+    engine.clock.currentTime = 5;
+    press(window, 'Tab');
+    expect(chords()).toEqual(['Am@1', 'F@2', 'Am@3', 'F@4', 'C@5']);
   });
 });
