@@ -3,6 +3,8 @@ import { useAudioEngine } from '../hooks/useAudioEngine';
 import { useTransportStore } from '../store/transportStore';
 import { useLyricsStore } from '../store/lyricsStore';
 import { usePanelMinimizeStore } from '../store/panelMinimizeStore';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { usePanelShortcut } from '../hooks/usePanelShortcut';
 import { isSectionMarker, isInstrumentalAnnotation, isEndMarker } from '../audio/lyricSections';
 import type { LyricsLine } from '../audio/lyricsTypes';
 
@@ -52,6 +54,11 @@ export function LyricsDisplay({ overrideLines, only }: LyricsDisplayProps) {
       return true;
     });
   }, [overrideLines, storeLines]);
+
+  // `l` shows or hides the lyrics on desktop. Only the instance that draws
+  // the desktop lyrics listens (the lyrics editor mounts a phone-only copy).
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  usePanelShortcut('l', 'lyrics', isDesktop && only !== 'mobile' && lines.length > 0);
 
   // Compute which lyric should be bolded based on playback position
   const computeTarget = useCallback(() => {

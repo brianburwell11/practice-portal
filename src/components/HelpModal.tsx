@@ -17,6 +17,8 @@ const shortcuts = [
   { key: 'M', action: 'Toggle global mute' },
   { key: 'Shift + M', action: 'Clear mute group' },
   { key: 'X', action: 'Show / hide the mixer' },
+  { key: 'L', action: 'Show / hide the lyrics' },
+  { key: 'K', action: 'Show / hide the chords' },
   { key: 'Cmd/Ctrl + Scroll', action: 'Zoom waveform in/out' },
   { key: 'Shift + Scroll', action: 'Scroll waveform left/right' },
   { key: 'Pinch', action: 'Zoom waveform (touch)' },

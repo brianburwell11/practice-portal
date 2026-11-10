@@ -5,6 +5,8 @@ import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useChordsStore, LOOK_AHEAD_OPTIONS } from '../../store/chordsStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { usePanelShortcut } from '../../hooks/usePanelShortcut';
 import { beatGrid, lastAtOrBefore, type GridLine } from '../../audio/chordGrid';
 import type { ChordEvent } from '../../audio/chordsTypes';
 
@@ -50,6 +52,10 @@ export function ChordLane({ overrideChords }: { overrideChords?: ChordEvent[] })
   const mobileVisible = useChordsStore((s) => s.mobileVisible);
   // The chords editor previews its draft here, minimized or toggled off or not.
   const chords = overrideChords ?? storeChords;
+  // `k` shows or hides the chords on desktop (`c` is the loop). Off while
+  // the chords editor previews here, since that shows regardless.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  usePanelShortcut('k', 'chords', isDesktop && !overrideChords && chords.length > 0);
   if (chords.length === 0) return null;
   return (
     <>
