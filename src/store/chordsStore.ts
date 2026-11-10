@@ -23,15 +23,19 @@ interface ChordsState {
    *  apart from "loaded, no chords", like the lyrics store. */
   loaded: boolean;
   lookAhead: LookAhead;
+  /** Phones: the lane shows only when its button is on, like the lyrics. */
+  mobileVisible: boolean;
   setChords: (chords: ChordEvent[]) => void;
   clear: () => void;
   setLookAhead: (s: LookAhead) => void;
+  toggleMobileVisible: () => void;
 }
 
 export const useChordsStore = create<ChordsState>((set) => ({
   chords: [],
   loaded: false,
   lookAhead: typeof window === 'undefined' ? 5 : loadLookAhead(),
+  mobileVisible: false,
   setChords: (raw) =>
     set({
       chords: raw.filter((c) => c.symbol.trim() !== '').sort((a, b) => a.time - b.time),
@@ -44,4 +48,5 @@ export const useChordsStore = create<ChordsState>((set) => ({
     } catch { /* private mode */ }
     set({ lookAhead });
   },
+  toggleMobileVisible: () => set((s) => ({ mobileVisible: !s.mobileVisible })),
 }));

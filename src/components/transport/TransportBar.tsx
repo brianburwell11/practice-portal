@@ -4,6 +4,8 @@ import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
 import { useLyricsStore } from '../../store/lyricsStore';
+import { useChordsStore } from '../../store/chordsStore';
+import { ChordsIcon } from '../chords/ChordsIcon';
 import { WaveformTimeline } from './WaveformTimeline';
 import { MasterSliders } from './MasterSliders';
 import { Skeleton } from '../ui/Loading';
@@ -127,6 +129,9 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
   const lyricsMobileVisible = useLyricsStore((s) => s.mobileVisible);
   const toggleLyricsMobileVisible = useLyricsStore((s) => s.toggleMobileVisible);
   const hasLyrics = useLyricsStore((s) => s.lines.length > 0);
+  const chordsMobileVisible = useChordsStore((s) => s.mobileVisible);
+  const toggleChordsMobileVisible = useChordsStore((s) => s.toggleMobileVisible);
+  const hasChords = useChordsStore((s) => s.chords.length > 0);
   const hasSheetMusic = !!selectedSong?.sheetMusicUrl;
   const sheetMusicOpen = useSheetMusicStore((s) => s.fullViewOpen);
   const openSheetMusic = () => {
@@ -402,6 +407,19 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
           </svg>
+        </button>}
+
+        {/* Mobile chords toggle — only when the song has chords */}
+        {!minimal && hasChords && <button
+          className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
+            chordsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+          }`}
+          onClick={toggleChordsMobileVisible}
+          title="Chords"
+          aria-label="Chords"
+          aria-pressed={chordsMobileVisible}
+        >
+          <ChordsIcon className="w-5 h-5" />
         </button>}
 
         {/* Mobile lyrics toggle — only when song has lyrics */}

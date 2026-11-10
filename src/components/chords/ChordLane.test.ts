@@ -42,6 +42,7 @@ beforeEach(() => {
   seek.mockReset();
   useChordsStore.getState().clear();
   useChordsStore.getState().setLookAhead(5);
+  useChordsStore.setState({ mobileVisible: true });
   usePanelMinimizeStore.getState().clearAll();
   useSongStore.getState().setSelectedSong({ tapMap: [], timeSignatureMap: [] } as unknown as SongConfig);
   useTransportStore.getState().setPosition(0);
@@ -138,6 +139,31 @@ describe('ChordLane', () => {
     render();
     act(() => labels(desktop()).find((b) => b.textContent === 'C')!.click());
     expect(seek).toHaveBeenCalledWith(3.5);
+  });
+
+  it('hides the phone lane until its button turns it on', () => {
+    useChordsStore.setState({ mobileVisible: false });
+    useChordsStore.getState().setChords([{ symbol: 'G', time: 0 }]);
+    render();
+    expect(phone()).toBeNull();
+    expect(desktop()).not.toBeNull();
+    act(() => useChordsStore.getState().toggleMobileVisible());
+    expect(phone()).not.toBeNull();
+  });
+
+  it('always shows the phone lane under the chords editor', () => {
+    useChordsStore.setState({ mobileVisible: false });
+    const engine = { seek } as unknown as AudioEngine;
+    act(() =>
+      root.render(
+        createElement(
+          AudioEngineContext.Provider,
+          { value: engine },
+          createElement(ChordLane, { overrideChords: [{ symbol: 'G', time: 0 }] }),
+        ),
+      ),
+    );
+    expect(phone()).not.toBeNull();
   });
 
   it('hides the desktop lane when minimized, keeping the phone lane', () => {

@@ -39,20 +39,22 @@ function labelWidth(symbol: string, px: number): number {
  *
  * Desktop lines up with the lyrics (`PinnedLane`). Phones have no room left
  * of the waveform and stack lyrics vertically, so the lane gets its own slot
- * (`SlotLane`). Hidden when the song has no chords.
+ * (`SlotLane`), shown when the transport's chords button is on. Hidden when
+ * the song has no chords.
  */
-export function ChordLane({ overrideChords }: { overrideChords?: ChordEvent[] } = {}) {
+export function ChordLane({ overrideChords }: { overrideChords?: ChordEvent[] }) {
   const storeChords = useChordsStore((s) => s.chords);
   const desktopMinimized = usePanelMinimizeStore((s) =>
     s.items.some((x) => x.kind === 'panel' && x.id === 'chords'),
   );
-  // The chords editor previews its draft here, minimized or not.
+  const mobileVisible = useChordsStore((s) => s.mobileVisible);
+  // The chords editor previews its draft here, minimized or toggled off or not.
   const chords = overrideChords ?? storeChords;
   if (chords.length === 0) return null;
   return (
     <>
       {(overrideChords || !desktopMinimized) && <PinnedLane chords={chords} className="hidden md:block" />}
-      <SlotLane chords={chords} className="md:hidden" />
+      {(overrideChords || mobileVisible) && <SlotLane chords={chords} className="md:hidden" />}
     </>
   );
 }
