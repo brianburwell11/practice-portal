@@ -11,7 +11,7 @@ import { MasterSliders } from './MasterSliders';
 import { Skeleton } from '../ui/Loading';
 import { formatTime } from '../../utils/formatTime';
 import { measureBeatAt } from '../../audio/tempoUtils';
-import { LoopButton, PlayPauseButton, StopButton } from './TransportButtons';
+import { LoopButton, PHONE_ROW_BUTTON, PlayPauseButton, StopButton } from './TransportButtons';
 import { SheetMusicIcon } from '../sheet/SheetMusicIcon';
 import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
@@ -107,9 +107,15 @@ interface TransportBarProps {
   /** An on-page editor is open: phones show only play/pause with the
    *  volume and speed sliders beside it. */
   minimal?: boolean;
+  /**
+   * Phones scrolling the whole page: the waveform row pins this many px from
+   * the top (just under the header) while the rows below it scroll away.
+   */
+  stickyTop?: number;
 }
 
-export function TransportBar({ showSliders, onToggleSliders, minimal = false }: TransportBarProps) {
+export function TransportBar({ showSliders, onToggleSliders, minimal = false, stickyTop }: TransportBarProps) {
+  const sticky = stickyTop !== undefined;
   const engine = useAudioEngine();
   const { playing, position, duration, loopA, loopB, loopEnabled, toggleFollowPlayhead } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
@@ -210,7 +216,10 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
   }, [engine, playing, disabled, loopA, loopB, loopEnabled, position, toggleFollowPlayhead, mixerStems, globalSoloActive, globalMuteActive, toggleGlobalSolo, toggleGlobalMute, clearSoloGroup, clearMuteGroup]);
 
   return (
-    <div className="flex flex-col md:flex-row md:items-center md:gap-4 px-4 py-3 border-b border-gray-700">
+    // Sticky phone layout: this box steps aside (`contents`) so the waveform
+    // row can pin to the page's scroll area, and the rows below get their
+    // own box that scrolls.
+    <div className={sticky ? 'contents' : 'flex flex-col md:flex-row md:items-center md:gap-4 px-4 py-3 border-b border-gray-700'}>
       {/* Desktop: controls cluster (buttons + sliders grouped together, shrink-0) */}
       <div className="hidden md:flex md:flex-col md:gap-1 md:shrink-0">
         {/* Transport buttons — centered over sliders */}
@@ -225,7 +234,10 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
       </div>
 
       {/* Waveform + timestamp — full width on mobile (row 1), flex-1 on desktop */}
-      <div className="md:flex-1 md:min-w-0 flex items-center gap-2">
+      <div
+        className={`md:flex-1 md:min-w-0 flex items-center gap-2 ${sticky ? 'sticky z-20 px-4 pt-3 pb-2' : ''}`}
+        style={sticky ? { top: stickyTop, backgroundColor: 'var(--band-bg, var(--color-page))' } : undefined}
+      >
         <div className="flex-1 min-w-0">
           {songLoading ? <WaveformSkeleton progress={loadProgress} /> : <WaveformTimeline />}
         </div>
@@ -358,45 +370,19 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
         )}
       </div>
 
-      {/* Mobile: transport buttons (row 2) */}
-      <div className={`flex items-center gap-2 mt-2 md:hidden ${minimal ? '' : 'justify-center'}`}>
-        <PlayPauseButton size="lg" longPressStops />
+      <div className={sticky ? 'px-4 pb-3 border-b border-gray-700' : 'contents'}>
+      {/* Mobile: transport buttons (row 2), one row whatever the song has.
+          Order: play and loop, where you are, what you read along with
+          (chords, lyrics, sheet music), then the mixer. */}
+      <div className={`flex items-center gap-1.5 mt-2 md:hidden ${minimal ? '' : 'justify-center'}`}>
+        <PlayPauseButton size={minimal ? 'lg' : 'fluid'} longPressStops />
         {/* Editors: volume and speed sit right of play/pause, always shown */}
         {minimal && <MasterSliders className="flex-1 min-w-0 ml-1" />}
-        {!minimal && <LoopButton size="lg" verb="Tap" />}
-        {/* Mobile controls toggle — shows/hides mixer + volume/speed sliders below lyrics */}
-        {!minimal && <button
-          className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
-            showSliders ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-          }`}
-          onClick={onToggleSliders}
-          title="Mixer & Sliders"
-          aria-label="Mixer and sliders"
-          aria-pressed={showSliders}
-        >
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="2" y1="14" x2="6" y2="14" />
-            <line x1="12" y1="21" x2="12" y2="8" /><line x1="12" y1="4" x2="12" y2="3" /><line x1="10" y1="8" x2="14" y2="8" />
-            <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="18" y1="16" x2="22" y2="16" />
-          </svg>
-        </button>}
-
-        {/* Mobile sheet music: opens it full screen (only when the song has a score) */}
-        {!minimal && hasSheetMusic && <button
-          className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
-            sheetMusicOpen ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-          }`}
-          onClick={openSheetMusic}
-          title="Sheet music"
-          aria-label="Sheet music"
-          aria-pressed={sheetMusicOpen}
-        >
-          <SheetMusicIcon />
-        </button>}
+        {!minimal && <LoopButton size="fluid" verb="Tap" />}
 
         {/* Mobile bookmark toggle */}
         {!minimal && <button
-          className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
+          className={`${PHONE_ROW_BUTTON} rounded-lg flex items-center justify-center transition-colors ${
             showBookmark ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={() => setShowBookmark(!showBookmark)}
@@ -411,7 +397,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
 
         {/* Mobile chords toggle — only when the song has chords */}
         {!minimal && hasChords && <button
-          className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
+          className={`${PHONE_ROW_BUTTON} rounded-lg flex items-center justify-center transition-colors ${
             chordsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={toggleChordsMobileVisible}
@@ -424,7 +410,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
 
         {/* Mobile lyrics toggle — only when song has lyrics */}
         {!minimal && hasLyrics && <button
-          className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
+          className={`${PHONE_ROW_BUTTON} rounded-lg flex items-center justify-center transition-colors ${
             lyricsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={toggleLyricsMobileVisible}
@@ -438,6 +424,36 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
             <path d="M43.642,412.297l220.223-264.551l100.371,100.738L99.549,468.203L43.642,412.297z" />
             <path d="M391.48,238.551l-118.1-118.199c-0.279-30.238,11.02-59.379,31.887-81.891l168.268,168.614c-22.131,20.18-50.791,31.484-80.695,31.484L391.48,238.551z" />
             <path d="M330.783,17.23c18.611-10.984,40.072-16.992,62.018-16.992c31.787,0,61.664,12.371,84.127,34.832c38.895,38.898,46.123,98.863,17.625,145.93L330.783,17.23z" />
+          </svg>
+        </button>}
+
+        {/* Mobile sheet music: opens it full screen (only when the song has a score) */}
+        {!minimal && hasSheetMusic && <button
+          className={`${PHONE_ROW_BUTTON} rounded-lg flex items-center justify-center transition-colors ${
+            sheetMusicOpen ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+          }`}
+          onClick={openSheetMusic}
+          title="Sheet music"
+          aria-label="Sheet music"
+          aria-pressed={sheetMusicOpen}
+        >
+          <SheetMusicIcon />
+        </button>}
+
+        {/* Mobile controls toggle — shows/hides mixer + volume/speed sliders below lyrics */}
+        {!minimal && <button
+          className={`${PHONE_ROW_BUTTON} rounded-lg flex items-center justify-center transition-colors ${
+            showSliders ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+          }`}
+          onClick={onToggleSliders}
+          title="Mixer & Sliders"
+          aria-label="Mixer and sliders"
+          aria-pressed={showSliders}
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="2" y1="14" x2="6" y2="14" />
+            <line x1="12" y1="21" x2="12" y2="8" /><line x1="12" y1="4" x2="12" y2="3" /><line x1="10" y1="8" x2="14" y2="8" />
+            <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="18" y1="16" x2="22" y2="16" />
           </svg>
         </button>}
       </div>
@@ -568,6 +584,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false }: 
           })()}
         </div>
       )}
+      </div>
 
     </div>
   );

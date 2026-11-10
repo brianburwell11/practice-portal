@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ChordEvent } from '../audio/chordsTypes';
+import { phonePanelOpen, rememberPhonePanel } from '../utils/phonePanels';
 
 /** How many seconds ahead the chord lane shows. A listener setting. */
 export const LOOK_AHEAD_OPTIONS = [3, 5, 8] as const;
@@ -23,7 +24,7 @@ interface ChordsState {
    *  apart from "loaded, no chords", like the lyrics store. */
   loaded: boolean;
   lookAhead: LookAhead;
-  /** Phones: the lane shows only when its button is on, like the lyrics. */
+  /** Phones: the lane shows when its button is on (open unless this device turned it off). */
   mobileVisible: boolean;
   setChords: (chords: ChordEvent[]) => void;
   clear: () => void;
@@ -35,7 +36,7 @@ export const useChordsStore = create<ChordsState>((set) => ({
   chords: [],
   loaded: false,
   lookAhead: typeof window === 'undefined' ? 5 : loadLookAhead(),
-  mobileVisible: false,
+  mobileVisible: phonePanelOpen('chords'),
   setChords: (raw) =>
     set({
       chords: raw.filter((c) => c.symbol.trim() !== '').sort((a, b) => a.time - b.time),
@@ -48,5 +49,9 @@ export const useChordsStore = create<ChordsState>((set) => ({
     } catch { /* private mode */ }
     set({ lookAhead });
   },
-  toggleMobileVisible: () => set((s) => ({ mobileVisible: !s.mobileVisible })),
+  toggleMobileVisible: () =>
+    set((s) => {
+      rememberPhonePanel('chords', !s.mobileVisible);
+      return { mobileVisible: !s.mobileVisible };
+    }),
 }));

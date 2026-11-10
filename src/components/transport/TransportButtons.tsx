@@ -5,12 +5,18 @@ import { useSongStore } from '../../store/songStore';
 import { useTransportStore } from '../../store/transportStore';
 import { formatTime } from '../../utils/formatTime';
 
-export type TransportButtonSize = 'sm' | 'md' | 'lg';
+/** Sizing for every button in the phone transport row, so however many a
+ *  song has, they share one row (48px each when there's room). */
+export const PHONE_ROW_BUTTON = 'flex-1 min-w-0 max-w-12 aspect-square';
+
+export type TransportButtonSize = 'sm' | 'md' | 'lg' | 'fluid';
 
 const SIZE: Record<TransportButtonSize, string> = {
   sm: 'w-9 h-9 text-base',
   md: 'w-10 h-10 text-lg',
   lg: 'w-12 h-12 text-lg',
+  /** Phone button row: share the row evenly, square, up to the `lg` size. */
+  fluid: PHONE_ROW_BUTTON + ' text-lg',
 };
 
 const BASE = 'rounded-lg flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed';

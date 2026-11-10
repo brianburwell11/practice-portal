@@ -165,6 +165,8 @@ export function NotesLayer() {
       className="pr-4 pb-2 pt-2 flex flex-col md:flex-row md:items-start md:flex-wrap gap-2 shrink-0"
       style={{ paddingLeft: leftPadding ?? 16 }}
     >
+      {/* Phones get no minimize (there's no strip to bring notes back from)
+          and no Export, so notes stay to one row. */}
       {canAdd && (
         <AddNoteButton onClick={handleAdd} disabled={!loaded} bg={THEME.bg} iconClass="text-gray-900" />
       )}
@@ -178,7 +180,8 @@ export function NotesLayer() {
           actions={actions}
         />
       ))}
-      <div className="flex items-center gap-2 md:ml-auto md:self-center">
+      {/* Desktop only: Export and minimize. */}
+      <div className="hidden md:flex items-center gap-2 md:ml-auto md:self-center">
         {canExport && <ExportButton onClick={handleExport} disabled={notes.length === 0} />}
         <MinimizeButton onClick={() => minimizePanel('notes')} />
       </div>

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { LyricsLine } from '../audio/lyricsTypes';
+import { phonePanelOpen, rememberPhonePanel } from '../utils/phonePanels';
 
 interface LyricsState {
   lines: LyricsLine[];
@@ -16,12 +17,17 @@ interface LyricsState {
 export const useLyricsStore = create<LyricsState>((set) => ({
   lines: [],
   loaded: false,
-  mobileVisible: false,
+  // Phones: open unless this device turned it off.
+  mobileVisible: phonePanelOpen('lyrics'),
   setLyrics: (raw) =>
     set({
       lines: raw.filter((l) => l.text !== '' || l.instrumental),
       loaded: true,
     }),
   clear: () => set({ lines: [], loaded: false }),
-  toggleMobileVisible: () => set((s) => ({ mobileVisible: !s.mobileVisible })),
+  toggleMobileVisible: () =>
+    set((s) => {
+      rememberPhonePanel('lyrics', !s.mobileVisible);
+      return { mobileVisible: !s.mobileVisible };
+    }),
 }));

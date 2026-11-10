@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
 import { TransportBar } from './components/transport/TransportBar';
@@ -30,6 +30,7 @@ import { useChordsStore } from './store/chordsStore';
 import { useChordsEditorStore } from './store/chordsEditorStore';
 import { dataUrl, safeHref } from './utils/url';
 import { chordsDataSchema } from './config/schema';
+import { phonePanelOpen, rememberPhonePanel } from './utils/phonePanels';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
 import { useSetlistStore } from './store/setlistStore';
@@ -128,6 +129,22 @@ export default function App() {
   const [showDeleteSetlistModal, setShowDeleteSetlistModal] = useState(false);
   const [showViewAllSetlistsModal, setShowViewAllSetlistsModal] = useState(false);
   const [showEditBandModal, setShowEditBandModal] = useState(false);
+  /** Phones with no editor open scroll the whole page; editors keep the
+   *  fixed layout they fill and scroll inside. */
+  const phonePageScroll = !isDesktop && !editorFocus && !showEditBandModal;
+  // The header's height (it wraps on narrow phones), so the waveform can pin
+  // right under it while the page scrolls.
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const measure = () => setHeaderHeight(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [showMembersModal, setShowMembersModal] = useState(false);
   // Anything to manage here? Decides whether a Member sees the admin ribbon
   // at all (they don't — their screen is the public one). UX only.
@@ -150,7 +167,8 @@ export default function App() {
   }, [fromRequestsLink, canInvite]);
   const [showDeleteBandModal, setShowDeleteBandModal] = useState(false);
   // Mobile-only toggle: shows the master volume/speed sliders + mixer panel below the lyrics.
-  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
+  // Open unless this device turned it off.
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(() => phonePanelOpen('mixer'));
   const activeSetlist = useSetlistStore((s) => s.activeSetlist);
   const sheetMinimized = usePanelMinimizeStore((s) =>
     s.items.some((x) => x.kind === 'panel' && x.id === 'sheet'),
@@ -245,7 +263,7 @@ export default function App() {
   return (
     <AudioEngineContext.Provider value={engine}>
       <div
-        className="h-screen overflow-hidden flex flex-col"
+        className={`h-screen flex flex-col ${phonePageScroll ? 'overflow-y-auto' : 'overflow-hidden'}`}
         style={{
           backgroundColor: 'var(--band-bg, var(--color-page))',
           color: 'var(--band-text, #f3f4f6)',
@@ -253,8 +271,14 @@ export default function App() {
       >
         {/* Header */}
         <header
-          className="px-3 py-2 md:px-4 md:py-3 border-b border-gray-700 flex flex-wrap items-center gap-y-1.5 md:relative"
-          style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
+          ref={headerRef}
+          className={`px-3 py-2 md:px-4 md:py-3 border-b border-gray-700 flex flex-wrap items-center gap-y-1.5 md:relative ${
+            phonePageScroll ? 'sticky top-0 z-30' : ''
+          }`}
+          style={{
+            borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)',
+            ...(phonePageScroll ? { backgroundColor: 'var(--band-bg, var(--color-page))' } : {}),
+          }}
         >
           <div className="flex items-center gap-2 md:gap-3 min-w-0">
             {/* Practice Portal's own mark: back to the band picker. */}
@@ -333,16 +357,24 @@ export default function App() {
 
         {/* Transport controls */}
         <TransportBar
+          stickyTop={phonePageScroll ? headerHeight : undefined}
           showSliders={mobileControlsOpen}
-          onToggleSliders={() => setMobileControlsOpen((v) => !v)}
+          onToggleSliders={() =>
+            setMobileControlsOpen((v) => {
+              rememberPhonePanel('mixer', !v);
+              return !v;
+            })
+          }
           minimal={editorFocus}
         />
 
         {/* Everything under the transport scrolls as one column, so a tall
             score (many instruments) can be scrolled past to the mixer below
             it instead of squeezing the mixer out of view. The editors fill
-            it (flex-1 min-h-0) and scroll themselves, as before. */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+            it (flex-1 min-h-0) and scroll themselves, as before. On a phone
+            with no editor open the whole page scrolls instead, header and
+            transport too, so chords, lyrics and the mixer all have room. */}
+        <div className={phonePageScroll ? 'flex flex-col shrink-0' : 'flex-1 min-h-0 flex flex-col overflow-y-auto'}>
           {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
           {!editorFocus && !showEditBandModal && <NotesLayer />}
 
