@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { displayChord } from '../../audio/chordSymbols';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
@@ -244,7 +245,7 @@ function SlotLane({ chords, className }: LaneProps) {
             className="font-semibold text-gray-100 whitespace-nowrap truncate"
             style={{ fontSize: NOW_PX }}
           >
-            {cur.symbol}
+            {displayChord(cur.symbol)}
           </button>
         )}
       </div>
@@ -276,12 +277,12 @@ function ChordLabel({
     <button
       type="button"
       onClick={() => onSeek(chord.time)}
-      title={`Play from ${chord.symbol}`}
+      title={`Play from ${displayChord(chord.symbol)}`}
       className={`absolute inset-y-0 left-0 flex items-center whitespace-nowrap hover:text-white ${marker ? 'border-l-2' : ''} ${TONE_CLASS[tone]}`}
       style={{ transform: `translateX(${left}px)`, paddingLeft: marker ? LABEL_INSET_PX - 2 : 0 }}
     >
       <span className="inline-block origin-left" style={{ fontSize: px, transform: scale !== 1 ? `scale(${scale})` : undefined }}>
-        {chord.symbol}
+        {displayChord(chord.symbol)}
       </span>
     </button>
   );

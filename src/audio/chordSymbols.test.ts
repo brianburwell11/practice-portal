@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordsFromText, normalizeChord } from './chordSymbols';
+import { chordsFromText, displayChord, normalizeChord } from './chordSymbols';
 
 describe('normalizeChord', () => {
   it.each([
@@ -47,5 +47,27 @@ describe('chordsFromText', () => {
 
   it('pulls chords out of a ChordPro sheet and ignores the words', () => {
     expect(chordsFromText('[G]Morning light [Em7]across\n[C]the [D]floor')).toEqual(['G', 'Em7', 'C', 'D']);
+  });
+});
+
+describe('displayChord', () => {
+  it.each([
+    ['Bb', 'B♭'],
+    ['F#m7b5', 'F♯m7♭5'],
+    ['D/F#', 'D/F♯'],
+    ['Ebmaj7/Bb', 'E♭maj7/B♭'],
+    ['C7#9', 'C7♯9'],
+    ['E7b9', 'E7♭9'],
+    ['Cadd9', 'Cadd9'],
+    ['Bm', 'Bm'],
+    ['Bdim', 'Bdim'],
+    ['Absus4', 'A♭sus4'],
+    ['N.C.', 'N.C.'],
+  ])('%s → %s', (stored, shown) => {
+    expect(displayChord(stored)).toBe(shown);
+  });
+
+  it('leaves the stored spelling alone for round trips', () => {
+    expect(normalizeChord(displayChord('F#m7b5'))).toBe('F#m7b5');
   });
 });

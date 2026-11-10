@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { displayChord } from '../../audio/chordSymbols';
 import { parseChordSheet, sheetToQueue } from '../../audio/chordSheet';
 import type { QueueItem } from '../../store/chordsEditorStore';
 
@@ -61,7 +62,7 @@ export function ChordSheetImport({ onAdd, onClose }: { onAdd: (items: QueueItem[
             <div key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               {s.name && <span className="text-xs font-semibold text-amber-500">{s.name}</span>}
               {s.chords.map((c, j) => (
-                <span key={j} className="font-semibold text-gray-200">{c}</span>
+                <span key={j} className="font-semibold text-gray-200">{displayChord(c)}</span>
               ))}
             </div>
           ))}

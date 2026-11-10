@@ -118,6 +118,17 @@ describe('ChordLane', () => {
     expect(shiftOf(d)).toBe(HIT);
   });
 
+  it('shows real flat and sharp signs', () => {
+    useChordsStore.getState().setChords([
+      { symbol: 'Bb', time: 1 },
+      { symbol: 'F#m7b5', time: 3 },
+    ]);
+    act(() => useTransportStore.getState().setPosition(2));
+    render();
+    expect(labels(desktop()).map((b) => b.textContent).sort()).toEqual(['B♭', 'F♯m7♭5']);
+    expect(useChordsStore.getState().chords.map((c) => c.symbol)).toEqual(['Bb', 'F#m7b5']); // stored as typed
+  });
+
   it('seeks to a chord when it is clicked', () => {
     useChordsStore.getState().setChords([
       { symbol: 'G', time: 1 },

@@ -45,7 +45,8 @@ function normalizeNote(raw: string): string | null {
  * Whitespace is ignored; the root and bass are capitalized.
  */
 export function normalizeChord(input: string): string | null {
-  const s = input.replace(/\s+/g, '');
+  // ♭ and ♯ anywhere (as shown on screen) read as b and #.
+  const s = input.replace(/\s+/g, '').replace(/♭/g, 'b').replace(/♯/g, '#');
   if (!s) return null;
   if (/^(n\.?c\.?)$/i.test(s)) return 'N.C.';
 
@@ -80,4 +81,18 @@ export function normalizeChord(input: string): string | null {
 export function chordsFromText(text: string): string[] {
   if (text.includes('[')) return [...text.matchAll(/\[([^\]]+)\]/g)].map((m) => m[1].trim()).filter(Boolean);
   return text.split(/[\s|,]+/).filter(Boolean);
+}
+
+/**
+ * A stored chord name as it's shown: real flat and sharp signs (B♭, F♯m7♭5,
+ * D/F♯, C7♯9). Display only; names are stored with b and #.
+ */
+export function displayChord(symbol: string): string {
+  return symbol
+    .replace(/^([A-G])b/, '$1♭')
+    .replace(/^([A-G])#/, '$1♯')
+    .replace(/\/([A-G])b/, '/$1♭')
+    .replace(/\/([A-G])#/, '/$1♯')
+    .replace(/b(?=\d)/g, '♭')
+    .replace(/#(?=\d)/g, '♯');
 }

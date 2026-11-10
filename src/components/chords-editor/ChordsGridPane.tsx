@@ -5,7 +5,7 @@ import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useChordsEditorStore } from '../../store/chordsEditorStore';
 import { beatGrid, cellFor, isOffGrid, lastAtOrBefore, pushTimeFor, type GridLine } from '../../audio/chordGrid';
-import { normalizeChord } from '../../audio/chordSymbols';
+import { displayChord, normalizeChord } from '../../audio/chordSymbols';
 import type { ChordEvent } from '../../audio/chordsTypes';
 import { formatPrecise } from './time';
 import { chordsInRange, copyRange, pasteEdit } from './gridRange';
@@ -459,7 +459,7 @@ export function ChordsGridPane() {
                               title={placed.offGrid ? 'Off the grid since the tapMap changed' : placed.push ? 'Pushed: comes in on the "and" before' : undefined}
                             >
                               {placed.push && <span className="text-amber-400 mr-px">›</span>}
-                              {placed.chord.symbol}
+                              {displayChord(placed.chord.symbol)}
                               {placed.offGrid && <span className="ml-0.5 text-orange-400">•</span>}
                             </span>
                           )}
@@ -479,7 +479,7 @@ export function ChordsGridPane() {
           <span className="text-red-400">{error}. Esc to clear.</span>
         ) : lastTyped ? (
           <span className="text-gray-500">
-            <span className="font-mono">{lastTyped.typed}</span> saved as <span className="text-gray-200 font-semibold">{lastTyped.stored}</span>
+            <span className="font-mono">{lastTyped.typed}</span> saved as <span className="text-gray-200 font-semibold">{displayChord(lastTyped.stored)}</span>
           </span>
         ) : (
           <span className="text-gray-600">Sloppy spellings are fine: am7, c-7, bbmaj7, f#ø, d/f#, nc</span>
@@ -517,7 +517,7 @@ function FreeTimeList({ chords, onStamp }: { chords: ChordEvent[]; onStamp?: () 
       <span className="italic">Free time:</span>
       {chords.map((c) => (
         <span key={c.time}>
-          <span className="font-semibold text-gray-200">{c.symbol}</span> <span className="font-mono">{formatPrecise(c.time)}</span>
+          <span className="font-semibold text-gray-200">{displayChord(c.symbol)}</span> <span className="font-mono">{formatPrecise(c.time)}</span>
         </span>
       ))}
       {onStamp && (

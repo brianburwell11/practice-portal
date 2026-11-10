@@ -100,7 +100,11 @@ export default function TimingAndLyrics() {
             there are no bars.
           </li>
         </Steps>
-        <p>The chord lane above the editor shows your changes as you go. Save when you’re done.</p>
+        <p>
+          The chord lane above the editor shows your changes as you go, and each chord also shows on the waveform as a
+          pink line with its name. Drag one to move it (it snaps like a stamp), or click it to play from there. Save when
+          you’re done.
+        </p>
         <Note>
           If the tap map changes after chords were added, the editor says how many chords are now off the grid, and{' '}
           <Ui>Snap to grid</Ui> moves them back onto the nearest half beat.

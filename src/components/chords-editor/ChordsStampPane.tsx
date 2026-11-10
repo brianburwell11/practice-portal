@@ -6,7 +6,7 @@ import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useChordsEditorStore } from '../../store/chordsEditorStore';
 import { beatGrid, cellFor, isFreeTime, isOffGrid, snapTime, type GridLine, type Snap } from '../../audio/chordGrid';
-import { chordsFromText, normalizeChord } from '../../audio/chordSymbols';
+import { chordsFromText, displayChord, normalizeChord } from '../../audio/chordSymbols';
 import { ChordSheetImport } from './ChordSheetImport';
 import { TapPadButton } from '../ui/TapPadButton';
 import { formatPrecise } from './time';
@@ -145,7 +145,7 @@ export function ChordsStampPane() {
   const btn = 'rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-gray-300 transition-[background-color,filter,transform] duration-75';
   const lit = (id: string) => (pressed === id ? 'brightness-150 scale-[0.97]' : '');
   const kbd = (k: string) => <span className="ml-1 font-mono text-xs opacity-60">({k})</span>;
-  const stampLabel = next ? `Stamp ${next.symbol}${next.section ? ` (${next.section})` : ''}` : 'Queue is empty';
+  const stampLabel = next ? `Stamp ${displayChord(next.symbol)}${next.section ? ` (${next.section})` : ''}` : 'Queue is empty';
   const lastStamped = stamped.length > 0;
 
   return (
@@ -195,7 +195,7 @@ export function ChordsStampPane() {
               <span
                 className={`rounded px-2 py-0.5 text-sm font-semibold ${i === 0 ? 'bg-cyan-500 text-gray-900' : 'bg-gray-800 text-gray-300'}`}
               >
-                {q.symbol}
+                {displayChord(q.symbol)}
               </span>
             </span>
           ))}
@@ -237,7 +237,7 @@ export function ChordsStampPane() {
               <span className={`w-12 text-xs font-mono ${isFreeTime(c.time, grid) ? 'italic text-gray-600' : 'text-gray-500'}`}>
                 {barBeat(c.time, grid)}
               </span>
-              <span className="flex-1 min-w-0 truncate text-base md:text-sm font-semibold text-gray-100">{c.symbol}</span>
+              <span className="flex-1 min-w-0 truncate text-base md:text-sm font-semibold text-gray-100">{displayChord(c.symbol)}</span>
               {off && <span className="text-xs text-orange-400" title="Off the grid since the tapMap changed">off grid</span>}
             </div>
           );
