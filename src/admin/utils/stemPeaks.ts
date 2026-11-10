@@ -2,8 +2,8 @@
  * Per-stem peak computation for the alignment canvas.
  *
  * Returns a Float32Array of interleaved [min, max, min, max, ...] — one pair
- * per bucket. Mirrors the algorithm in AudioEngine.computeMergedPeaks but
- * scoped to a single buffer (no cross-stem merging).
+ * per bucket, for a single buffer. (The player's live mix waveform is built
+ * in src/audio/mixPeaks.ts.)
  */
 export function computePeaks(buffer: AudioBuffer, bucketCount = 2048): Float32Array {
   const peaks = new Float32Array(bucketCount * 2);

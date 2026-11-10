@@ -9,6 +9,8 @@ interface TransportState {
   loopB: number | null;
   loopEnabled: boolean;
   followPlayhead: boolean;
+  /** Bumps whenever the engine's waveform changes (mix, offsets, new song) */
+  peaksVersion: number;
   setPlaying: (p: boolean) => void;
   setPosition: (p: number) => void;
   setDuration: (d: number) => void;
@@ -19,6 +21,7 @@ interface TransportState {
   setFollowPlayhead: (f: boolean) => void;
   toggleFollowPlayhead: () => void;
   clearLoop: () => void;
+  setPeaksVersion: (v: number) => void;
 }
 
 export const useTransportStore = create<TransportState>((set) => ({
@@ -30,6 +33,7 @@ export const useTransportStore = create<TransportState>((set) => ({
   loopB: null,
   loopEnabled: true,
   followPlayhead: true,
+  peaksVersion: 0,
   setPlaying: (playing) => set({ playing }),
   setPosition: (position) => set({ position }),
   setDuration: (duration) => set({ duration }),
@@ -40,4 +44,5 @@ export const useTransportStore = create<TransportState>((set) => ({
   setFollowPlayhead: (followPlayhead) => set({ followPlayhead }),
   toggleFollowPlayhead: () => set((s) => ({ followPlayhead: !s.followPlayhead })),
   clearLoop: () => set({ loopA: null, loopB: null, loopEnabled: true }),
+  setPeaksVersion: (peaksVersion) => set({ peaksVersion }),
 }));

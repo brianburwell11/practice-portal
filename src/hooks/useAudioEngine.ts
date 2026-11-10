@@ -36,6 +36,7 @@ export function useCreateEngine(): AudioEngine {
       setLoopA(engine.loopA);
       setLoopB(engine.loopB);
       setLoopEnabled(engine.loopEnabled);
+      useTransportStore.getState().setPeaksVersion(engine.peaksVersion);
     });
 
     // Don't dispose — singleton survives StrictMode remounts

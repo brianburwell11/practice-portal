@@ -17,6 +17,8 @@ export class StemPlayer {
   private _userVolume: number;
   private _userPan: number;
   private _offsetSec: number;
+  /** The gain last applied after mute, solo and group volume */
+  private _effectiveGain: number;
   private loopRegion: LoopRegion | null = null;
   /** This stem's audio for the loop, for stems that start or end inside it */
   private segment: { region: LoopRegion; buffer: AudioBuffer } | null = null;
@@ -35,6 +37,7 @@ export class StemPlayer {
     this._userVolume = defaultVolume;
     this._userPan = defaultPan;
     this._offsetSec = offsetSec;
+    this._effectiveGain = defaultVolume;
 
     // Mono mixer: downmixes stereo to mono by default
     this.monoMixer = ctx.createGain();
@@ -247,21 +250,27 @@ export class StemPlayer {
     groupMuted: boolean;
   }): void {
     if (this._muted || params.groupMuted) {
-      this.gainNode.gain.value = 0;
+      this.setGain(0);
     } else if (params.anySoloActive && !params.stemAudibleBySolo) {
-      this.gainNode.gain.value = 0;
+      this.setGain(0);
     } else {
-      this.gainNode.gain.value = this._userVolume * params.groupVolume;
+      this.setGain(this._userVolume * params.groupVolume);
     }
+  }
+
+  /** What this stem currently contributes to the mix, before pan and master */
+  get effectiveGain(): number {
+    return this._effectiveGain;
+  }
+
+  private setGain(g: number): void {
+    this._effectiveGain = g;
+    this.gainNode.gain.value = g;
   }
 
   private updateGain(): void {
     // Simple update without solo logic — full recalc happens via applyEffectiveGain
-    if (this._muted) {
-      this.gainNode.gain.value = 0;
-    } else {
-      this.gainNode.gain.value = this._userVolume;
-    }
+    this.setGain(this._muted ? 0 : this._userVolume);
   }
 
   disconnect(): void {

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
+import { drawPeaks } from '../transport/drawPeaks';
 import { useTransportStore } from '../../store/transportStore';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 
@@ -17,7 +18,7 @@ export function TimelineNavigator({
   onSeek,
 }: TimelineNavigatorProps) {
   const engine = useAudioEngine();
-  const { position, duration } = useTransportStore();
+  const { position, duration, peaksVersion } = useTransportStore();
   const tapMap = useMarkerEditorStore((s) => s.tapMap);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -78,21 +79,9 @@ export function TimelineNavigator({
     ctx.fillRect(0, 0, width, height);
 
     // 2. Waveform
-    const bucketCount = peakData.length / 2;
     const centerY = height / 2;
     const halfHeight = height / 2 - 2;
-
-    for (let px = 0; px < width; px++) {
-      const bucketIndex = Math.floor((px / width) * bucketCount);
-      const min = peakData[bucketIndex * 2];
-      const max = peakData[bucketIndex * 2 + 1];
-
-      const y1 = centerY + min * halfHeight;
-      const y2 = centerY + max * halfHeight;
-
-      ctx.fillStyle = '#374151';
-      ctx.fillRect(px, y1, 1, y2 - y1 || 1);
-    }
+    drawPeaks(ctx, peakData, engine.peaksPerSecond, 0, duration, width, centerY, halfHeight, '#374151');
 
     // 3. TapMap entries
     for (const entry of tapMap) {
@@ -129,7 +118,7 @@ export function TimelineNavigator({
     const playheadX = (position / duration) * width;
     ctx.fillStyle = '#3B82F6';
     ctx.fillRect(Math.round(playheadX) - 0.75, 0, 1.5, height);
-  }, [engine.peakData, position, duration, viewStart, viewDuration, tapMap]);
+  }, [engine.peakData, engine.peaksPerSecond, peaksVersion, position, duration, viewStart, viewDuration, tapMap]);
 
   const clampViewStart = useCallback(
     (vs: number) => Math.max(0, Math.min(vs, duration - viewDuration)),

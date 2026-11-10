@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
+import { drawPeaks } from './drawPeaks';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
@@ -46,7 +47,7 @@ interface WaveformTimelineProps {
 
 export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}) {
   const engine = useAudioEngine();
-  const { position, duration, loopA, loopB, loopEnabled, followPlayhead, setFollowPlayhead } = useTransportStore();
+  const { position, duration, loopA, loopB, loopEnabled, followPlayhead, setFollowPlayhead, peaksVersion } = useTransportStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
   const lyricsLines = useLyricsEditorStore((s) => s.lines);
@@ -1202,24 +1203,9 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
     ctx.fillRect(0, 0, width, height);
 
     // Waveform — viewport-relative
-    const bucketCount = peakData.length / 2;
     const centerY = height / 2;
     const halfHeight = height / 2 - 2;
-
-    for (let px = 0; px < width; px++) {
-      const seconds = viewStart + (px / width) * effectiveViewDuration;
-      const fraction = seconds / duration;
-      const bucketIndex = Math.floor(fraction * bucketCount);
-      if (bucketIndex < 0 || bucketIndex >= bucketCount) continue;
-
-      const min = peakData[bucketIndex * 2];
-      const max = peakData[bucketIndex * 2 + 1];
-      const y1 = centerY + min * halfHeight;
-      const y2 = centerY + max * halfHeight;
-
-      ctx.fillStyle = '#4B5563';
-      ctx.fillRect(px, y1, 1, y2 - y1 || 1);
-    }
+    drawPeaks(ctx, peakData, engine.peaksPerSecond, viewStart, effectiveViewDuration, width, centerY, halfHeight, '#4B5563');
 
     // Played region tint
     const playheadX = secondsToPixel(position, width);
@@ -1308,7 +1294,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       ctx.fillStyle = '#3B82F6';
       ctx.fillRect(Math.round(playheadX) - 1, 0, 2, height);
     }
-  }, [engine.peakData, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB, loopEnabled, canvasReady, loopSelectTick]);
+  }, [engine.peakData, engine.peaksPerSecond, peaksVersion, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB, loopEnabled, canvasReady, loopSelectTick]);
 
   // Draw overview canvas (full song, only when zoomed)
   useEffect(() => {
@@ -1333,19 +1319,9 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
     ctx.fillRect(0, 0, width, height);
 
     // Waveform (full song)
-    const bucketCount = peakData.length / 2;
     const centerY = height / 2;
     const halfHeight = height / 2 - 1;
-
-    for (let px = 0; px < width; px++) {
-      const bucketIndex = Math.floor((px / width) * bucketCount);
-      const min = peakData[bucketIndex * 2];
-      const max = peakData[bucketIndex * 2 + 1];
-      const y1 = centerY + min * halfHeight;
-      const y2 = centerY + max * halfHeight;
-      ctx.fillStyle = '#374151';
-      ctx.fillRect(px, y1, 1, y2 - y1 || 1);
-    }
+    drawPeaks(ctx, peakData, engine.peaksPerSecond, 0, duration, width, centerY, halfHeight, '#374151');
 
     // Section markers only (keep overview clean)
     const tapMap = selectedSong?.tapMap;
@@ -1395,7 +1371,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
     const phx = (position / duration) * width;
     ctx.fillStyle = '#3B82F6';
     ctx.fillRect(Math.round(phx) - 0.5, 0, 1.5, height);
-  }, [engine.peakData, position, duration, selectedSong, isZoomed, viewStart, effectiveViewDuration, loopA, loopB, loopEnabled]);
+  }, [engine.peakData, engine.peaksPerSecond, peaksVersion, position, duration, selectedSong, isZoomed, viewStart, effectiveViewDuration, loopA, loopB, loopEnabled]);
 
   // Overview strip: drag the view box to slide the main waveform. Grab
   // the box anywhere and it keeps that grip; press outside it and the box

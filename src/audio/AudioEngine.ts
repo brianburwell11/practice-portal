@@ -3,6 +3,7 @@ import { TransportClock } from './TransportClock';
 import { StemPlayer, type LoopRegion } from './StemPlayer';
 import { SoundTouchFallbackNode } from './SoundTouchFallbackNode';
 import { BackgroundAudio } from './BackgroundAudio';
+import { PEAKS_PER_SECOND, computeStemEnvelope, maxOf, mixEnvelopes } from './mixPeaks';
 
 /** Common interface for both AudioWorklet and ScriptProcessorNode pitch correction paths */
 interface PitchCorrectorNode {
@@ -38,7 +39,13 @@ export class AudioEngine {
   /** Stems deferred for lazy decode — stored as raw ArrayBuffer until unmuted */
   private pendingStems: Map<string, { config: StemConfig; arrayBuffer: ArrayBuffer }> = new Map();
   private _songConfig: SongConfig | null = null;
+  /** The live mix's waveform: peak amplitude (0..1) per bucket, in song time */
   private _peakData: Float32Array | null = null;
+  /** Each decoded stem's envelope, in its own time */
+  private stemEnvelopes: Map<string, Float32Array> = new Map();
+  /** Fixed per song so turning stems down shrinks the waveform rather than re-normalizing it */
+  private peakScale = 0;
+  private _peaksVersion = 0;
   private onStateChange: EngineStateCallback | null = null;
   private animFrameId: number | null = null;
   private groupConfigs: StemGroupConfig[] = [];
@@ -85,6 +92,15 @@ export class AudioEngine {
 
   get peakData(): Float32Array | null {
     return this._peakData;
+  }
+
+  get peaksPerSecond(): number {
+    return PEAKS_PER_SECOND;
+  }
+
+  /** Changes whenever peakData does */
+  get peaksVersion(): number {
+    return this._peaksVersion;
   }
 
   get loopA(): number | null {
@@ -182,6 +198,7 @@ export class AudioEngine {
         player.stereo = true;
       }
       this.stems.set(stemConfig.id, player);
+      this.stemEnvelopes.set(stemConfig.id, computeStemEnvelope(audioBuffer));
     }
 
     // Initialize group state
@@ -195,7 +212,8 @@ export class AudioEngine {
       }
     }
 
-    this._peakData = this.computeMergedPeaks(2048);
+    this.peakScale = 0;
+    this.refreshPeaks();
     this.notify();
   }
 
@@ -429,47 +447,30 @@ export class AudioEngine {
         groupMuted: gs?.muted ?? false,
       });
     }
+    this.refreshPeaks();
   }
 
-  private computeMergedPeaks(bucketCount: number): Float32Array {
-    const peaks = new Float32Array(bucketCount * 2); // interleaved [min, max, ...]
+  /** Rebuild the waveform from each stem's current gain and offset. Master volume is left out. */
+  private refreshPeaks(): void {
+    const mix = (unity: boolean) =>
+      mixEnvelopes(
+        Array.from(this.stems, ([id, stem]) => ({
+          env: this.stemEnvelopes.get(id) ?? new Float32Array(0),
+          offsetSec: stem.offsetSec,
+          gain: unity ? 1 : stem.effectiveGain,
+        })),
+        this.clock.duration,
+      );
 
-    // Find the longest buffer to determine total sample count
-    let maxLength = 0;
-    for (const stem of this.stems.values()) {
-      maxLength = Math.max(maxLength, stem.audioBuffer.length);
+    const peaks = mix(false);
+    if (this.peakScale === 0) {
+      // First draw for this song: let its starting mix fill the height
+      const max = maxOf(peaks) || maxOf(mix(true));
+      if (max > 0) this.peakScale = 0.95 / max;
     }
-    if (maxLength === 0) return peaks;
-
-    const samplesPerBucket = maxLength / bucketCount;
-
-    for (let b = 0; b < bucketCount; b++) {
-      let bucketMin = 0;
-      let bucketMax = 0;
-      const start = Math.floor(b * samplesPerBucket);
-      const end = Math.floor((b + 1) * samplesPerBucket);
-
-      for (const stem of this.stems.values()) {
-        const buf = stem.audioBuffer;
-        if (start >= buf.length) continue;
-        const channels = buf.numberOfChannels;
-        const sampleEnd = Math.min(end, buf.length);
-
-        for (let ch = 0; ch < channels; ch++) {
-          const data = buf.getChannelData(ch);
-          for (let s = start; s < sampleEnd; s++) {
-            const val = data[s] / channels; // average across channels
-            if (val < bucketMin) bucketMin = val;
-            if (val > bucketMax) bucketMax = val;
-          }
-        }
-      }
-
-      peaks[b * 2] = bucketMin;
-      peaks[b * 2 + 1] = bucketMax;
-    }
-
-    return peaks;
+    for (let i = 0; i < peaks.length; i++) peaks[i] = Math.min(1, peaks[i] * this.peakScale);
+    this._peakData = peaks;
+    this._peaksVersion++;
   }
 
   /** Decode a deferred stem, create its StemPlayer, and join playback if active */
@@ -491,6 +492,7 @@ export class AudioEngine {
       player.stereo = true;
     }
     this.stems.set(id, player);
+    this.stemEnvelopes.set(id, computeStemEnvelope(audioBuffer));
     player.setLoop(this.loopRegion());
 
     // If currently playing, start the new stem at the current position
@@ -567,7 +569,9 @@ export class AudioEngine {
     }
     this.stems.clear();
     this.pendingStems.clear();
+    this.stemEnvelopes.clear();
     this._peakData = null;
+    this._peaksVersion++;
     if (this.pitchNode) {
       this.mixBus.disconnect();
       this.pitchNode.disconnect();

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
+import { drawPeaks } from '../transport/drawPeaks';
 import { useTransportStore } from '../../store/transportStore';
 
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
@@ -19,7 +20,7 @@ export function MarkerEditorCanvas({
   onViewDurationChange,
 }: MarkerEditorCanvasProps) {
   const engine = useAudioEngine();
-  const { position, duration } = useTransportStore();
+  const { position, duration, peaksVersion } = useTransportStore();
 
   const {
     tapMap,
@@ -143,25 +144,9 @@ export function MarkerEditorCanvas({
     ctx.fillRect(0, 0, width, height);
 
     // 2. Waveform — only draw the visible viewport portion
-    const bucketCount = peakData.length / 2;
     const centerY = height / 2;
     const halfHeight = height / 2 - 2;
-
-    for (let px = 0; px < width; px++) {
-      const seconds = viewStart + (px / width) * viewDuration;
-      const fraction = seconds / duration;
-      const bucketIndex = Math.floor(fraction * bucketCount);
-      if (bucketIndex < 0 || bucketIndex >= bucketCount) continue;
-
-      const min = peakData[bucketIndex * 2];
-      const max = peakData[bucketIndex * 2 + 1];
-
-      const y1 = centerY + min * halfHeight;
-      const y2 = centerY + max * halfHeight;
-
-      ctx.fillStyle = '#4B5563';
-      ctx.fillRect(px, y1, 1, y2 - y1 || 1);
-    }
+    drawPeaks(ctx, peakData, engine.peaksPerSecond, viewStart, viewDuration, width, centerY, halfHeight, '#4B5563');
 
     // 3. TapMap entries
     ctx.font = '11px ui-monospace, monospace';
@@ -225,7 +210,7 @@ export function MarkerEditorCanvas({
       ctx.fillStyle = '#3B82F6';
       ctx.fillRect(Math.round(playheadX) - 1, 0, 2, height);
     }
-  }, [engine.peakData, position, duration, tapMap, selectedIndex, viewStart, viewDuration, secondsToPixel, onViewChange]);
+  }, [engine.peakData, engine.peaksPerSecond, peaksVersion, position, duration, tapMap, selectedIndex, viewStart, viewDuration, secondsToPixel, onViewChange]);
 
   // Playhead animation during playback
   useEffect(() => {
