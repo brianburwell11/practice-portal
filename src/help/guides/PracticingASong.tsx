@@ -40,6 +40,12 @@ export default function PracticingASong() {
       </HelpSection>
 
       <HelpSection title="Looping a section">
+        <p>
+          The quickest way: drag across the part you want on the waveform. On a phone or tablet, press and hold on the
+          waveform for a moment, then drag. The ends snap to nearby sections and bar lines, and more gently to beats
+          if the song’s timing is marked. To put an end between beats, zoom in, or hold <Key>Alt</Key> (<Key>Option</Key>
+          on a Mac) while you drag. The loop turns on, and playback jumps to its start if it was somewhere else. <Key>Esc</Key> cancels a drag partway through.
+        </p>
         <p>The loop button (↻) works in steps:</p>
         <Steps>
           <li>Click it where the loop should start.</li>
@@ -88,7 +94,14 @@ export default function PracticingASong() {
             Zoom in and out with <Key>Ctrl</Key> or <Key>⌘</Key> and your scroll wheel, or pinch on a trackpad or
             phone. Phones also have zoom buttons and a strip showing the whole song.
           </li>
-          <li><Key>Shift</Key> and scroll moves left and right. Dragging moves the view too.</li>
+          <li>
+            When you’re zoomed in, a strip under the waveform shows the whole song, with a box around the part in view.
+            Drag the box to move along, or click the strip to jump there.
+          </li>
+          <li>
+            <Key>Shift</Key> and scroll moves left and right. On a computer, <Key>Alt</Key>+drag (<Key>Option</Key> on a
+            Mac) moves the view too, since a plain drag sets a loop. On a phone, drag with one finger.
+          </li>
           <li>
             The view follows the playhead as the song plays. Moving the view yourself stops that; press{' '}
             <Key>`</Key> to turn following back on.

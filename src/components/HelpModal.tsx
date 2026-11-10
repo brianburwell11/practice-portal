@@ -22,6 +22,9 @@ const shortcuts = [
   { key: 'Cmd/Ctrl + Scroll', action: 'Zoom waveform in/out' },
   { key: 'Shift + Scroll', action: 'Scroll waveform left/right' },
   { key: 'Pinch', action: 'Zoom waveform (touch)' },
+  { key: 'Drag', action: 'Loop a stretch of the waveform' },
+  { key: 'Alt + drag', action: 'Move the waveform view' },
+  { key: 'Hold, then drag', action: 'Loop a stretch (touch)' },
   { key: 'Shift + click', action: 'Clear loop / mute group / solo group' },
   { key: 'Long-press', action: 'The same, on a phone or tablet' },
 ];

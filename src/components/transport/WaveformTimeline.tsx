@@ -5,7 +5,7 @@ import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
 import { useChordsEditorStore } from '../../store/chordsEditorStore';
-import { beatGrid, snapTime } from '../../audio/chordGrid';
+import { beatGrid, lastAtOrBefore, snapTime } from '../../audio/chordGrid';
 import { displayChord } from '../../audio/chordSymbols';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import type { TapMapEntry } from '../../audio/types';
@@ -21,11 +21,15 @@ const isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: c
 const SNAP_PX = isCoarse ? 24 : 12;
 /** Loop marker hit test threshold in pixels */
 const HIT_PX = isCoarse ? 20 : 6;
+/** Most a plain beat pulls a loop edge, in pixels: gentler than bars and sections. */
+const BEAT_SNAP_PX = isCoarse ? 12 : 7;
 /** Minimum zoom level in seconds */
 /** Chord markers in the chords editor: pink, apart from lyric cyan, section gold and loop yellow. */
 const CHORD_MARKER_COLOR = '#f472b6';
 
 const MIN_VIEW = 5;
+/** How long a finger must rest on the waveform before a drag selects a loop instead of panning. */
+const LONG_PRESS_MS = 450;
 /** Default zoom level in seconds for mobile */
 const DEFAULT_MOBILE_VIEW = 30;
 /** Default zoom level in seconds for desktop (songs > 2.5 min start zoomed) */
@@ -96,6 +100,31 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
   const dragStartRef = useRef<{ x: number; viewStart: number } | null>(null);
   const didDragRef = useRef(false);
   const DRAG_THRESHOLD = 8;
+
+  // Drag across an empty stretch of waveform to set a loop. With a mouse
+  // it's a plain drag (Alt/Option-drag still pans); on touch it's press,
+  // hold, then drag, so a one-finger drag still pans. `active` once the
+  // selection has started; until then it may still turn into a click,
+  // a pan or a pinch. Committed on release, so a slip can't clobber the
+  // current loop mid-drag.
+  const loopSelectRef = useRef<{ anchor: number; current: number; startX: number; active: boolean } | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const [loopSelecting, setLoopSelecting] = useState(false);
+  const [loopSelectTick, setLoopSelectTick] = useState(0);
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+  const cancelLoopSelect = useCallback(() => {
+    cancelLongPress();
+    if (!loopSelectRef.current) return;
+    loopSelectRef.current = null;
+    setLoopSelecting(false);
+    setLoopSelectTick((n) => n + 1);
+  }, [cancelLongPress]);
+  useEffect(() => cancelLongPress, [cancelLongPress]);
 
   const effectiveViewDuration = Math.min(viewDuration, duration || Infinity);
   const isZoomed = duration > 0 && effectiveViewDuration < duration;
@@ -287,6 +316,59 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
     [chordsEditorOpen, selectedSong?.tapMap, selectedSong?.timeSignatureMap],
   );
 
+  // Every beat of a tapped song, for loop-selection snapping. Songs without
+  // a tapMap have no trustworthy beats, so they only snap to their markers.
+  const loopSnapGrid = useMemo(
+    () => (displayTapMap?.length ? beatGrid(displayTapMap, selectedSong?.timeSignatureMap) : []),
+    [displayTapMap, selectedSong?.timeSignatureMap],
+  );
+
+  /**
+   * Where a loop edge dragged to pixel `x` lands. Bar lines and sections
+   * pull from SNAP_PX away; plain beats pull more gently, and never from
+   * more than a third of the way to the next beat, so there's always room
+   * between beats to let go off the grid. Each line pulls in proportion to
+   * its reach, so a beat right under the pointer beats a bar a few pixels
+   * off. `free` (Alt/Option held mid-drag) turns snapping off.
+   */
+  const snapLoopEdge = useCallback(
+    (x: number, free: boolean): { time: number; snapped: boolean } => {
+      const { width } = sizeRef.current;
+      const raw = Math.max(0, Math.min(pixelToSeconds(x, width), duration || 0));
+      if (free || width === 0) return { time: raw, snapped: false };
+
+      let best: { time: number; score: number } | null = null;
+      const consider = (time: number, reach: number) => {
+        if (reach <= 0) return;
+        const score = Math.abs(secondsToPixel(time, width) - x) / reach;
+        if (score <= 1 && (!best || score < best.score)) best = { time, score };
+      };
+
+      const grid = loopSnapGrid;
+      if (grid.length > 0) {
+        const i = Math.max(0, lastAtOrBefore(grid, raw));
+        for (let j = Math.max(0, i - 2); j <= Math.min(grid.length - 1, i + 3); j++) {
+          const line = grid[j];
+          if (line.bar || line.label) {
+            consider(line.time, SNAP_PX);
+          } else {
+            const prev = grid[j - 1]?.time ?? -Infinity;
+            const next = grid[j + 1]?.time ?? Infinity;
+            const gapPx = (Math.min(line.time - prev, next - line.time) / effectiveViewDuration) * width;
+            consider(line.time, Math.min(BEAT_SNAP_PX, gapPx / 3));
+          }
+        }
+      } else {
+        const marker = findSnapMarker(x);
+        if (marker !== null) consider(marker, SNAP_PX);
+      }
+
+      const hit = best as { time: number; score: number } | null;
+      return hit ? { time: hit.time, snapped: true } : { time: raw, snapped: false };
+    },
+    [duration, pixelToSeconds, secondsToPixel, loopSnapGrid, effectiveViewDuration, findSnapMarker],
+  );
+
   const [cursorStyle, setCursorStyle] = useState<string>('pointer');
 
   // Right-click context menu for changing a tapMap entry's type. Only
@@ -301,6 +383,9 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
   const handleContextMenu = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (!markerEditorOpen) return;
+      // A touch long-press selects a loop; keep the browser's menu away.
+      if (loopSelectRef.current || isCoarse) e.preventDefault();
+      if (loopSelectRef.current?.active) return;
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const hit = hitTestEditorEntry(x);
@@ -422,6 +507,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         pinchStartRef.current = { dist, viewDuration: effectiveViewDuration, centerX };
         dragStartRef.current = null;
         setDraggingMarker(null);
+        cancelLoopSelect();
         return;
       }
 
@@ -487,11 +573,35 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         return;
       }
 
-      // Start potential drag-to-pan (on touch) or just track position
+      // Start potential drag-to-pan or just track position
       dragStartRef.current = { x: e.clientX, viewStart };
       didDragRef.current = false;
+
+      // Empty waveform: maybe the start of a loop selection.
+      cancelLoopSelect();
+      if (!duration || e.button !== 0) return;
+      const anchor = snapLoopEdge(x, false).time;
+      if (e.pointerType === 'mouse') {
+        // Plain drag selects; Alt/Option-drag pans like before.
+        if (e.altKey) return;
+        dragStartRef.current = null;
+        loopSelectRef.current = { anchor, current: anchor, startX: e.clientX, active: false };
+        return;
+      }
+      // Touch / pen: hold still for a moment to start selecting.
+      loopSelectRef.current = { anchor, current: anchor, startX: e.clientX, active: false };
+      longPressTimerRef.current = window.setTimeout(() => {
+        longPressTimerRef.current = null;
+        const sel = loopSelectRef.current;
+        if (!sel || didDragRef.current || pointersRef.current.size !== 1) return;
+        sel.active = true;
+        dragStartRef.current = null;
+        navigator.vibrate?.(10);
+        setLoopSelecting(true);
+        setLoopSelectTick((n) => n + 1);
+      }, LONG_PRESS_MS);
     },
-    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestChordMarker, hitTestNote, editorTapMap, lyricsLines, editorChords, notes, canEditNote, setMarkerSelectedIndex, effectiveViewDuration, viewStart],
+    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestChordMarker, hitTestNote, editorTapMap, lyricsLines, editorChords, notes, canEditNote, setMarkerSelectedIndex, effectiveViewDuration, viewStart, duration, snapLoopEdge, cancelLoopSelect],
   );
 
   const handlePointerMove = useCallback(
@@ -575,6 +685,33 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         return;
       }
 
+      // Loop selection: extend it, or decide whether this press becomes one
+      const sel = loopSelectRef.current;
+      if (sel) {
+        const isMouse = e.pointerType === 'mouse';
+        if (!sel.active && Math.abs(e.clientX - sel.startX) >= DRAG_THRESHOLD) {
+          if (isMouse) {
+            sel.active = true;
+            setLoopSelecting(true);
+            setCursorStyle('ew-resize');
+          } else {
+            // Moved before the long-press fired: it's a pan, not a selection.
+            cancelLoopSelect();
+          }
+        }
+        if (sel.active) {
+          const { width } = sizeRef.current;
+          const cx = Math.max(0, Math.min(x, width));
+          // Hold Alt/Option mid-drag to place an edge off the grid.
+          const edge = snapLoopEdge(cx, isMouse && e.altKey);
+          sel.current = edge.time;
+          setHoveredTime(edge.snapped ? edge.time : null);
+          setLoopSelectTick((n) => n + 1);
+          return;
+        }
+        if (isMouse) return;
+      }
+
       // Single-finger drag-to-pan (when zoomed)
       if (dragStartRef.current && isZoomed) {
         const dx = e.clientX - dragStartRef.current.x;
@@ -607,7 +744,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         setHoveredTime(findSnapMarker(x));
       }
     },
-    [draggingMarker, findSnapMarker, hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestChordMarker, hitTestNote, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead, chordGrid, chordSnap],
+    [draggingMarker, findSnapMarker, hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestChordMarker, hitTestNote, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead, chordGrid, chordSnap, cancelLoopSelect, snapLoopEdge],
   );
 
   const handlePointerUp = useCallback(
@@ -698,6 +835,31 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         return;
       }
 
+      // End loop selection: set the loop and, if the playhead is outside
+      // it, start from the top of it. A long-press released without a
+      // drag does nothing. One that never started falls through to the
+      // tap-to-seek / pan handling below.
+      const sel = loopSelectRef.current;
+      cancelLoopSelect();
+      if (sel?.active) {
+        dragStartRef.current = null;
+        didDragRef.current = false;
+        setHoveredTime(null);
+        setCursorStyle('pointer');
+        const a = Math.min(sel.anchor, sel.current);
+        const b = Math.max(sel.anchor, sel.current);
+        const { width } = sizeRef.current;
+        if (secondsToPixel(b, width) - secondsToPixel(a, width) >= DRAG_THRESHOLD) {
+          engine.setLoop(a, b);
+          const pos = useTransportStore.getState().position;
+          if (pos < a || pos >= b) {
+            engine.seek(a);
+            setFollowPlayhead(true);
+          }
+        }
+        return;
+      }
+
       // End drag-to-pan — if we dragged, don't seek
       if (didDragRef.current) {
         dragStartRef.current = null;
@@ -718,7 +880,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         setFollowPlayhead(true);
       }
     },
-    [draggingMarker, moveLyricLine, moveMarkerEntry, setNoteTime, notes, duration, findSnapMarker, pixelToSeconds, engine, setFollowPlayhead],
+    [draggingMarker, moveLyricLine, moveMarkerEntry, setNoteTime, notes, duration, findSnapMarker, pixelToSeconds, secondsToPixel, engine, setFollowPlayhead, cancelLoopSelect],
   );
 
   const handlePointerLeave = useCallback(
@@ -735,13 +897,31 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       dragChordRef.current = null;
       dragEditorEntryRef.current = null;
       dragNoteRef.current = null;
+      cancelLoopSelect();
       setHoveredNote(null);
       dragStartRef.current = null;
       didDragRef.current = false;
       setCursorStyle('pointer');
     },
-    [draggingMarker],
+    [draggingMarker, cancelLoopSelect],
   );
+
+  // Esc drops a loop selection in progress; the release that follows
+  // must not count as a click, so it's marked as a drag.
+  useEffect(() => {
+    if (!loopSelecting) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      cancelLoopSelect();
+      didDragRef.current = true;
+      setHoveredTime(null);
+      setCursorStyle('pointer');
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [loopSelecting, cancelLoopSelect]);
 
   // Cmd+scroll zoom, shift+scroll horizontal navigation
   useEffect(() => {
@@ -1089,6 +1269,25 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       }
     }
 
+    // Loop selection in progress: a brighter band with dashed ends
+    const sel = loopSelectRef.current;
+    if (sel?.active) {
+      const x1 = secondsToPixel(Math.min(sel.anchor, sel.current), width);
+      const x2 = secondsToPixel(Math.max(sel.anchor, sel.current), width);
+      ctx.fillStyle = 'rgba(234, 179, 8, 0.25)';
+      ctx.fillRect(x1, 0, x2 - x1, height);
+      ctx.strokeStyle = '#eab308';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x1, 0);
+      ctx.lineTo(x1, height);
+      ctx.moveTo(x2, 0);
+      ctx.lineTo(x2, height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     // Hover highlight
     if (hoveredTime !== null) {
       const hx = secondsToPixel(hoveredTime, width);
@@ -1109,7 +1308,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       ctx.fillStyle = '#3B82F6';
       ctx.fillRect(Math.round(playheadX) - 1, 0, 2, height);
     }
-  }, [engine.peakData, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB, loopEnabled, canvasReady]);
+  }, [engine.peakData, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB, loopEnabled, canvasReady, loopSelectTick]);
 
   // Draw overview canvas (full song, only when zoomed)
   useEffect(() => {
@@ -1198,18 +1397,69 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
     ctx.fillRect(Math.round(phx) - 0.5, 0, 1.5, height);
   }, [engine.peakData, position, duration, selectedSong, isZoomed, viewStart, effectiveViewDuration, loopA, loopB, loopEnabled]);
 
-  // Overview click: seek + center viewport
-  const handleOverviewClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!duration) return;
+  // Overview strip: drag the view box to slide the main waveform. Grab
+  // the box anywhere and it keeps that grip; press outside it and the box
+  // centers on the pointer, then follows the drag. A click without a drag
+  // still moves playback there, as before.
+  const overviewDragRef = useRef<{ offset: number; startX: number; moved: boolean } | null>(null);
+  const [overviewCursor, setOverviewCursor] = useState<'pointer' | 'grab' | 'grabbing'>('pointer');
+
+  const overviewTime = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const seconds = (x / rect.width) * duration;
-      engine.seek(Math.max(0, Math.min(seconds, duration)));
-      setViewStart(clampViewStart(seconds - effectiveViewDuration / 2, effectiveViewDuration));
+      const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+      return rect.width > 0 ? (x / rect.width) * duration : 0;
     },
-    [engine, duration, effectiveViewDuration, clampViewStart],
+    [duration],
   );
+
+  const handleOverviewPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      if (!duration || e.button !== 0) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const t = overviewTime(e);
+      const inBox = t >= viewStart && t <= viewStart + effectiveViewDuration;
+      const offset = inBox ? t - viewStart : effectiveViewDuration / 2;
+      overviewDragRef.current = { offset, startX: e.clientX, moved: false };
+      setOverviewCursor('grabbing');
+    },
+    [duration, overviewTime, viewStart, effectiveViewDuration],
+  );
+
+  const handleOverviewPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const t = overviewTime(e);
+      const drag = overviewDragRef.current;
+      if (!drag) {
+        setOverviewCursor(t >= viewStart && t <= viewStart + effectiveViewDuration ? 'grab' : 'pointer');
+        return;
+      }
+      if (!drag.moved && Math.abs(e.clientX - drag.startX) < 3) return;
+      drag.moved = true;
+      setViewStart(clampViewStart(t - drag.offset, effectiveViewDuration));
+      setFollowPlayhead(false);
+    },
+    [overviewTime, viewStart, effectiveViewDuration, clampViewStart, setFollowPlayhead],
+  );
+
+  const handleOverviewPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const drag = overviewDragRef.current;
+      overviewDragRef.current = null;
+      setOverviewCursor('grab');
+      if (!drag || drag.moved || !duration) return;
+      const seconds = overviewTime(e);
+      engine.seek(seconds);
+      setViewStart(clampViewStart(seconds - effectiveViewDuration / 2, effectiveViewDuration));
+      setFollowPlayhead(true);
+    },
+    [engine, duration, overviewTime, effectiveViewDuration, clampViewStart, setFollowPlayhead],
+  );
+
+  const handleOverviewPointerCancel = useCallback(() => {
+    overviewDragRef.current = null;
+    setOverviewCursor('pointer');
+  }, []);
 
   // Mobile zoom controls
   const handleZoom = useCallback(
@@ -1235,7 +1485,8 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         data-waveform-timeline={compact ? undefined : true}
         // The waveform paints its own dark panel; overlays keep the stock colors.
         className={`theme-default ${compact ? 'h-[44px]' : 'h-[80px] md:h-[108px]'} relative rounded overflow-hidden`}
-        style={{ cursor: cursorStyle, touchAction: 'none' }}
+        // No iOS callout or text selection on the press-and-hold that starts a loop.
+        style={{ cursor: cursorStyle, touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
       >
         <canvas
           ref={canvasRef}
@@ -1244,6 +1495,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerLeave}
+          onPointerCancel={handlePointerLeave}
           onContextMenu={handleContextMenu}
         />
         {hoveredNote && !dragNoteRef.current && (() => {
@@ -1373,12 +1625,17 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
           </button>
           <div
             ref={overviewContainerRef}
-            className="flex-1 h-5 relative cursor-pointer rounded overflow-hidden border border-gray-700/50"
+            className="flex-1 h-5 relative rounded overflow-hidden border border-gray-700/50"
+            style={{ cursor: overviewCursor, touchAction: 'none', userSelect: 'none' }}
           >
             <canvas
               ref={overviewCanvasRef}
               className="w-full h-full"
-              onClick={handleOverviewClick}
+              onPointerDown={handleOverviewPointerDown}
+              onPointerMove={handleOverviewPointerMove}
+              onPointerUp={handleOverviewPointerUp}
+              onPointerCancel={handleOverviewPointerCancel}
+              onPointerLeave={() => { if (!overviewDragRef.current) setOverviewCursor('pointer'); }}
             />
           </div>
           <button

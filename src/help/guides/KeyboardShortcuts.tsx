@@ -28,13 +28,16 @@ export default function KeyboardShortcuts() {
             ['Show or hide the chords (computer only)', <Key>K</Key>],
             ['Zoom the waveform', <><Key>Ctrl</Key>+scroll, or pinch</>],
             ['Move along the waveform or lyrics', <><Key>Shift</Key>+scroll</>],
+            ['Loop a stretch of the waveform', 'Drag across it'],
+            ['Move the waveform view by dragging', <><Key>Alt</Key>/<Key>Option</Key>+drag</>],
             ['Reset Speed, Vol or a part’s Pan', 'Double-click the slider'],
             ['Close a window', <Key>Esc</Key>],
           ]}
         />
         <Note>
           On a phone or tablet, press and hold instead of <Key>Shift</Key>+click: hold the loop button to clear the loop,
-          or the big M or S to clear every part’s mute or solo. Hold play to stop.
+          or the big M or S to clear every part’s mute or solo. Hold play to stop. To loop a stretch of the waveform, hold
+          on it for a moment, then drag.
         </Note>
         <p>
           More on mute and solo in <GuideLink slug="using-the-mixer">Using the mixer</GuideLink>.
