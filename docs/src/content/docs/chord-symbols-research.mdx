@@ -1,0 +1,449 @@
+---
+title: "Synced Chord Symbols: Research and Proposal"
+description: "How other practice, notation and DAW tools handle time-synced chord symbols: input, display, timing, formats and auto-detection, and what that means for a chord track in Practice Portal."
+pubDate: "Nov 09 2026"
+tags: ["chords", "lyrics", "tapmap", "sync", "research", "plan", "interactive"]
+---
+
+import { NowNextPanel } from '../../components/react/chords/NowNextPanel';
+import { ChordLane } from '../../components/react/chords/ChordLane';
+import { ChordsOverLyrics } from '../../components/react/chords/ChordsOverLyrics';
+import { BarGridView } from '../../components/react/chords/BarGridView';
+import { GridTypingEditor } from '../../components/react/chords/GridTypingEditor';
+import { TapToStamp } from '../../components/react/chords/TapToStamp';
+import { DisplaySettings } from '../../components/react/chords/DisplaySettings';
+import { BeatAnchorDemo } from '../../components/react/chords/BeatAnchorDemo';
+import { DetectionFixer } from '../../components/react/chords/DetectionFixer';
+import { NashvilleKeys } from '../../components/react/chords/NashvilleKeys';
+
+Lyrics already scroll with the song: each line is `{ text, time }`, stamped live with <kbd>Tab</kbd> in the Lyrics Editor. This page looks at how other tools handle the same job for **chord symbols**, and proposes how a chord track should work here.
+
+Short version:
+
+- **Almost every serious tool positions chords by bar and beat, not by raw seconds.** We have the beat grid (the tapMap) for *entering and showing* chords, but we decided to *store* plain seconds, like lyrics; see [Bar and beat anchors, or seconds?](#bar-and-beat-anchors-or-seconds).
+- **Tools that show chords during playback give you more than one view.** Editors get a timeline lane. Players get a big "now / next" chord or a bar grid with the current cell lit. Singers and rhythm players get chords over the lyrics.
+- **The fastest way to enter chords is typing on a beat grid** (type a chord, press Space for the next beat, Tab for the next bar). Tap-to-stamp, the way lyrics work now, is a good fallback.
+- **Auto-detection is a first draft, not finished data.** The state of the art labels about 80% of a song correctly, and only for major and minor chords. If we ever add it, the correction UI matters more than the detector.
+- **Transpose, capo, Nashville numbers and simplified chords are display settings.** None of them change the stored chords.
+
+**Playable sketches.** The [proposal](#proposal-for-practice-portal) has a small widget for each idea. They all run on a made-up 17-bar song in G with a slightly human tapMap, a short free-time intro with no tapMap under it, and three pushed chords. There's no audio file: you hear a soft click on each beat and a synth chord on each change, and the **Chords** and **Click** buttons turn those off. These are rough sketches to react to, not the real UI.
+
+## Decisions
+
+Made Nov 10 2026, after playing with the sketches.
+
+| Question | Decision |
+|---|---|
+| Who can edit chords | Anyone with Editor access or above (Owner, Manager, Editor), same as lyrics |
+| Score vs chord track | Independent. A score's chord symbols don't drive the chord track, and editing one never changes the other |
+| Transpose / audio pitch shift | Not now |
+| Chord diagrams | Not worth it |
+| Key changes, Nashville numbers, Roman numerals | Not now |
+| How chords are shown | Chord names only (no simplify, no capo) |
+| Chord input | **Typing on the beat grid**, plus **tap to stamp** as a second mode for free time and songs without a tapMap. Imports and detection are later |
+| Chord display | **A scrolling now / next lane**, no countdown (the scrolling already shows how far off the next chord is), under the waveform: below notes, above lyrics. On desktop the current chord starts on the same line as the current lyric. The other views are later |
+| Bar and beat anchors, or seconds | **Seconds only (option C).** Chords are placed on the beat grid when typed (with `<` for pushes); a Snap to grid button tidies chords after a tapMap edit; free time never snaps. [Details](#bar-and-beat-anchors-or-seconds) |
+
+The parked ideas and their sketches are kept at the end of the page under [Parked for now](#parked-for-now).
+
+---
+
+## What other tools do
+
+### Practice apps that detect chords from audio
+
+| Tool | Input | Display during playback | Timing |
+|---|---|---|---|
+| **Moises** | AI detection with Easy, Medium and Advanced vocabularies. | A "Bar mode" strip, plus a "Grid mode" showing the whole song in bars and beats, which can be paired with lyrics. | Bars and beats (it detects beats too). |
+| **Capo** (SuperMegaUltraGroovy) | On-device detection. Press <kbd>K</kbd> to add a chord at the playhead; it re-detects just that spot and plays the shape. Double-click opens a chooser: likely chords first, then search, then voicings. "Apply to all matching chords" fixes a mistake everywhere at once. Chords can be dragged. | A chord lane under the waveform. When chords crowd at low zoom it shows only the last one as "…Am". There's also a separate lead-sheet "Chords" view; its Grid-aligned layout (1 to 4 bars per line) is the one its docs recommend for playing along. | Timeline positions over a beat grid, which you correct separately. |
+| **Chordify** | Auto-detected from YouTube, files and streaming services; the community can correct it. | Grid view with autoscroll, a timeline view, and animated guitar, piano and ukulele diagrams. | Beat grid. |
+| **Chord ai** | Detects chords, beats and lyrics from files or the mic, offline. Editing is Pro only. | Diagrams, with a left-handed option. | Beat grid. |
+| **Riffstation** (discontinued 2019) | Auto-detect only. | Diagrams during playback. | A cautionary tale: reviews say detection often needed fixing and missed 7ths and diminished chords. |
+
+### Curated play-along apps
+
+- **Ultimate Guitar "Official" tabs** are made by hand and paired with a closely aligned backing track and a mixer. Whether autoscroll actually follows the audio is unclear.
+- **Songsterr** syncs tabs to the original audio for selected songs. It has no separate chords-over-audio mode that we could find.
+- **Spotify** has no chord feature; its community has an open idea asking for chords "in sync just like lyrics". Extensions like Strumio add timestamped chords and lyrics on top.
+
+### Grid entry: iReal Pro and Band-in-a-Box
+
+- **iReal Pro:** each line has 16 cells, usually four per bar. You type chords into cells, and `/` repeats the previous chord on a beat. Timing is bars and beats only, never seconds.
+- **Band-in-a-Box:** keyboard-only, built for speed.
+  - The chord sheet has one cell per bar, and the cursor covers two beats.
+  - <kbd>Enter</kbd> moves forward two beats. A comma (`C,F`) splits a half-bar into two chords.
+  - It fixes capitalization for you, so you never press Shift.
+  - Typed commands like `tkc` set the key.
+
+### Notation software: type, then advance a beat
+
+| Tool | Open entry | Next beat | Next bar | Notable |
+|---|---|---|---|---|
+| **MuseScore 4** | <kbd>Cmd/Ctrl+K</kbd> | <kbd>Space</kbd> or <kbd>;</kbd> | <kbd>Cmd/Ctrl+→</kbd> | Accepts many spellings (`m`/`min`/`-`, `M`/`maj`/`t`, `o`/`dim`, `0` half-dim), plus slash chords, polychords and `N.C.`. Can display Nashville numbers and Roman numerals; Transpose moves the chords too. |
+| **Dorico** | <kbd>Shift+Q</kbd> | <kbd>Space</kbd> (one *metric* beat, so 5/4 counts as 3+2) | <kbd>Shift+Space</kbd> / <kbd>Tab</kbd> | With MIDI input it moves to the next beat on its own after each chord you play. |
+| **Sibelius** | <kbd>Cmd/Ctrl+K</kbd> | <kbd>Space</kbd> | <kbd>Tab</kbd> | Since 2023 it suggests the chord that best fits the notes already at that spot. |
+
+### DAW chord tracks
+
+- **Logic Pro:** the Chord track is a global lane. Session Players follow it. Logic 12's **Chord ID** detects chords from audio when you drag a region onto the track.
+- **Cubase / Nuendo:** drop audio on the chord track to detect chords. Chords that came from audio get a badge, so you can tell them from ones you typed.
+- **Studio One:** "Extract to Chord Track" works from MIDI or audio. Its users are advised to fix the chord start points by hand afterwards.
+
+### Chords over lyrics: OnSong and SongbookPro
+
+Both are built on ChordPro (`[G]like [C]this`), with autoscroll like a teleprompter but no link to audio.
+
+- **OnSong:** Nashville (1–7) and Roman (I, ii…) chord styles, *display only*. A capo slider from 0 to 11 shifts the chord shapes while the key stays the same, and the direction can be flipped. If a song has no key, it guesses one from the first chord.
+- **SongbookPro:** spells sharps or flats to suit the key (Eb vs D#). It can force chord-only lines into a monospaced font so they line up.
+
+### Transcribe!
+
+Transcribe! has no chord feature. Its markers (Section, Measure, Beat, tapped with <kbd>S</kbd> <kbd>M</kbd> <kbd>B</kbd>) can carry text labels, and some people type chord names into them. Our `xscParser.ts` keeps labels on **section** markers only today. If Brian has `.xsc` files with chord names on measure or beat markers, keeping those labels would give us a free chord import.
+
+---
+
+## Patterns worth copying
+
+1. **Anchor chords to the beat grid.** A chord happens *on a beat*. If the tapMap is retimed, the chords should move with it, with no re-stamping.
+2. **Separate the editing view from the playing view.** A timeline lane is good for fixing timing. A big current chord, or a bar grid, is good for playing along.
+3. **Accept any spelling, store one canonical form.** `Cm7`, `C-7` and `Cmin7` should all be accepted and stored the same way.
+4. **Keep display changes out of the data.** Transpose, capo, Nashville or Roman numerals, simplification, enharmonic spelling and diagrams are all view settings.
+5. **Make fixing fast.** Suggested chords first, then search. "Apply to all matching." Drag to retime. Fix the beat grid separately from the chords.
+
+### Ideas worth stealing
+
+- **Next chord with a beat countdown** (tried, then dropped: in the scrolling lane, the gap to the next chord already shows it). None of the tools we looked at document a lead time for the next chord. We know exactly where the next beat is, so we can show something like **G → C · 3 2 1**. Nobody does this well, so it's a chance for us to stand out.
+- **Capo-style ellipsis collapsing** on the waveform lane when zoomed out.
+- **Moises-style simplify levels:** full chord (`Cmaj9/E`) → seventh (`Cmaj7`) → triad (`C`).
+- **Sibelius-style suggestions:** we have the score, and `@tonaljs/chord`'s `Chord.detect()` can name a chord from the notes at a beat.
+
+---
+
+## Formats and libraries
+
+- **ChordPro.** The de facto text format: inline `[G]` chords, `{transpose}` and `{capo}` directives, and a `{start_of_grid}` bar-grid syntax with repeats and voltas. It has **no timing at all**, so it's good for import and export, not for storage.
+- **MusicXML `<harmony>`.** `root`, `kind`, `bass` (slash chords), `degree`, `frame` (fretboard diagram), and `offset` within the measure. Chords there already sit at a measure and beat, so a score that has them can **seed a chord track** by converting measures to seconds through the tapMap.
+- **Harte / JAMS / `.lab`.** Labels like `C:maj`, `A:min7`, `G:maj/3`, `N` (no chord). This is the format chord-detection research tools output as (start, end, label) rows. It's only worth supporting if we add detection.
+- **LRC for chords.** There is no standard. Tools that sync chords use their own formats, so we'll design our own JSON next to `lyrics`.
+
+| Library | Use |
+|---|---|
+| [`chord-symbol`](https://www.npmjs.com/package/chord-symbol) | Parse and normalize typed input; tested on 37k+ symbols; has MusicXML and Ultimate Guitar companion packages. **Best fit for the editor's input box.** |
+| [`@tonaljs/chord`](https://tonaljs.github.io/tonal/docs/chords) | `Chord.transpose()` and `Chord.detect(notes)`. Good for transpose and for score-based suggestions. |
+| [ChordSheetJS](https://github.com/martijnversluis/ChordSheetJS) | Parse and format ChordPro and UG-style sheets. Useful for an "Import chord sheet" path. |
+
+---
+
+## Auto-detection: later, if at all
+
+| Option | Notes |
+|---|---|
+| Chordino / NNLS Chroma | A classic baseline (Vamp plugin, C++). |
+| madmom | Python. Deep chroma + CRF. **Major/minor only.** Outputs (start, end, label). |
+| Essentia `ChordsDetectionBeats` | Gives one chord per beat when you hand it beat times, so it would line up with our tapMap. Marked experimental. |
+| BTC (2019 transformer) | About 75–82% on major/minor, depending on the test. |
+| Browser options | A ChordMini ONNX model (check the weight license), `chord-recognition` (a non-ML chromagram port). Immature. |
+
+The field has a well-known "glass ceiling" at **about 80% of song duration correct on major/minor only**. Accuracy drops for 7ths and extensions. If we add detection, it should run on the server in Python on the full mix, and its results should come in as **suggestions** in the editor, marked like Cubase's badge, rather than as saved chords.
+
+<div class="widget-sandbox"><DetectionFixer client:visible /></div>
+
+---
+
+## Proposal for Practice Portal
+
+### Data model
+
+Store chords as their own list next to `lyrics`: a `song.chords` jsonb document with the same read and save routes, editable by Owners, Managers and Editors.
+
+```ts
+interface ChordEvent {
+  /** Canonical symbol from chord-symbol, e.g. "Cm7", "G/B", "N.C." */
+  symbol: string;
+  /** Seconds, the only position stored. Bar and beat are worked out from
+   *  the current tapMap when drawing, never saved. */
+  time: number;
+}
+
+interface ChordsData {
+  chords: ChordEvent[];
+}
+```
+
+A chord lasts until the next one, so there is no end time. `N.C.` stops the previous chord.
+
+### Bar and beat anchors, or seconds?
+
+**Decided (Nov 10 2026): C, seconds only, positioned by the beat grid while typing.** The reasoning is below, followed by what that means for [pushes and free time](#pushes-free-time-and-snapping).
+
+**What's actually at stake.** Playback is the same either way: the player needs seconds, and every view (the scrolling lane, a bar grid) can work out bar and beat from a chord's time and the *current* tapMap while drawing. The grid editor is the same: it's built from the tapMap when you open it, and each chord goes in the cell nearest its time. So the choice only matters for one thing: **what happens to chords that were already entered when someone later edits the tapMap.**
+
+There are three options:
+
+- **A. Bar and beat anchors.** Store `bar` and `beat`; work out `time` again from the tapMap whenever it changes.
+- **B. Seconds only.** Store `time`, exactly like lyrics. A tapMap edit doesn't touch the chords.
+- **C. Seconds, plus re-snap.** Store `time` only, snapped to a beat when entered. The Chords Editor shows chords that no longer sit on a beat and offers **Snap to beats**, which moves each one to its nearest beat.
+
+Try both kinds of edit in the sketch:
+
+<div class="widget-sandbox"><BeatAnchorDemo client:visible /></div>
+
+How each kind of tapMap edit plays out:
+
+| tapMap edit | A. Anchors | B. Seconds | C. Seconds + re-snap |
+|---|---|---|---|
+| **Tidying taps:** moving sloppy taps by less than half a beat | ✅ Chords follow | ❌ Chords placed on the grid stay on the old, sloppy times | ✅ One click fixes them |
+| **Adding or deleting a bar:** a missed measure tap, a pickup bar, a re-import from `.xsc` with a different bar count | ❌ **Every chord after the change shifts by a bar, silently** | ✅ Unaffected | ✅ Unaffected |
+| **Big re-tap:** the whole map was tapped late, or re-tapped from scratch with the same bar count | ✅ Chords follow | Depends on how the chords were entered: right if by ear, wrong if placed on the grid | ❌ Snaps to the wrong beat once a tap moves more than half a beat |
+
+Other things that push one way or the other:
+
+- **Who edits what.** Only Managers can edit the tapMap, and Editors can edit chords. With A, a Manager's tapMap fix can quietly move (or break) an Editor's chords. With C, moving chords is a visible step in the Chords Editor.
+- **Measures without beat taps.** Beat taps are optional, and plenty of songs only have measure taps. With A, "beat 3" then means a guess spaced evenly between measure taps, and that guess changes if someone adds beat taps later. B and C store what you heard.
+- **Pushes.** A chord on the "and" of 4 (an anticipation) needs a half-beat anchor in A. In C, snapping would pull it onto the beat, so snapping needs a half-beat setting or a way to skip a chord.
+- **One model for everything timed.** Lyrics and notes are seconds today. With B or C, chords match them. The same "carry things along when the tapMap changes" tool could later fix lyrics too.
+- **Songs without a tapMap.** They need seconds anyway, so A always carries a seconds fallback, and both paths need testing.
+
+**D, the thorough version (later, if needed).** When the TapMap Editor saves, it knows exactly which taps were dragged, added and deleted. It could move each chord (and lyric) along with the taps on either side of it: drag a tap and the chords near it follow, add a bar and nothing else moves. That gets A's good behavior without A's silent breakage. But it ties the TapMap Editor to chords and lyrics, and the tapMap has no stable tap IDs today, so it's real work.
+
+**Recommendation: C now, D only if it turns out to be needed.**
+- C matches lyrics and notes.
+- It can't break silently.
+- It handles the most likely edit, tidying taps, with one button.
+- It costs nothing beyond a "chords off the beat" check in the Chords Editor.
+
+A's failure on an added or deleted bar is the deal-breaker: it's a likely edit, and nothing would tell you the chords had moved.
+
+What settled it:
+
+1. **Chords will mostly go in after the tapMap.** So tapMap edits afterwards are the exception, and a manual Snap to grid button is enough. There's no need for chords to follow the tapMap on their own.
+2. **An automatic tapMap is on the horizon.** If a tapMap can be generated, and regenerated, any day, chords mustn't depend on its bar count. Seconds survive a regenerated map untouched, and Snap to grid lets chords adopt the better grid when you want it.
+3. **Lots of songs have pushed chords.** That rules out positions limited to whole beats. Grid typing has a push key, and Snap to grid works in half beats.
+4. **Some passages are in free time,** with no bars or beats to anchor to. Seconds are the only thing that works there anyway.
+
+### Pushes, free time and snapping
+
+**The rule:** chords store seconds. Positions come from the beat grid while you type them in (or when you press Snap to grid), and nothing ever snaps in free time.
+
+**Pushes.** In the grid, type the chord on the beat it's *written* on, then press <kbd>&lt;</kbd> to push it to the "and" before. That's how charts write anticipations: on the downbeat, with a push mark (shown as ›). It's stored as the "and" time, like any other chord. In the lane there's no special case: spacing is by time, so a push simply arrives half a beat before the bar line.
+
+**Grid resolution.** One cell per beat is the default, and <kbd>&lt;</kbd> covers eighth-note pushes. If sixteenth pushes turn out to be common, a "½ beat cells" setting could split each beat in two, but it's not needed to start. Beats come from the tapMap's beat taps. If a bar only has a measure tap, its beats are filled in evenly using the song's `timeSignatureMap`. That's new: today the transport only counts beats that were actually tapped.
+
+**Free time.** The grid only exists where there are taps. Before the first tap, after the last, and (later) anywhere the tapMap marks as free time, there's no grid:
+- *In the lane:* free time shows no beat lines; chords still scroll in by time, so nothing else changes.
+- *In the editor:* grid typing can't reach free time, so those chords go in with [tap to stamp](#second-mode-tap-to-stamp), where snapping does nothing.
+- *Snap to grid* skips free-time chords.
+
+The sketches' song opens with two free-time chords before the tapMap starts. Play the start of the lane to see it.
+
+**Mid-song free time** (a rubato bridge, a fermata, a cadenza) needs the tapMap to say so. A long gap between taps is ambiguous: it could be a slow bar or no bar at all. That's a tapMap feature (see [open questions](#open-questions)).
+
+**After a tapMap edit.** Chords sit wherever they were typed, in seconds. The Chords Editor marks any that are more than a small tolerance off the current grid ("3 chords are off the grid"). **Snap to grid** moves them to the nearest half beat, so pushes survive, with Undo. It's only safe for moves under a quarter beat. That covers tidying taps, which is all it's for. The anchors sketch above shows this.
+
+> Watch out: the lyrics view hides any line that is entirely `[...]`, a leftover from the old bracket annotations. Chords must never be stored in lyric text.
+
+### Input: typing on the beat grid
+
+The Chords Editor shows a bar grid built from the tapMap, one cell per beat.
+
+- Type a chord, then <kbd>Space</kbd> for the next beat, <kbd>Tab</kbd> for the next bar, and <kbd>Shift</kbd> with either to go back.
+- `/` repeats the previous chord and `%` repeats the previous bar.
+- <kbd>&lt;</kbd> pushes the chord to the "and" before its beat (marked ›).
+- Lowercase and sloppy spellings are fine (`am7`, `c-7` and `f#ø` become `Am7`, `Cm7` and `F#m7b5`).
+- Clicking a cell seeks the audio there, and a play-from-cursor shortcut lets you listen and type.
+- The lane shows above the grid while you edit, the same way the Lyrics Editor keeps the karaoke view visible, so you can check the result as it plays.
+
+<div class="widget-sandbox"><GridTypingEditor client:visible /></div>
+
+#### What grid typing doesn't cover
+
+Grid typing needs a beat grid, so two cases need another way in:
+
+1. **Free-time passages:** the intro before the first tap, an outro after the last, and later any marked free time.
+2. **Songs with no tapMap at all.**
+
+**Decided: tap to stamp as a second input mode** in the same editor.
+
+#### Second mode: tap to stamp
+
+The Lyrics Editor's flow, for chords:
+
+1. Type or paste the progression (`G C D G`, or a ChordPro sheet; the chords are pulled out of the brackets).
+2. Play, and press <kbd>Tab</kbd> as each chord starts. <kbd>Shift+Tab</kbd> steps back.
+3. Fine-tune with <kbd>Alt+←/→</kbd>, and press <kbd>R</kbd> to replay, the same keys as the Lyrics Editor's timing pane.
+
+**Snap setting** (only where there's a beat grid; free time never snaps):
+- **Off:** stamps land exactly where you pressed.
+- **Beat**
+- **½ beat:** the default. It catches pushes on the "and".
+- **¼ beat:** for sixteenth pushes.
+
+The setting is remembered per person, and holding <kbd>Alt</kbd> while stamping skips the snap for one chord.
+
+The two modes edit the same chord list, so you can type most of a song on the grid and stamp just the free-time intro. A song without a tapMap is stamped all the way through.
+
+Try Beat against ½ beat in the sketch and compare the average miss on the three pushed chords. The two free-time intro chords never snap.
+
+<div class="widget-sandbox"><TapToStamp client:visible /></div>
+
+### Display: the chord lane
+
+A now / next strip that sits in the song view **under the waveform, below the notes and above the lyrics**. Upcoming chords scroll in from the right at a constant speed, spaced by time, so a chord that lasts two bars takes twice the room of one that lasts one bar. Each one takes over the moment it reaches the reading point.
+
+**Decided: no countdown.** The distance between the current chord and the next one already shows how long until the change, and the beat and bar lines let you count it. A countdown was more to look at for no new information. Like the lyrics, it slows down with the playback speed, so a chord still lands exactly on its beat.
+
+**Where the hit line goes.**
+- *Desktop: the current chord lines up with the current lyric.* Its text starts on the lyric reading point (`FOCUS_LEFT_NUDGE_PX`, 24px into the waveform), the same vertical line the current lyric, the first note sticky and the score's first bar already share. It works the way the lyric track does:
+  - The current chord stays put on the reading point while it rings, like the current lyric.
+  - Upcoming chords scroll in from the right at a constant speed.
+  - When the next one gets close, it **pushes the current chord off to the left**, like a sticky header. It grows to full size as it arrives, and its left edge reaches the reading point exactly when it sounds.
+  - The previous chord fades out to the left, like the previous lyric. The space under the transport controls holds it.
+- *Phone:* the waveform is full width, so there's no room left of it. Lyrics run vertically on phones anyway, so there's nothing to line up with. The lane gets its own narrow slot on the left.
+
+Other details:
+- The lane is about 58px tall, compared with 160px for the standalone panel.
+- It can be collapsed like the lyrics panel (`panelMinimizeStore`).
+- It's hidden on songs with no chords.
+- **Look-ahead** (how many seconds of the future the lane shows) and the faint **beat and bar lines** are listener settings, stored locally.
+
+One deliberate difference from lyrics: the lyric track moves to the next line 500ms early (`PRE_SHIFT_MS`) so you can read ahead. Chords don't need that lead, because you watch each one scroll in. So a chord reaches the reading point *on* its beat, and a lyric that starts on the same beat arrives half a second before it.
+
+Switch the sketch between **desktop** and **phone** to see the lane in place; the dashed line is the shared reading point. The standalone panel and the fixed layout are still there for comparison.
+
+<div class="widget-sandbox"><NowNextPanel client:visible /></div>
+
+### Later: other inputs and views
+
+Not in the first version, but kept here with their sketches.
+
+#### Imports
+
+- ~~Pull `<harmony>` from the song's MusicXML score.~~ Decided: the score and chord track are independent. A one-time "copy chords from the score" could come back later, but nothing would keep the two in sync.
+- Paste a ChordPro or UG-style sheet (tap to stamp already accepts ChordPro text; a proper import would keep the sheet's sections too).
+- Possibly keep chord labels from `.xsc` markers.
+
+#### Detection
+
+Server-side, shown as suggestions. See the [fixing detected chords](#auto-detection-later-if-at-all) sketch.
+
+#### Chords drawn on the waveform
+
+Chord labels on the waveform itself, collapsing to "…Am" when zoomed out.
+
+<div class="widget-sandbox"><ChordLane client:visible /></div>
+
+#### Chords over lyrics
+
+When a chord falls inside a lyric line's time span, draw it above the line. Word placement is an estimate, since lyrics are timed by line, not word.
+
+<div class="widget-sandbox"><ChordsOverLyrics client:visible /></div>
+
+#### Bar grid view
+
+iReal / Moises Grid style, with the current bar lit, push marks, and a free-time cell.
+
+<div class="widget-sandbox"><BarGridView client:visible /></div>
+
+### Proposed phases
+
+**Phase 1: Data and the chord lane**
+- [ ] `chordEventSchema` (`symbol`, `time`) and `chordsDataSchema` in `src/config/schema.ts`; `song.chords` jsonb plus read and save routes mirroring lyrics, with the same Owner / Manager / Editor permission
+- [ ] Add `chord-symbol` and wrap it in `src/audio/chords.ts` (parse and normalize to one spelling)
+- [ ] `chordsStore`, and a `ChordLane` component placed between `NotesLayer` and `LyricsDisplay` in `App.tsx`
+- [ ] Desktop: current chord pinned on the reading point (`FOCUS_LEFT_NUDGE_PX`) like the current lyric, pushed off left by the next chord, previous chord fading left. Phone: own narrow slot
+- [ ] Beat and bar lines (none in free time), look-ahead setting
+- [ ] Collapsible like the lyrics panel; hidden when a song has no chords
+
+**Test:**
+- [ ] Hand-written chords JSON for one song plays back in time at 50%, 100% and with loops
+- [ ] Each chord reaches the reading point exactly when it sounds, at every speed, and its text lines up with the current lyric's
+- [ ] A song with no tapMap still shows chords, scrolling by time with no beat lines
+- [ ] Songs with no chords look unchanged, on desktop and phone
+
+**Phase 2: Chords Editor (grid typing and tap to stamp)**
+- [ ] Editor modal with the bar grid built from the tapMap (beats filled in from the time signature where only measures are tapped)
+- [ ] Keys: chord entry, Space, Tab, Shift, `/`, `%`, `<` for pushes, play from cursor; the lane stays visible above the grid
+- [ ] Tap-to-stamp mode (reuse `LyricsTimingPane` patterns: Tab, Shift+Tab, Alt+arrows to nudge, R to replay) for free time and songs without a tapMap
+- [ ] Snap setting for stamping (Off, Beat, ½ beat, ¼ beat; default ½), remembered per person; Alt skips it for one stamp; nothing snaps in free time
+- [ ] "Off the grid" marker and a Snap to grid button (half beats) with Undo, for after a tapMap edit
+- [ ] Help guide section in `TimingAndLyrics.tsx`, the Editor role in `RolesAndPermissions.tsx`, and new keys in `KeyboardShortcuts.tsx`
+
+**Test:**
+- [ ] Enter a full song on the grid with pushes, and stamp its free-time intro
+- [ ] Stamp a whole song that has no tapMap
+- [ ] Nudge some taps in the TapMap Editor: chords are marked off the grid, and Snap to grid fixes them with pushes intact
+- [ ] Add a bar in the TapMap Editor: no chord moves
+
+**Later:** imports, detection, chords on the waveform, chords over lyrics, bar grid view.
+
+---
+
+## Open questions
+
+- **Marking free time in the tapMap.** Mid-song free time (a rubato bridge, a fermata) needs the tapMap to say "no grid here". It could be a `free` flag on a section, or a new entry type that ends the grid until the next measure tap. It matters for the lane's beat lines, for grid typing, and for an automatic tapMap later.
+- **Snap tolerance after a tapMap edit:** how far off the grid counts as "off". Somewhere around an eighth of a beat is a starting point to tune.
+
+## Parked for now
+
+Decided against for now (Nov 10 2026): transpose, capo, simplify, chord diagrams, key changes, Nashville numbers and Roman numerals. Chords show by name only. The research and sketches are kept here in case any of it comes back.
+
+### Display settings
+
+- **Transpose ±semitones**, with spelling that suits the key: flats in F, sharps in A.
+- **Capo** for guitarists: shows shapes relative to the capo while the sound stays the same.
+- **Nashville numbers / Roman numerals**, relative to the chords' `key`.
+- **Simplify:** full → 7th → triad.
+- **Diagrams** (guitar, ukulele, piano, or none, plus left-handed). Probably a later phase; no sketch yet.
+
+<div class="widget-sandbox"><DisplaySettings client:visible /></div>
+
+### Nashville numbers and key changes
+
+A Nashville number (or Roman numeral) only means something against a key. "4" in G is C; in Ab it's Db. So once the page offers numbers, the chord data has to know the key at every point in the song, and that brings up several questions.
+
+<div class="widget-sandbox"><NashvilleKeys client:visible /></div>
+
+**Store letters, derive numbers.** Chords stay stored as letters, the pitches you actually hear, and numbers are worked out on screen from the letters and the key. The other way round, storing numbers, makes transposing free, but:
+- every import and detector produces letters
+- the letters themselves become unknowable if the key is entered wrong
+- playback and diagrams need letters anyway
+
+With letters as the truth, a wrong key only mislabels the numbers, and fixing the key fixes them.
+
+**A key map, not one key per song.** `song.key` covers most songs. For the rest, `keys` is a short list of key changes anchored like chords (bar and beat, with seconds as backup). Two places it could live:
+- *In the chords document* (proposed above). Whoever edits chords can mark key changes, and a change can fall mid-section.
+- *On the tapMap's section entries* (`{ type: 'section', label: 'Last chorus', key: 'Ab' }`). This fits how people think ("the last chorus is up a half step"), but only Managers can edit the tapMap, and the key can't change in the middle of a section.
+
+**Key change, or just a borrowed chord?** A Bb in a G song is a b3 (borrowed from G minor), not a modulation. Usually the key map holds only what the band would call a key change; everything else shows as a chromatic number (b3, b7), highlighted so it stands out. Short detours are a judgement call, like a pre-chorus that sits on the relative minor. Try the "Mark the pre-chorus as E minor" box in the widget. Numbered from the relative major, it makes no difference: Em, C, Am7, B7 read 6m, 4, 2m⁷, 3⁷ either way, since E minor and G share a relative major. Numbered from the minor tonic, marking it changes them to 1m, 6, 4m⁷, 5⁷. Either way, the editor decides; the app shouldn't guess.
+
+**Minor keys have two conventions.** Most Nashville charts number a minor key from its relative major, so Em is 6m and B7 is 3⁷. Others number from the minor tonic, so Em is 1m and B7 is 5⁷. Neither is wrong; it depends on who's reading. This should probably be a **band-level setting**, since the whole band reads the same chart, with a listener override.
+
+**What a key change looks like on screen.**
+- Every view marks the change: a "Key change G → Ab (up a half step)" badge in the grid and over the lyrics, and an event in the chord lane and the scrolling now / next strip, so you see it coming.
+- Numbers restart against the new key.
+- Some people prefer one reference for the whole song, which is the "Song key throughout" option. The last chorus then reads b5, b2/4, b3m⁷, b6⁷sus4 instead of 4, 1/3, 2m⁷, 5⁷sus4, which shows why that's rarely what you want.
+
+**Transpose, capo and spelling.**
+- Transpose moves every key in the map along with the chords. Numbers don't change, which is the point of them.
+- Capo is the same, with the shift going the other way.
+- Spelling follows the *local* key, so the Ab chorus is written with flats even though the song starts in G.
+
+**Notation details to copy.**
+- Raise the quality: 5⁷, 2m⁷, 5⁷sus4, so "57" can't be misread.
+- Minor written as `m` or `-` (a setting).
+- Slash chords as 1/3.
+- Two chords in one bar underlined together, the Nashville "split bar".
+- Diamonds (let ring), pushes (anticipations) and ties are real Nashville marks too, but they need rhythm data we don't store. They're a later idea.
+
+**Suggesting the key.** Given the chords, `tonal`'s key detection can suggest the song's key. A run of chords that fits a different key better can suggest a key change for the editor to accept. This is cheap, and much more reliable than detecting chords from audio.
+
+## Sources
+
+- Moises: [Chord detection](https://help.moises.ai/hc/articles/6569274648220-How-do-I-use-Chord-Detection), [Grid mode](https://help.moises.ai/hc/en-us/articles/9570133423772-How-to-use-the-new-Chords-view-Grid-Mode), [Capo mode](https://moises.ai/features/guitar-capo-mode/)
+- Capo: [Practice view](https://supermegaultragroovy.com/products/capo/user-guide/latest/reference/practice-song-view.html), [Chords view](https://supermegaultragroovy.com/products/capo/user-guide/4.7/reference/chords-song-view.html), [Instrument display](https://supermegaultragroovy.com/products/capo/user-guide/latest/reference/instrument-display-settings.html)
+- [MuseScore handbook: chord symbols](https://handbook.musescore.org/text/chord-symbols) · [Dorico chord symbol navigation](https://steinberg.help/dorico/v4/en/dorico/topics/write_mode/write_mode_notations_input/write_mode_chord_symbols_navigation_r.html) · [Sibelius June 2023](https://www.avid.com/resource-center/whats-new-in-sibelius-June-2023)
+- [Band-in-a-Box manual](https://www.pgmusic.com/manuals/bbw2023full/chapter2.htm) · [iReal Pro editing basics](https://forums.irealpro.com/threads/the-basics-of-editing.1049)
+- [Logic Pro chord track](https://support.apple.com/guide/logicpro-ipad/lpipc614f032/ipados) · [Cubase chords from audio](https://steinberg.help/nuendo/v12/en/cubase_nuendo/topics/chord_functions/chord_functions_from_audio_events_extracting_t.html) · [Studio One chord track](https://www.soundonsound.com/techniques/studio-one-chord-track-nashville-numbering)
+- [OnSong transpose and capo](https://onsongapp.com/docs/transpose-capo) · [SongbookPro settings](https://songbook-pro.com/docs/manual/settings/general) · [Spotify chords idea](https://community.spotify.com/t5/Live-Ideas/Chords-amp-Tabs/idi-p/5645802)
+- [ChordPro grids](https://chordpro.org/beta/directives-env_grid/) · [MusicXML harmony](https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/harmony) · [JAMS namespaces](https://jams.readthedocs.io/en/v0.2.0/namespace.html) · [mir_eval chord](https://mir-eval.readthedocs.io/stable/api/chord.html)
+- [madmom chords](https://madmom.readthedocs.io/en/v0.16/modules/features/chords.html) · [Essentia ChordsDetectionBeats](https://essentia.upf.edu/reference/std_ChordsDetectionBeats.html) · [BTC paper](https://arxiv.org/pdf/1907.02698) · [ACR glass ceiling](https://arxiv.org/pdf/2002.09748.pdf)
