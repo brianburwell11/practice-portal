@@ -271,7 +271,7 @@ The Lyrics Editor's flow, for chords:
 
 1. Type or paste the progression (`G C D G`, or a ChordPro sheet; the chords are pulled out of the brackets).
 2. Play, and press <kbd>Tab</kbd> as each chord starts. <kbd>Shift+Tab</kbd> steps back.
-3. Fine-tune with <kbd>Alt+←/→</kbd>, and press <kbd>R</kbd> to replay, the same keys as the Lyrics Editor's timing pane.
+3. Fine-tune the selected chord with <kbd>Alt+←/→</kbd>, and press <kbd>R</kbd> to replay, the same keys as the Lyrics Editor's timing pane.
 
 **Snap setting** (only where there's a beat grid; free time never snaps):
 - **Off:** stamps land exactly where you pressed.
@@ -279,7 +279,7 @@ The Lyrics Editor's flow, for chords:
 - **½ beat:** the default. It catches pushes on the "and".
 - **¼ beat:** for sixteenth pushes.
 
-The setting is remembered per person, and holding <kbd>Alt</kbd> while stamping skips the snap for one chord.
+The setting is remembered per person. (A per-stamp "hold Alt to skip the snap" was planned and dropped: Alt+Tab is the app switcher on Windows. Snap Off is one click.)
 
 The two modes edit the same chord list, so you can type most of a song on the grid and stamp just the free-time intro. A song without a tapMap is stamped all the way through.
 
@@ -372,18 +372,28 @@ iReal / Moises Grid style, with the current bar lit, push marks, and a free-time
 - [x] In the app: songs with no chords look unchanged, on desktop and phone
 
 **Phase 2: Chords Editor (grid typing and tap to stamp)**
-- [ ] Editor modal with the bar grid built from the tapMap (beats filled in from the time signature where only measures are tapped)
-- [ ] Keys: chord entry, Space, Tab, Shift, `/`, `%`, `<` for pushes, play from cursor; the lane stays visible above the grid
-- [ ] Tap-to-stamp mode (reuse `LyricsTimingPane` patterns: Tab, Shift+Tab, Alt+arrows to nudge, R to replay) for free time and songs without a tapMap
-- [ ] Snap setting for stamping (Off, Beat, ½ beat, ¼ beat; default ½), remembered per person; Alt skips it for one stamp; nothing snaps in free time
-- [ ] "Off the grid" marker and a Snap to grid button (half beats) with Undo, for after a tapMap edit
-- [ ] Help guide section in `TimingAndLyrics.tsx`, the Editor role in `RolesAndPermissions.tsx`, and new keys in `KeyboardShortcuts.tsx`
+- [x] Songs → Chords Editor (Owner / Manager / Editor), full page in place of the mixer, Grid and Stamp tabs; the lane above shows the draft, the lyric track stays for alignment, closing with unsaved changes asks first
+- [x] Small in-house chord name parser (`src/audio/chordSymbols.ts`) instead of `chord-symbol`: accepts common spellings, stores one (`am7` → Am7, `BbM7` → Bbmaj7, `f#ø` → F#m7b5, `nc` → N.C.)
+- [x] Grid: bars from the tapMap (beats filled in from the time signature where only measures are tapped), 4 bars a row (2 on phones); the cursor cell is a real text input so the app's one-key shortcuts stay out of the way
+- [x] Grid keys: Space / Tab (Shift goes back), arrows, `/`, `%`, `<` for pushes, Backspace, Enter, Esc, Cmd/Ctrl+Enter to play from the cursor, Cmd/Ctrl+Z; on-screen buttons for touch
+- [x] Stamp: a queue (plain list or ChordPro); Tab stamps the next at the playhead, Shift+Tab takes it back into the queue; Alt+arrows nudge (0.05 s), R replays, Delete removes; chords already placed aren't touched
+- [x] Snap for stamping (Off, Beat, ½, ¼; default ½), remembered per device; never in free time
+- [x] "N chords are off the grid" + Snap to grid (half beats, undoable)
+- [x] Section labels (gold, like the waveform's section markers) next to the bar number where each section starts
+- [x] Bars of any length: rows hold 16 beats (8 on phones) and bars wrap by beat count, so every beat box is the same width; a double tap (two taps within 60 ms, found in 2 real songs) counts once
+- [x] Range select (desktop): Grid has Shift+click / Shift+arrows / Cmd+A, then Delete, Cmd+C, Cmd+X, Cmd+V (paste overwrites the span beat for beat, pushes included; the clipboard lasts the session, across songs); Stamp list has Shift+click rows, then Delete
+- [x] Help: new Chords section in Timing, lyrics and chords; chord lane in Practicing a song; Editor role; Chords editor keys
 
 **Test:**
-- [ ] Enter a full song on the grid with pushes, and stamp its free-time intro
-- [ ] Stamp a whole song that has no tapMap
-- [ ] Nudge some taps in the TapMap Editor: chords are marked off the grid, and Snap to grid fixes them with pushes intact
-- [ ] Add a bar in the TapMap Editor: no chord moves
+- [x] Unit: parser (37 cases), grid snapping / pushes / free time / off-grid, editor store (edits, undo/redo, stamp queue and take-back, nudge limits, snap to grid)
+- [x] Render (`ChordsEditor.test.ts`): type + Space, Tab and Shift+Tab, bad names refused, `<` push and back, `/` and `%`, Backspace + undo, free-time list, no-tapMap message, stamping with snap and take-back, bad names in the queue
+- [x] Range: `gridRange` helpers (range membership, copy offsets and pushes, paste overwrite and end clipping); render tests for Shift+click select + Delete + undo, copy/paste bar over bar, cut, Shift+arrows, Esc, Cmd+A, Stamp rows
+- [x] Odd meters: render tests for 2-, 3- and 7-beat bars, an untapped bar, a 3/4 song with measure taps only, and a pickup; Tab / Space / arrows / pushes / `%` across them. All 87 real tapMaps checked: bar counts, beat and push placement, snapping (0 problems; longest bar 8 beats)
+- [ ] In the app: enter a full song on the grid with pushes, and stamp its free-time intro
+- [ ] In the app: select two bars, copy, paste over two others, undo; cut; in Stamp, Shift+click rows and delete
+- [ ] In the app: stamp a whole song that has no tapMap
+- [ ] In the app: nudge some taps in the TapMap Editor: chords are marked off the grid, and Snap to grid fixes them with pushes intact
+- [ ] In the app: add a bar in the TapMap Editor: no chord moves
 
 **Later:** imports, detection, chords on the waveform, chords over lyrics, bar grid view.
 
