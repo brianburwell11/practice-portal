@@ -8,6 +8,7 @@ const PANEL_LABELS: Record<PanelId, string> = {
   sheet: 'Sheet music',
   mixer: 'Mixer',
   lyrics: 'Lyrics',
+  chords: 'Chords',
   notes: 'Notes',
 };
 
@@ -26,6 +27,23 @@ function PanelIcon({ id }: { id: PanelId }) {
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" />
         <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+      </svg>
+    );
+  }
+  if (id === 'chords') {
+    // A guitar chord box: nut on top, strings down, frets across, finger dots.
+    return (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="5" y1="3" x2="19" y2="3" strokeWidth="2.5" />
+        <line x1="5" y1="3" x2="5" y2="21" />
+        <line x1="9.67" y1="3" x2="9.67" y2="21" />
+        <line x1="14.33" y1="3" x2="14.33" y2="21" />
+        <line x1="19" y1="3" x2="19" y2="21" />
+        <line x1="5" y1="9" x2="19" y2="9" />
+        <line x1="5" y1="15" x2="19" y2="15" />
+        <circle cx="9.67" cy="6" r="2" fill="currentColor" stroke="none" />
+        <circle cx="14.33" cy="12" r="2" fill="currentColor" stroke="none" />
+        <circle cx="19" cy="12" r="2" fill="currentColor" stroke="none" />
       </svg>
     );
   }

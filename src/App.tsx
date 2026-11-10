@@ -4,6 +4,7 @@ import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/
 import { TransportBar } from './components/transport/TransportBar';
 import { LyricsDisplay } from './components/LyricsDisplay';
 import { NotesLayer } from './components/notes/NotesLayer';
+import { ChordLane } from './components/chords/ChordLane';
 import { UndoToast } from './components/notes/UndoToast';
 import { useNotesKeyboard } from './hooks/useNotesKeyboard';
 import { ScrollingScore } from './components/sheet/ScrollingScore';
@@ -24,6 +25,7 @@ import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useLyricsEditorStore } from './store/lyricsEditorStore';
 import { usePanelMinimizeStore } from './store/panelMinimizeStore';
 import { useLyricsStore } from './store/lyricsStore';
+import { useChordsStore } from './store/chordsStore';
 import { dataUrl, safeHref } from './utils/url';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
@@ -130,6 +132,8 @@ export default function App() {
   );
   const lyricsLoaded = useLyricsStore((s) => s.loaded);
   const lyricsLineCount = useLyricsStore((s) => s.lines.length);
+  const chordsLoaded = useChordsStore((s) => s.loaded);
+  const chordCount = useChordsStore((s) => s.chords.length);
 
   // When the loaded song changes: scope per-song video minimize memory
   // (saved video chips for this song are restored from localStorage; the
@@ -151,6 +155,13 @@ export default function App() {
       usePanelMinimizeStore.getState().restorePanel('lyrics');
     }
   }, [lyricsLoaded, lyricsLineCount]);
+
+  // Same for the chords chip.
+  useEffect(() => {
+    if (chordsLoaded && chordCount === 0) {
+      usePanelMinimizeStore.getState().restorePanel('chords');
+    }
+  }, [chordsLoaded, chordCount]);
 
   const bandRoute = currentBand?.route ?? '';
 
@@ -311,6 +322,10 @@ export default function App() {
         <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
           {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
           {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && <NotesLayer />}
+
+          {/* Chord lane: below notes, above lyrics. On desktop the current
+              chord starts on the lyric reading point. */}
+          {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && <ChordLane />}
 
           {/* Lyrics display \u2014 hidden when the tapMap or band editors
               occupy the page. Stays visible under the lyrics editor so

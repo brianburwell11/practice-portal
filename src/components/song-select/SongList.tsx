@@ -4,11 +4,12 @@ import { useMixerStore } from '../../store/mixerStore';
 import { useBandStore } from '../../store/bandStore';
 import { useSetlistStore } from '../../store/setlistStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
-import { songManifestSchema, songConfigSchema, setlistConfigSchema } from '../../config/schema';
+import { songManifestSchema, songConfigSchema, setlistConfigSchema, chordsDataSchema } from '../../config/schema';
 import { dataUrl, r2Url } from '../../utils/url';
 import { loadMixerState } from '../../utils/mixerStorage';
 import { collectionLabel } from '../../utils/collections';
 import { useLyricsStore } from '../../store/lyricsStore';
+import { useChordsStore } from '../../store/chordsStore';
 import { useNotesStore } from '../../store/notesStore';
 import { toast } from '../../store/dialogStore';
 import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
@@ -44,6 +45,7 @@ export function useSongLoader() {
     setLoading(true);
     setError(null);
     useLyricsStore.getState().clear();
+    useChordsStore.getState().clear();
     useNotesStore.getState().clear();
 
     try {
@@ -54,13 +56,14 @@ export function useSongLoader() {
       const configData = await res.json();
       const config = songConfigSchema.parse(configData);
 
-      // Lyrics, notes and the score start downloading now, alongside the
+      // Lyrics, chords, notes and the score start downloading now, alongside the
       // audio, instead of after it has all decoded. They're shown once the
       // song is selected.
       const fetchJson = (file: string) => fetch(dataUrl(`${bandId}/songs/${entry.id}/${file}`))
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null);
       const lyricsData = fetchJson('lyrics.json');
+      const chordsData = fetchJson('chords.json');
       const notesData = fetchJson('notes.json');
       warmSongScore(bandId, config);
 
@@ -72,6 +75,10 @@ export function useSongLoader() {
       setSelectedSong(config);
 
       lyricsData.then((data) => useLyricsStore.getState().setLyrics(data?.lines ?? []));
+      chordsData.then((data) => {
+        const parsed = chordsDataSchema.safeParse(data);
+        useChordsStore.getState().setChords(parsed.success ? parsed.data.chords : []);
+      });
       notesData.then((data) => useNotesStore.getState().load(bandId!, entry.id, data?.notes ?? []));
 
       // In a setlist, `#n` is the song's place in it. Otherwise the song is

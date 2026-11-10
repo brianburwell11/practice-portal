@@ -64,6 +64,7 @@ import {
   renameSong,
   saveSongConfig,
   saveSongLyrics,
+  saveSongChords,
   upsertDiscographyEntry,
 } from './handlers/songs';
 import {
@@ -478,6 +479,18 @@ export const routes: RouteDef[] = [
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/lyrics$/,
     body: 'json',
     handler: saveSongLyrics,
+    errorStatus: 400,
+    errorMessage: 'Invalid request',
+  },
+  // Chords: same people as lyrics (Owner, Manager, Editor).
+  {
+    name: 'song.chords.write',
+    writes: 'documents',
+    access: 'song.content.write',
+    method: 'POST',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/chords$/,
+    body: 'json',
+    handler: saveSongChords,
     errorStatus: 400,
     errorMessage: 'Invalid request',
   },

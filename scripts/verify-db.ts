@@ -157,7 +157,7 @@ const columns = new Set((await conn.query<{ c: string }>(
 )).map((r) => r.c));
 // ...the Phase 5 account columns (migration 0004), and Phase 10's guest links (0005).
 for (const c of [
-  'band.legacy_id', 'band.position', 'setlist.position', 'song.lyrics', 'song.notes',
+  'band.legacy_id', 'band.position', 'setlist.position', 'song.lyrics', 'song.chords', 'song.notes',
   'app_user.google_sub', 'app_user.avatar_url', 'invite.accepted_by', 'invite.revoked_at', 'invite.created_at',
   'grant_link.token', 'grant_link.created_at',
 ]) {
