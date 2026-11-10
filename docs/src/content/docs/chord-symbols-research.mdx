@@ -395,7 +395,21 @@ iReal / Moises Grid style, with the current bar lit, push marks, and a free-time
 - [ ] In the app: nudge some taps in the TapMap Editor: chords are marked off the grid, and Snap to grid fixes them with pushes intact
 - [ ] In the app: add a bar in the TapMap Editor: no chord moves
 
-**Later:** imports, detection, chords on the waveform, chords over lyrics, bar grid view.
+**Phase 3: Chord sheet import** (decided Nov 10 2026: always into the Stamp queue; paste or upload; no .xsc, no fetching from websites)
+- [x] Sheet parser (`src/audio/chordSheet.ts`): ChordPro (inline `[G]`, `{start_of_verse: Verse 1}` / `{sov}` / `{soc}` and friends, `{comment}` headings, `{start_of_grid}` bar lines with `%`), Ultimate Guitar style (chord lines over lyrics, `[Verse 1]` and `Chorus:` headings, repeats in any common spelling (`x4`, `x(4)`, `(x4)`, `[x4]`, `4x`, `×4`, `*4`), `[ch]` markup, tab and capo lines ignored), and plain lists. Lyrics that look like headings ("Bridge over…") or chords ("Am I…") stay lyrics
+- [x] Repeats: a marker repeats its own line; one alone on a line repeats the chord line above. Ultimate Guitar's [Tablature Guide](https://www.ultimate-guitar.com/contribution/help/rubric) only says to give the count, not what it covers, and never mentions `x(4)`; own-line is how most sheets use it
+- [x] Sections kept: each section's first chord carries its name, shown as a gold divider in the queue and on the stamp button ("Stamp C (Chorus)"); take-back restores it. A chord held across bars (`| G | G |`) counts once per section
+- [x] Import panel in Stamp (Import sheet…): paste or upload `.cho`, `.chopro`, `.chordpro`, `.pro`, `.crd`, `.txt`; preview of sections and chords, skipped names in red; Add N chords to queue
+- [ ] ~~The quick box goes through the same parser~~ Dropped: it's a one-line input, so a pasted sheet loses its line breaks. It stays a chord list; whole sheets use Import sheet
+- [x] Help: import step in Timing, lyrics and chords
+
+**Test:**
+- [x] Parser (10 cases): plain list, ChordPro with directives and comments, grids with `%`, a UG sheet with capo, tuning, repeats and tab lines, `[ch]` markup, lyrics that look like headings or chords, unknown names
+- [x] Store: take-back brings a section divider back; undo and redo through stamps
+- [x] Render: open Import sheet, paste, preview with skipped names, add, panel closes, stamp across a section divider
+- [ ] In the app: paste a real sheet copied from Ultimate Guitar and stamp it through
+
+**Later:** detection, chords on the waveform, chords over lyrics, bar grid view, .xsc marker labels.
 
 ---
 
