@@ -101,7 +101,7 @@ export default function AddingSongs() {
         </Bullets>
         <p>
           <Ui>Align stems</Ui> at the top reopens the alignment step. To mark the song’s sections and measures or add
-          lyrics, see <GuideLink slug="timing-and-lyrics">Timing and lyrics</GuideLink>.
+          lyrics and chords, see <GuideLink slug="timing-and-lyrics">Timing, lyrics and chords</GuideLink>.
         </p>
         <Note>
           Deleting a song (<Ui>Songs</Ui> → <Ui>Delete Song</Ui>) can’t be undone. Only Managers and the Owner can do it.

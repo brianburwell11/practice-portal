@@ -30,3 +30,11 @@ tags: ["architecture", "design", "tapmap"]
 11. **Transcribe! .xsc import** — Parser for Seventh String's Transcribe! file format to bootstrap tapMap data from existing beat-mapped files.
 
 12. **Freeform section names** — No preset section names. Sections can be renamed to meaningful labels (Intro, Head, Solo, etc.) after tapping.
+
+13. **Chord symbols: scope** — Chords are a separate `song.chords` document next to lyrics, editable by Owners, Managers and Editors. Shown by name only: no transpose, capo, simplify, diagrams, key changes or Nashville/Roman numbers for now. The chord track is independent of the score's chord symbols. See [Synced Chord Symbols](/docs/chord-symbols-research/).
+
+14. **Chord symbols: now / next display** — A scrolling strip (placed as a lane, see 16): the current chord in a fixed slot, upcoming chords scrolling in from the right at a constant speed, spaced by time. No countdown: the gap to the next chord already shows how long is left.
+
+15. **Chord symbols: stored as seconds** — Chords store only `symbol` and `time`, like lyrics; bar and beat are derived from the current tapMap when drawing. Chords are positioned on the beat grid while typing (`<` pushes to the "and"), and a "Snap to grid" button (half beats) tidies chords after a tapMap edit. Free time (no tapMap) never snaps. Chosen because chords mostly go in after the tapMap, an automatic tapMap may regenerate it later, many songs have pushes, and some passages have no bars at all.
+
+16. **Chord symbols: first version focus** — Input is typing on the beat grid (Space next beat, Tab next bar, `<` for pushes), with tap to stamp as a second mode for free time and songs without a tapMap. Display is the scrolling now / next as a lane under the waveform, below notes and above lyrics. On desktop the current chord starts on the lyric reading point (`FOCUS_LEFT_NUDGE_PX`), lined up with the current lyric, and the next chord pushes it off to the left as it arrives. Imports, detection and the other chord views are later.

@@ -5,9 +5,9 @@ export default function TimingAndLyrics() {
   return (
     <>
       <p>
-        Two editors make a song easier to practice: the <Ui>TapMap Editor</Ui> marks where its sections and measures
-        fall, and the <Ui>Lyrics Editor</Ui> lines the words up with the music. Both are in the <Ui>Songs</Ui> menu while
-        a song is open.
+        Three editors make a song easier to practice: the <Ui>TapMap Editor</Ui> marks where its sections and measures
+        fall, and the <Ui>Lyrics Editor</Ui> and <Ui>Chords Editor</Ui> line the words and chords up with the music. All
+        three are in the <Ui>Songs</Ui> menu while a song is open.
       </p>
 
       <HelpSection title="The tap map">
@@ -57,6 +57,60 @@ export default function TimingAndLyrics() {
         </p>
       </HelpSection>
 
+      <HelpSection title="Chords">
+        <p>
+          Owners, Managers and Editors can add chords from <Ui>Songs</Ui> → <Ui>Chords Editor</Ui>. It has two ways in,
+          and you can use both on the same song.
+        </p>
+        <p>
+          <Ui>Grid</Ui> lays the song out in bars, one box per beat, from its tap map. Click a box and type:
+        </p>
+        <Steps>
+          <li>
+            Type a chord name and press <Key>Space</Key> for the next beat or <Key>Tab</Key> for the next bar. Spelling is
+            forgiving: <code>am7</code>, <code>c-7</code> and <code>d/f#</code> become Am7, Cm7 and D/F#.
+          </li>
+          <li>
+            <Key>/</Key> repeats the last chord, <Key>%</Key> copies the previous bar, and <Key>&lt;</Key> pushes a chord
+            to the “and” before its beat (shown as ›).
+          </li>
+          <li>
+            Clicking a box moves the playhead there. <Key>Ctrl</Key>+<Key>Enter</Key> plays from the box you’re on.
+          </li>
+          <li>
+            <Key>Shift</Key>+click selects a range of beats. Delete clears it; <Key>Ctrl</Key>+<Key>C</Key> and{' '}
+            <Key>Ctrl</Key>+<Key>V</Key> copy it somewhere else. Pasting replaces what was there, beat for beat.
+          </li>
+        </Steps>
+        <p>
+          <Ui>Stamp</Ui> is for parts with no bars to type into, like a free-time intro, or a song without a tap map:
+        </p>
+        <Steps>
+          <li>
+            Type the chords to place, in order, and press <Ui>Add</Ui>. Or use <Ui>Import sheet…</Ui> to paste or
+            upload a whole chord sheet (ChordPro, or chords over lyrics copied from a site like Ultimate Guitar). You’ll
+            see the sections and chords it found before adding them; each section’s name shows in the queue in gold.
+          </li>
+          <li>
+            Play the song and press <Key>Tab</Key> as each chord starts. <Key>Shift</Key>+<Key>Tab</Key> takes the last
+            one back. In the list, <Key>Shift</Key>+click selects a run of chords to delete.
+          </li>
+          <li>
+            <Ui>Snap</Ui> lines your stamps up with the beat, half beat or quarter beat. It never moves chords where
+            there are no bars.
+          </li>
+        </Steps>
+        <p>
+          The chord lane above the editor shows your changes as you go, and each chord also shows on the waveform as a
+          pink line with its name. Drag one to move it (it snaps like a stamp), or click it to play from there. Save when
+          you’re done.
+        </p>
+        <Note>
+          If the tap map changes after chords were added, the editor says how many chords are now off the grid, and{' '}
+          <Ui>Snap to grid</Ui> moves them back onto the nearest half beat.
+        </Note>
+      </HelpSection>
+
       <HelpSection title="Lining up videos">
         <p>
           If a song has YouTube videos (added in <Ui>Edit Song</Ui>), Owners, Managers and Editors see a <Ui>Sync</Ui>{' '}
@@ -69,7 +123,7 @@ export default function TimingAndLyrics() {
       <HelpSection title="Who can do what">
         <Bullets>
           <li>TapMap Editor: Managers and the Owner.</li>
-          <li>Lyrics Editor and video sync: Owners, Managers and Editors.</li>
+          <li>Lyrics Editor, Chords Editor and video sync: Owners, Managers and Editors.</li>
         </Bullets>
         <p>The full list is in <GuideLink slug="roles-and-permissions">Roles and permissions</GuideLink>.</p>
       </HelpSection>

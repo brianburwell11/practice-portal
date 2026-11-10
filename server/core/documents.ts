@@ -8,7 +8,7 @@
  *
  * Two kinds of document:
  *
- *   item  — band.json, a song's config/lyrics/notes, a setlist. Stored as-is
+ *   item  — band.json, a song's config/lyrics/chords/notes, a setlist. Stored as-is
  *           in a row (jsonb), so a read returns exactly what was written.
  *   index — registry.json, discography.json, setlists/index.json. Never
  *           stored: built from the item rows on read. Checked against the
@@ -34,11 +34,13 @@ type Key =
   | { kind: 'registry' }
   | { kind: 'band'; band: string }
   | { kind: 'discography'; band: string }
-  | { kind: 'song'; band: string; song: string; file: 'config' | 'lyrics' | 'notes' }
+  | { kind: 'song'; band: string; song: string; file: SongFile }
   | { kind: 'setlistIndex'; band: string }
   | { kind: 'setlist'; band: string; setlist: string };
 
 const SEG = '[^/]+';
+
+type SongFile = 'config' | 'lyrics' | 'chords' | 'notes';
 
 /** Parse an R2 key into the document it names, or null if it isn't one. */
 export function parseKey(key: string): Key | null {
@@ -46,8 +48,8 @@ export function parseKey(key: string): Key | null {
   if (key === 'registry.json') return { kind: 'registry' };
   if ((m = key.match(new RegExp(`^(${SEG})/band\\.json$`)))) return { kind: 'band', band: m[1] };
   if ((m = key.match(new RegExp(`^(${SEG})/songs/discography\\.json$`)))) return { kind: 'discography', band: m[1] };
-  if ((m = key.match(new RegExp(`^(${SEG})/songs/(${SEG})/(config|lyrics|notes)\\.json$`)))) {
-    return { kind: 'song', band: m[1], song: m[2], file: m[3] as 'config' | 'lyrics' | 'notes' };
+  if ((m = key.match(new RegExp(`^(${SEG})/songs/(${SEG})/(config|lyrics|chords|notes)\\.json$`)))) {
+    return { kind: 'song', band: m[1], song: m[2], file: m[3] as SongFile };
   }
   if ((m = key.match(new RegExp(`^(${SEG})/setlists/index\\.json$`)))) return { kind: 'setlistIndex', band: m[1] };
   if ((m = key.match(new RegExp(`^(${SEG})/setlists/(${SEG})\\.json$`)))) return { kind: 'setlist', band: m[1], setlist: m[2] };
@@ -236,7 +238,7 @@ async function read(key: string, d: Db, viewer: Viewer | typeof UNCHECKED): Prom
     }
 
     case 'song': {
-      const [row] = await d.select({ config: schema.song.config, lyrics: schema.song.lyrics, notes: schema.song.notes })
+      const [row] = await d.select({ config: schema.song.config, lyrics: schema.song.lyrics, chords: schema.song.chords, notes: schema.song.notes })
         .from(schema.song)
         .where(and(liveSongs(band.id), eq(schema.song.mediaPrefix, `${k.band}/songs/${k.song}`)));
       if (!row) return null;

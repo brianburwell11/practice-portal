@@ -186,6 +186,8 @@ export const song = pgTable('song', {
   config: jsonb('config').notNull(),
   /** `lyricsDataSchema`. Null when the song has no lyrics file. */
   lyrics: jsonb('lyrics'),
+  /** `chordsDataSchema`. Null when the song has no chords file. */
+  chords: jsonb('chords'),
   /**
    * `notesDataSchema` — the band's timestamp notes, written by admins.
    * Personal notes are a different thing and live in `user_song_state`.

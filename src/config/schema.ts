@@ -67,6 +67,25 @@ export const lyricsDataSchema = z.object({
   lines: z.array(lyricsLineSchema),
 });
 
+/** The longest a chord symbol may be ("F#m7b5/C" is 8). */
+export const CHORD_SYMBOL_MAX = 24;
+
+/**
+ * One chord change. Seconds only: bar and beat are worked out from the
+ * current tapMap when drawing, never stored, so editing the tapMap can't
+ * silently move chords (see docs: chord-symbols-research).
+ */
+export const chordEventSchema = z.object({
+  /** As shown, e.g. "Cm7", "G/B", "N.C.". */
+  symbol: z.string().trim().min(1).max(CHORD_SYMBOL_MAX),
+  time: z.number().min(0),
+});
+
+/** A song's chord track. A chord lasts until the next one. */
+export const chordsDataSchema = z.object({
+  chords: z.array(chordEventSchema),
+});
+
 export const noteSchema = z.object({
   id: z.string().min(1),
   time: z.number().min(0),

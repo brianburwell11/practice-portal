@@ -1,9 +1,12 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
+import { useChordsEditorStore } from '../../store/chordsEditorStore';
+import { beatGrid, snapTime } from '../../audio/chordGrid';
+import { displayChord } from '../../audio/chordSymbols';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import type { TapMapEntry } from '../../audio/types';
 import { markersToSeconds } from '../../audio/tempoUtils';
@@ -19,6 +22,9 @@ const SNAP_PX = isCoarse ? 24 : 12;
 /** Loop marker hit test threshold in pixels */
 const HIT_PX = isCoarse ? 20 : 6;
 /** Minimum zoom level in seconds */
+/** Chord markers in the chords editor: pink, apart from lyric cyan, section gold and loop yellow. */
+const CHORD_MARKER_COLOR = '#f472b6';
+
 const MIN_VIEW = 5;
 /** Default zoom level in seconds for mobile */
 const DEFAULT_MOBILE_VIEW = 30;
@@ -41,6 +47,9 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
   const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
   const lyricsLines = useLyricsEditorStore((s) => s.lines);
   const moveLyricLine = useLyricsEditorStore((s) => s.moveLine);
+  const chordsEditorOpen = useChordsEditorStore((s) => s.isOpen);
+  const editorChords = useChordsEditorStore((s) => s.chords);
+  const chordSnap = useChordsEditorStore((s) => s.snap);
   const notes = useNotesStore((s) => s.notes);
   const setNoteTime = useNotesStore((s) => s.setTime);
   // Dragging a note's dot retimes it: your own notes, or anyone's for a Manager or the Owner.
@@ -174,6 +183,10 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
   /** A lyric marker under the pointer: `moved` once it's dragged past a
    *  few pixels, so a plain click seeks instead of re-saving the time. */
   const dragLyricRef = useRef<{ index: number; time: number; startX: number; moved: boolean } | null>(null);
+  /** A chord marker under the pointer (chords editor): its original time,
+   *  where it's being dragged to, and `moved` past the click threshold. */
+  const dragChordRef = useRef<{ from: number; symbol: string; time: number; startX: number; moved: boolean } | null>(null);
+  const [chordDragTick, setChordDragTick] = useState(0);
   // TapMap editor entry drag state \u2014 mirrors the lyric-marker pattern.
   const dragEditorEntryRef = useRef<{ index: number; time: number } | null>(null);
   // Note marker drag state — held in a ref for high-frequency updates;
@@ -251,6 +264,27 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       return closest?.index ?? null;
     },
     [lyricsEditorOpen, lyricsLines, secondsToPixel],
+  );
+
+  const hitTestChordMarker = useCallback(
+    (pixelX: number): number | null => {
+      if (!chordsEditorOpen || !editorChords.length) return null;
+      const { width } = sizeRef.current;
+      if (width === 0) return null;
+      let closest: { index: number; dist: number } | null = null;
+      for (let i = 0; i < editorChords.length; i++) {
+        const dist = Math.abs(pixelX - secondsToPixel(editorChords[i].time, width));
+        if (dist <= HIT_PX && (!closest || dist < closest.dist)) closest = { index: i, dist };
+      }
+      return closest?.index ?? null;
+    },
+    [chordsEditorOpen, editorChords, secondsToPixel],
+  );
+
+  // The beat grid chord drags snap to (the editor's snap setting; never in free time).
+  const chordGrid = useMemo(
+    () => (chordsEditorOpen ? beatGrid(selectedSong?.tapMap, selectedSong?.timeSignatureMap) : []),
+    [chordsEditorOpen, selectedSong?.tapMap, selectedSong?.timeSignatureMap],
   );
 
   const [cursorStyle, setCursorStyle] = useState<string>('pointer');
@@ -432,6 +466,17 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         return;
       }
 
+      // Chord marker (chords editor)
+      const chordHit = hitTestChordMarker(x);
+      if (chordHit !== null) {
+        e.preventDefault();
+        const c = editorChords[chordHit];
+        dragChordRef.current = { from: c.time, symbol: c.symbol, time: c.time, startX: e.clientX, moved: false };
+        didDragRef.current = false;
+        suppressClickRef.current = false;
+        return;
+      }
+
       // Check loop marker hit
       const hit = hitTestLoopMarker(x);
       if (hit) {
@@ -446,7 +491,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       dragStartRef.current = { x: e.clientX, viewStart };
       didDragRef.current = false;
     },
-    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestNote, editorTapMap, lyricsLines, notes, canEditNote, setMarkerSelectedIndex, effectiveViewDuration, viewStart],
+    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestChordMarker, hitTestNote, editorTapMap, lyricsLines, editorChords, notes, canEditNote, setMarkerSelectedIndex, effectiveViewDuration, viewStart],
   );
 
   const handlePointerMove = useCallback(
@@ -505,6 +550,18 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         return;
       }
 
+      // Single pointer: drag a chord marker, snapping like stamps do
+      if (dragChordRef.current) {
+        const drag = dragChordRef.current;
+        if (!drag.moved && Math.abs(e.clientX - drag.startX) < 4) return;
+        drag.moved = true;
+        const seconds = Math.max(0, Math.min(pixelToSeconds(x, sizeRef.current.width), duration || 0));
+        drag.time = snapTime(seconds, chordGrid, chordSnap);
+        setChordDragTick((n) => n + 1);
+        suppressClickRef.current = true;
+        return;
+      }
+
       // Single pointer: drag loop marker
       if (draggingMarker) {
         const seconds = pixelToSeconds(x, sizeRef.current.width);
@@ -537,11 +594,12 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         const noteHit = hitTestNote(x, e.clientY - rect.top);
         const editorIdx = hitTestEditorEntry(x);
         const lyricIdx = hitTestLyricMarker(x);
+        const chordIdx = hitTestChordMarker(x);
         const hit = hitTestLoopMarker(x);
         setHoveredNote(noteHit);
         if (noteHit) {
           setCursorStyle('grab');
-        } else if (editorIdx !== null || lyricIdx !== null || hit) {
+        } else if (editorIdx !== null || lyricIdx !== null || chordIdx !== null || hit) {
           setCursorStyle('col-resize');
         } else {
           setCursorStyle('pointer');
@@ -549,7 +607,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         setHoveredTime(findSnapMarker(x));
       }
     },
-    [draggingMarker, findSnapMarker, hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestNote, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead],
+    [draggingMarker, findSnapMarker, hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestChordMarker, hitTestNote, pixelToSeconds, duration, engine, loopA, loopB, clampViewStart, isZoomed, effectiveViewDuration, setFollowPlayhead, chordGrid, chordSnap],
   );
 
   const handlePointerUp = useCallback(
@@ -614,6 +672,24 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         return;
       }
 
+      // End chord marker drag (one undo step), or a click: play from it and select it
+      if (dragChordRef.current) {
+        const { from, symbol, time, moved } = dragChordRef.current;
+        const editor = useChordsEditorStore.getState();
+        if (moved && time !== from) {
+          editor.applyEdit([from], [{ symbol, time }], time);
+          suppressClickRef.current = true;
+        } else if (!moved) {
+          engine.seek(from);
+          setFollowPlayhead(true);
+          editor.select(from);
+        }
+        dragChordRef.current = null;
+        dragStartRef.current = null;
+        setChordDragTick((n) => n + 1);
+        return;
+      }
+
       // End loop marker drag
       if (draggingMarker) {
         suppressClickRef.current = true;
@@ -656,6 +732,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         pinchStartRef.current = null;
       }
       dragLyricRef.current = null;
+      dragChordRef.current = null;
       dragEditorEntryRef.current = null;
       dragNoteRef.current = null;
       setHoveredNote(null);
@@ -881,8 +958,42 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
           ctx.fillText(label, Math.max(1, lx + 1), height - 2);
         }
       }
+
+      // Chord markers (chords editor): pink, with the chord name. A label
+      // that would run into the one before it is left off at this zoom.
+      if (chordsEditorOpen && editorChords.length > 0) {
+        ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
+        ctx.textBaseline = 'bottom';
+        const drag = dragChordRef.current;
+        const shown = editorChords
+          .map((c) => (drag?.moved && c.time === drag.from ? { ...c, time: drag.time } : c))
+          .sort((a, b) => a.time - b.time);
+        let labelEnd = -Infinity;
+        for (const c of shown) {
+          const x = toPixel(c.time);
+          if (x < -1 || x > width + 1) continue;
+          const dragged = !!drag?.moved && c.time === drag.time && c.symbol === drag.symbol;
+
+          ctx.strokeStyle = CHORD_MARKER_COLOR;
+          ctx.lineWidth = dragged ? 2 : 1;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+
+          const name = displayChord(c.symbol);
+          const tw = ctx.measureText(name).width;
+          const lx = Math.min(x + 2, width - tw - 3);
+          if (lx <= labelEnd + 3 && !dragged) continue;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(lx - 1, height - 14, tw + 4, 13);
+          ctx.fillStyle = CHORD_MARKER_COLOR;
+          ctx.fillText(name, lx + 1, height - 2);
+          labelEnd = lx + tw + 3;
+        }
+      }
     },
-    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines, notes, noteDragTick],
+    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines, chordsEditorOpen, editorChords, chordDragTick, notes, noteDragTick],
   );
 
   // Draw main canvas (viewport-relative)

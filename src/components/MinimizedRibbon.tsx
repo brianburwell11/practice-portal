@@ -1,6 +1,7 @@
 import { usePanelMinimizeStore, type PanelId } from '../store/panelMinimizeStore';
 import { useSongStore } from '../store/songStore';
 import { SheetMusicIcon } from './sheet/SheetMusicIcon';
+import { ChordsIcon } from './chords/ChordsIcon';
 
 const TOOLBAR_HEIGHT = 40;
 
@@ -8,6 +9,7 @@ const PANEL_LABELS: Record<PanelId, string> = {
   sheet: 'Sheet music',
   mixer: 'Mixer',
   lyrics: 'Lyrics',
+  chords: 'Chords',
   notes: 'Notes',
 };
 
@@ -29,6 +31,7 @@ function PanelIcon({ id }: { id: PanelId }) {
       </svg>
     );
   }
+  if (id === 'chords') return <ChordsIcon />;
   if (id === 'lyrics') {
     return (
       <svg className="w-4 h-4" viewBox="0 0 512 512" fill="currentColor">

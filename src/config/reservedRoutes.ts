@@ -63,7 +63,7 @@ const RESERVED = [
   'explore', 'search', 'browse', 'trending', 'popular', 'featured', 'new', 'create', 'edit',
   'import', 'export', 'share', 'shared', 'embed', 'widget', 'widgets', 'player', 'play', 'listen',
   'live', 'stream', 'music', 'track', 'tracks', 'stems', 'mixer', 'sheet', 'sheets', 'score',
-  'scores', 'lyrics', 'notes', 'tapmap', 'metronome', 'tuner', 'tempo', 'transcribe', 'record',
+  'scores', 'lyrics', 'chords', 'notes', 'tapmap', 'metronome', 'tuner', 'tempo', 'transcribe', 'record',
   'recordings', 'guest', 'guests', 'sub', 'subs', 'org', 'orgs', 'organization', 'organizations',
   'teams', 'studio', 'rehearsal', 'rehearsals', 'gigs', 'gig', 'calendar', 'events', 'event',
   'app', 'apps', 'mobile', 'ios', 'android', 'download', 'downloads', 'desktop', 'extension',

@@ -1,6 +1,7 @@
 import {
   songConfigSchema,
   lyricsDataSchema,
+  chordsDataSchema,
   songIdSchema,
   songManifestEntrySchema,
 } from '../../../src/config/schema';
@@ -34,6 +35,14 @@ export async function saveSongLyrics(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, songId } = req.params;
   const validated = lyricsDataSchema.parse(req.body);
   await writeJson(`${bandId}/songs/${songId}/lyrics.json`, validated);
+  return ok();
+}
+
+export async function saveSongChords(req: CoreRequest): Promise<CoreResponse> {
+  const { bandId, songId } = req.params;
+  const validated = chordsDataSchema.parse(req.body);
+  validated.chords.sort((a, b) => a.time - b.time);
+  await writeJson(`${bandId}/songs/${songId}/chords.json`, validated);
   return ok();
 }
 
@@ -79,7 +88,7 @@ export async function renameSong(req: CoreRequest): Promise<CoreResponse> {
     // config may not exist yet
   }
 
-  // 2. Everything else under the old prefix — stems, score, lyrics, notes.
+  // 2. Everything else under the old prefix — stems, score, lyrics, chords, notes.
   //    Copies happen now; the deletes wait for the commit (see store.ts).
   const oldAudioPrefix = `${bandId}/songs/${oldId}/`;
   const newAudioPrefix = `${bandId}/songs/${newId}/`;

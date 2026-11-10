@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type PanelId = 'sheet' | 'mixer' | 'lyrics' | 'notes';
+export type PanelId = 'sheet' | 'mixer' | 'lyrics' | 'chords' | 'notes';
 
 export type MinimizedItem =
   | { kind: 'panel'; id: PanelId }

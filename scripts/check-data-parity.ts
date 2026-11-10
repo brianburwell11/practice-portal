@@ -102,7 +102,7 @@ async function main(): Promise<void> {
     await compare(`${band.id}/band.json`);
     const songs = await compareDiscography(`${band.id}/songs/discography.json`);
     for (const s of songs) {
-      await Promise.all(['config', 'lyrics', 'notes'].map((f) => compare(`${band.id}/songs/${s.id}/${f}.json`)));
+      await Promise.all(['config', 'lyrics', 'chords', 'notes'].map((f) => compare(`${band.id}/songs/${s.id}/${f}.json`)));
     }
     const index = await compare(`${band.id}/setlists/index.json`);
     for (const s of (index.body as { setlists: { id: string }[] } | null)?.setlists ?? []) {
