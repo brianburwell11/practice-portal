@@ -14,6 +14,7 @@ import { MinimizedRibbon } from './components/MinimizedRibbon';
 import { YouTubeMiniPlayerStack } from './components/youtube/YouTubeMiniPlayerStack';
 import { MarkerEditorModal } from './components/marker-editor/MarkerEditorModal';
 import { LyricsEditorModal } from './components/lyrics-editor/LyricsEditorModal';
+import { ChordsEditorModal } from './components/chords-editor/ChordsEditorModal';
 import { DeleteSongModal } from './components/song-select/DeleteSongModal';
 import { AdminRibbon } from './admin/AdminRibbon';
 import { AccountMenu } from './components/account/AccountMenu';
@@ -26,7 +27,9 @@ import { useLyricsEditorStore } from './store/lyricsEditorStore';
 import { usePanelMinimizeStore } from './store/panelMinimizeStore';
 import { useLyricsStore } from './store/lyricsStore';
 import { useChordsStore } from './store/chordsStore';
+import { useChordsEditorStore } from './store/chordsEditorStore';
 import { dataUrl, safeHref } from './utils/url';
+import { chordsDataSchema } from './config/schema';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
 import { useSetlistStore } from './store/setlistStore';
@@ -50,6 +53,7 @@ const ADMIN_CAPABILITIES = new Set([
 
 const LYRICS_UNSAVED = 'You have unsaved lyrics changes.';
 const TAPMAP_UNSAVED = 'You have unsaved tapMap changes.';
+const CHORDS_UNSAVED = 'You have unsaved chord changes.';
 
 /**
  * Copy the band's guest link, opening on `setlistSlug`. The link is the band's
@@ -88,9 +92,30 @@ export default function App() {
   const lyricsEditorOpen = useLyricsEditorStore((s) => s.isOpen);
   const editorLines = useLyricsEditorStore((s) => s.lines);
   const lyricsEditorMode = useLyricsEditorStore((s) => s.mode);
+  const openChordsEditor = useChordsEditorStore((s) => s.open);
+  const chordsEditorOpen = useChordsEditorStore((s) => s.isOpen);
+  const editorChords = useChordsEditorStore((s) => s.chords);
   // The on-page editors hide the pickers, the ribbon and most transport
   // buttons so a stray tap can't switch songs mid-session.
-  const editorFocus = markerEditorOpen || lyricsEditorOpen;
+  const editorFocus = markerEditorOpen || lyricsEditorOpen || chordsEditorOpen;
+
+  /** Close whichever on-page editor is open (except `keep`), asking first if
+   *  it has unsaved changes. False if the user chose to stay. */
+  const closeOtherEditors = async (keep?: 'tapmap' | 'lyrics' | 'chords'): Promise<boolean> => {
+    if (keep !== 'lyrics' && lyricsEditorOpen) {
+      if (useLyricsEditorStore.getState().dirty && !(await confirmDiscard(LYRICS_UNSAVED))) return false;
+      closeLyricsEditor();
+    }
+    if (keep !== 'tapmap' && markerEditorOpen) {
+      if (markerEditorDirty && !(await confirmDiscard(TAPMAP_UNSAVED))) return false;
+      closeMarkerEditor();
+    }
+    if (keep !== 'chords' && chordsEditorOpen) {
+      if (useChordsEditorStore.getState().dirty && !(await confirmDiscard(CHORDS_UNSAVED))) return false;
+      useChordsEditorStore.getState().close();
+    }
+    return true;
+  };
   // Phones and desktop lay the header out differently (one picker each,
   // so their effects don't run twice).
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -175,15 +200,7 @@ export default function App() {
     hasSetlist: !!activeSetlist,
     onManageMembers: () => setShowMembersModal(true),
     onEditBand: async () => {
-      if (lyricsEditorOpen) {
-        const dirty = useLyricsEditorStore.getState().dirty;
-        if (dirty && !(await confirmDiscard(LYRICS_UNSAVED))) return;
-        closeLyricsEditor();
-      }
-      if (markerEditorOpen) {
-        if (markerEditorDirty && !(await confirmDiscard(TAPMAP_UNSAVED))) return;
-        closeMarkerEditor();
-      }
+      if (!(await closeOtherEditors())) return;
       setShowEditBandModal(true);
     },
     onDeleteBand: () => setShowDeleteBandModal(true),
@@ -191,19 +208,25 @@ export default function App() {
     onEditSong: () => selectedSong && navigate(`/${bandRoute}/admin/edit-song/${selectedSong.id}`),
     onTapMapEditor: async () => {
       if (!selectedSong) return;
-      if (lyricsEditorOpen) {
-        const dirty = useLyricsEditorStore.getState().dirty;
-        if (dirty && !(await confirmDiscard(LYRICS_UNSAVED))) return;
-        closeLyricsEditor();
-      }
+      if (!(await closeOtherEditors('tapmap'))) return;
       openMarkerEditor(selectedSong.tapMap ?? []);
+    },
+    onChordsEditor: async () => {
+      if (!selectedSong || !currentBand) return;
+      if (!(await closeOtherEditors('chords'))) return;
+      setShowEditBandModal(false);
+      // The saved chords, not the store's: the store may lag a save made elsewhere.
+      fetch(dataUrl(`${currentBand.id}/songs/${selectedSong.id}/chords.json`))
+        .then((r) => (r.ok ? r.json() : { chords: [] }))
+        .then((data) => {
+          const parsed = chordsDataSchema.safeParse(data);
+          openChordsEditor(parsed.success ? parsed.data.chords : []);
+        })
+        .catch(() => openChordsEditor([]));
     },
     onLyricsEditor: async () => {
       if (!selectedSong || !currentBand) return;
-      if (markerEditorOpen) {
-        if (markerEditorDirty && !(await confirmDiscard(TAPMAP_UNSAVED))) return;
-        closeMarkerEditor();
-      }
+      if (!(await closeOtherEditors('lyrics'))) return;
       setShowEditBandModal(false);
       fetch(dataUrl(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`))
         .then((r) => (r.ok ? r.json() : { lines: [] }))
@@ -321,11 +344,14 @@ export default function App() {
             it (flex-1 min-h-0) and scroll themselves, as before. */}
         <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
           {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
-          {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && <NotesLayer />}
+          {!editorFocus && !showEditBandModal && <NotesLayer />}
 
           {/* Chord lane: below notes, above lyrics. On desktop the current
-              chord starts on the lyric reading point. */}
-          {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && <ChordLane />}
+              chord starts on the lyric reading point. Under the chords
+              editor it previews the draft. */}
+          {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && (
+            <ChordLane overrideChords={chordsEditorOpen ? editorChords : undefined} />
+          )}
 
           {/* Lyrics display \u2014 hidden when the tapMap or band editors
               occupy the page. Stays visible under the lyrics editor so
@@ -333,7 +359,7 @@ export default function App() {
           {!markerEditorOpen && !showEditBandModal && !(lyricsEditorOpen && lyricsEditorMode === 'lyrics') && (
             <LyricsDisplay
               overrideLines={lyricsEditorOpen ? editorLines : undefined}
-              only={lyricsEditorOpen ? 'desktop' : undefined}
+              only={lyricsEditorOpen || chordsEditorOpen ? 'desktop' : undefined}
             />
           )}
 
@@ -341,7 +367,7 @@ export default function App() {
               opens it full screen on phones (ScrollingScore decides). Hidden
               under any of the on-page editors to give the editor full
               vertical space. */}
-          {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && !sheetMinimized && (
+          {!editorFocus && !showEditBandModal && !sheetMinimized && (
             <ScrollingScore />
           )}
 
@@ -350,6 +376,8 @@ export default function App() {
             <MarkerEditorModal />
           ) : lyricsEditorOpen ? (
             <LyricsEditorModal />
+          ) : chordsEditorOpen ? (
+            <ChordsEditorModal />
           ) : showEditBandModal && currentBand ? (
             <Suspense fallback={null}>
               <EditBandModal band={currentBand} onClose={() => setShowEditBandModal(false)} />

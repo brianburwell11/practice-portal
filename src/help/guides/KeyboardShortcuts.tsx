@@ -55,6 +55,39 @@ export default function KeyboardShortcuts() {
         />
       </HelpSection>
 
+      <HelpSection title="Chords editor">
+        <p>In Grid mode:</p>
+        <Table
+          head={['To', 'Press']}
+          rows={[
+            ['Store the chord and go to the next beat, or back one', <><Key>Space</Key>, <Key>Shift</Key>+<Key>Space</Key></>],
+            ['Store the chord and go to the next bar, or back one', <><Key>Tab</Key>, <Key>Shift</Key>+<Key>Tab</Key></>],
+            ['Repeat the last chord on this beat', <Key>/</Key>],
+            ['Copy the previous bar into this one', <Key>%</Key>],
+            ['Push the chord to the “and” before its beat', <Key>&lt;</Key>],
+            ['Delete the chord, or every chord in the selection', <><Key>Delete</Key> or <Key>Backspace</Key></>],
+            ['Select a range of beats', <><Key>Shift</Key>+click, or <Key>Shift</Key>+arrows</>],
+            ['Select every beat', <><Key>Ctrl</Key>+<Key>A</Key></>],
+            ['Copy, cut, paste', <><Key>Ctrl</Key>+<Key>C</Key>, <Key>Ctrl</Key>+<Key>X</Key>, <Key>Ctrl</Key>+<Key>V</Key></>],
+            ['Play from the cursor, or pause', <><Key>Ctrl</Key>+<Key>Enter</Key></>],
+            ['Undo, redo', <><Key>Ctrl</Key>+<Key>Z</Key>, <Key>Ctrl</Key>+<Key>Shift</Key>+<Key>Z</Key></>],
+          ]}
+        />
+        <p>In Stamp mode:</p>
+        <Table
+          head={['To', 'Press']}
+          rows={[
+            ['Play or pause', <Key>Space</Key>],
+            ['Stamp the next chord in the queue at the current time', <Key>Tab</Key>],
+            ['Take the last stamp back', <><Key>Shift</Key>+<Key>Tab</Key></>],
+            ['Nudge the selected chord', <><Key>Alt</Key>+<Key>←</Key> or <Key>→</Key></>],
+            ['Replay from just before the selected chord', <Key>R</Key>],
+            ['Select a run of chords', <><Key>Shift</Key>+click</>],
+            ['Delete the selected chords', <><Key>Delete</Key> or <Key>Backspace</Key></>],
+          ]}
+        />
+      </HelpSection>
+
       <HelpSection title="TapMap editor">
         <Table
           head={['To', 'Press']}
@@ -81,7 +114,7 @@ export default function KeyboardShortcuts() {
           ]}
         />
         <p>
-          More in <GuideLink slug="timing-and-lyrics">Timing and lyrics</GuideLink> and{' '}
+          More in <GuideLink slug="timing-and-lyrics">Timing, lyrics and chords</GuideLink> and{' '}
           <GuideLink slug="adding-songs">Adding and editing songs</GuideLink>.
         </p>
       </HelpSection>

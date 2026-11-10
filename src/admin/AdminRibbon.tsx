@@ -19,6 +19,7 @@ interface Props {
   onEditSong?: () => void;
   onTapMapEditor?: () => void;
   onLyricsEditor?: () => void;
+  onChordsEditor?: () => void;
   onDeleteSong?: () => void;
   onAddSetlist?: () => void;
   onEditSetlist?: () => void;
@@ -84,6 +85,7 @@ export function AdminRibbon({
   onEditSong,
   onTapMapEditor,
   onLyricsEditor,
+  onChordsEditor,
   onDeleteSong,
   onAddSetlist,
   onEditSetlist,
@@ -145,6 +147,7 @@ export function AdminRibbon({
         { label: 'Edit Song', show: can('song.content.write'), enabled: !!hasSong, onClick: onEditSong },
         { label: 'TapMap Editor', show: can('song.timing.write'), enabled: !!hasSong, onClick: onTapMapEditor },
         { label: 'Lyrics Editor', show: can('song.content.write'), enabled: !!hasSong, onClick: onLyricsEditor },
+        { label: 'Chords Editor', show: can('song.content.write'), enabled: !!hasSong, onClick: onChordsEditor },
         { label: 'Delete Song', show: can('song.delete'), enabled: !!hasSong, danger: true, onClick: onDeleteSong },
       ],
     },

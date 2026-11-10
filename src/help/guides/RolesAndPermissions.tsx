@@ -11,7 +11,7 @@ const ROWS: { group: string; items: { label: string; capability: Capability }[] 
   {
     group: 'Practicing',
     items: [
-      { label: 'Play songs, use the mixer, and follow the sheet music and lyrics', capability: 'song.read' },
+      { label: 'Play songs, use the mixer, and follow the sheet music, lyrics and chords', capability: 'song.read' },
       { label: 'See everyone’s notes on songs', capability: 'song.read' },
       { label: 'Add notes, and edit or delete your own', capability: 'note.create' },
       { label: 'Edit or delete anyone’s notes', capability: 'note.moderate' },
@@ -21,7 +21,7 @@ const ROWS: { group: string; items: { label: string; capability: Capability }[] 
     group: 'Songs and setlists',
     items: [
       { label: 'Add songs', capability: 'song.create' },
-      { label: 'Edit song details and lyrics', capability: 'song.content.write' },
+      { label: 'Edit song details, lyrics and chords', capability: 'song.content.write' },
       { label: 'Upload or replace audio, and save the mixer’s default levels', capability: 'song.audio.write' },
       { label: 'Upload or replace sheet music', capability: 'song.score.write' },
       { label: 'Edit a song’s timing (its tap map and sections)', capability: 'song.timing.write' },
@@ -90,7 +90,7 @@ export default function RolesAndPermissions() {
           <Role name="Editor">
             <p>
               The people who build the band’s library. Editors add songs, upload audio and sheet music, edit song
-              details and lyrics, and manage setlists.
+              details, lyrics and chords, and manage setlists.
             </p>
             <p>Editors can’t delete songs, change a song’s timing, or invite people.</p>
           </Role>

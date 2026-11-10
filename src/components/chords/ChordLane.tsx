@@ -40,15 +40,17 @@ function labelWidth(symbol: string, px: number): number {
  * of the waveform and stack lyrics vertically, so the lane gets its own slot
  * (`SlotLane`). Hidden when the song has no chords.
  */
-export function ChordLane() {
-  const chords = useChordsStore((s) => s.chords);
+export function ChordLane({ overrideChords }: { overrideChords?: ChordEvent[] } = {}) {
+  const storeChords = useChordsStore((s) => s.chords);
   const desktopMinimized = usePanelMinimizeStore((s) =>
     s.items.some((x) => x.kind === 'panel' && x.id === 'chords'),
   );
+  // The chords editor previews its draft here, minimized or not.
+  const chords = overrideChords ?? storeChords;
   if (chords.length === 0) return null;
   return (
     <>
-      {!desktopMinimized && <PinnedLane chords={chords} className="hidden md:block" />}
+      {(overrideChords || !desktopMinimized) && <PinnedLane chords={chords} className="hidden md:block" />}
       <SlotLane chords={chords} className="md:hidden" />
     </>
   );

@@ -53,8 +53,8 @@ export const GUIDES: GuideInfo[] = [
   },
   {
     slug: 'timing-and-lyrics',
-    title: 'Timing and lyrics',
-    summary: 'Mark a song’s sections and measures, and sync its lyrics.',
+    title: 'Timing, lyrics and chords',
+    summary: 'Mark a song’s sections and measures, and sync its lyrics and chords.',
     section: 'Managing your band',
   },
   {
