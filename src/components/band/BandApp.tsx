@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { autoInk } from '../../utils/bandTheme';
 import { useParams, Outlet } from 'react-router-dom';
 import { useBandStore } from '../../store/bandStore';
 import { useSongStore } from '../../store/songStore';
@@ -118,7 +119,7 @@ export function BandApp() {
     root.style.setProperty('--band-primary', currentBand.colors.primary);
     root.style.setProperty('--band-accent', currentBand.colors.accent);
     root.style.setProperty('--band-bg', currentBand.colors.background);
-    root.style.setProperty('--band-text', currentBand.colors.text);
+    root.style.setProperty('--band-text', autoInk(currentBand.colors.background));
     document.title = bandPageTitle(currentBand.name);
     return () => {
       root.style.removeProperty('--band-primary');

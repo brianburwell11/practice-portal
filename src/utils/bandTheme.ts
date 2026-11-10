@@ -7,7 +7,8 @@
  * `var(--color-gray-400)` and friends, so redefining the scale on the band
  * page root makes every existing class follow the band's colors.
  *
- * The scale runs from the band's text color ("ink", gray-50) down to its
+ * Bands only pick a background; the text color ("ink") is chosen here for
+ * the best contrast on it. The scale runs from the ink (gray-50) down to the
  * background (gray-950), keeping the stock theme's spacing, then each step
  * that carries text is pushed toward the ink until it reaches a minimum WCAG
  * contrast against the background. A few accent hues used as text (amber,
@@ -20,7 +21,7 @@ type Lab = [number, number, number]; // OKLab
 
 /** The stock page color (`--color-page` in index.css). */
 export const DEFAULT_PAGE_BG = '#080e22';
-/** The stock page text color (App's fallback for `--band-text`). */
+/** The stock page text color, preferred on dark backgrounds. */
 export const DEFAULT_PAGE_TEXT = '#f3f4f6';
 
 // ---------- parsing / conversion ----------
@@ -155,20 +156,27 @@ function liftLightness(color: Lab, bg: RGB, floor: number): RGB {
 
 // ---------- the theme ----------
 
-/** Contrast the band's text color must reach on its background. */
+/** Contrast the text color must reach on the background. */
 export const INK_MIN = 7;
-/** Contrast an adjusted text color aims for. */
-const ADJUSTED_INK_TARGET = 12;
 
-/** The band's text color, adjusted if needed to read clearly on `bg`. */
-export function resolveInk(bg: RGB, text: RGB | null): RGB {
-  if (text && contrastRatio(text, bg) >= INK_MIN) return text;
-  if (!text) return extreme(bg);
-  // Once we're adjusting anyway, go well past the bare minimum so the
-  // scale below the ink has room for active, upcoming and past text.
-  const best = contrastRatio(extreme(bg), bg);
-  const target = Math.max(INK_MIN, Math.min(ADJUSTED_INK_TARGET, best * 0.9));
-  return liftLightness(rgbToOklab(text), bg, target);
+/** Near-black text, preferred on light backgrounds. */
+const DARK_INK = '#111827';
+
+/**
+ * The text color for `bg`: the stock light gray or a near-black, whichever
+ * stands out more, or pure white/black if neither reaches `INK_MIN`.
+ */
+export function resolveInk(bg: RGB): RGB {
+  const light = parseHex(DEFAULT_PAGE_TEXT)!;
+  const dark = parseHex(DARK_INK)!;
+  const best = contrastRatio(light, bg) >= contrastRatio(dark, bg) ? light : dark;
+  return contrastRatio(best, bg) >= INK_MIN ? best : extreme(bg);
+}
+
+/** The text color for a band background (hex in, hex out). */
+export function autoInk(background: string): string {
+  const bg = parseHex(background);
+  return bg ? toHex(resolveInk(bg)) : DEFAULT_PAGE_TEXT;
 }
 
 export const GRAY_STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950] as const;
@@ -345,31 +353,24 @@ export function buildAccentOverrides(bg: RGB): Record<string, string> {
 export interface BandTheme {
   /** CSS custom properties to set on the band page root. */
   vars: Record<string, string>;
-  /** The text color actually used. */
+  /** The text color used on the page. */
   ink: string;
-  /** True when the band's text color had to be changed to read clearly. */
-  inkAdjusted: boolean;
 }
 
 /**
  * The band page's color variables for `colors`, or null when there's no
  * band or its background can't be parsed (the stock theme then applies).
  */
-export function bandTheme(colors: Pick<BandColors, 'background' | 'text'> | null | undefined): BandTheme | null {
+export function bandTheme(colors: Pick<BandColors, 'background'> | null | undefined): BandTheme | null {
   if (!colors) return null;
   const bg = parseHex(colors.background);
   if (!bg) return null;
-  const text = parseHex(colors.text);
-  const ink = resolveInk(bg, text);
+  const ink = resolveInk(bg);
   const inkHex = toHex(ink);
   const vars: Record<string, string> = { '--band-ink': inkHex };
   const scale = buildNeutralScale(bg, ink);
   for (const step of GRAY_STEPS) vars[`--color-gray-${step}`] = scale[step];
   for (const [step, hex] of Object.entries(buildMixerSurfaces(bg, ink))) vars[`--mixer-gray-${step}`] = hex;
   for (const [name, hex] of Object.entries(buildAccentOverrides(bg))) vars[`--color-${name}`] = hex;
-  return {
-    vars,
-    ink: inkHex,
-    inkAdjusted: !text || toHex(text) !== inkHex,
-  };
+  return { vars, ink: inkHex };
 }

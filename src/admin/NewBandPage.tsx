@@ -8,6 +8,8 @@ import { generateUniqueBandId } from '../utils/bandId';
 import { dedupeSlug } from '../utils/dedupeSlug';
 import { shrinkLogo } from '../utils/shrinkLogo';
 import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
+import { autoInk } from '../utils/bandTheme';
+import { textOn } from '../components/mixer/textOn';
 
 // The portal's own: `--color-brand`, `--color-page` and the body text in
 // index.css. The portal has no accent, so that one is just a default.
@@ -136,7 +138,12 @@ export default function NewBandPage() {
       const safeId = existingIds.has(draft.id)
         ? generateUniqueBandId(existingIds)
         : draft.id;
-      let finalDraft: BandConfig = { ...draft, id: safeId };
+      let finalDraft: BandConfig = {
+        ...draft,
+        id: safeId,
+        // Text color isn't a choice: it's whatever reads best on the background.
+        colors: { ...draft.colors, text: autoInk(draft.colors.background) },
+      };
 
       if (pendingLogoFile) {
         const formData = new FormData();
@@ -172,7 +179,8 @@ export default function NewBandPage() {
     }
   };
 
-  const colorKeys: (keyof BandColors)[] = ['primary', 'accent', 'background', 'text'];
+  // No text color: the page picks whichever reads best on the background.
+  const colorKeys: (keyof BandColors)[] = ['primary', 'accent', 'background'];
 
   return (
     <div className="min-h-screen bg-page text-gray-100">
@@ -267,7 +275,7 @@ export default function NewBandPage() {
 
         <div className="space-y-2">
           <span className="text-sm font-medium text-gray-300">Color Scheme</span>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {colorKeys.map((key) => (
               <label key={key} className="space-y-1">
                 <span className="text-xs text-gray-400 capitalize">{key}</span>
@@ -302,25 +310,25 @@ export default function NewBandPage() {
             ) : (
               <div
                 className="w-16 h-16 rounded flex items-center justify-center text-2xl font-bold shrink-0"
-                style={{ backgroundColor: draft.colors.primary, color: draft.colors.text }}
+                style={{ backgroundColor: draft.colors.primary, color: textOn(draft.colors.primary) }}
               >
                 {(draft.name || 'My Band')[0]}
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <div className="font-semibold" style={{ color: draft.colors.text }}>
+              <div className="font-semibold" style={{ color: autoInk(draft.colors.background) }}>
                 {draft.name || 'My Band'}
               </div>
               <div className="flex gap-2 mt-2">
                 <span
                   className="px-2 py-1 rounded text-xs font-medium"
-                  style={{ backgroundColor: draft.colors.primary, color: draft.colors.text }}
+                  style={{ backgroundColor: draft.colors.primary, color: textOn(draft.colors.primary) }}
                 >
                   Primary
                 </span>
                 <span
                   className="px-2 py-1 rounded text-xs font-medium"
-                  style={{ backgroundColor: draft.colors.accent, color: draft.colors.background }}
+                  style={{ backgroundColor: draft.colors.accent, color: textOn(draft.colors.accent) }}
                 >
                   Accent
                 </span>

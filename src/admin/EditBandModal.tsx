@@ -5,7 +5,7 @@ import { useBandStore } from '../store/bandStore';
 import { dedupeSlug } from '../utils/dedupeSlug';
 import { shrinkLogo } from '../utils/shrinkLogo';
 import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
-import { bandTheme } from '../utils/bandTheme';
+import { autoInk } from '../utils/bandTheme';
 
 function nameToSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -61,7 +61,7 @@ export function EditBandModal({ band, onClose }: Props) {
     root.style.setProperty('--band-primary', draft.colors.primary);
     root.style.setProperty('--band-accent', draft.colors.accent);
     root.style.setProperty('--band-bg', draft.colors.background);
-    root.style.setProperty('--band-text', draft.colors.text);
+    root.style.setProperty('--band-text', autoInk(draft.colors.background));
     setPreviewColors({ ...draft.colors });
   }, [draft.colors, setPreviewColors]);
 
@@ -76,7 +76,7 @@ export function EditBandModal({ band, onClose }: Props) {
       root.style.setProperty('--band-primary', current.colors.primary);
       root.style.setProperty('--band-accent', current.colors.accent);
       root.style.setProperty('--band-bg', current.colors.background);
-      root.style.setProperty('--band-text', current.colors.text);
+      root.style.setProperty('--band-text', autoInk(current.colors.background));
     };
   }, []);
 
@@ -176,7 +176,12 @@ export function EditBandModal({ band, onClose }: Props) {
 
     // Normalize empty website to undefined so we don't persist "" in band.json.
     const trimmedWebsite = draft.website?.trim();
-    const toSave: BandConfig = { ...draft, website: trimmedWebsite ? trimmedWebsite : undefined };
+    const toSave: BandConfig = {
+      ...draft,
+      // Text color isn't a choice: it's whatever reads best on the background.
+      colors: { ...draft.colors, text: autoInk(draft.colors.background) },
+      website: trimmedWebsite ? trimmedWebsite : undefined,
+    };
 
     try {
       const res = await fetch(`/api/bands/${toSave.id}`, {
@@ -211,8 +216,8 @@ export function EditBandModal({ band, onClose }: Props) {
     }
   };
 
-  const draftTheme = useMemo(() => bandTheme(draft.colors), [draft.colors]);
-  const colorKeys: (keyof BandColors)[] = ['primary', 'accent', 'background', 'text'];
+  // No text color: the page picks whichever reads best on the background.
+  const colorKeys: (keyof BandColors)[] = ['primary', 'accent', 'background'];
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -337,7 +342,7 @@ export function EditBandModal({ band, onClose }: Props) {
 
         <div className="space-y-2">
           <span className="text-xs font-medium text-gray-300">Color Scheme</span>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {colorKeys.map((key) => (
               <label key={key} className="space-y-1">
                 <span className="text-xs text-gray-400 capitalize">{key}</span>
@@ -358,11 +363,6 @@ export function EditBandModal({ band, onClose }: Props) {
               </label>
             ))}
           </div>
-          {draftTheme?.inkAdjusted && (
-            <p className="text-xs text-gray-400">
-              Text is shown as {draftTheme.ink} so it stays readable on this background.
-            </p>
-          )}
         </div>
 
         <div className="space-y-2">

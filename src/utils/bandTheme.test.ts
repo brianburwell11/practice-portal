@@ -5,46 +5,46 @@ import {
   DEFAULT_PAGE_TEXT,
   GRAY_STEPS,
   INK_MIN,
+  autoInk,
   bandTheme,
   contrastHex,
   parseHex,
   relativeLuminance,
 } from './bandTheme';
 
-const CASES: [string, string, string][] = [
-  ['stock navy', DEFAULT_PAGE_BG, DEFAULT_PAGE_TEXT],
-  ['white', '#ffffff', '#111111'],
-  ['black', '#000000', '#ffffff'],
-  ['pale yellow', '#fff6c2', '#fffbe0'],
-  ['mid gray', '#808080', '#909090'],
-  ['saturated yellow', '#ffff00', '#ffff00'],
-  ['saturated blue', '#0000ff', '#2222ff'],
-  ['text equals background', '#3a6b4c', '#3a6b4c'],
-  ['light text on light bg', '#e8e0d0', '#ffffff'],
-  ['three-digit hex', '#fff', '#000'],
+const CASES: [string, string][] = [
+  ['stock navy', DEFAULT_PAGE_BG],
+  ['white', '#ffffff'],
+  ['black', '#000000'],
+  ['pale yellow', '#fff6c2'],
+  ['mid gray', '#808080'],
+  ['saturated yellow', '#ffff00'],
+  ['saturated blue', '#0000ff'],
+  ['forest green', '#3a6b4c'],
+  ['beige', '#e8e0d0'],
+  ['three-digit hex', '#fff'],
 ];
 
 describe('bandTheme', () => {
   it('returns null without a parseable background', () => {
     expect(bandTheme(null)).toBeNull();
-    expect(bandTheme({ background: 'tomato', text: '#fff' })).toBeNull();
+    expect(bandTheme({ background: 'tomato' })).toBeNull();
   });
 
-  it('keeps a text color that already reads clearly', () => {
-    const t = bandTheme({ background: '#ffffff', text: '#123456' })!;
-    expect(t.ink).toBe('#123456');
-    expect(t.inkAdjusted).toBe(false);
+  it('picks the stock light text on dark backgrounds and near-black on light ones', () => {
+    expect(autoInk(DEFAULT_PAGE_BG)).toBe(DEFAULT_PAGE_TEXT);
+    expect(autoInk('#ffffff')).toBe('#111827');
+    expect(autoInk('#fff6c2')).toBe('#111827');
   });
 
-  it('flags and fixes a text color that does not', () => {
-    const t = bandTheme({ background: '#ffffff', text: '#ffeeaa' })!;
-    expect(t.inkAdjusted).toBe(true);
-    expect(contrastHex(t.ink, '#ffffff')).toBeGreaterThanOrEqual(INK_MIN);
+  it('falls back to pure black or white when neither reaches the minimum', () => {
+    expect(autoInk('#808080')).toBe('#000000');
+    expect(autoInk('#585858')).toBe('#ffffff');
   });
 
-  for (const [label, bg, text] of CASES) {
+  for (const [label, bg] of CASES) {
     describe(label, () => {
-      const theme = bandTheme({ background: bg, text })!;
+      const theme = bandTheme({ background: bg })!;
       const gray = (s: number) => theme.vars[`--color-gray-${s}`];
       const best = Math.max(contrastHex('#000000', bg), contrastHex('#ffffff', bg));
 
@@ -85,7 +85,7 @@ describe('bandTheme', () => {
   }
 
   it('leaves the stock navy page nearly as it was', () => {
-    const t = bandTheme({ background: DEFAULT_PAGE_BG, text: DEFAULT_PAGE_TEXT })!;
+    const t = bandTheme({ background: DEFAULT_PAGE_BG })!;
     // Text-bright steps stay bright, surfaces stay dark.
     expect(relativeLuminance(parseHex(t.vars['--color-gray-100'])!)).toBeGreaterThan(0.8);
     expect(relativeLuminance(parseHex(t.vars['--color-gray-800'])!)).toBeLessThan(0.05);
@@ -100,7 +100,7 @@ describe('.theme-default in index.css', () => {
     const { resolve } = await import('node:path');
     const css = readFileSync(resolve(__dirname, '../index.css'), 'utf8');
     const block = /\.theme-default\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
-    const t = bandTheme({ background: '#808080', text: '#000' })!;
+    const t = bandTheme({ background: '#808080' })!;
     // `--mixer-gray-*` only acts through `.mixer-surfaces`, so it needs no reset.
     const themed = Object.keys(t.vars).filter((k) => !k.startsWith('--mixer-'));
     for (const name of [...themed, ...ACCENTS.map((a) => `--color-${a.name}`)]) {

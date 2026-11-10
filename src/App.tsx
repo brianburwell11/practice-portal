@@ -123,15 +123,11 @@ export default function App() {
   // so their effects don't run twice).
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const currentBand = useBandStore((s) => s.currentBand);
-  // The band's colors (or the editor's unsaved preview), turned into a gray
-  // scale and accent fixes that keep every label readable on its background.
+  // The band's background (or the editor's unsaved preview), turned into a
+  // text color, gray scale and accent fixes that keep every label readable.
   const previewColors = useBandStore((s) => s.previewColors);
   const themeBg = (previewColors ?? currentBand?.colors)?.background;
-  const themeText = (previewColors ?? currentBand?.colors)?.text;
-  const theme = useMemo(
-    () => (themeBg ? bandTheme({ background: themeBg, text: themeText ?? '' }) : null),
-    [themeBg, themeText],
-  );
+  const theme = useMemo(() => (themeBg ? bandTheme({ background: themeBg }) : null), [themeBg]);
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSetlistModal, setShowSetlistModal] = useState(false);
@@ -278,7 +274,7 @@ export default function App() {
         style={{
           ...(theme?.vars as CSSProperties | undefined),
           backgroundColor: 'var(--band-bg, var(--color-page))',
-          color: theme ? theme.ink : 'var(--band-text, #f3f4f6)',
+          color: theme ? theme.ink : '#f3f4f6',
         }}
       >
         {/* Header */}
