@@ -15,6 +15,7 @@ import { DisplaySettings } from '../../components/react/chords/DisplaySettings';
 import { BeatAnchorDemo } from '../../components/react/chords/BeatAnchorDemo';
 import { DetectionFixer } from '../../components/react/chords/DetectionFixer';
 import { NashvilleKeys } from '../../components/react/chords/NashvilleKeys';
+import { RealChordLane } from '../../components/react/chords/RealChordLane';
 
 Lyrics already scroll with the song: each line is `{ text, time }`, stamped live with <kbd>Tab</kbd> in the Lyrics Editor. This page looks at how other tools handle the same job for **chord symbols**, and proposes how a chord track should work here.
 
@@ -312,6 +313,10 @@ Switch the sketch between **desktop** and **phone** to see the lane in place; th
 
 <div class="widget-sandbox"><NowNextPanel client:visible /></div>
 
+**Built (Phase 1).** Below is the app's actual `ChordLane` component, with the real lyric track under it, played by the demo song. Widen the window past the phone breakpoint to see the desktop lane, or narrow it to see the phone one. Phone lyrics stay hidden until toggled, as in the app.
+
+<div class="widget-sandbox"><RealChordLane client:only="react" /></div>
+
 ### Later: other inputs and views
 
 Not in the first version, but kept here with their sketches.
@@ -347,18 +352,24 @@ iReal / Moises Grid style, with the current bar lit, push marks, and a free-time
 ### Proposed phases
 
 **Phase 1: Data and the chord lane**
-- [ ] `chordEventSchema` (`symbol`, `time`) and `chordsDataSchema` in `src/config/schema.ts`; `song.chords` jsonb plus read and save routes mirroring lyrics, with the same Owner / Manager / Editor permission
-- [ ] Add `chord-symbol` and wrap it in `src/audio/chords.ts` (parse and normalize to one spelling)
-- [ ] `chordsStore`, and a `ChordLane` component placed between `NotesLayer` and `LyricsDisplay` in `App.tsx`
-- [ ] Desktop: current chord pinned on the reading point (`FOCUS_LEFT_NUDGE_PX`) like the current lyric, pushed off left by the next chord, previous chord fading left. Phone: own narrow slot
-- [ ] Beat and bar lines (none in free time), look-ahead setting
-- [ ] Collapsible like the lyrics panel; hidden when a song has no chords
+- [x] `chordEventSchema` (`symbol`, `time`) and `chordsDataSchema` in `src/config/schema.ts`; `song.chords` jsonb (migration `0014_song_chords`) plus `chords.json` reads and a `POST /api/bands/:band/songs/:song/chords` save route, with the same Owner / Manager / Editor permission as lyrics (`song.content.write`)
+- [x] Chords follow a song rename and show up in `check-data-parity` and `verify-db`
+- [ ] ~~Add `chord-symbol`~~ Moved to Phase 2: nothing parses chords until the editor exists, and the package (last release 2023, depends on lodash) should be weighed against the bundle then
+- [x] `chordsStore` (sorted chords, loaded flag, look-ahead remembered per device) and loading `chords.json` alongside lyrics
+- [x] `ChordLane` placed between `NotesLayer` and `LyricsDisplay` in `App.tsx`
+- [x] Desktop: current chord's text on the lyric reading point, pushed off left by the next chord, previous chord fading left. Phone: own narrow slot
+- [x] Beat and bar lines from the tapMap (`beatGrid`: tapped beats, or beats filled in from the time signature; none in free time); look-ahead button (3 / 5 / 8 s)
+- [x] Collapsible on desktop like the lyrics (Chords chip in the ribbon); hidden when a song has no chords; click a chord to play from it
+- [x] Apply migration `0014_song_chords` to Neon (`npm run db:migrate`) **before** deploying: every song read selects the new column. Done Nov 10 2026
+- [x] `scripts/set-chords.ts`: saves chords through the real route (Postgres, audit log, R2) from a file or as one-chord-per-bar test data, until the editor exists. Purple Rain (`dev/QBIBTcj`) has Bb Gm F Eb, one per bar, as test data
 
 **Test:**
-- [ ] Hand-written chords JSON for one song plays back in time at 50%, 100% and with loops
-- [ ] Each chord reaches the reading point exactly when it sounds, at every speed, and its text lines up with the current lyric's
-- [ ] A song with no tapMap still shows chords, scrolling by time with no beat lines
-- [ ] Songs with no chords look unchanged, on desktop and phone
+- [x] Unit: `beatGrid` (tapped beats, measure-only songs, time signature changes, free time) and `chordsStore`
+- [x] Render: hidden with no chords; look-ahead window; current chord on the reading point; push-off; a chord reaches the reading point when it sounds; click seeks; minimize; look-ahead remembered (`ChordLane.test.ts`)
+- [x] In the app: hand-written chords JSON for one song plays back in time at 50%, 100% and with loops
+- [x] In the app: each chord reaches the reading point when it sounds, and its text lines up with the current lyric's
+- [x] In the app: a song with no tapMap still shows chords, scrolling by time with no beat lines
+- [x] In the app: songs with no chords look unchanged, on desktop and phone
 
 **Phase 2: Chords Editor (grid typing and tap to stamp)**
 - [ ] Editor modal with the bar grid built from the tapMap (beats filled in from the time signature where only measures are tapped)
