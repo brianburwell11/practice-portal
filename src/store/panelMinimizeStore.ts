@@ -13,7 +13,9 @@ interface PanelMinimizeState {
   currentSongId: string | null;
   minimizePanel: (id: PanelId) => void;
   restorePanel: (id: PanelId) => void;
-  minimizeVideo: (id: string) => void;
+  /** `remember: false` hides it for now without saving that for the next
+   *  visit (the editors tuck videos away this way). */
+  minimizeVideo: (id: string, opts?: { remember?: boolean }) => void;
   restoreVideo: (id: string) => void;
   isPanelMinimized: (id: PanelId) => boolean;
   isVideoMinimized: (id: string) => boolean;
@@ -69,11 +71,11 @@ export const usePanelMinimizeStore = create<PanelMinimizeState>((set, get) => ({
     set((s) => ({
       items: s.items.filter((x) => !(x.kind === 'panel' && x.id === id)),
     })),
-  minimizeVideo: (id) =>
+  minimizeVideo: (id, { remember = true } = {}) =>
     set((s) => {
       if (s.items.some((x) => x.kind === 'video' && x.id === id)) return s;
       const items: MinimizedItem[] = [...s.items, { kind: 'video', id }];
-      if (s.currentSongId) saveMinimizedVideos(s.currentSongId, videoIdsFromItems(items));
+      if (remember && s.currentSongId) saveMinimizedVideos(s.currentSongId, videoIdsFromItems(items));
       return { items };
     }),
   restoreVideo: (id) =>

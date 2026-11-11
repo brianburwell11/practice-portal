@@ -102,6 +102,24 @@ export default function App() {
   // buttons so a stray tap can't switch songs mid-session.
   const editorFocus = markerEditorOpen || lyricsEditorOpen || chordsEditorOpen;
 
+  // The editors need the room: videos minimize while one is open, and the
+  // ones minimized for it come back when it closes. Videos already
+  // minimized by hand stay that way.
+  const editorHidVideosRef = useRef<string[]>([]);
+  useEffect(() => {
+    const store = usePanelMinimizeStore.getState();
+    if (editorFocus) {
+      const showing = (selectedSong?.videos ?? []).map((v) => v.id).filter((id) => !store.isVideoMinimized(id));
+      for (const id of showing) store.minimizeVideo(id, { remember: false });
+      editorHidVideosRef.current = showing;
+      return;
+    }
+    for (const id of editorHidVideosRef.current) store.restoreVideo(id);
+    editorHidVideosRef.current = [];
+    // Only on an editor opening or closing, not on every song edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorFocus]);
+
   /** Close whichever on-page editor is open (except `keep`), asking first if
    *  it has unsaved changes. False if the user chose to stay. */
   const closeOtherEditors = async (keep?: 'tapmap' | 'lyrics' | 'chords'): Promise<boolean> => {
