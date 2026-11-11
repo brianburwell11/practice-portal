@@ -82,9 +82,9 @@ A day like any other`;
   });
 
   it('reports a stray chord-like token on a chord line', () => {
-    const parsed = parseChordSheet('G  Cadd13#11  D  Em');
+    const parsed = parseChordSheet('G  C7#13  D  Em');
     expect(parsed.sections[0].chords).toEqual(['G', 'D', 'Em']);
-    expect(parsed.unknown).toEqual(['Cadd13#11']);
+    expect(parsed.unknown).toEqual(['C7#13']);
   });
 
   it('accepts word headings like "Chorus:" and "Verse 2"', () => {
