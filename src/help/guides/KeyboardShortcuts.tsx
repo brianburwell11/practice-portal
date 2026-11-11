@@ -27,7 +27,7 @@ export default function KeyboardShortcuts() {
             ['Show or hide the lyrics (computer only)', <Key>L</Key>],
             ['Show or hide the chords (computer only)', <Key>K</Key>],
             ['Zoom the waveform', <><Key>Ctrl</Key>+scroll, or pinch</>],
-            ['Move along the waveform or lyrics', <><Key>Shift</Key>+scroll</>],
+            ['Move along the waveform, lyrics or chords', <><Key>Shift</Key>+scroll</>],
             ['Loop a stretch of the waveform', 'Drag across it'],
             ['Move the waveform view by dragging', <><Key>Alt</Key>/<Key>Option</Key>+drag</>],
             ['Reset Speed, Vol or a part’s Pan', 'Double-click the slider'],

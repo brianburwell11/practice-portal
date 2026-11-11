@@ -46,6 +46,7 @@ beforeEach(() => {
   usePanelMinimizeStore.getState().clearAll();
   useSongStore.getState().setSelectedSong({ tapMap: [], timeSignatureMap: [] } as unknown as SongConfig);
   useTransportStore.getState().setPosition(0);
+  useTransportStore.setState({ playing: false });
 });
 
 afterEach(() => {
@@ -62,6 +63,12 @@ function render() {
 const desktop = () => host.querySelector('.md\\:block') as HTMLElement | null;
 const phone = () => host.querySelector('.md\\:hidden') as HTMLElement | null;
 const labels = (el: HTMLElement | null) => [...(el?.querySelectorAll('button[title^="Play from"]') ?? [])] as HTMLElement[];
+/** A wheel event; happy-dom drops `shiftKey` from the init, so it's set here. */
+const wheel = (deltaY: number, shiftKey: boolean) => {
+  const e = new WheelEvent('wheel', { deltaY, cancelable: true });
+  Object.defineProperty(e, 'shiftKey', { value: shiftKey });
+  return e;
+};
 const shiftOf = (el: HTMLElement) => Number(/translateX\((-?[\d.]+)px\)/.exec(el.style.transform)?.[1]);
 
 describe('ChordLane', () => {
@@ -219,6 +226,41 @@ describe('ChordLane', () => {
     expect(bars).toContain(HIT + 4 * pps);
     expect(bars).not.toContain(shiftOf(chordC));
     expect(shiftOf(chordC)).toBeCloseTo(HIT + 3.75 * pps);
+  });
+
+  it('shift + scroll moves the lane by hand until playback catches up', () => {
+    useChordsStore.getState().setChords([{ symbol: 'G', time: 0 }, { symbol: 'C', time: 8 }]);
+    act(() => useTransportStore.setState({ position: 1, playing: true }));
+    render();
+    const pps = (1000 - HIT) / 10;
+    const chordC = () => labels(desktop()).find((b) => b.textContent === 'C')!;
+    const lane = desktop()!.querySelector('.overflow-hidden') as HTMLElement;
+    expect(shiftOf(chordC())).toBeCloseTo(HIT + 7 * pps);
+
+    // A plain scroll leaves it alone; with Shift it moves the lane 2 s on.
+    act(() => { lane.dispatchEvent(wheel(2 * pps, false)); });
+    expect(shiftOf(chordC())).toBeCloseTo(HIT + 7 * pps);
+    act(() => { lane.dispatchEvent(wheel(2 * pps, true)); });
+    expect(shiftOf(chordC())).toBeCloseTo(HIT + 5 * pps);
+
+    // Holds while playback is short of that point, follows again once it gets there.
+    act(() => useTransportStore.setState({ position: 2 }));
+    expect(shiftOf(chordC())).toBeCloseTo(HIT + 5 * pps);
+    act(() => useTransportStore.setState({ position: 3.1 }));
+    expect(shiftOf(chordC())).toBeCloseTo(HIT + 4.9 * pps);
+  });
+
+  it('shift + scroll lets go when playback pauses', () => {
+    useChordsStore.getState().setChords([{ symbol: 'G', time: 0 }, { symbol: 'C', time: 8 }]);
+    act(() => useTransportStore.setState({ position: 1, playing: true }));
+    render();
+    const pps = (1000 - HIT) / 10;
+    const lane = desktop()!.querySelector('.overflow-hidden') as HTMLElement;
+    act(() => { lane.dispatchEvent(wheel(3 * pps, true)); });
+    act(() => useTransportStore.setState({ playing: false }));
+    const chordC = labels(desktop()).find((b) => b.textContent === 'C')!;
+    expect(shiftOf(chordC)).toBeCloseTo(HIT + 7 * pps);
+    act(() => useTransportStore.setState({ playing: false, position: 0 }));
   });
 
   it('cycles the look-ahead and remembers it', () => {

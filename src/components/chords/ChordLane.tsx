@@ -83,9 +83,11 @@ interface LaneProps {
   className?: string;
 }
 
-/** What every lane needs each frame. */
-function useLaneState(chords: ChordEvent[]) {
-  const position = useTransportStore((s) => s.position);
+/** What every lane needs each frame. `viewTime`, when set, lays the lane
+ *  out as if playback were there (a lane scrolled by hand). */
+function useLaneState(chords: ChordEvent[], viewTime: number | null = null) {
+  const playhead = useTransportStore((s) => s.position);
+  const position = viewTime ?? playhead;
   const lookAhead = useChordsStore((s) => s.lookAhead);
   const tapMap = useSongStore((s) => s.selectedSong?.tapMap);
   const timeSignatureMap = useSongStore((s) => s.selectedSong?.timeSignatureMap);
@@ -155,6 +157,47 @@ function useReadingX(containerRef: React.RefObject<HTMLElement | null>): number 
     };
   }, [containerRef]);
   return x;
+}
+
+/**
+ * Shift + scroll moves the lane by hand, like the lyrics: the lane holds the
+ * time it was scrolled to (returned) until playback reaches it, playback
+ * pauses, or a seek while paused. Null while following playback.
+ */
+function useShiftScroll(
+  containerRef: React.RefObject<HTMLElement | null>,
+  pps: number,
+): number | null {
+  const [heldAt, setHeldAt] = useState<number | null>(null);
+  const ppsRef = useRef(pps);
+  useEffect(() => { ppsRef.current = pps; }, [pps]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.shiftKey) return;
+      e.preventDefault();
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      const from = useTransportStore.getState().position;
+      setHeldAt((t) => Math.max(0, (t ?? from) + delta / ppsRef.current));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [containerRef]);
+
+  // Let go when playback catches up, on pause, or on a seek while paused.
+  useEffect(() => {
+    if (heldAt === null) return;
+    return useTransportStore.subscribe((s, prev) => {
+      const reached = s.playing && s.position >= heldAt;
+      const paused = prev.playing && !s.playing;
+      const seekedWhilePaused = !s.playing && !prev.playing && s.position !== prev.position;
+      if (reached || paused || seekedWhilePaused) setHeldAt(null);
+    });
+  }, [heldAt]);
+
+  return heldAt;
 }
 
 function BeatLines({ grid, position, x, from, to }: { grid: GridLine[]; position: number; x: (t: number) => number; from: number; to: number }) {
@@ -241,10 +284,11 @@ function PinnedLane({ chords, className }: LaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useWidth(containerRef);
   const readingX = useReadingX(containerRef);
-  const { position, lookAhead, grid, cur, prev, next, upcoming, sections, chordTop } = useLaneState(chords);
-
+  const lookAhead = useChordsStore((s) => s.lookAhead);
   const hit = readingX - LABEL_INSET_PX;
   const pps = Math.max(20, (width - hit) / lookAhead);
+  const heldAt = useShiftScroll(containerRef, pps);
+  const { position, grid, cur, prev, next, upcoming, sections, chordTop } = useLaneState(chords, heldAt);
   const x = (t: number) => hit + (t - position) * pps;
 
   const curX = cur && next ? Math.min(hit, x(next.time) - labelWidth(cur.symbol, NOW_PX) - GAP_PX) : hit;
