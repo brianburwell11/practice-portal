@@ -26,8 +26,9 @@ const NOW_PX = 18;
 const NEXT_PX = 14;
 /** Gap kept between the current chord and the next one pushing it. */
 const GAP_PX = 14;
-/** Over this many px before the reading point, the next chord grows to full size. */
-const GROW_PX = 70;
+/** Over this many seconds before it sounds, the next chord grows to full
+ *  size. In time rather than px, so it's as quick at every look-ahead. */
+const GROW_SEC = 0.3;
 /** Phone: width of the fixed slot on the left that holds the current chord. */
 const PHONE_SLOT_PX = 96;
 
@@ -314,7 +315,7 @@ function PinnedLane({ chords, className }: LaneProps) {
             )}
             {upcoming.map((c) => {
               const cx = x(c.time);
-              const grow = c === next ? Math.max(0, Math.min(1, 1 - (cx - hit) / GROW_PX)) : 0;
+              const grow = c === next ? Math.max(0, Math.min(1, 1 - (cx - hit) / (GROW_SEC * pps))) : 0;
               return (
                 <ChordLabel
                   key={c.time}
@@ -408,8 +409,10 @@ type Tone = 'now' | 'arriving' | 'upcoming' | 'past';
 
 const TONE_CLASS: Record<Tone, string> = {
   now: 'text-gray-100 font-semibold border-amber-400/70',
-  arriving: 'text-gray-100 font-semibold border-amber-400/70',
-  upcoming: 'text-gray-400 font-medium border-gray-600',
+  // Only the current chord shows its line; the others keep the border's
+  // space (transparent) so their text still lands on the reading point.
+  arriving: 'text-gray-100 font-semibold border-transparent',
+  upcoming: 'text-gray-400 font-medium border-transparent',
   past: 'text-gray-600 font-semibold border-transparent',
 };
 
