@@ -3,11 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { wizardReducer, createInitialState } from './wizardReducer';
 import { MetadataStep } from './steps/MetadataStep';
 import { StemsStep } from './steps/StemsStep';
-import { AlignmentStep } from './steps/AlignmentStep';
 import { ReviewStep } from './steps/ReviewStep';
 import { confirmDiscard } from '../store/dialogStore';
 
-const stepLabels = ['Metadata', 'Stems & Groups', 'Align', 'Review'];
+const stepLabels = ['Metadata', 'Stems & Groups', 'Review'];
 
 export default function AddSongWizard() {
   // A new key starts a fresh wizard, for "Add another song".
@@ -56,7 +55,7 @@ function Wizard({ onAddAnother }: { onAddAnother: () => void }) {
       {/* Step indicator */}
       <div className="flex items-center justify-center gap-1 py-4 px-4">
         {stepLabels.map((label, i) => {
-          const stepNum = (i + 1) as 1 | 2 | 3 | 4;
+          const stepNum = (i + 1) as 1 | 2 | 3;
           const isCurrent = state.step === stepNum;
           const isCompleted = state.step > stepNum;
 
@@ -96,8 +95,7 @@ function Wizard({ onAddAnother }: { onAddAnother: () => void }) {
       <main className="max-w-2xl mx-auto px-4 py-6">
         {state.step === 1 && <MetadataStep state={state} dispatch={dispatch} />}
         {state.step === 2 && <StemsStep state={state} dispatch={dispatch} />}
-        {state.step === 3 && <AlignmentStep state={state} dispatch={dispatch} />}
-        {state.step === 4 && <ReviewStep state={state} dispatch={dispatch} onSaved={() => setSaved(true)} onAddAnother={onAddAnother} />}
+        {state.step === 3 && <ReviewStep state={state} dispatch={dispatch} onSaved={() => setSaved(true)} onAddAnother={onAddAnother} />}
       </main>
     </div>
   );

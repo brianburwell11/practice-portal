@@ -19,9 +19,12 @@ export function drawPeaks(
   const bucketsPerPx = (viewDuration * peaksPerSecond) / width;
   const firstBucket = viewStart * peaksPerSecond;
   for (let px = 0; px < width; px++) {
-    const from = Math.max(0, Math.floor(firstBucket + px * bucketsPerPx));
-    const to = Math.min(peaks.length, Math.max(from + 1, Math.floor(firstBucket + (px + 1) * bucketsPerPx)));
-    if (from >= to) continue;
+    const start = firstBucket + px * bucketsPerPx;
+    const end = start + bucketsPerPx;
+    // Nothing here when the view starts before the audio does (an offset stem).
+    if (end <= 0 || start >= peaks.length) continue;
+    const from = Math.max(0, Math.floor(start));
+    const to = Math.min(peaks.length, Math.max(from + 1, Math.floor(end)));
     let amp = 0;
     for (let i = from; i < to; i++) if (peaks[i] > amp) amp = peaks[i];
     const h = amp * halfHeight;

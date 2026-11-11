@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { computePeaks } from '../utils/stemPeaks';
 import { AlignmentPlayback } from '../utils/alignmentPlayback';
+import { computeStemEnvelope, maxOf, PEAKS_PER_SECOND } from '../../audio/mixPeaks';
+import { drawPeaks } from '../../components/transport/drawPeaks';
 
 /**
  * Pure alignment UI: stacked waveforms, drag-to-offset, click-to-seek,
- * keyboard nudge, mute/solo, cmd+scroll zoom, shift+scroll pan,
+ * keyboard nudge, mute/solo/volume, cmd+scroll zoom, shift+scroll pan,
  * directly editable ms input. State is owned locally; the parent feeds
  * stems + receives offset changes via callback.
  *
- * Used by both the new-song wizard's AlignmentStep and the standalone
- * re-align page (AlignSongPage).
+ * Used by the align page (AlignSongPage), opened from Edit Song.
  */
 
 export interface AlignmentCanvasStem {
@@ -25,7 +25,6 @@ interface Props {
   onOffsetChange: (id: string, offsetSec: number) => void;
 }
 
-const BUCKET_COUNT = 2048;
 const ROW_HEIGHT = 72;
 const MIN_ZOOM_SPAN = 0.05;
 const ZOOM_STEP = 1.15;
@@ -33,6 +32,15 @@ const NUDGE_MS = 1;
 const SHIFT_NUDGE_MS = 10;
 const ALT_NUDGE_MS = 100;
 const DRAG_THRESHOLD_PX = 3;
+
+interface MixState {
+  muted: boolean;
+  soloed: boolean;
+  /** Listening level while aligning, 0 to 1. Not saved with the song. */
+  volume: number;
+}
+
+const DEFAULT_MIX: MixState = { muted: false, soloed: false, volume: 1 };
 
 function fmtTime(s: number): string {
   const sign = s < 0 ? '-' : '';
@@ -97,11 +105,18 @@ function MsInput({ valueSec, onCommit }: { valueSec: number; onCommit: (sec: num
   );
 }
 
+/** A stem's waveform, drawn like the player's main waveform. */
+interface StemWave {
+  env: Float32Array;
+  /** Fills the row at full volume; turning a stem down shrinks it. */
+  scale: number;
+}
+
 function drawRow(
   canvas: HTMLCanvasElement,
-  peaks: Float32Array,
-  bufferDuration: number,
+  wave: StemWave,
   offsetSec: number,
+  volume: number,
   viewStart: number,
   viewEnd: number,
 ): void {
@@ -113,27 +128,16 @@ function drawRow(
   canvas.width = cssWidth * dpr;
   canvas.height = cssHeight * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cssWidth, cssHeight);
+  ctx.fillStyle = '#111827';
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
 
-  const bucketCount = peaks.length / 2;
-  const viewSpan = viewEnd - viewStart;
-  const pxPerSec = cssWidth / viewSpan;
-  const stemStartPx = (offsetSec - viewStart) * pxPerSec;
-  const stemWidthPx = bufferDuration * pxPerSec;
+  // The envelope is in the stem's own time; the view is in song time.
   const centerY = cssHeight / 2;
   const halfH = cssHeight / 2 - 2;
-
-  ctx.fillStyle = '#ffffff';
-  for (let px = 0; px < cssWidth; px++) {
-    const relativeStemPx = px - stemStartPx;
-    if (relativeStemPx < 0 || relativeStemPx >= stemWidthPx) continue;
-    const bucketIndex = Math.floor((relativeStemPx / stemWidthPx) * bucketCount);
-    const min = peaks[bucketIndex * 2];
-    const max = peaks[bucketIndex * 2 + 1];
-    const y1 = centerY + min * halfH;
-    const y2 = centerY + max * halfH;
-    ctx.fillRect(px, y1, 1, Math.max(1, y2 - y1));
-  }
+  drawPeaks(
+    ctx, wave.env, PEAKS_PER_SECOND, viewStart - offsetSec, viewEnd - viewStart,
+    cssWidth, centerY, halfH * wave.scale * volume, '#4B5563',
+  );
 
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.beginPath();
@@ -143,9 +147,9 @@ function drawRow(
 }
 
 export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
-  const [peaks, setPeaks] = useState<Record<string, Float32Array>>({});
-  const [mixState, setMixState] = useState<Record<string, { muted: boolean; soloed: boolean }>>(
-    () => Object.fromEntries(stems.map((s) => [s.id, { muted: false, soloed: false }])),
+  const [waves, setWaves] = useState<Record<string, StemWave>>({});
+  const [mixState, setMixState] = useState<Record<string, MixState>>(
+    () => Object.fromEntries(stems.map((s) => [s.id, { ...DEFAULT_MIX }])),
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [playing, setPlaying] = useState(false);
@@ -190,6 +194,8 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
   const historyRef = useRef(history);
   const markerSelectedRef = useRef(markerSelectedIndex);
   const onOffsetChangeRef = useRef(onOffsetChange);
+  const mixStateRef = useRef(mixState);
+  useEffect(() => { mixStateRef.current = mixState; }, [mixState]);
   useEffect(() => { stemsRef.current = stems; }, [stems]);
   useEffect(() => { markersRef.current = markers; }, [markers]);
   useEffect(() => { historyRef.current = history; }, [history]);
@@ -230,11 +236,13 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
   useEffect(() => {
     if (stems.length === 0) return;
 
-    const p: Record<string, Float32Array> = {};
+    const w: Record<string, StemWave> = {};
     for (const s of stems) {
-      p[s.id] = computePeaks(s.buffer, BUCKET_COUNT);
+      const env = computeStemEnvelope(s.buffer);
+      const max = maxOf(env);
+      w[s.id] = { env, scale: max > 0 ? 0.95 / max : 0 };
     }
-    setPeaks(p);
+    setWaves(w);
 
     const engine = new AlignmentPlayback();
     engine.load(
@@ -244,6 +252,11 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
         offsetSec: s.offsetSec,
       })),
     );
+    // Keep any listening levels already set.
+    for (const s of stems) {
+      const volume = mixStateRef.current[s.id]?.volume;
+      if (volume !== undefined) engine.setVolume(s.id, volume);
+    }
     engineRef.current = engine;
 
     return () => {
@@ -276,11 +289,11 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
   useEffect(() => {
     for (const s of stems) {
       const canvas = canvasRefs.current[s.id];
-      const peakData = peaks[s.id];
-      if (!canvas || !peakData) continue;
-      drawRow(canvas, peakData, s.buffer.duration, s.offsetSec, viewStart, viewEnd);
+      const wave = waves[s.id];
+      if (!canvas || !wave) continue;
+      drawRow(canvas, wave, s.offsetSec, mixState[s.id]?.volume ?? 1, viewStart, viewEnd);
     }
-  }, [stems, peaks, viewStart, viewEnd]);
+  }, [stems, waves, mixState, viewStart, viewEnd]);
 
   // Playhead loop
   useEffect(() => {
@@ -668,7 +681,7 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
 
   const toggleMute = useCallback((id: string) => {
     setMixState((prev) => {
-      const cur = prev[id] ?? { muted: false, soloed: false };
+      const cur = prev[id] ?? DEFAULT_MIX;
       const next = { ...cur, muted: !cur.muted };
       engineRef.current?.setMuted(id, next.muted);
       return { ...prev, [id]: next };
@@ -677,11 +690,16 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
 
   const toggleSolo = useCallback((id: string) => {
     setMixState((prev) => {
-      const cur = prev[id] ?? { muted: false, soloed: false };
+      const cur = prev[id] ?? DEFAULT_MIX;
       const next = { ...cur, soloed: !cur.soloed };
       engineRef.current?.setSoloed(id, next.soloed);
       return { ...prev, [id]: next };
     });
+  }, []);
+
+  const setVolume = useCallback((id: string, volume: number) => {
+    engineRef.current?.setVolume(id, volume);
+    setMixState((prev) => ({ ...prev, [id]: { ...(prev[id] ?? DEFAULT_MIX), volume } }));
   }, []);
 
   const resetZoom = () => {
@@ -746,7 +764,7 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
 
         <dt className="text-gray-500">Audition</dt>
         <dd>
-          <Kbd>space</Kbd> play/pause · click a waveform or the timeline to seek · M/S buttons on each card mute/solo
+          <Kbd>space</Kbd> play/pause · click a waveform or the timeline to seek · M/S buttons on each card mute/solo · the slider sets a stem's listening volume (not saved)
         </dd>
       </dl>
 
@@ -801,9 +819,9 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
       <div ref={rowsContainerRef} className="space-y-2">
         {stems.map((stem) => {
           const selected = selectedIds.has(stem.id);
-          const mix = mixState[stem.id] ?? { muted: false, soloed: false };
+          const mix = mixState[stem.id] ?? DEFAULT_MIX;
           const color = stem.color || '#6b7280';
-          const loaded = !!peaks[stem.id];
+          const loaded = !!waves[stem.id];
           return (
             <div
               key={stem.id}
@@ -846,6 +864,18 @@ export function AlignmentCanvas({ stems, onOffsetChange }: Props) {
                 >
                   S
                 </button>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={mix.volume}
+                  onChange={(e) => setVolume(stem.id, Number(e.target.value))}
+                  onDoubleClick={() => setVolume(stem.id, 1)}
+                  aria-label={`${stem.label} volume`}
+                  title={`Volume ${Math.round(mix.volume * 100)}%, double-click for full`}
+                  className="w-24 sm:w-32 accent-blue-500"
+                />
 
                 <div className="ml-auto flex items-center gap-1.5">
                   <MsInput

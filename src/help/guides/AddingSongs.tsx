@@ -63,16 +63,7 @@ export default function AddingSongs() {
         </p>
       </HelpSection>
 
-      <HelpSection title="Step 3: Align">
-        <p>
-          If a stem starts a little early or late compared with the others, drag it into place, or type how many
-          milliseconds to shift it. Select a stem and use the arrow keys to nudge it: <Key>←</Key> <Key>→</Key> move it 1
-          ms, add <Key>Shift</Key> for 10 ms or <Key>Alt</Key> for 100 ms. Mute and solo stems to check them. Most songs
-          need nothing here.
-        </p>
-      </HelpSection>
-
-      <HelpSection title="Step 4: Review and save">
+      <HelpSection title="Step 3: Review and save">
         <p>
           Check the summary and click <Ui>Save Song</Ui>. Each stem uploads and is then converted so it streams quickly.
           You’ll see each one go from Uploading to Done.
@@ -100,12 +91,22 @@ export default function AddingSongs() {
           <li>add up to four YouTube videos, which play in sync with the song.</li>
         </Bullets>
         <p>
-          <Ui>Align stems</Ui> at the top reopens the alignment step. To mark the song’s sections and measures or add
+          <Ui>Align stems</Ui> at the top lines the stems up (see below). To mark the song’s sections and measures or add
           lyrics and chords, see <GuideLink slug="timing-and-lyrics">Timing, lyrics and chords</GuideLink>.
         </p>
         <Note>
           Deleting a song (<Ui>Songs</Ui> → <Ui>Delete Song</Ui>) can’t be undone. Only Managers and the Owner can do it.
         </Note>
+      </HelpSection>
+
+      <HelpSection title="Aligning stems">
+        <p>
+          If a stem starts a little early or late compared with the others, open the song’s <Ui>Edit Song</Ui> page and
+          click <Ui>Align stems</Ui>. Drag a stem into place, or type how many milliseconds to shift it. Select a stem and
+          use the arrow keys to nudge it: <Key>←</Key> <Key>→</Key> move it 1 ms, add <Key>Shift</Key> for 10 ms or{' '}
+          <Key>Alt</Key> for 100 ms. Mute, solo and the volume slider on each stem help you hear it against the others;
+          the volume there is only for listening and isn’t saved. Most songs need nothing here.
+        </p>
       </HelpSection>
     </>
   );

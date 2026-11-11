@@ -458,7 +458,7 @@ export function StemsStep({ state, dispatch }: Props) {
           onClick={() => dispatch({ type: 'NEXT_STEP' })}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium"
         >
-          Next: Align
+          Next: Review
         </button>
       </div>
     </div>

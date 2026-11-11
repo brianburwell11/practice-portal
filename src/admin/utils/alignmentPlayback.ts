@@ -1,5 +1,5 @@
 /**
- * Lightweight playback engine for the stem alignment step.
+ * Lightweight playback engine for the stem alignment page.
  *
  * Each stem gets one AudioBufferSourceNode + GainNode. Per-stem offsets
  * are handled at scheduling time so dragging doesn't require re-padding
@@ -24,6 +24,8 @@ interface LiveStem {
   offsetSec: number;
   muted: boolean;
   soloed: boolean;
+  /** Listening level, 0 to 1. */
+  volume: number;
   gain: GainNode;
   source: AudioBufferSourceNode | null;
 }
@@ -64,6 +66,7 @@ export class AlignmentPlayback {
         offsetSec: s.offsetSec,
         muted: s.muted ?? false,
         soloed: s.soloed ?? false,
+        volume: 1,
         gain,
         source: null,
       });
@@ -146,6 +149,13 @@ export class AlignmentPlayback {
     this.recalcGains();
   }
 
+  setVolume(id: string, volume: number): void {
+    const live = this.stems.get(id);
+    if (!live) return;
+    live.volume = Math.max(0, Math.min(1, volume));
+    this.recalcGains();
+  }
+
   get isPlaying(): boolean {
     return this.playing;
   }
@@ -204,7 +214,7 @@ export class AlignmentPlayback {
     for (const live of this.stems.values()) {
       const audibleBySolo = live.soloed || !anySoloActive;
       const audible = audibleBySolo && !live.muted;
-      live.gain.gain.setTargetAtTime(audible ? 1 : 0, this.ctx.currentTime, 0.01);
+      live.gain.gain.setTargetAtTime(audible ? live.volume : 0, this.ctx.currentTime, 0.01);
     }
   }
 }
