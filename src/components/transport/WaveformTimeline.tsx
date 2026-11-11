@@ -218,7 +218,10 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
   const dragChordRef = useRef<{ from: number; symbol: string; time: number; startX: number; moved: boolean } | null>(null);
   const [chordDragTick, setChordDragTick] = useState(0);
   // TapMap editor entry drag state \u2014 mirrors the lyric-marker pattern.
-  const dragEditorEntryRef = useRef<{ index: number; time: number } | null>(null);
+  // `moved` once it's dragged past the click threshold; `editorDragTick`
+  // bumps on each move so the canvas redraws the line under the pointer.
+  const dragEditorEntryRef = useRef<{ index: number; time: number; startX: number; moved: boolean } | null>(null);
+  const [editorDragTick, setEditorDragTick] = useState(0);
   // Note marker drag state — held in a ref for high-frequency updates;
   // `noteDragTick` bumps on each move so the canvas redraws. `editable`:
   // whether a drag may retime it (otherwise a click only seeks).
@@ -537,7 +540,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       if (editorHit !== null) {
         e.preventDefault();
         setMarkerSelectedIndex(editorHit);
-        dragEditorEntryRef.current = { index: editorHit, time: editorTapMap[editorHit].time };
+        dragEditorEntryRef.current = { index: editorHit, time: editorTapMap[editorHit].time, startX: e.clientX, moved: false };
         didDragRef.current = false;
         suppressClickRef.current = false;
         return;
@@ -643,9 +646,13 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
 
       // Single pointer: drag tapMap editor entry
       if (dragEditorEntryRef.current) {
+        const drag = dragEditorEntryRef.current;
+        if (!drag.moved && Math.abs(e.clientX - drag.startX) < DRAG_THRESHOLD) return;
+        drag.moved = true;
         const seconds = pixelToSeconds(x, sizeRef.current.width);
-        dragEditorEntryRef.current.time = Math.max(0, Math.min(seconds, duration || 0));
+        drag.time = Math.max(0, Math.min(seconds, duration || 0));
         suppressClickRef.current = true;
+        setEditorDragTick((n) => n + 1);
         return;
       }
 
@@ -777,12 +784,12 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
 
       // End tapMap editor entry drag (or click-select)
       if (dragEditorEntryRef.current) {
-        const { index, time } = dragEditorEntryRef.current;
+        const { index, time, moved } = dragEditorEntryRef.current;
         // Only commit a move if the pointer actually moved enough
         // to qualify as a drag. A plain click just selects; on touch a
         // tap also moves playback to the marker, like tapping a row in
         // the section list.
-        if (didDragRef.current) {
+        if (moved) {
           moveMarkerEntry(index, time);
           suppressClickRef.current = true;
         } else if (isCoarse) {
@@ -1174,7 +1181,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         }
       }
     },
-    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines, chordsEditorOpen, editorChords, chordDragTick, notes, noteDragTick],
+    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines, chordsEditorOpen, editorChords, chordDragTick, notes, noteDragTick, editorDragTick],
   );
 
   // Draw main canvas (viewport-relative)
