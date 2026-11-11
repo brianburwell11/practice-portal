@@ -22,6 +22,7 @@
 import type { MasterScore } from 'muse-encore';
 import { zipSync } from 'fflate';
 import { extractEntries, isZip, scoreBytesToXml, UnsafeArchiveError } from '../../../utils/safeUnzip';
+import { splitMultiMeasureRests } from './multiMeasureRests';
 
 export type ScoreSource =
   | { kind: 'musicxml'; xml: string }
@@ -289,16 +290,12 @@ export class ScoreEngine {
   /**
    * Rectangles of the measures in written order, indexed like
    * `MusicXMLStructure.measures` (and so like `UnfoldedStep.srcIndex`).
+   * Measures inside a multi-measure rest each get an even share of it.
    * Built once per layout.
    */
   measureRects(): (MeasureRect | null)[] {
-    if (this.rects) return this.rects;
-    const rects: (MeasureRect | null)[] = [];
-    for (let m = this.score.firstMeasure(); m; m = m.nextMeasure()) {
-      rects.push(this.me.playalongMeasureBounds(this.score, m.tick().ticks()));
-    }
-    this.rects = rects;
-    return rects;
+    if (!this.rects) this.buildMeasureGeometry();
+    return this.rects!;
   }
 
   /**
@@ -307,13 +304,21 @@ export class ScoreEngine {
    * null. Built once per layout.
    */
   measureBeatStarts(): (number | null)[] {
-    if (this.beatStarts) return this.beatStarts;
+    if (!this.beatStarts) this.buildMeasureGeometry();
+    return this.beatStarts!;
+  }
+
+  private buildMeasureGeometry(): void {
+    const rects: (MeasureRect | null)[] = [];
     const starts: (number | null)[] = [];
     for (let m = this.score.firstMeasure(); m; m = m.nextMeasure()) {
-      starts.push(this.me.playbackCursorBounds(this.score, m.tick().ticks())?.x ?? null);
+      const tick = m.tick().ticks();
+      rects.push(this.me.playalongMeasureBounds(this.score, tick));
+      starts.push(this.me.playbackCursorBounds(this.score, tick)?.x ?? null);
     }
-    this.beatStarts = starts;
-    return starts;
+    const split = splitMultiMeasureRests(rects, starts);
+    this.rects = split.rects;
+    this.beatStarts = split.beats;
   }
 
   /**
