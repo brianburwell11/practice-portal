@@ -19,6 +19,9 @@ const FOCUS_LEFT_NUDGE_PX = 24;
  *  of the reading point so the chord's *text* lines up with the lyric's. */
 const LABEL_INSET_PX = 7;
 const LANE_HEIGHT = 44;
+/** Height of the section-name row across the top, when the song has sections. */
+const SECTION_ROW_PX = 14;
+const SECTION_PX = 10;
 const NOW_PX = 18;
 const NEXT_PX = 14;
 /** Gap kept between the current chord and the next one pushing it. */
@@ -31,6 +34,16 @@ const PHONE_SLOT_PX = 96;
 /** Rough label width, for the push-off. Good enough for chord names. */
 function labelWidth(symbol: string, px: number): number {
   return symbol.length * px * 0.62 + 10;
+}
+
+/** Rough width of an uppercase section name at SECTION_PX. */
+function sectionWidth(label: string): number {
+  return label.length * SECTION_PX * 0.72 + 10;
+}
+
+interface Section {
+  time: number;
+  label: string;
 }
 
 /**
@@ -77,6 +90,13 @@ function useLaneState(chords: ChordEvent[]) {
   const tapMap = useSongStore((s) => s.selectedSong?.tapMap);
   const timeSignatureMap = useSongStore((s) => s.selectedSong?.timeSignatureMap);
   const grid = useMemo(() => beatGrid(tapMap, timeSignatureMap), [tapMap, timeSignatureMap]);
+  const sections = useMemo<Section[]>(
+    () => (tapMap ?? [])
+      .filter((e) => e.type === 'section' && e.label)
+      .map((e) => ({ time: e.time, label: e.label! }))
+      .sort((a, b) => a.time - b.time),
+    [tapMap],
+  );
 
   const idx = lastAtOrBefore(chords, position);
   const upcoming: ChordEvent[] = [];
@@ -89,6 +109,9 @@ function useLaneState(chords: ChordEvent[]) {
     prev: idx >= 1 ? chords[idx - 1] : null,
     next: chords[idx + 1] ?? null,
     upcoming,
+    sections,
+    /** Chords sit below the section row when there is one. */
+    chordTop: sections.length > 0 ? SECTION_ROW_PX : 0,
   };
 }
 
@@ -153,6 +176,59 @@ function BeatLines({ grid, position, x, from, to }: { grid: GridLine[]; position
 }
 
 /**
+ * Section names along the top of the lane: each upcoming one scrolls in with
+ * a faint line at its start, and the current one stays put at `pinX` until
+ * the next pushes it off to the left. Clicking one plays from it.
+ */
+function SectionMarks({
+  sections, position, x, pinX, to, onSeek,
+}: {
+  sections: Section[];
+  position: number;
+  x: (t: number) => number;
+  pinX: number;
+  to: number;
+  onSeek: (t: number) => void;
+}) {
+  if (sections.length === 0) return null;
+  const cur = lastAtOrBefore(sections, position);
+  const marks: ReactNode[] = [];
+  for (let i = Math.max(0, cur); i < sections.length; i++) {
+    const s = sections[i];
+    const nextX = i + 1 < sections.length ? x(sections[i + 1].time) : Infinity;
+    let left: number;
+    if (i === cur) {
+      left = Math.min(pinX, nextX - sectionWidth(s.label) - GAP_PX);
+    } else {
+      left = x(s.time);
+      if (left > to) break;
+      marks.push(
+        <div
+          key={`line-${s.time}`}
+          className="absolute inset-y-0 left-0 w-px bg-amber-400/30 pointer-events-none"
+          style={{ transform: `translateX(${left}px)` }}
+        />,
+      );
+    }
+    marks.push(
+      <button
+        key={`label-${s.time}`}
+        type="button"
+        onClick={() => onSeek(s.time)}
+        title={`Play from ${s.label}`}
+        className={`absolute top-0 left-0 flex items-center whitespace-nowrap uppercase tracking-wide font-semibold hover:text-amber-200 ${
+          i === cur ? 'text-amber-400' : 'text-amber-400/70'
+        }`}
+        style={{ height: SECTION_ROW_PX, fontSize: SECTION_PX, paddingLeft: 3, transform: `translateX(${left}px)` }}
+      >
+        {s.label}
+      </button>,
+    );
+  }
+  return <>{marks}</>;
+}
+
+/**
  * Desktop: the current chord's text starts on the lyric reading point, like
  * the current lyric. When the next chord gets close it pushes the current
  * one off to the left (a sticky header), growing to full size as it arrives;
@@ -165,7 +241,7 @@ function PinnedLane({ chords, className }: LaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useWidth(containerRef);
   const readingX = useReadingX(containerRef);
-  const { position, lookAhead, grid, cur, prev, next, upcoming } = useLaneState(chords);
+  const { position, lookAhead, grid, cur, prev, next, upcoming, sections, chordTop } = useLaneState(chords);
 
   const hit = readingX - LABEL_INSET_PX;
   const pps = Math.max(20, (width - hit) / lookAhead);
@@ -180,7 +256,7 @@ function PinnedLane({ chords, className }: LaneProps) {
         ref={containerRef}
         className="relative overflow-hidden"
         style={{
-          height: LANE_HEIGHT,
+          height: LANE_HEIGHT + chordTop,
           maskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 120px), transparent calc(100% - 40px))',
           WebkitMaskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 120px), transparent calc(100% - 40px))',
         }}
@@ -188,8 +264,9 @@ function PinnedLane({ chords, className }: LaneProps) {
         {width > 0 && (
           <>
             <BeatLines grid={grid} position={position} x={x} from={hit} to={width} />
+            <SectionMarks sections={sections} position={position} x={x} pinX={hit} to={width} onSeek={seek} />
             {prev && (
-              <ChordLabel chord={prev} left={prevX} px={NOW_PX} tone="past" onSeek={seek} />
+              <ChordLabel chord={prev} left={prevX} top={chordTop} px={NOW_PX} tone="past" onSeek={seek} />
             )}
             {upcoming.map((c) => {
               const cx = x(c.time);
@@ -199,6 +276,7 @@ function PinnedLane({ chords, className }: LaneProps) {
                   key={c.time}
                   chord={c}
                   left={cx}
+                  top={chordTop}
                   px={NEXT_PX}
                   scale={1 + grow * (NOW_PX / NEXT_PX - 1)}
                   tone={grow > 0.3 ? 'arriving' : 'upcoming'}
@@ -207,7 +285,7 @@ function PinnedLane({ chords, className }: LaneProps) {
                 />
               );
             })}
-            {cur && <ChordLabel chord={cur} left={curX} px={NOW_PX} tone="now" marker onSeek={seek} />}
+            {cur && <ChordLabel chord={cur} left={curX} top={chordTop} px={NOW_PX} tone="now" marker onSeek={seek} />}
           </>
         )}
       </div>
@@ -226,26 +304,47 @@ function SlotLane({ chords, className }: LaneProps) {
   const seek = (t: number) => engine.seek(t);
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useWidth(containerRef);
-  const { position, lookAhead, grid, cur, upcoming } = useLaneState(chords);
+  const { position, lookAhead, grid, cur, upcoming, sections, chordTop } = useLaneState(chords);
+  const curSection = sections[lastAtOrBefore(sections, position)] ?? null;
 
   const hit = PHONE_SLOT_PX;
   const pps = Math.max(20, (width - hit) / lookAhead);
   const x = (t: number) => hit + (t - position) * pps;
 
   return (
-    <div ref={containerRef} className={`relative overflow-hidden ${className ?? ''}`} style={{ height: LANE_HEIGHT }}>
+    <div ref={containerRef} className={`relative overflow-hidden ${className ?? ''}`} style={{ height: LANE_HEIGHT + chordTop }}>
       {width > 0 && (
         <>
           <BeatLines grid={grid} position={position} x={x} from={hit} to={width} />
+          {/* The current section shows in the slot, so only later ones scroll here. */}
+          <SectionMarks
+            sections={sections.filter((s) => s.time > position)}
+            position={position}
+            x={x}
+            pinX={hit}
+            to={width}
+            onSeek={seek}
+          />
           {upcoming.map((c) => (
-            <ChordLabel key={c.time} chord={c} left={x(c.time)} px={NEXT_PX} tone="upcoming" marker onSeek={seek} />
+            <ChordLabel key={c.time} chord={c} left={x(c.time)} top={chordTop} px={NEXT_PX} tone="upcoming" marker onSeek={seek} />
           ))}
         </>
       )}
       <div
         className="absolute inset-y-0 left-0 flex items-center justify-end bg-gray-50/5 border-r-2 border-amber-400/70 pr-2"
-        style={{ width: PHONE_SLOT_PX }}
+        style={{ width: PHONE_SLOT_PX, paddingTop: chordTop }}
       >
+        {curSection && (
+          <button
+            type="button"
+            onClick={() => seek(curSection.time)}
+            title={`Play from ${curSection.label}`}
+            className="absolute top-0 left-1.5 right-2 truncate text-left uppercase tracking-wide font-semibold text-amber-400"
+            style={{ height: SECTION_ROW_PX, fontSize: SECTION_PX, lineHeight: `${SECTION_ROW_PX}px` }}
+          >
+            {curSection.label}
+          </button>
+        )}
         {cur && (
           <button
             type="button"
@@ -271,10 +370,12 @@ const TONE_CLASS: Record<Tone, string> = {
 };
 
 function ChordLabel({
-  chord, left, px, scale = 1, tone, marker = false, onSeek,
+  chord, left, top = 0, px, scale = 1, tone, marker = false, onSeek,
 }: {
   chord: ChordEvent;
   left: number;
+  /** Space above the label (the section row). */
+  top?: number;
   px: number;
   scale?: number;
   tone: Tone;
@@ -286,8 +387,8 @@ function ChordLabel({
       type="button"
       onClick={() => onSeek(chord.time)}
       title={`Play from ${displayChord(chord.symbol)}`}
-      className={`absolute inset-y-0 left-0 flex items-center whitespace-nowrap hover:text-gray-50 ${marker ? 'border-l-2' : ''} ${TONE_CLASS[tone]}`}
-      style={{ transform: `translateX(${left}px)`, paddingLeft: marker ? LABEL_INSET_PX - 2 : 0 }}
+      className={`absolute bottom-0 left-0 flex items-center whitespace-nowrap hover:text-gray-50 ${marker ? 'border-l-2' : ''} ${TONE_CLASS[tone]}`}
+      style={{ top, transform: `translateX(${left}px)`, paddingLeft: marker ? LABEL_INSET_PX - 2 : 0 }}
     >
       <span className="inline-block origin-left" style={{ fontSize: px, transform: scale !== 1 ? `scale(${scale})` : undefined }}>
         {displayChord(chord.symbol)}

@@ -135,7 +135,8 @@ export default function PracticingASong() {
           <li>
             If a song has chords, they scroll in from the right just above the lyrics, and each one takes over as it
             sounds. On a computer the current chord lines up with the current lyric. Click a chord to play from there;
-            the <Ui>10s</Ui> button sets how far ahead you see. On a phone the chords button (next to the lyrics
+            the <Ui>10s</Ui> button sets how far ahead you see. Section names run along the top of the chords, and
+            clicking one plays from that section. On a phone the chords button (next to the lyrics
             button) hides or shows them.
           </li>
           <li>

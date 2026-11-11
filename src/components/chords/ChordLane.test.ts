@@ -174,6 +174,53 @@ describe('ChordLane', () => {
     expect(phone()).not.toBeNull();
   });
 
+  it('shows section names: the current one pinned, later ones scrolling in', () => {
+    useSongStore.getState().setSelectedSong({
+      tapMap: [
+        { time: 0, type: 'section', label: 'Intro' },
+        { time: 1, type: 'measure' },
+        { time: 6, type: 'section', label: 'Verse' },
+        { time: 60, type: 'section', label: 'Chorus' },
+      ],
+      timeSignatureMap: [],
+    } as unknown as SongConfig);
+    useChordsStore.getState().setChords([{ symbol: 'G', time: 0 }]);
+    act(() => useTransportStore.getState().setPosition(2));
+    render();
+    const section = (el: HTMLElement | null, name: string) =>
+      labels(el).find((b) => b.textContent === name);
+    // Desktop: Intro sits at the reading point, Verse is on its way, Chorus is too far ahead.
+    expect(shiftOf(section(desktop(), 'Intro')!)).toBe(HIT);
+    expect(shiftOf(section(desktop(), 'Verse')!)).toBeGreaterThan(HIT);
+    expect(section(desktop(), 'Chorus')).toBeUndefined();
+    // Phone: the current section is in the slot.
+    expect(section(phone(), 'Intro')).toBeDefined();
+    act(() => section(desktop(), 'Verse')!.click());
+    expect(seek).toHaveBeenCalledWith(6);
+  });
+
+  it('draws bar lines on the measure taps, not on the chords (a pushed chord sits before the bar)', () => {
+    useSongStore.getState().setSelectedSong({
+      tapMap: [
+        { time: 0, type: 'measure' },
+        { time: 4, type: 'measure' },
+        { time: 8, type: 'measure' },
+      ],
+      timeSignatureMap: [],
+    } as unknown as SongConfig);
+    // C is pushed an eighth ahead of the bar at 4.
+    useChordsStore.getState().setChords([{ symbol: 'G', time: 0 }, { symbol: 'C', time: 3.75 }]);
+    act(() => useTransportStore.getState().setPosition(0));
+    render();
+    const lane = desktop()!;
+    const bars = [...lane.querySelectorAll('div.top-0.w-0\\.5')].map((el) => shiftOf(el as HTMLElement));
+    const chordC = labels(lane).find((b) => b.textContent === 'C')!;
+    const pps = (1000 - HIT) / 10;
+    expect(bars).toContain(HIT + 4 * pps);
+    expect(bars).not.toContain(shiftOf(chordC));
+    expect(shiftOf(chordC)).toBeCloseTo(HIT + 3.75 * pps);
+  });
+
   it('cycles the look-ahead and remembers it', () => {
     useChordsStore.getState().setChords([{ symbol: 'G', time: 0 }]);
     render();
