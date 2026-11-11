@@ -41,7 +41,7 @@ beforeEach(() => {
   root = createRoot(host);
   seek.mockReset();
   useChordsStore.getState().clear();
-  useChordsStore.getState().setLookAhead(5);
+  useChordsStore.getState().setLookAhead(10);
   useChordsStore.setState({ mobileVisible: true });
   usePanelMinimizeStore.getState().clearAll();
   useSongStore.getState().setSelectedSong({ tapMap: [], timeSignatureMap: [] } as unknown as SongConfig);
@@ -177,8 +177,8 @@ describe('ChordLane', () => {
   it('cycles the look-ahead and remembers it', () => {
     useChordsStore.getState().setChords([{ symbol: 'G', time: 0 }]);
     render();
-    act(() => (host.querySelector('[aria-label="Show chords 5 seconds ahead"]') as HTMLElement).click());
-    expect(useChordsStore.getState().lookAhead).toBe(8);
-    expect(window.localStorage.getItem('practice-portal.chordLookAhead')).toBe('8');
+    act(() => (host.querySelector('[aria-label="Show chords 10 seconds ahead"]') as HTMLElement).click());
+    expect(useChordsStore.getState().lookAhead).toBe(15);
+    expect(window.localStorage.getItem('practice-portal.chordLookAhead')).toBe('15');
   });
 });

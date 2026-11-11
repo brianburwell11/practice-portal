@@ -3,7 +3,7 @@ import type { ChordEvent } from '../audio/chordsTypes';
 import { phonePanelOpen, rememberPhonePanel } from '../utils/phonePanels';
 
 /** How many seconds ahead the chord lane shows. A listener setting. */
-export const LOOK_AHEAD_OPTIONS = [3, 5, 8] as const;
+export const LOOK_AHEAD_OPTIONS = [10, 15, 30] as const;
 export type LookAhead = (typeof LOOK_AHEAD_OPTIONS)[number];
 
 const LOOK_AHEAD_KEY = 'practice-portal.chordLookAhead';
@@ -11,9 +11,9 @@ const LOOK_AHEAD_KEY = 'practice-portal.chordLookAhead';
 function loadLookAhead(): LookAhead {
   try {
     const n = Number(window.localStorage.getItem(LOOK_AHEAD_KEY));
-    return (LOOK_AHEAD_OPTIONS as readonly number[]).includes(n) ? (n as LookAhead) : 5;
+    return (LOOK_AHEAD_OPTIONS as readonly number[]).includes(n) ? (n as LookAhead) : 10;
   } catch {
-    return 5;
+    return 10;
   }
 }
 
@@ -35,7 +35,7 @@ interface ChordsState {
 export const useChordsStore = create<ChordsState>((set) => ({
   chords: [],
   loaded: false,
-  lookAhead: typeof window === 'undefined' ? 5 : loadLookAhead(),
+  lookAhead: typeof window === 'undefined' ? 10 : loadLookAhead(),
   mobileVisible: phonePanelOpen('chords'),
   setChords: (raw) =>
     set({
