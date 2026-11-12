@@ -35,7 +35,7 @@ const MORE_ICON_ANDROID = (
 type Platform = 'iphone' | 'android';
 
 const STEPS = 'list-decimal pl-5 space-y-2.5 text-sm text-gray-300 marker:text-gray-500';
-const PRIMARY = 'w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white';
+const PRIMARY = 'w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium text-accent-ink';
 const SECONDARY = 'w-full px-4 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-gray-200';
 
 /** The steps, for iPhone or Android, with a one-tap install where Chrome offers it. */

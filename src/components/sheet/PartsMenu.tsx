@@ -59,7 +59,7 @@ export function PartsMenu({ parts, hiddenPartIds, onApply, className = '' }: Pro
           if (!open) setDraft(new Set(hiddenPartIds));
           setOpen(!open);
         }}
-        className={`px-2 py-0.5 rounded ${hiddenPartIds.size > 0 ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'} ${className}`}
+        className={`px-2 py-0.5 rounded ${hiddenPartIds.size > 0 ? 'bg-blue-600 text-accent-ink' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'} ${className}`}
         title="Pick which instrument parts to display"
         aria-expanded={open}
       >
@@ -88,7 +88,7 @@ export function PartsMenu({ parts, hiddenPartIds, onApply, className = '' }: Pro
             <button
               onClick={() => { onApply(new Set(draft)); setOpen(false); }}
               disabled={!differs}
-              className={`w-full rounded px-2 py-1 text-xs ${differs ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+              className={`w-full rounded px-2 py-1 text-xs ${differs ? 'bg-blue-600 text-accent-ink hover:bg-blue-500' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
               title="Apply the part selection and redraw the score"
             >
               apply

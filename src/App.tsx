@@ -145,7 +145,11 @@ export default function App() {
   // text color, gray scale and accent fixes that keep every label readable.
   const previewColors = useBandStore((s) => s.previewColors);
   const themeBg = (previewColors ?? currentBand?.colors)?.background;
-  const theme = useMemo(() => (themeBg ? bandTheme({ background: themeBg }) : null), [themeBg]);
+  const themeAccent = (previewColors ?? currentBand?.colors)?.accent;
+  const theme = useMemo(
+    () => (themeBg ? bandTheme({ background: themeBg, accent: themeAccent }) : null),
+    [themeBg, themeAccent],
+  );
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSetlistModal, setShowSetlistModal] = useState(false);
@@ -302,7 +306,7 @@ export default function App() {
             phonePageScroll ? 'sticky top-0 z-30' : ''
           }`}
           style={{
-            borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)',
+            borderColor: 'color-mix(in srgb, var(--band-accent, #374151) 40%, transparent)',
             ...(phonePageScroll ? { backgroundColor: 'var(--band-bg, var(--color-page))' } : {}),
           }}
         >

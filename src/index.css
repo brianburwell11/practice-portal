@@ -7,6 +7,13 @@
   /* The logo's blue, sampled from the door. */
   --color-brand: #4a31f5;
   /* The wordmark's typeface (HK Grotesk, released on Google Fonts as Hanken Grotesk). */
+  /* Text on accent (blue) buttons. A band page swaps it for black when its
+     accent is too light for white (bandTheme). */
+  --color-accent-ink: #ffffff;
+  /* Text on a fill of the accent itself (blue-500): the desktop admin ribbon. */
+  --color-on-accent: #ffffff;
+  /* The accent pushed away from `--color-on-accent`, for the ribbon's gradient. */
+  --color-accent-deep: oklch(48.8% 0.243 264.376);
   --font-brand: "Hanken Grotesk", system-ui, sans-serif;
   /* `PageLoader`'s mark: hidden for a beat, so a quick load shows nothing,
      then breathing. */
@@ -111,9 +118,20 @@ body {
   --color-amber-500: oklch(76.9% 0.188 70.08);
   --color-yellow-200: oklch(94.5% 0.129 101.54);
   --color-yellow-300: oklch(90.5% 0.182 98.111);
+  --color-blue-50: oklch(97% 0.014 254.604);
+  --color-blue-100: oklch(93.2% 0.032 255.585);
+  --color-blue-200: oklch(88.2% 0.059 254.128);
   --color-blue-300: oklch(80.9% 0.105 251.813);
   --color-blue-400: oklch(70.7% 0.165 254.624);
   --color-blue-500: oklch(62.3% 0.214 259.815);
+  --color-blue-600: oklch(54.6% 0.245 262.881);
+  --color-blue-700: oklch(48.8% 0.243 264.376);
+  --color-blue-800: oklch(42.4% 0.199 265.638);
+  --color-blue-900: oklch(37.9% 0.146 265.522);
+  --color-blue-950: oklch(28.2% 0.091 267.935);
+  --color-accent-ink: #ffffff;
+  --color-on-accent: #ffffff;
+  --color-accent-deep: oklch(48.8% 0.243 264.376);
   --color-red-300: oklch(80.8% 0.114 19.571);
   --color-red-400: oklch(70.4% 0.191 22.216);
   --color-green-400: oklch(79.2% 0.209 151.711);

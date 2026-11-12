@@ -70,7 +70,7 @@ function Wizard({ onAddAnother }: { onAddAnother: () => void }) {
                 <div
                   className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-medium ${
                     isCurrent
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-blue-600 text-accent-ink'
                       : isCompleted
                         ? 'bg-blue-500/30 text-blue-400'
                         : 'bg-gray-700 text-gray-500'

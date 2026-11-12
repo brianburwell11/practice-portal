@@ -24,7 +24,7 @@ export function TouchSlider({
   onDoubleClick,
   label,
   className = '',
-  accentColor = '#3b82f6',
+  accentColor = 'var(--color-blue-500)',
 }: TouchSliderProps) {
   const rootRef = useRef<HTMLSpanElement>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);

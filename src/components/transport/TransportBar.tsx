@@ -383,7 +383,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
         {/* Mobile bookmark toggle */}
         {!minimal && <button
           className={`${PHONE_ROW_BUTTON} rounded-lg flex items-center justify-center transition-colors ${
-            showBookmark ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            showBookmark ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={() => setShowBookmark(!showBookmark)}
           title="Position & Sections"
@@ -398,7 +398,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
         {/* Mobile chords toggle — only when the song has chords */}
         {!minimal && hasChords && <button
           className={`${PHONE_ROW_BUTTON} rounded-lg flex items-center justify-center transition-colors ${
-            chordsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            chordsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={toggleChordsMobileVisible}
           title="Chords"
@@ -411,7 +411,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
         {/* Mobile lyrics toggle — only when song has lyrics */}
         {!minimal && hasLyrics && <button
           className={`${PHONE_ROW_BUTTON} rounded-lg flex items-center justify-center transition-colors ${
-            lyricsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            lyricsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={toggleLyricsMobileVisible}
           title="Lyrics"
@@ -430,7 +430,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
         {/* Mobile sheet music: opens it full screen (only when the song has a score) */}
         {!minimal && hasSheetMusic && <button
           className={`${PHONE_ROW_BUTTON} rounded-lg flex items-center justify-center transition-colors ${
-            sheetMusicOpen ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            sheetMusicOpen ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={openSheetMusic}
           title="Sheet music"
@@ -443,7 +443,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
         {/* Mobile controls toggle — shows/hides mixer + volume/speed sliders below lyrics */}
         {!minimal && <button
           className={`${PHONE_ROW_BUTTON} rounded-lg flex items-center justify-center transition-colors ${
-            showSliders ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            showSliders ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={onToggleSliders}
           title="Mixer & Sliders"

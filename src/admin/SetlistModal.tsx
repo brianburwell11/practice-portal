@@ -1157,7 +1157,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
                     setNewLinkTitle('');
                     setNewLinkUrl('');
                   }}
-                  className="px-2 py-2 sm:py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm sm:text-xs"
+                  className="px-2 py-2 sm:py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm sm:text-xs text-accent-ink"
                 >
                   Add
                 </button>
@@ -1182,7 +1182,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
               <button
                 onClick={handleSave}
                 disabled={!canSave}
-                className="px-4 py-2 bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium"
+                className="px-4 py-2 bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500 rounded text-sm font-medium text-accent-ink"
               >
                 {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Setlist'}
               </button>

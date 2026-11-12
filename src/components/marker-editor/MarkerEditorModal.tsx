@@ -266,7 +266,7 @@ export function MarkerEditorModal() {
         label="+ Measure"
         shortcut={coarse ? undefined : 'M'}
         sublabel={String(nextMeasure)}
-        color="bg-blue-700 text-white"
+        color="bg-blue-700 text-accent-ink"
         size={coarse ? 'lg' : 'md'}
         pulse={pulses.measure}
         onFire={() => tap('measure')}
@@ -327,7 +327,7 @@ export function MarkerEditorModal() {
         </div>
         <div className="flex items-center gap-2 relative z-10">
           <button
-            className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
+            className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-accent-ink transition-colors"
             onClick={handleSave}
             disabled={!dirty || saving}
           >

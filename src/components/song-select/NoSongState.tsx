@@ -30,7 +30,7 @@ export function NoSongState({ onInvite }: { onInvite: () => void }) {
         <button
           onClick={() => (failedSong ? handleSelect(failedSong) : window.location.reload())}
           disabled={loading}
-          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-medium text-white"
+          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-medium text-accent-ink"
         >
           {loading ? 'Loading…' : 'Try again'}
         </button>
@@ -59,7 +59,7 @@ export function NoSongState({ onInvite }: { onInvite: () => void }) {
         <div className="flex flex-wrap justify-center gap-3">
           <Link
             to={`/${bandRoute}/admin/add-song`}
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white"
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium text-accent-ink"
           >
             + Add a song
           </Link>

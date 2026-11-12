@@ -102,7 +102,7 @@ export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPart
           <button className={btn} onClick={() => setZoom(zoom * 1.15)} aria-label="Zoom in">+</button>
         </div>
         <button
-          className={`${btn} ${invert ? 'bg-blue-600 text-white hover:bg-blue-500' : ''}`}
+          className={`${btn} ${invert ? 'bg-blue-600 text-accent-ink hover:bg-blue-500' : ''}`}
           onClick={() => setInvert(!invert)}
           aria-pressed={invert}
           title="Light notes on dark pages"

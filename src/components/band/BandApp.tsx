@@ -140,13 +140,11 @@ export function BandApp() {
   useEffect(() => {
     if (!currentBand) return;
     const root = document.documentElement;
-    root.style.setProperty('--band-primary', currentBand.colors.primary);
     root.style.setProperty('--band-accent', currentBand.colors.accent);
     root.style.setProperty('--band-bg', currentBand.colors.background);
     root.style.setProperty('--band-text', autoInk(currentBand.colors.background));
     document.title = bandPageTitle(currentBand.name);
     return () => {
-      root.style.removeProperty('--band-primary');
       root.style.removeProperty('--band-accent');
       root.style.removeProperty('--band-bg');
       root.style.removeProperty('--band-text');

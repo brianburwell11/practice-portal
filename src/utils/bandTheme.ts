@@ -12,7 +12,7 @@
  * background (gray-950), keeping the stock theme's spacing, then each step
  * that carries text is pushed toward the ink until it reaches a minimum WCAG
  * contrast against the background. A few accent hues used as text (amber,
- * blue, red...) get the same floor.
+ * blue, red...) get the same floor, and the blues follow the band's accent.
  */
 import type { BandColors } from '../audio/types';
 
@@ -350,6 +350,55 @@ export function buildAccentOverrides(bg: RGB): Record<string, string> {
   return out;
 }
 
+/** Tailwind's blue scale, which the band page's UI uses for its accent. */
+const BLUE_SCALE: [number, string][] = [
+  [50, 'oklch(97% 0.014 254.604)'],
+  [100, 'oklch(93.2% 0.032 255.585)'],
+  [200, 'oklch(88.2% 0.059 254.128)'],
+  [300, 'oklch(80.9% 0.105 251.813)'],
+  [400, 'oklch(70.7% 0.165 254.624)'],
+  [500, 'oklch(62.3% 0.214 259.815)'],
+  [600, 'oklch(54.6% 0.245 262.881)'],
+  [700, 'oklch(48.8% 0.243 264.376)'],
+  [800, 'oklch(42.4% 0.199 265.638)'],
+  [900, 'oklch(37.9% 0.146 265.522)'],
+  [950, 'oklch(28.2% 0.091 267.935)'],
+];
+
+/** Blue steps used as text on the page, and the contrast each needs. */
+const ACCENT_TEXT_FLOOR: Record<number, number> = { 200: 4.5, 300: 4.5, 400: 4.5 };
+
+/**
+ * The page's blue scale rebuilt around the band's accent: blue-500 is the
+ * accent itself, and each other step sits as far above or below it in
+ * lightness (and chroma, proportionally) as Tailwind's does from its blue-500.
+ * Steps used as text are lifted to stay readable on `bg`.
+ */
+export function buildAccentScale(accent: RGB, bg: RGB): Record<string, string> {
+  const [L, a, b] = rgbToOklab(accent);
+  const chroma = Math.hypot(a, b);
+  const [baseL, baseA, baseB] = parseOklch(BLUE_SCALE[5][1]);
+  const baseChroma = Math.hypot(baseA, baseB);
+  const out: Record<string, string> = {};
+  for (const [step, value] of BLUE_SCALE) {
+    if (step === 500) {
+      out[`blue-${step}`] = toHex(accent);
+      continue;
+    }
+    const [sL, sA, sB] = parseOklch(value);
+    const k = chroma > 1e-4 ? Math.hypot(sA, sB) / baseChroma : 0;
+    const lab: Lab = [Math.min(0.99, Math.max(0.05, L + (sL - baseL))), a * k, b * k];
+    const floor = ACCENT_TEXT_FLOOR[step];
+    out[`blue-${step}`] = toHex(floor ? liftLightness(lab, bg, floor) : oklabToRgb(lab));
+  }
+  return out;
+}
+
+/** White or near-black, whichever reads better on `fill`. */
+function inkOn(fill: RGB): string {
+  return contrastRatio(WHITE, fill) >= contrastRatio(parseHex(DARK_INK)!, fill) ? '#ffffff' : DARK_INK;
+}
+
 export interface BandTheme {
   /** CSS custom properties to set on the band page root. */
   vars: Record<string, string>;
@@ -361,7 +410,9 @@ export interface BandTheme {
  * The band page's color variables for `colors`, or null when there's no
  * band or its background can't be parsed (the stock theme then applies).
  */
-export function bandTheme(colors: Pick<BandColors, 'background'> | null | undefined): BandTheme | null {
+export function bandTheme(
+  colors: Pick<BandColors, 'background'> & Partial<Pick<BandColors, 'accent'>> | null | undefined,
+): BandTheme | null {
   if (!colors) return null;
   const bg = parseHex(colors.background);
   if (!bg) return null;
@@ -372,5 +423,17 @@ export function bandTheme(colors: Pick<BandColors, 'background'> | null | undefi
   for (const step of GRAY_STEPS) vars[`--color-gray-${step}`] = scale[step];
   for (const [step, hex] of Object.entries(buildMixerSurfaces(bg, ink))) vars[`--mixer-gray-${step}`] = hex;
   for (const [name, hex] of Object.entries(buildAccentOverrides(bg))) vars[`--color-${name}`] = hex;
+  // The band's accent takes over the blues (buttons, toggles, focus rings,
+  // links), with black or white text on its buttons, whichever reads better.
+  const accent = parseHex(colors.accent);
+  if (accent) {
+    for (const [name, hex] of Object.entries(buildAccentScale(accent, bg))) vars[`--color-${name}`] = hex;
+    vars['--color-accent-ink'] = inkOn(parseHex(vars['--color-blue-600'])!);
+    vars['--color-on-accent'] = inkOn(accent);
+    // The accent pushed away from that text color, for gradients that only
+    // ever gain contrast: darker under white text, lighter under dark.
+    const away = vars['--color-on-accent'] === '#ffffff' ? BLACK : WHITE;
+    vars['--color-accent-deep'] = toHex(oklabToRgb(mixLab(rgbToOklab(accent), rgbToOklab(away), away === BLACK ? 0.28 : 0.35)));
+  }
   return { vars, ink: inkHex };
 }

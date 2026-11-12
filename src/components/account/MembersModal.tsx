@@ -249,7 +249,7 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
                   <button
                     onClick={() => run(() => api('POST', `${base}/access-requests/${r.id}/approve`), `${r.name ?? r.email} is in the band.`)}
                     disabled={busy}
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-xs font-medium text-white"
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-xs font-medium text-accent-ink"
                   >
                     Approve
                   </button>
@@ -292,7 +292,7 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
             <button
               onClick={createInvite}
               disabled={busy}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm font-medium text-white"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm font-medium text-accent-ink"
             >
               Send invite
             </button>
@@ -431,7 +431,7 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
             <button
               onClick={() => run(async () => setGuestLink((await api('POST', `${base}/guest-link`, {})).link))}
               disabled={busy}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm font-medium text-white"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-sm font-medium text-accent-ink"
             >
               Turn on guest link
             </button>

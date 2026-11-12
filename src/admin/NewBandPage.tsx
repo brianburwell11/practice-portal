@@ -11,11 +11,10 @@ import type { BandColors, BandConfig, BandIndexEntry } from '../audio/types';
 import { autoInk } from '../utils/bandTheme';
 import { textOn } from '../components/mixer/textOn';
 
-// The portal's own: `--color-brand`, `--color-page` and the body text in
-// index.css. The portal has no accent, so that one is just a default.
+// The portal's own: `--color-page` and the body text in index.css, and the
+// blue its buttons and toggles use until a band picks its own accent.
 const defaultColors: BandColors = {
-  primary: '#4a31f5',
-  accent: '#f59e0b',
+  accent: '#3b82f6',
   background: '#080e22',
   text: '#e5e7eb',
 };
@@ -180,7 +179,7 @@ export default function NewBandPage() {
   };
 
   // No text color: the page picks whichever reads best on the background.
-  const colorKeys: (keyof BandColors)[] = ['primary', 'accent', 'background'];
+  const colorKeys: (keyof BandColors)[] = ['background', 'accent'];
 
   return (
     <div className="min-h-screen bg-page text-gray-100">
@@ -275,7 +274,7 @@ export default function NewBandPage() {
 
         <div className="space-y-2">
           <span className="text-sm font-medium text-gray-300">Color Scheme</span>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {colorKeys.map((key) => (
               <label key={key} className="space-y-1">
                 <span className="text-xs text-gray-400 capitalize">{key}</span>
@@ -310,7 +309,7 @@ export default function NewBandPage() {
             ) : (
               <div
                 className="w-16 h-16 rounded flex items-center justify-center text-2xl font-bold shrink-0"
-                style={{ backgroundColor: draft.colors.primary, color: textOn(draft.colors.primary) }}
+                style={{ backgroundColor: draft.colors.accent, color: textOn(draft.colors.accent) }}
               >
                 {(draft.name || 'My Band')[0]}
               </div>
@@ -320,12 +319,6 @@ export default function NewBandPage() {
                 {draft.name || 'My Band'}
               </div>
               <div className="flex gap-2 mt-2">
-                <span
-                  className="px-2 py-1 rounded text-xs font-medium"
-                  style={{ backgroundColor: draft.colors.primary, color: textOn(draft.colors.primary) }}
-                >
-                  Primary
-                </span>
                 <span
                   className="px-2 py-1 rounded text-xs font-medium"
                   style={{ backgroundColor: draft.colors.accent, color: textOn(draft.colors.accent) }}

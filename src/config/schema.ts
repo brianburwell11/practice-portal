@@ -195,7 +195,7 @@ export const songManifestSchema = z.object({
 });
 
 export const bandColorsSchema = z.object({
-  primary: z.string(),
+  primary: z.string().optional(),
   accent: z.string(),
   background: z.string(),
   text: z.string(),
@@ -222,7 +222,7 @@ export const bandConfigWriteSchema = bandConfigSchema.extend({
   name: z.string().trim().min(1).max(80),
   route: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,59}$/, 'Use letters, numbers, dots, dashes or underscores (at most 60)'),
   colors: z.object({
-    primary: z.string().max(32),
+    primary: z.string().max(32).optional(),
     accent: z.string().max(32),
     background: z.string().max(32),
     text: z.string().max(32),

@@ -7,6 +7,7 @@ import {
   INK_MIN,
   autoInk,
   bandTheme,
+  buildAccentScale,
   contrastHex,
   parseHex,
   relativeLuminance,
@@ -100,11 +101,52 @@ describe('.theme-default in index.css', () => {
     const { resolve } = await import('node:path');
     const css = readFileSync(resolve(__dirname, '../index.css'), 'utf8');
     const block = /\.theme-default\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
-    const t = bandTheme({ background: '#808080' })!;
+    const t = bandTheme({ background: '#808080', accent: '#f59e0b' })!;
     // `--mixer-gray-*` only acts through `.mixer-surfaces`, so it needs no reset.
     const themed = Object.keys(t.vars).filter((k) => !k.startsWith('--mixer-'));
     for (const name of [...themed, ...ACCENTS.map((a) => `--color-${a.name}`)]) {
       expect(block).toContain(`${name}:`);
     }
+  });
+});
+
+describe('band accent', () => {
+  it('is blue-500, with the other blues built around it', () => {
+    const t = bandTheme({ background: DEFAULT_PAGE_BG, accent: '#e11d48' })!;
+    expect(t.vars['--color-blue-500']).toBe('#e11d48');
+    const lum = (step: number) => relativeLuminance(parseHex(t.vars[`--color-blue-${step}`])!);
+    expect(lum(600)).toBeLessThan(lum(500));
+    expect(lum(300)).toBeGreaterThan(lum(500));
+  });
+
+  it('keeps the blues used as text readable on the background', () => {
+    for (const [, bg] of CASES) {
+      const scale = buildAccentScale(parseHex('#3b82f6')!, parseHex(bg)!);
+      for (const step of [200, 300, 400]) {
+        const best = Math.max(contrastHex('#000000', bg), contrastHex('#ffffff', bg));
+        expect(contrastHex(scale[`blue-${step}`], bg)).toBeGreaterThanOrEqual(Math.min(4.5, best) - 0.05);
+      }
+    }
+  });
+
+  it('puts dark text on a light accent and white on a dark one', () => {
+    expect(bandTheme({ background: DEFAULT_PAGE_BG, accent: '#fde047' })!.vars['--color-accent-ink']).not.toBe('#ffffff');
+    expect(bandTheme({ background: DEFAULT_PAGE_BG, accent: '#1d4ed8' })!.vars['--color-accent-ink']).toBe('#ffffff');
+  });
+
+  it('picks legible text for a fill of the accent itself', () => {
+    for (const accent of ['#fde047', '#1d4ed8', '#22c55e', '#e11d48', '#ffffff', '#000000']) {
+      const t = bandTheme({ background: DEFAULT_PAGE_BG, accent })!;
+      const best = Math.max(contrastHex('#111827', accent), contrastHex('#ffffff', accent));
+      expect(contrastHex(t.vars['--color-on-accent'], accent)).toBe(best);
+      // The gradient's deep end only ever reads better.
+      expect(contrastHex(t.vars['--color-on-accent'], t.vars['--color-accent-deep'])).toBeGreaterThanOrEqual(best - 0.01);
+    }
+  });
+
+  it('leaves the blues alone without an accent', () => {
+    const t = bandTheme({ background: '#ffffff' })!;
+    expect(t.vars['--color-blue-600']).toBeUndefined();
+    expect(t.vars['--color-accent-ink']).toBeUndefined();
   });
 });

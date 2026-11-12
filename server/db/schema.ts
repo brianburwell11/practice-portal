@@ -93,7 +93,8 @@ export const session = pgTable('session', {
 ]);
 
 export interface BandColors {
-  primary: string;
+  /** No longer used or edited; older bands still have one saved. */
+  primary?: string;
   accent: string;
   background: string;
   text: string;

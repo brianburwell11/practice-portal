@@ -103,7 +103,7 @@ export function ChordsEditorModal() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
-            className="px-3 md:px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
+            className="px-3 md:px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-accent-ink transition-colors"
             onClick={handleSave}
             disabled={saving}
           >

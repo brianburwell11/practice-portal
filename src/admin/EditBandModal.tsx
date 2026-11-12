@@ -58,7 +58,6 @@ export function EditBandModal({ band, onClose }: Props) {
   // Live-preview draft colors on the page's CSS variables.
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty('--band-primary', draft.colors.primary);
     root.style.setProperty('--band-accent', draft.colors.accent);
     root.style.setProperty('--band-bg', draft.colors.background);
     root.style.setProperty('--band-text', autoInk(draft.colors.background));
@@ -73,7 +72,6 @@ export function EditBandModal({ band, onClose }: Props) {
       const current = useBandStore.getState().currentBand;
       if (!current) return;
       const root = document.documentElement;
-      root.style.setProperty('--band-primary', current.colors.primary);
       root.style.setProperty('--band-accent', current.colors.accent);
       root.style.setProperty('--band-bg', current.colors.background);
       root.style.setProperty('--band-text', autoInk(current.colors.background));
@@ -217,7 +215,7 @@ export function EditBandModal({ band, onClose }: Props) {
   };
 
   // No text color: the page picks whichever reads best on the background.
-  const colorKeys: (keyof BandColors)[] = ['primary', 'accent', 'background'];
+  const colorKeys: (keyof BandColors)[] = ['background', 'accent'];
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -236,7 +234,7 @@ export function EditBandModal({ band, onClose }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
+            className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-accent-ink transition-colors"
             onClick={handleSave}
             disabled={saving || !draft.name || !draft.route || routeCollides}
           >
@@ -342,7 +340,7 @@ export function EditBandModal({ band, onClose }: Props) {
 
         <div className="space-y-2">
           <span className="text-xs font-medium text-gray-300">Color Scheme</span>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {colorKeys.map((key) => (
               <label key={key} className="space-y-1">
                 <span className="text-xs text-gray-400 capitalize">{key}</span>

@@ -50,7 +50,7 @@ export function PlayPauseButton({ size = 'md', longPressStops = false }: { size?
   const hint = longPressStops ? ' (long-press to stop)' : '';
   return (
     <button
-      className={`${BASE} ${SIZE[size]} bg-blue-600 hover:bg-blue-500`}
+      className={`${BASE} ${SIZE[size]} bg-blue-600 hover:bg-blue-500 text-accent-ink`}
       disabled={disabled}
       {...handlers}
       title={(playing ? 'Pause' : 'Play') + hint}

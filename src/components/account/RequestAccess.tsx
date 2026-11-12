@@ -81,7 +81,7 @@ export function RequestAccess({ slug, user, fallback, frame = (node) => node }: 
       ) : access.member ? (
         <>
           <p className="text-sm text-gray-400">You’re in this band now.</p>
-          <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white">
+          <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium text-accent-ink">
             Open {band.name}
           </button>
         </>
@@ -107,7 +107,7 @@ export function RequestAccess({ slug, user, fallback, frame = (node) => node }: 
           <button
             onClick={send}
             disabled={sending}
-            className="w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 font-medium text-white"
+            className="w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 font-medium text-accent-ink"
           >
             {sending ? 'Sending…' : 'Request access'}
           </button>

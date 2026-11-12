@@ -787,12 +787,12 @@ export function ScrollingScore() {
                   <div className="flex gap-1">
                     <button
                       onClick={() => setTrackingMode('karaoke')}
-                      className={`flex-1 px-2 py-0.5 rounded ${trackingMode === 'karaoke' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                      className={`flex-1 px-2 py-0.5 rounded ${trackingMode === 'karaoke' ? 'bg-blue-600 text-accent-ink' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
                       title="Score scrolls smoothly under a fixed playback cursor"
                     >continuous</button>
                     <button
                       onClick={() => setTrackingMode('window')}
-                      className={`flex-1 px-2 py-0.5 rounded ${trackingMode === 'window' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                      className={`flex-1 px-2 py-0.5 rounded ${trackingMode === 'window' ? 'bg-blue-600 text-accent-ink' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
                       title="Show a page of measures at a time; advance when filled"
                     >windowed</button>
                   </div>
@@ -804,12 +804,12 @@ export function ScrollingScore() {
                   <div className="flex gap-1">
                     <button
                       onClick={() => setShowPlayhead(true)}
-                      className={`flex-1 px-2 py-0.5 rounded ${showPlayhead ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                      className={`flex-1 px-2 py-0.5 rounded ${showPlayhead ? 'bg-blue-600 text-accent-ink' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
                       title="Show the vertical line marking current playback"
                     >show</button>
                     <button
                       onClick={() => setShowPlayhead(false)}
-                      className={`flex-1 px-2 py-0.5 rounded ${!showPlayhead ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                      className={`flex-1 px-2 py-0.5 rounded ${!showPlayhead ? 'bg-blue-600 text-accent-ink' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
                       title="Hide the vertical line marking current playback"
                     >hide</button>
                   </div>

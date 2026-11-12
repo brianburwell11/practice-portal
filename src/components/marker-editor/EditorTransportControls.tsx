@@ -14,7 +14,7 @@ export function EditorTransportControls() {
   return (
     <div className="flex items-center gap-3">
       <button
-        className="w-9 h-9 rounded-lg bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-base transition-colors"
+        className="w-9 h-9 rounded-lg bg-blue-600 hover:bg-blue-500 text-accent-ink flex items-center justify-center text-base transition-colors"
         onClick={() => (playing ? engine.pause() : engine.play())}
         title={playing ? 'Pause' : 'Play'}
         aria-label={playing ? 'Pause' : 'Play'}

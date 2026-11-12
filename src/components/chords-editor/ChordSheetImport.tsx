@@ -76,7 +76,7 @@ export function ChordSheetImport({ onAdd, onClose }: { onAdd: (items: QueueItem[
         <button type="button" className={btn} onClick={onClose}>Cancel</button>
         <button
           type="button"
-          className="rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white px-3 py-1.5"
+          className="rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-accent-ink px-3 py-1.5"
           disabled={count === 0}
           onClick={() => onAdd(sheetToQueue(parsed))}
         >

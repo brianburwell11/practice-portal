@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type CSSProperties } from 'react';
 import { HelpModal } from '../components/HelpModal';
 import { useBandStore } from '../store/bandStore';
 import { useSessionStore } from '../store/sessionStore';
@@ -41,6 +41,14 @@ interface MenuEntry {
   enabled: boolean;
   danger?: boolean;
   onClick?: () => void;
+}
+
+/** A ribbon button or link: a small pill that lights up on hover. */
+const CHIP = 'h-5 px-2 rounded-full inline-flex items-center gap-1 text-xs hover:bg-on-accent/15 focus:outline-none focus-visible:ring-1 focus-visible:ring-on-accent transition-colors';
+
+/** Divider between the ribbon's groups. */
+function Dot() {
+  return <span aria-hidden="true" className="mx-1 w-1 h-1 rounded-full bg-gray-600" />;
 }
 
 function MenuItem({
@@ -251,10 +259,25 @@ export function AdminRibbon({
   }
 
   return (
+    <>
+    {/* Filled with the band's accent, deeper on the left. Its grays are
+        redefined from the text color that reads on the accent, so labels,
+        links and dividers stay legible on any accent; the open menus reset
+        them (`theme-default`). */}
     <div
       ref={ribbonRef}
-      className="px-4 py-1.5 border-b flex items-center gap-3 min-h-[33px]"
-      style={{ borderColor: 'color-mix(in srgb, var(--band-primary, #374151) 40%, transparent)' }}
+      className="relative px-3 h-7 flex items-center gap-1"
+      style={{
+        '--color-gray-300': 'var(--color-on-accent)',
+        '--color-gray-400': 'var(--color-on-accent)',
+        '--color-gray-500': 'var(--color-on-accent)',
+        '--color-gray-600': 'color-mix(in srgb, var(--color-on-accent) 50%, var(--color-blue-500))',
+        '--color-gray-700': 'color-mix(in srgb, var(--color-on-accent) 40%, var(--color-blue-500))',
+        color: 'var(--color-on-accent)',
+        backgroundColor: 'var(--color-blue-500)',
+        backgroundImage: 'linear-gradient(90deg, var(--color-accent-deep), var(--color-blue-500) 60%)',
+        boxShadow: 'inset 0 1px 0 color-mix(in srgb, var(--color-on-accent) 22%, transparent), inset 0 -1px 0 rgb(0 0 0 / 0.18)',
+      } as CSSProperties}
     >
       {menus.map((menu) => (
         <div key={menu.id} className="relative">
@@ -262,9 +285,12 @@ export function AdminRibbon({
             onClick={() => toggle(menu.id)}
             aria-haspopup="menu"
             aria-expanded={open === menu.id}
-            className="py-1.5 text-sm md:text-xs text-gray-400 md:text-gray-500 hover:text-gray-300"
+            className={`${CHIP} font-medium tracking-wide ${open === menu.id ? 'bg-on-accent/20' : ''}`}
           >
-            {menu.label} <span className="text-base">▾</span>
+            {menu.label}
+            <svg viewBox="0 0 10 6" aria-hidden="true" className={`w-2 h-1.5 transition-transform ${open === menu.id ? 'rotate-180' : ''}`}>
+              <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
           {open === menu.id && (
             <div role="menu" aria-label={menu.label} className="theme-default absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
@@ -284,7 +310,7 @@ export function AdminRibbon({
 
       {menus.length > 0
         && ((setlistNavLinks && setlistNavLinks.length > 0) || (songNavLinks && songNavLinks.length > 0)) && (
-        <div className="border-l border-gray-700 h-4" />
+        <Dot />
       )}
 
       {setlistNavLinks?.map((link, i) => (
@@ -293,14 +319,15 @@ export function AdminRibbon({
           href={safeHref(link.url)}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-gray-500 hover:text-gray-300"
+          className={CHIP}
         >
           {link.title}
+          <span aria-hidden="true" className="text-[10px] opacity-70">↗</span>
         </a>
       ))}
 
       {setlistNavLinks && setlistNavLinks.length > 0 && songNavLinks && songNavLinks.length > 0 && (
-        <div className="border-l border-gray-700 h-4" />
+        <Dot />
       )}
 
       {songNavLinks?.map((link, i) => (
@@ -309,21 +336,23 @@ export function AdminRibbon({
           href={safeHref(link.url)}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-gray-500 hover:text-gray-300"
+          className={CHIP}
         >
           {link.title}
+          <span aria-hidden="true" className="text-[10px] opacity-70">↗</span>
         </a>
       ))}
 
       <button
         onClick={() => setShowHelp(true)}
-        className="ml-auto w-5 h-5 rounded-full border border-gray-600 text-gray-500 hover:text-gray-300 hover:border-gray-400 flex items-center justify-center text-xs leading-none transition-colors"
+        className="ml-auto w-5 h-5 rounded-full bg-on-accent/15 hover:bg-on-accent/30 flex items-center justify-center text-[11px] font-semibold leading-none transition-colors"
         title="Help"
         aria-label="Help"
       >
         ?
       </button>
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
+    {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+    </>
   );
 }
