@@ -270,4 +270,105 @@ describe('ChordLane', () => {
     expect(useChordsStore.getState().lookAhead).toBe(15);
     expect(window.localStorage.getItem('practice-portal.chordLookAhead')).toBe('15');
   });
+
+  it('cmd + scroll and pinch zoom the look-ahead about the reading point', () => {
+    useChordsStore.getState().setChords([{ symbol: 'G', time: 0 }, { symbol: 'C', time: 4 }]);
+    act(() => useTransportStore.setState({ position: 1 }));
+    render();
+    const lane = desktop()!.querySelector('.overflow-hidden') as HTMLElement;
+    const chordC = () => labels(desktop()).find((b) => b.textContent === 'C')!;
+    const zoomWheel = (deltaY: number, key: 'metaKey' | 'ctrlKey') => {
+      const e = new WheelEvent('wheel', { deltaY, cancelable: true });
+      Object.defineProperty(e, key, { value: true });
+      return e;
+    };
+
+    // Cmd + scroll down zooms out, capped per notch like the waveform.
+    let e = zoomWheel(100, 'metaKey');
+    act(() => { lane.dispatchEvent(e); });
+    expect(e.defaultPrevented).toBe(true);
+    expect(useChordsStore.getState().lookAhead).toBeCloseTo(11.5);
+    // The reading point holds: C, 3 s out, sits at 3 s of the new scale.
+    expect(shiftOf(chordC())).toBeCloseTo(HIT + 3 * ((1000 - HIT) / 11.5));
+
+    // A pinch (ctrlKey, small deltas) zooms in proportionally.
+    e = zoomWheel(-10, 'ctrlKey');
+    act(() => { lane.dispatchEvent(e); });
+    expect(useChordsStore.getState().lookAhead).toBeCloseTo(11.5 * Math.exp(-0.1));
+
+    // Clamped at both ends.
+    act(() => { for (let i = 0; i < 40; i++) lane.dispatchEvent(zoomWheel(-100, 'metaKey')); });
+    expect(useChordsStore.getState().lookAhead).toBe(4);
+    act(() => { for (let i = 0; i < 40; i++) lane.dispatchEvent(zoomWheel(100, 'metaKey')); });
+    expect(useChordsStore.getState().lookAhead).toBe(60);
+  });
+
+  it('the look-ahead button steps up from a zoomed value and shows it rounded', () => {
+    useChordsStore.getState().setChords([{ symbol: 'G', time: 0 }]);
+    useChordsStore.getState().setLookAhead(12.4);
+    render();
+    const button = host.querySelector('[aria-label="Show chords 12 seconds ahead"]') as HTMLElement;
+    expect(button.textContent).toBe('12s');
+    act(() => button.click());
+    expect(useChordsStore.getState().lookAhead).toBe(15);
+    act(() => useChordsStore.getState().setLookAhead(45));
+    act(() => (host.querySelector('[aria-label="Show chords 45 seconds ahead"]') as HTMLElement).click());
+    expect(useChordsStore.getState().lookAhead).toBe(10);
+  });
+
+  it('a two-finger pinch on the phone lane zooms and shows the look-ahead', () => {
+    useChordsStore.getState().setChords([{ symbol: 'G', time: 0 }, { symbol: 'C', time: 4 }]);
+    render();
+    const lane = phone()!;
+    /** A touch event with fingers at these x positions; happy-dom drops `touches` from the init. */
+    const touch = (type: string, xs: number[]) => {
+      const e = new Event(type, { cancelable: true });
+      Object.defineProperty(e, 'touches', { value: xs.map((clientX) => ({ clientX, clientY: 0 })) });
+      return e;
+    };
+
+    // One finger does nothing, so it can still scroll the page.
+    let e = touch('touchmove', [100]);
+    act(() => { lane.dispatchEvent(touch('touchstart', [100])); lane.dispatchEvent(e); });
+    expect(e.defaultPrevented).toBe(false);
+    expect(lane.querySelector('[data-pinch-readout]')).toBeNull();
+
+    // Fingers 100 px apart, then 200: zoomed in to half the seconds.
+    act(() => { lane.dispatchEvent(touch('touchstart', [100, 200])); });
+    e = touch('touchmove', [50, 250]);
+    act(() => { lane.dispatchEvent(e); });
+    expect(e.defaultPrevented).toBe(true);
+    expect(useChordsStore.getState().lookAhead).toBe(5);
+    expect(lane.querySelector('[data-pinch-readout]')?.textContent).toBe('5s ahead');
+
+    // Pinched together past the limit: clamped. Lifting a finger ends it.
+    act(() => { lane.dispatchEvent(touch('touchmove', [149, 151])); });
+    expect(useChordsStore.getState().lookAhead).toBe(60);
+    act(() => { lane.dispatchEvent(touch('touchend', [150])); });
+    expect(lane.querySelector('[data-pinch-readout]')).toBeNull();
+  });
+
+  it('chords too close to the last named one show as ticks', () => {
+    // At 60 s across ~760 px, chords 0.25 s apart are ~3 px apart.
+    useChordsStore.getState().setLookAhead(60);
+    useChordsStore.getState().setChords([
+      { symbol: 'G', time: 0 },
+      { symbol: 'Am', time: 2 },
+      { symbol: 'Bm', time: 2.25 },
+      { symbol: 'C', time: 2.5 },
+      { symbol: 'D', time: 20 },
+    ]);
+    render();
+    const named = labels(desktop()).map((b) => b.textContent);
+    expect(named).toEqual(expect.arrayContaining(['G', 'Am', 'D']));
+    expect(named).not.toContain('Bm');
+    expect(named).not.toContain('C');
+    const ticks = [...desktop()!.querySelectorAll('[data-chord-tick]')].map((t) => t.getAttribute('title'));
+    expect(ticks).toEqual(['Bm', 'C']);
+
+    // Zoomed in, there's room for all of them.
+    act(() => useChordsStore.getState().setLookAhead(4));
+    expect(desktop()!.querySelectorAll('[data-chord-tick]')).toHaveLength(0);
+    expect(labels(desktop()).map((b) => b.textContent)).toEqual(expect.arrayContaining(['Am', 'Bm', 'C']));
+  });
 });
