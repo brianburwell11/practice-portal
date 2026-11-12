@@ -166,6 +166,7 @@ export function useSongLoader() {
 /** Headless component — runs manifest fetch, setlist index fetch, auto-select, and popstate effects. Renders nothing. */
 export function SongList() {
   const { filteredSongs, handleSelect } = useSongLoader();
+  const engine = useAudioEngine();
   const setManifest = useSongStore((s) => s.setManifest);
   const setError = useSongStore((s) => s.setError);
   const currentBand = useBandStore((s) => s.currentBand);
@@ -305,8 +306,15 @@ export function SongList() {
     const onPopState = () => {
       const hash = window.location.hash.replace('#', '');
       const songKey = new URLSearchParams(window.location.search).get('song') ?? hash;
-      if (!hash && !songKey) return;
       const activeSetlist = useSetlistStore.getState().activeSetlist;
+      if (!hash && !songKey) {
+        // Back to the setlist itself: show its song list again.
+        if (activeSetlist && useSongStore.getState().selectedSong) {
+          engine.stop();
+          useSongStore.getState().setSelectedSong(null);
+        }
+        return;
+      }
       if (activeSetlist) {
         const idx = parseInt(hash) - 1;
         if (!isNaN(idx) && idx >= 0 && idx < filteredSongs.length) {
@@ -324,7 +332,7 @@ export function SongList() {
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [filteredSongs, handleSelect]);
+  }, [filteredSongs, handleSelect, engine]);
 
   return null;
 }
@@ -367,7 +375,7 @@ export function SongSelectDropdown() {
   return (
     <select
       className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 flex-1 min-w-0 text-center md:flex-initial md:text-left md:w-auto md:shrink-0"
-      value={inSetlist ? String(activeIndex) : (selectedSong?.id ?? '')}
+      value={inSetlist ? (selectedSong ? String(activeIndex) : '-1') : (selectedSong?.id ?? '')}
       onChange={(e) => {
         if (inSetlist) {
           const idx = parseInt(e.target.value);
@@ -424,7 +432,7 @@ export function SetlistDropdown({ className = 'ml-auto' }: { className?: string 
   const activeTag = useSetlistStore((s) => s.activeTag);
   const setActiveTag = useSetlistStore((s) => s.setActiveTag);
   const manifest = useSongStore((s) => s.manifest);
-  const { filteredSongs, handleSelect } = useSongLoader();
+  const engine = useAudioEngine();
   const collections = useMemo(() => collectionsOf(manifest?.songs ?? []), [manifest]);
 
   const handleSetlistChange = async (setlistId: string) => {
@@ -458,6 +466,9 @@ export function SetlistDropdown({ className = 'ml-auto' }: { className?: string 
       const res = await fetch(dataUrl(`${currentBand.id}/setlists/${setlistId}.json`));
       const data: SetlistConfig = setlistConfigSchema.parse(await res.json());
       setActiveSetlist(data);
+      // The setlist opens on its song list (SetlistHome), not its first song.
+      engine.stop();
+      useSongStore.getState().setSelectedSong(null);
       const url = new URL(window.location.href);
       // Prefer the setlist's slug in the URL. For legacy setlists
       // (no slug), strip the "setlist-" prefix to keep the param
@@ -468,22 +479,12 @@ export function SetlistDropdown({ className = 'ml-auto' }: { className?: string 
       );
       url.searchParams.delete('song');
       url.searchParams.delete('tag');
-      // activeIndex resets to 0 via setActiveSetlist, so first song
-      url.hash = '#1';
+      url.hash = '';
       history.replaceState(null, '', url.pathname + url.search + url.hash);
     } catch {
       // silently fail
     }
   };
-
-  // When setlist changes, load first song
-  const prevSetlistId = useRef(activeSetlist?.id);
-  useEffect(() => {
-    if (activeSetlist && activeSetlist.id !== prevSetlistId.current && filteredSongs.length > 0) {
-      handleSelect(filteredSongs[0]);
-    }
-    prevSetlistId.current = activeSetlist?.id;
-  }, [activeSetlist, filteredSongs, handleSelect]);
 
   const setlists = setlistIndex ?? [];
   if (setlists.length === 0 && collections.length === 0) return null;
@@ -521,9 +522,12 @@ export function SetlistNav() {
   const setActiveIndex = useSetlistStore((s) => s.setActiveIndex);
   const loading = useSongStore((s) => s.loading);
   const { filteredSongs, handleSelect } = useSongLoader();
+  const hasSong = useSongStore((s) => !!s.selectedSong);
 
-  const prevSong = activeSetlist && activeIndex > 0 ? filteredSongs[activeIndex - 1] : null;
-  const nextSong = activeSetlist && activeIndex < filteredSongs.length - 1 ? filteredSongs[activeIndex + 1] : null;
+  // On the setlist's song list (no song open), next is its first song.
+  const nextIndex = hasSong ? activeIndex + 1 : 0;
+  const prevSong = activeSetlist && hasSong && activeIndex > 0 ? filteredSongs[activeIndex - 1] : null;
+  const nextSong = activeSetlist && nextIndex < filteredSongs.length ? filteredSongs[nextIndex] : null;
 
   const navigate = (idx: number) => {
     setActiveIndex(idx);
@@ -554,7 +558,7 @@ export function SetlistNav() {
         {activeSetlist && (
           <button
             disabled={!nextSong || loading}
-            onClick={() => navigate(activeIndex + 1)}
+            onClick={() => navigate(nextIndex)}
             className="text-sm md:text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default"
           >
             {nextSong ? (

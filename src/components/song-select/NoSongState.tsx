@@ -4,11 +4,13 @@ import { useCan } from '../../store/sessionStore';
 import { useSongStore } from '../../store/songStore';
 import { useSongLoader } from './SongList';
 import { MixerSkeleton } from '../mixer/MixerSkeleton';
+import { useSetlistStore } from '../../store/setlistStore';
+import { SetlistHome } from './SetlistHome';
 
 /**
  * What fills the screen before a song is playing: a failed load and its
  * Retry, a band with no songs yet (and, for those who can, how to add one),
- * or a prompt to pick a song.
+ * an open setlist's song list, or a prompt to pick a song.
  */
 export function NoSongState({ onInvite }: { onInvite: () => void }) {
   const { handleSelect } = useSongLoader();
@@ -19,6 +21,7 @@ export function NoSongState({ onInvite }: { onInvite: () => void }) {
   const bandRoute = useBandStore((s) => s.currentBand?.route);
   const canAddSong = useCan('song.create');
   const canInvite = useCan('member.invite');
+  const activeSetlist = useSetlistStore((s) => s.activeSetlist);
 
   if (error) {
     return (
@@ -69,6 +72,8 @@ export function NoSongState({ onInvite }: { onInvite: () => void }) {
       </Centered>
     );
   }
+
+  if (activeSetlist) return <SetlistHome setlist={activeSetlist} />;
 
   return <Centered><p className="text-gray-500">Pick a song to get started.</p></Centered>;
 }
