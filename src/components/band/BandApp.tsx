@@ -1,9 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { autoInk } from '../../utils/bandTheme';
 import { useParams, Outlet } from 'react-router-dom';
 import { useBandStore } from '../../store/bandStore';
 import { useSongStore } from '../../store/songStore';
 import { useSetlistStore } from '../../store/setlistStore';
+import { useLyricsStore } from '../../store/lyricsStore';
+import { useChordsStore } from '../../store/chordsStore';
+import { useNotesStore } from '../../store/notesStore';
+import { useMarkerEditorStore } from '../../store/markerEditorStore';
+import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
+import { useChordsEditorStore } from '../../store/chordsEditorStore';
+import { stopSharedEngine } from '../../hooks/useAudioEngine';
 import { bandConfigSchema, bandsManifestSchema } from '../../config/schema';
 import { dataUrl } from '../../utils/url';
 import { useSessionStore } from '../../store/sessionStore';
@@ -30,6 +37,27 @@ async function openGuestLink(token: string): Promise<string> {
   // The token decides the band, so a link made before a route rename still lands right.
   window.location.replace(`/${data.band.slug}${qs ? `?${qs}` : ''}${window.location.hash}`);
   return new Promise(() => {}); // the page is going away
+}
+
+/**
+ * The band the page last showed. Module level, not a ref: switching bands
+ * goes through the band picker, which unmounts BandApp, so a ref would
+ * forget the old band and its song, setlist and editors would carry over.
+ */
+let lastBandId: string | null = null;
+
+/** Clear everything that belongs to one band, so the next starts fresh. */
+function resetBandState() {
+  stopSharedEngine();
+  useBandStore.getState().setCurrentBand(null);
+  useSongStore.setState({ manifest: null, selectedSong: null, error: null, failedSong: null });
+  useSetlistStore.setState({ index: null, activeSetlist: null, activeIndex: 0, activeTag: null });
+  useLyricsStore.getState().clear();
+  useChordsStore.getState().clear();
+  useNotesStore.getState().clear();
+  useMarkerEditorStore.getState().close();
+  useLyricsEditorStore.getState().close();
+  useChordsEditorStore.getState().close();
 }
 
 export function BandApp() {
@@ -67,7 +95,6 @@ export function BandApp() {
   }, [bandsManifest, setBandsManifest, guestPending]);
 
   // Resolve the slim index entry, then fetch the full band.json.
-  const prevBandIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!bandsManifest || !bandSlug) return;
     const indexEntry = bandsManifest.bands.find((b) => b.route === bandSlug);
@@ -79,13 +106,10 @@ export function BandApp() {
       return;
     }
 
-    // When switching to a different band, clear per-band state so stale
-    // selections (song, setlist) from the previous band don't linger.
-    if (prevBandIdRef.current && prevBandIdRef.current !== indexEntry.id) {
-      useSongStore.getState().setSelectedSong(null);
-      useSetlistStore.getState().setActiveSetlist(null);
-    }
-    prevBandIdRef.current = indexEntry.id;
+    // A different band than last time: drop the old band's song, setlist
+    // and editors, and wait for this band before showing the page.
+    if (lastBandId && lastBandId !== indexEntry.id) resetBandState();
+    lastBandId = indexEntry.id;
 
     let cancelled = false;
     fetch(dataUrl(`${indexEntry.id}/band.json`))

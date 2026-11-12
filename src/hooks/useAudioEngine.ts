@@ -13,6 +13,11 @@ export function useAudioEngine(): AudioEngine {
 // Module-level singleton so StrictMode double-mount doesn't destroy it
 let singletonEngine: AudioEngine | null = null;
 
+/** Stop the shared engine, if there is one. For when the page leaves a band. */
+export function stopSharedEngine(): void {
+  singletonEngine?.stop();
+}
+
 export function useCreateEngine(): AudioEngine {
   const engineRef = useRef<AudioEngine | null>(null);
   if (!engineRef.current) {
