@@ -54,6 +54,7 @@ import {
   requestAccess,
 } from './handlers/requests';
 import { blockEmail, getEmailBlock } from './handlers/emailBlock';
+import { deleteMixerTemplate, listMixerTemplates, putMixerTemplate, setDefaultMixerTemplate } from './handlers/mixerTemplates';
 import { createNote, deleteNote, updateNote } from './handlers/notes';
 import { deleteSetlist, saveSetlist } from './handlers/setlists';
 import { adminBands, adminCosts, adminUsers, emailUser } from './handlers/siteAdmin';
@@ -640,6 +641,48 @@ export const routes: RouteDef[] = [
     handler: deleteSongFile,
     errorStatus: 500,
     errorMessage: 'Delete failed',
+  },
+  // --- Mixer templates: band-wide channel name → gain and pan.
+  {
+    name: 'mixer.templates.read',
+    access: 'song.audio.write',
+    method: 'GET',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/mixer-templates$/,
+    handler: listMixerTemplates,
+    errorStatus: 500,
+    errorMessage: 'Couldn’t load mixer templates',
+  },
+  {
+    name: 'mixer.templates.write',
+    writes: 'self',
+    access: 'song.audio.write',
+    method: 'PUT',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/mixer-templates\/(?<templateId>[^/]+)$/,
+    body: 'json',
+    handler: putMixerTemplate,
+    errorStatus: 400,
+    errorMessage: 'Save template failed',
+  },
+  {
+    name: 'mixer.templates.delete',
+    writes: 'self',
+    access: 'song.audio.write',
+    method: 'DELETE',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/mixer-templates\/(?<templateId>[^/]+)$/,
+    handler: deleteMixerTemplate,
+    errorStatus: 500,
+    errorMessage: 'Delete template failed',
+  },
+  {
+    name: 'mixer.templates.default',
+    writes: 'self',
+    access: 'song.audio.write',
+    method: 'POST',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/mixer-templates\/(?<templateId>[^/]+)\/default$/,
+    body: 'json',
+    handler: setDefaultMixerTemplate,
+    errorStatus: 400,
+    errorMessage: 'Set default template failed',
   },
   {
     name: 'setlist.write',

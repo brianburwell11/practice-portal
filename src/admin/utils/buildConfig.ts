@@ -1,6 +1,7 @@
-import type { SongConfig, MarkerConfig } from '../../audio/types';
+import type { SongConfig, MarkerConfig, MixerTemplate } from '../../audio/types';
 import type { WizardState } from '../wizardReducer';
-import { deduplicateLabels } from './stemDetection';
+import { deduplicateLabels, isUntouchedStem } from './stemDetection';
+import { applyTemplateToConfig } from '../../utils/mixerTemplates';
 import { slugify } from '../../utils/deriveId';
 import { secondsToBeat } from '../../audio/tempoUtils';
 
@@ -9,7 +10,12 @@ const markerColors = [
   '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
 ];
 
-export function buildConfig(state: WizardState, fallbackArtist?: string): SongConfig {
+/**
+ * `template` is the band's default mixer template: it sets the gain and pan of
+ * tracks still at their starting values, and stacks with no saved volume, so
+ * Ableton imports and anything set by hand win.
+ */
+export function buildConfig(state: WizardState, fallbackArtist?: string, template?: MixerTemplate | null): SongConfig {
   // Dedupe collisions before deriving ids so two stems sharing a label don't
   // slug to the same id in the saved config.
   const dedupedStems = deduplicateLabels(state.stems);
@@ -86,7 +92,7 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
   const durationSeconds = Math.max(state.durationSeconds, alignedEnd);
 
   const finalSlug = slugify(state.slug);
-  return {
+  const config: SongConfig = {
     id: state.id,
     ...(finalSlug ? { slug: finalSlug } : {}),
     title: state.title,
@@ -114,6 +120,11 @@ export function buildConfig(state: WizardState, fallbackArtist?: string): SongCo
     // (b) the admin actually turned it on.
     ...(state.sheetMusicFile && state.repeatAfterDcDs ? { repeatAfterDcDs: true } : {}),
   };
+  if (!template) return config;
+  return applyTemplateToConfig(config, template, {
+    stem: isUntouchedStem,
+    group: (g) => g.defaultVolume === undefined,
+  });
 }
 
 function buildAccentPattern(numerator: number): number[] {

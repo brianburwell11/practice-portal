@@ -2,7 +2,9 @@ import { useReducer, useEffect, useMemo, useRef, useState, useCallback } from 'r
 import { useParams, useNavigate } from 'react-router-dom';
 import { editSongReducer, initialEditState, isDirty } from './editSongReducer';
 import { songConfigSchema } from '../config/schema';
-import { detectStem, isAudioFile, oversizedStemsMessage } from './utils/stemDetection';
+import { detectStem, isAudioFile, isUntouchedStem, oversizedStemsMessage } from './utils/stemDetection';
+import { loadDefaultMixerTemplate } from '../store/mixerTemplateStore';
+import { applyTemplateToConfig } from '../utils/mixerTemplates';
 import { getAudioInfo } from './utils/audioConvert';
 import { uploadFileWithProgress, uploadFormWithProgress } from './utils/uploadWithProgress';
 import { uploadStems, waitForStems, type StemJobState } from './utils/stemJobs';
@@ -320,6 +322,15 @@ export default function EditSongPage() {
           file: newStemFiles.has(stem.id) ? `${stem.id}.opus` : stem.file,
         }));
         configToSave = { ...config, stems: updatedStems };
+        // New tracks still at their starting gain and pan take the band's
+        // starred mixer template, matched by name.
+        const template = await loadDefaultMixerTemplate(currentBand.id);
+        if (template) {
+          configToSave = applyTemplateToConfig(configToSave, template, {
+            stem: (stem) => newStemFiles.has(stem.id) && isUntouchedStem(stem),
+            group: () => false,
+          });
+        }
         dispatch({ type: 'INIT', config: configToSave });
         dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
       }

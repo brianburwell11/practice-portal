@@ -223,6 +223,24 @@ export const setlist = pgTable('setlist', {
 ]);
 
 /**
+ * A band's mixer templates: channel name → gain and pan, applied to a song's
+ * mixer by matching names. Postgres only; nothing reads them from R2.
+ */
+export const mixerTemplate = pgTable('mixer_template', {
+  id: uuid('id').primaryKey(),
+  bandId: uuid('band_id').notNull().references(() => band.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  /** The band's default: sets the starting mix of new stems. At most one per band. */
+  isDefault: boolean('is_default').notNull().default(false),
+  /** `{ stems: [{name, volume, pan}], groups: [{name, volume}] }` */
+  config: jsonb('config').notNull(),
+  createdAt: createdAt(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('mixer_template_band_name_unique').on(t.bandId, sql`lower(${t.name})`),
+]);
+
+/**
  * Per-user private layer: personal notes, mixer state, loop points.
  * Always writable by its owner, no capability check.
  */

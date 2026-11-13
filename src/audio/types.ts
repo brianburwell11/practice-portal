@@ -189,3 +189,15 @@ export interface SetlistConfig {
 export interface SetlistIndex {
   setlists: { id: string; slug?: string; name: string }[];
 }
+
+/** A band's saved mix: channel and stack names with their gain and pan. */
+export interface MixerTemplate {
+  id: string;
+  name: string;
+  /** The band's default, which sets the starting mix of new stems. */
+  isDefault: boolean;
+  /** Matched to tracks by label, ignoring case. Volume is linear gain (0..1.5). */
+  stems: { name: string; volume: number; pan: number }[];
+  /** Matched to stacks by label. Stacks have no pan. */
+  groups: { name: string; volume: number }[];
+}

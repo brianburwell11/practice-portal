@@ -20,6 +20,20 @@ export const stemConfigSchema = z.object({
   offsetSec: z.number().optional(),
 });
 
+/** A mixer template as the admin saves it (the id and default flag travel separately). */
+export const mixerTemplateWriteSchema = z.object({
+  name: z.string().trim().min(1, 'A template needs a name').max(60),
+  stems: z.array(z.object({
+    name: z.string().trim().min(1).max(200),
+    volume: z.number().min(0).max(1.5),
+    pan: z.number().min(-1).max(1),
+  })).max(500),
+  groups: z.array(z.object({
+    name: z.string().trim().min(1).max(200),
+    volume: z.number().min(0).max(1.5),
+  })).max(500),
+});
+
 export const tempoMapEntrySchema = z.object({
   beat: z.number().min(0),
   bpm: z.number().min(1),

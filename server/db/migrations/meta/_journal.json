@@ -106,6 +106,13 @@
       "when": 1794327878606,
       "tag": "0014_song_chords",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794598860250,
+      "tag": "0015_mixer_template",
+      "breakpoints": true
     }
   ]
 }

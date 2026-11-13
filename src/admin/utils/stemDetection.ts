@@ -41,6 +41,15 @@ function toKebab(str: string): string {
     .replace(/^-|-$/g, '');
 }
 
+/** The gain and pan a dropped file starts with, before anyone touches it. */
+export const DETECTED_STEM_VOLUME = 0.7;
+export const DETECTED_STEM_PAN = 0;
+
+/** Still at the starting gain and pan, so the band's default template may set them. */
+export function isUntouchedStem(stem: { defaultVolume: number; defaultPan: number }): boolean {
+  return stem.defaultVolume === DETECTED_STEM_VOLUME && stem.defaultPan === DETECTED_STEM_PAN;
+}
+
 export function detectStem(filename: string): StemDefaults {
   // Strip extension
   const nameWithoutExt = filename.replace(/\.[^.]+$/, '');
@@ -55,8 +64,8 @@ export function detectStem(filename: string): StemDefaults {
     id: toKebab(label),
     label,
     color: '#6b7280',
-    defaultVolume: 0.7,
-    defaultPan: 0,
+    defaultVolume: DETECTED_STEM_VOLUME,
+    defaultPan: DETECTED_STEM_PAN,
   };
 }
 

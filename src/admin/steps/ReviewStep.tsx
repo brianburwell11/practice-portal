@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { MixerTemplate } from '../../audio/types';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { WizardState, WizardAction } from '../wizardReducer';
 import { buildConfig } from '../utils/buildConfig';
@@ -9,6 +10,7 @@ import { StemProgress } from '../components/StemProgress';
 import { prepareSheetMusicUpload, sheetMusicConfigFields } from '../utils/sheetMusic';
 import { dataUrl } from '../../utils/url';
 import { useBandStore } from '../../store/bandStore';
+import { loadDefaultMixerTemplate } from '../../store/mixerTemplateStore';
 import { slugify } from '../../utils/deriveId';
 
 interface Props {
@@ -29,7 +31,16 @@ export function ReviewStep({ state, dispatch, onSaved, onAddAnother }: Props) {
   const { bandSlug = '' } = useParams();
   const navigate = useNavigate();
   const bandName = useBandStore((s) => s.currentBand?.name ?? '');
-  const config = buildConfig(state, bandName);
+  const currentBandId = useBandStore((s) => s.currentBand?.id);
+  // The band's starred mixer template sets the starting mix of untouched tracks.
+  const [mixerTemplate, setMixerTemplate] = useState<MixerTemplate | null>(null);
+  useEffect(() => {
+    if (!currentBandId) return;
+    let live = true;
+    loadDefaultMixerTemplate(currentBandId).then((t) => { if (live) setMixerTemplate(t); });
+    return () => { live = false; };
+  }, [currentBandId]);
+  const config = buildConfig(state, bandName, mixerTemplate);
   const validation = songConfigSchema.safeParse(config);
 
   /** After the stems: sheet music, the config, the discography entry. */

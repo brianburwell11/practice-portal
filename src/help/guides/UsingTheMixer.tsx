@@ -74,6 +74,20 @@ export default function UsingTheMixer() {
           <GuideLink slug="roles-and-permissions">Roles and permissions</GuideLink>.
         </p>
       </HelpSection>
+
+      <HelpSection title="Mixer templates">
+        <p>
+          Next to the save button, the sliders button opens the band’s mixer templates. A template remembers the
+          volume and pan of each part by its name, and the volume of each group. Save the current mix as a template,
+          then apply it to any song: parts and groups with the same name (capital letters don’t matter) move to the
+          template’s settings, and the rest stay where they are.
+        </p>
+        <p>
+          Applying a template only moves the faders. Press the save button to keep the result as the song’s starting
+          mix. Star a template to make it the band’s default: new songs, and parts added to a song later, start with
+          its settings wherever the names match. Owners, Managers and Editors can use templates.
+        </p>
+      </HelpSection>
     </>
   );
 }

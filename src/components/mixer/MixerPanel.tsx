@@ -15,6 +15,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { usePanelShortcut } from '../../hooks/usePanelShortcut';
 import { MINIMIZED_RIBBON_HEIGHT } from '../MinimizedRibbon';
 import { MixerSkeleton } from './MixerSkeleton';
+import { MixerTemplateMenu } from './MixerTemplateMenu';
 import { resolveMixerOrder } from '../../audio/mixerOrder';
 import { groupKey, stemKey, useFaderSelectionStore } from '../../store/faderSelectionStore';
 
@@ -387,6 +388,7 @@ export function MixerPanel() {
             {saveState === 'error' && <span>Save failed</span>}
           </button>
         )}
+        {canSaveMix && <MixerTemplateMenu />}
         <button
           onClick={() => minimizePanel('mixer')}
           className="hidden md:inline-flex items-center gap-1 text-xs px-2 py-1 ml-auto rounded font-medium text-gray-500 hover:text-gray-300 transition-colors"
