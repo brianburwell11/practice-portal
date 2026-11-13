@@ -8,6 +8,8 @@ import {
   DesktopChannelStrip, NameBlock, STRIP_MS_BUTTON, StripFrame,
 } from './DesktopChannelStrip';
 import { textOn } from './textOn';
+import { useFaderGang } from './useFaderGang';
+import { groupKey } from '../../store/faderSelectionStore';
 
 interface DesktopGroupStripProps {
   groupConfig: StemGroupConfig;
@@ -22,6 +24,7 @@ interface DesktopGroupStripProps {
  */
 export function DesktopGroupStrip({ groupConfig, stemConfigs }: DesktopGroupStripProps) {
   const g = useGroupControls(groupConfig, stemConfigs);
+  const gang = useFaderGang(groupKey(groupConfig.id), (v) => g?.setVolume(v));
   if (!g) return null;
   const { groupState } = g;
   const { label, color } = groupConfig;
@@ -36,11 +39,14 @@ export function DesktopGroupStrip({ groupConfig, stemConfigs }: DesktopGroupStri
       <StripFrame
         className="w-[76px] bg-gray-800"
         bandColor={color}
+        selected={gang.selected}
+        events={gang.events}
         fader={(
           <VerticalFader
             value={groupState.volume}
-            onChange={g.setVolume}
+            onChange={gang.setVolume}
             resetValue={groupConfig.defaultVolume ?? 1}
+            onReset={() => gang.reset(groupConfig.defaultVolume ?? 1)}
             color={color}
             label={`${label} volume`}
           />
@@ -49,7 +55,7 @@ export function DesktopGroupStrip({ groupConfig, stemConfigs }: DesktopGroupStri
           <EditableReadout
             text={formatDb(groupState.volume)}
             parse={(t) => parseDb(t, MAX_GAIN)}
-            onCommit={g.setVolume}
+            onCommit={gang.setVolume}
             label={`${label} volume in dB`}
           />
         )}

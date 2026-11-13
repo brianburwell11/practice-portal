@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState, useRef } from 'react';
+import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import { useCan } from '../../store/sessionStore';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
@@ -16,6 +16,7 @@ import { usePanelShortcut } from '../../hooks/usePanelShortcut';
 import { MINIMIZED_RIBBON_HEIGHT } from '../MinimizedRibbon';
 import { MixerSkeleton } from './MixerSkeleton';
 import { resolveMixerOrder } from '../../audio/mixerOrder';
+import { groupKey, stemKey, useFaderSelectionStore } from '../../store/faderSelectionStore';
 
 type SaveState = 'idle' | 'pending' | 'cancelled' | 'saving' | 'saved' | 'error';
 
@@ -195,6 +196,33 @@ export function MixerPanel() {
   // Top-level mixer order: groups + ungrouped stems, ordered by
   // `mixerOrder` when set (with legacy fallback for missing items).
   const mixerItems = useMemo(() => resolveMixerOrder(selectedSong), [selectedSong]);
+
+  // Fader selection (desktop): shift + click runs over the strips in the
+  // order shown, open stacks' tracks included. A new song starts with none.
+  // Keyed on which stacks are open, not the whole group state, so moving a
+  // fader doesn't rebuild it.
+  const openStacks = useMixerStore((s) => Object.keys(s.groups).filter((id) => s.groups[id].expanded).join(','));
+  const selectionOrder = useMemo(() => {
+    const open = new Set(openStacks.split(','));
+    return mixerItems.flatMap((item) => (
+      item.kind === 'group'
+        ? [groupKey(item.id), ...(open.has(item.id) ? item.group.stemIds.map(stemKey) : [])]
+        : [stemKey(item.id)]
+    ));
+  }, [mixerItems, openStacks]);
+  const setSelectionOrder = useFaderSelectionStore((s) => s.setOrder);
+  const clearSelection = useFaderSelectionStore((s) => s.clear);
+  const hasSelection = useFaderSelectionStore((s) => s.selected.length > 0);
+  useEffect(() => { setSelectionOrder(selectionOrder); }, [selectionOrder, setSelectionOrder]);
+  useEffect(() => { clearSelection(); }, [selectedSong?.id, clearSelection]);
+  useEffect(() => {
+    if (!hasSelection) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !(e.target as HTMLElement)?.closest?.('input, textarea')) clearSelection();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [hasSelection, clearSelection]);
 
   const minimized = usePanelMinimizeStore((s) =>
     s.items.some((x) => x.kind === 'panel' && x.id === 'mixer'),

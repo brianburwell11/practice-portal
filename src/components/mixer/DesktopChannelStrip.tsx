@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import type { StemConfig } from '../../audio/types';
 import { formatDb, parseDb } from '../../audio/db';
 import { formatPan, parsePan, useStemControls } from './useStemControls';
@@ -8,6 +8,8 @@ import { FaderScale, MAX_GAIN, VerticalFader } from './VerticalFader';
 import { EditableReadout } from './EditableReadout';
 import { ResetIcon } from './ResetIcon';
 import { textOn } from './textOn';
+import { useFaderGang } from './useFaderGang';
+import { stemKey } from '../../store/faderSelectionStore';
 
 /**
  * Background for a strip whose card starts at the band, leaving the name row
@@ -36,6 +38,10 @@ interface StripFrameProps {
   nameStyle?: CSSProperties;
   className?: string;
   style?: CSSProperties;
+  /** Part of the mixer's fader selection: outlined in the accent. */
+  selected?: boolean;
+  /** Selection handlers from `useFaderGang`. */
+  events?: HTMLAttributes<HTMLDivElement>;
 }
 
 /**
@@ -44,10 +50,17 @@ interface StripFrameProps {
  */
 export function StripFrame({
   knob, panReadout, fader, dbReadout, buttons, stackRow, bandColor, name, nameStyle,
-  className = 'w-[76px] bg-gray-800 rounded-md', style,
+  className = 'w-[76px] bg-gray-800 rounded-md', style, selected, events,
 }: StripFrameProps) {
   return (
-    <div className={`flex flex-col items-center gap-1 shrink-0 h-full p-1 px-1.5 ${className}`} style={style}>
+    <div
+      {...events}
+      data-selected={selected || undefined}
+      className={`flex flex-col items-center gap-1 shrink-0 h-full p-1 px-1.5 ${className} ${
+        selected ? 'outline-2 -outline-offset-2 outline-blue-400' : ''
+      }`}
+      style={style}
+    >
       <div
         className="h-5 w-full shrink-0 rounded-sm flex items-center justify-center text-[11px] font-medium"
         style={nameStyle}
@@ -108,6 +121,7 @@ interface DesktopChannelStripProps {
 /** A stem's vertical, Logic-style channel strip (desktop). */
 export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelStripProps) {
   const c = useStemControls(stemConfig);
+  const gang = useFaderGang(stemKey(stemConfig.id), (v) => c?.setVolume(v));
   if (!c) return null;
   const { stemState } = c;
   const { label, color } = stemConfig;
@@ -117,6 +131,8 @@ export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelSt
       className={`w-[76px] ${stackColor ? '' : 'bg-gray-800 rounded-md'}`}
       style={stackColor ? { background: CARD_BELOW_NAME } : undefined}
       bandColor={stackColor}
+      selected={gang.selected}
+      events={gang.events}
       knob={stemState.stereo ? (
         <span className="flex items-center" title="Stereo" aria-label={`${label} is stereo`} role="img">
           <span className="block w-4 h-4 rounded-full" style={{ backgroundColor: color }} />
@@ -137,8 +153,9 @@ export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelSt
       fader={(
         <VerticalFader
           value={stemState.volume}
-          onChange={c.setVolume}
+          onChange={gang.setVolume}
           resetValue={stemConfig.defaultVolume}
+          onReset={() => gang.reset(stemConfig.defaultVolume)}
           color={color}
           label={`${label} volume`}
         />
@@ -147,7 +164,7 @@ export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelSt
         <EditableReadout
           text={formatDb(stemState.volume)}
           parse={(t) => parseDb(t, MAX_GAIN)}
-          onCommit={c.setVolume}
+          onCommit={gang.setVolume}
           label={`${label} volume in dB`}
         />
       )}

@@ -27,6 +27,8 @@ interface VerticalFaderProps {
   onChange: (value: number) => void;
   /** Double-click target, usually the stem's default volume. */
   resetValue: number;
+  /** Double-click handler, when resetting does more than set `resetValue`. */
+  onReset?: () => void;
   color: string;
   label: string;
 }
@@ -77,7 +79,7 @@ const GAIN_PER_PX = 0.0003;
 /** Pixels per `deltaMode` unit: pixels, lines (Firefox), pages. */
 const DELTA_MODE_PX = [1, 33, 800];
 
-export function VerticalFader({ value, onChange, resetValue, color, label }: VerticalFaderProps) {
+export function VerticalFader({ value, onChange, resetValue, onReset, color, label }: VerticalFaderProps) {
   const root = useRef<HTMLSpanElement>(null);
   const latest = useRef({ value, onChange });
   useEffect(() => { latest.current = { value, onChange }; });
@@ -113,7 +115,8 @@ export function VerticalFader({ value, onChange, resetValue, color, label }: Ver
         step={0.01}
         value={[value]}
         onValueChange={([v]) => onChange(v)}
-        onDoubleClick={() => onChange(resetValue)}
+        onDoubleClick={() => (onReset ? onReset() : onChange(resetValue))}
+        data-fader
         className="relative flex flex-col items-center select-none touch-none w-7 h-full"
         title="Double-click to reset"
       >
