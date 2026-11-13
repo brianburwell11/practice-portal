@@ -305,7 +305,7 @@ export default function EditSongPage() {
           currentBand.id,
           oldId,
           [...newStemFiles].map(([stemId, { file }]) => ({ stemId, file })),
-          true,
+          config.normalizeStems ?? true,
           setStemStates,
         );
         const final = await waitForStems(currentBand.id, oldId, states, setStemStates);
@@ -730,6 +730,21 @@ export default function EditSongPage() {
               className="hidden"
             />
           </div>
+          {newStemFiles.size > 0 && (
+            <label
+              className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer w-fit"
+              title="Matches how this song's stems were first uploaded. Leave it off when the new stem was exported from the same session as the others, so it keeps its place in the mix."
+            >
+              <input
+                type="checkbox"
+                checked={config.normalizeStems ?? true}
+                onChange={(e) => dispatch({ type: 'SET_NORMALIZE_STEMS', value: e.target.checked })}
+                disabled={state.saving}
+                className="accent-blue-500"
+              />
+              <span>Normalize new stem loudness on upload</span>
+            </label>
+          )}
         </section>
 
         {/* Groups */}

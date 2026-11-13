@@ -77,6 +77,7 @@ const CONFIG_FIELDS: Record<string, Capability> = {
   stems: 'song.audio.write',
   groups: 'song.audio.write',
   mixerOrder: 'song.audio.write',
+  normalizeStems: 'song.audio.write',
   sheetMusicUrl: 'song.score.write',
   sheetMusicMsczUrl: 'song.score.write',
   sheetMusicModified: 'song.score.write',

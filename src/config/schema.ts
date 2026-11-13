@@ -174,6 +174,9 @@ export const songConfigSchema = z.object({
    *  where internal repeats are honored only on the first pass and the
    *  D.C./D.S. return walks straight through. */
   repeatAfterDcDs: z.boolean().optional(),
+  /** Whether stem uploads are leveled to -16 LUFS; stems added later follow
+   *  it. Unset (older songs) means true. */
+  normalizeStems: z.boolean().optional(),
 });
 
 /** A song id is one path segment of its media prefix, so no `/` or `..`. */

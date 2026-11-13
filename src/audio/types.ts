@@ -123,6 +123,9 @@ export interface SongConfig {
    *  pass after a D.C. / D.S. jump. Default (unset / false) matches
    *  the usual convention where D.C./D.S. walks straight through. */
   repeatAfterDcDs?: boolean;
+  /** Whether stem uploads are leveled to -16 LUFS. Stems added later follow
+   *  it so they match the first batch. Unset (older songs) means true. */
+  normalizeStems?: boolean;
 }
 
 export interface SongManifestEntry {

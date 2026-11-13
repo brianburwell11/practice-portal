@@ -44,7 +44,8 @@ export type EditSongAction =
   | { type: 'SET_UPLOAD_PROGRESS'; progress: UploadProgress | null }
   /** Sets or (all undefined) clears the score and its original MuseScore file. */
   | { type: 'SET_SHEET_MUSIC'; fields: Pick<SongConfig, 'sheetMusicUrl' | 'sheetMusicMsczUrl' | 'sheetMusicModified'> }
-  | { type: 'SET_REPEAT_AFTER_DC_DS'; value: boolean };
+  | { type: 'SET_REPEAT_AFTER_DC_DS'; value: boolean }
+  | { type: 'SET_NORMALIZE_STEMS'; value: boolean };
 
 export const initialEditState: EditSongState = {
   config: null,
@@ -250,5 +251,7 @@ export function editSongReducer(state: EditSongState, action: EditSongAction): E
       return updateConfig(state, {
         repeatAfterDcDs: action.value ? true : undefined,
       });
+    case 'SET_NORMALIZE_STEMS':
+      return updateConfig(state, { normalizeStems: action.value });
   }
 }
