@@ -691,7 +691,7 @@ Song prep takes minutes and shells out to native binaries. It cannot run inside 
 - [x] Apply migration 0007 to Neon (`npm run db:migrate`), deploy, then rerun `measure-transcode.ts --url https://practiceportal.app`. **Done 2026-10-29:** the same 6 × 4-minute stems (415 MB) that took the site down in 8c uploaded straight to R2 in 21.6 s and were all transcoded 95.5 s after starting; `/healthz` answered 45 times, median 95 ms, worst 2.0 s (ffmpeg holding the one shared CPU for a moment); nothing left behind.
 
 ### Later
-- [ ] Per-band concurrency caps, once more than a few bands upload.
+- [ ] Per-band concurrency caps, once more than a few bands upload. Plan: [Noisy Neighbours](/docs/noisy-neighbour-plan/).
 - [ ] Per-band storage quotas at upload time.
 - [ ] `TODO.md` #9: orphan cleanup for songs abandoned mid-wizard.
 
