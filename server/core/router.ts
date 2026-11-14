@@ -55,7 +55,7 @@ export async function runRoute(
     return response;
   } catch (err) {
     if (err instanceof HttpError) {
-      return { status: err.status, body: { error: err.message } };
+      return { status: err.status, body: { ...err.extra, error: err.message } };
     }
     // Validation: say what's wrong, briefly.
     if (err instanceof ZodError) {

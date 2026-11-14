@@ -8,6 +8,7 @@ import { beatGrid, isOffGrid } from '../../audio/chordGrid';
 import type { ChordsData } from '../../audio/chordsTypes';
 import { ChordsGridPane } from './ChordsGridPane';
 import { ChordsStampPane } from './ChordsStampPane';
+import { saveDoc } from '../../utils/docRevs';
 
 const MODES: { id: ChordsEditorMode; label: string }[] = [
   { id: 'grid', label: 'Grid' },
@@ -45,11 +46,11 @@ export function ChordsEditorModal() {
     setError(null);
     try {
       const data: ChordsData = { chords };
-      const res = await fetch(
+      await saveDoc(
+        `${currentBand.id}/songs/${selectedSong.id}/chords.json`,
         `/api/bands/${currentBand.id}/songs/${selectedSong.id}/chords`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) },
+        data,
       );
-      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
       useChordsStore.getState().setChords(data.chords);
       close();
     } catch (err: unknown) {

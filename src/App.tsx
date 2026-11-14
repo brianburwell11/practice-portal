@@ -29,7 +29,7 @@ import { usePanelMinimizeStore } from './store/panelMinimizeStore';
 import { useLyricsStore } from './store/lyricsStore';
 import { useChordsStore } from './store/chordsStore';
 import { useChordsEditorStore } from './store/chordsEditorStore';
-import { dataUrl, safeHref } from './utils/url';
+import { safeHref } from './utils/url';
 import { chordsDataSchema } from './config/schema';
 import { phonePanelOpen, rememberPhonePanel } from './utils/phonePanels';
 import { useSongStore } from './store/songStore';
@@ -40,6 +40,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import practicePortalLogo from './assets/practice-portal-logo.png';
 import { useMixerPersistence } from './hooks/useMixerPersistence';
 import { useMediaQuery } from './hooks/useMediaQuery';
+import { fetchDoc } from './utils/docRevs';
 
 
 const SetlistModal = lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })));
@@ -263,7 +264,7 @@ export default function App() {
       if (!(await closeOtherEditors('chords'))) return;
       setShowEditBandModal(false);
       // The saved chords, not the store's: the store may lag a save made elsewhere.
-      fetch(dataUrl(`${currentBand.id}/songs/${selectedSong.id}/chords.json`))
+      fetchDoc(`${currentBand.id}/songs/${selectedSong.id}/chords.json`)
         .then((r) => (r.ok ? r.json() : { chords: [] }))
         .then((data) => {
           const parsed = chordsDataSchema.safeParse(data);
@@ -275,7 +276,7 @@ export default function App() {
       if (!selectedSong || !currentBand) return;
       if (!(await closeOtherEditors('lyrics'))) return;
       setShowEditBandModal(false);
-      fetch(dataUrl(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`))
+      fetchDoc(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`)
         .then((r) => (r.ok ? r.json() : { lines: [] }))
         .then((data) => openLyricsEditor(data.lines ?? []))
         .catch(() => openLyricsEditor([]));

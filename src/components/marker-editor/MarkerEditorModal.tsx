@@ -16,6 +16,7 @@ import { TapPadButton } from '../ui/TapPadButton';
 import type { TapMapEntry } from '../../audio/types';
 import { useTransportStore } from '../../store/transportStore';
 import { measureBeatAt } from '../../audio/tempoUtils';
+import { saveDoc } from '../../utils/docRevs';
 
 export function MarkerEditorModal() {
   const {
@@ -121,15 +122,11 @@ export function MarkerEditorModal() {
     };
 
     try {
-      const res = await fetch(`/api/bands/${currentBand!.id}/songs/${selectedSong.id}/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedConfig),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Save failed: ${res.status} ${res.statusText}`);
-      }
+      await saveDoc(
+        `${currentBand!.id}/songs/${selectedSong.id}/config.json`,
+        `/api/bands/${currentBand!.id}/songs/${selectedSong.id}/config`,
+        updatedConfig,
+      );
 
       setSelectedSong(updatedConfig);
       close();

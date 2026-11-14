@@ -9,6 +9,7 @@ import { confirmDialog, confirmDiscard } from '../../store/dialogStore';
 import { LyricsTextPane } from './LyricsTextPane';
 import { LyricsTimingPane } from './LyricsTimingPane';
 import { LyricsDisplay } from '../LyricsDisplay';
+import { saveDoc } from '../../utils/docRevs';
 
 const MODES: { id: LyricsEditorMode; label: string }[] = [
   { id: 'lyrics', label: 'Lyrics' },
@@ -95,11 +96,11 @@ export function LyricsEditorModal() {
       let end = lines.length;
       while (end > 0 && lines[end - 1].text === '' && !lines[end - 1].instrumental) end--;
       const data: LyricsData = { lines: lines.slice(0, end) };
-      const res = await fetch(
+      await saveDoc(
+        `${currentBand.id}/songs/${selectedSong.id}/lyrics.json`,
         `/api/bands/${currentBand.id}/songs/${selectedSong.id}/lyrics`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) },
+        data,
       );
-      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
       useLyricsStore.getState().setLyrics(data.lines);
       close();
     } catch (err: unknown) {

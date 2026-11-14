@@ -6,11 +6,14 @@ import type { CoreResponse } from './types';
  */
 export class HttpError extends Error {
   status: number;
+  /** Extra fields for the JSON body, beside `error` (a 409's current document). */
+  extra?: Record<string, unknown>;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, extra?: Record<string, unknown>) {
     super(message);
     this.name = 'HttpError';
     this.status = status;
+    this.extra = extra;
   }
 }
 

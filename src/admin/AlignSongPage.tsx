@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { songConfigSchema } from '../config/schema';
 import type { SongConfig } from '../audio/types';
-import { dataUrl, r2Url } from '../utils/url';
+import { r2Url } from '../utils/url';
 import { useBandStore } from '../store/bandStore';
 import { AlignmentCanvas, type AlignmentCanvasStem } from './components/AlignmentCanvas';
 import { confirmDiscard } from '../store/dialogStore';
+import { fetchDoc, saveDoc } from '../utils/docRevs';
 
 interface LoadedStem {
   id: string;
@@ -42,7 +43,7 @@ export default function AlignSongPage() {
 
     (async () => {
       try {
-        const configRes = await fetch(dataUrl(`${currentBand.id}/songs/${songId}/config.json`));
+        const configRes = await fetchDoc(`${currentBand.id}/songs/${songId}/config.json`);
         if (!configRes.ok) {
           throw new Error(`Song "${songId}" config not found (${configRes.status})`);
         }
@@ -138,15 +139,7 @@ export default function AlignSongPage() {
         durationSeconds,
       };
 
-      const res = await fetch(`/api/bands/${currentBand.id}/songs/${songId}/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedConfig),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Save failed (${res.status})`);
-      }
+      await saveDoc(`${currentBand.id}/songs/${songId}/config.json`, `/api/bands/${currentBand.id}/songs/${songId}/config`, updatedConfig);
 
       // Reset baseline so dirty becomes false
       originalOffsetsRef.current = Object.fromEntries(load.stems.map((s) => [s.id, s.offsetSec]));

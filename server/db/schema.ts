@@ -195,6 +195,14 @@ export const song = pgTable('song', {
    */
   notes: jsonb('notes'),
   /**
+   * Revisions of `config`, `lyrics` and `chords`, bumped on every write of
+   * that document. A save based on an older revision gets a 409, so two
+   * editors (or an offline edit) can't silently overwrite each other.
+   */
+  configRev: integer('config_rev').notNull().default(1),
+  lyricsRev: integer('lyrics_rev').notNull().default(1),
+  chordsRev: integer('chords_rev').notNull().default(1),
+  /**
    * R2 prefix holding this song's audio and score objects, e.g.
    * `dev/songs/8xDKlqH`. Media does not move in Phase 4, so the legacy
    * id-based prefix has to survive as a reference even after a slug rename.
@@ -216,6 +224,8 @@ export const setlist = pgTable('setlist', {
   /** Order in the band's setlist menu — `setlists/index.json` order, shown as-is. */
   position: integer('position').notNull().default(0),
   config: jsonb('config').notNull(),
+  /** Bumped on every write; see `song.configRev`. */
+  rev: integer('rev').notNull().default(1),
   createdAt: createdAt(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (t) => [

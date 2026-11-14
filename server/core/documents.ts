@@ -411,6 +411,7 @@ export async function mirrorWrite(
           if (row) {
             await tx.update(schema.song).set({
               config: data, title: c.title, artist: c.artist, updatedAt: new Date(),
+              configRev: sql`${schema.song.configRev} + 1`,
               ...(c.slug ? { slug: c.slug } : {}),
             }).where(eq(schema.song.id, row.id));
           } else {
@@ -422,7 +423,11 @@ export async function mirrorWrite(
           return;
         }
         if (!row) throw new Error(`Can't mirror ${key}: song has no config in Postgres`);
-        await tx.update(schema.song).set({ [k.file]: data, updatedAt: new Date() }).where(eq(schema.song.id, row.id));
+        await tx.update(schema.song).set({
+          [k.file]: data, updatedAt: new Date(),
+          ...(k.file === 'lyrics' ? { lyricsRev: sql`${schema.song.lyricsRev} + 1` } : {}),
+          ...(k.file === 'chords' ? { chordsRev: sql`${schema.song.chordsRev} + 1` } : {}),
+        }).where(eq(schema.song.id, row.id));
         return;
       }
 
@@ -440,7 +445,7 @@ export async function mirrorWrite(
         const slug = c.slug ?? (row ? undefined : k.setlist.replace(/^setlist-/, ''));
         if (slug) await freeSlug(tx, schema.setlist, band.id, slug, row?.id, setlistLegacyId);
         if (row) {
-          await tx.update(schema.setlist).set({ config: data, name: c.name, ...(c.slug ? { slug: c.slug } : {}) })
+          await tx.update(schema.setlist).set({ config: data, name: c.name, rev: sql`${schema.setlist.rev} + 1`, ...(c.slug ? { slug: c.slug } : {}) })
             .where(eq(schema.setlist.id, row.id));
           return;
         }
@@ -454,6 +459,33 @@ export async function mirrorWrite(
       }
     }
   });
+}
+
+/**
+ * The revision of a document that has one: a song's config, lyrics or
+ * chords, or a setlist. Null for any other key, or a document that isn't
+ * there. `lock` holds the row until the transaction ends, so a check and
+ * the write after it can't interleave with another save.
+ */
+export async function documentRev(key: string, d: Db, lock = false): Promise<number | null> {
+  const k = parseKey(key);
+  if (!k || (k.kind !== 'song' && k.kind !== 'setlist')) return null;
+  if (k.kind === 'song' && k.file === 'notes') return null;
+  const [band] = await d.select({ id: schema.band.id }).from(schema.band).where(eq(schema.band.legacyId, k.band));
+  if (!band) return null;
+
+  if (k.kind === 'setlist') {
+    const q = d.select({ rev: schema.setlist.rev }).from(schema.setlist).where(setlistById(band.id, k.setlist));
+    const [row] = lock ? await q.for('update') : await q;
+    return row?.rev ?? null;
+  }
+  const column = k.file === 'config' ? schema.song.configRev : k.file === 'lyrics' ? schema.song.lyricsRev : schema.song.chordsRev;
+  const q = d.select({ rev: column, doc: schema.song[k.file] }).from(schema.song)
+    .where(and(liveSongs(band.id), eq(schema.song.mediaPrefix, `${k.band}/songs/${k.song}`)));
+  const [row] = lock ? await q.for('update') : await q;
+  // Lyrics and chords that were never written don't exist yet.
+  if (!row || row.doc === null) return null;
+  return row.rev;
 }
 
 /** Apply a document delete to Postgres. Deleting what isn't there is a no-op, as in R2. */

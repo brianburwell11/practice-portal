@@ -1,5 +1,6 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import { useCan } from '../../store/sessionStore';
+import { toast } from '../../store/dialogStore';
 import { useSongStore } from '../../store/songStore';
 import { useMixerStore } from '../../store/mixerStore';
 import { useBandStore } from '../../store/bandStore';
@@ -18,6 +19,7 @@ import { MixerSkeleton } from './MixerSkeleton';
 import { MixerTemplateMenu } from './MixerTemplateMenu';
 import { resolveMixerOrder } from '../../audio/mixerOrder';
 import { groupKey, stemKey, useFaderSelectionStore } from '../../store/faderSelectionStore';
+import { DocConflictError, saveDoc } from '../../utils/docRevs';
 
 type SaveState = 'idle' | 'pending' | 'cancelled' | 'saving' | 'saved' | 'error';
 
@@ -175,19 +177,15 @@ export function MixerPanel() {
             })),
           } : {}),
         };
-        const res = await fetch(`/api/bands/${bandId}/songs/${selectedSong.id}/config`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedConfig),
-        });
-        if (!res.ok) throw new Error('Save failed');
+        await saveDoc(`${bandId}/songs/${selectedSong.id}/config.json`, `/api/bands/${bandId}/songs/${selectedSong.id}/config`, updatedConfig);
         // Reflect the new defaults on the in-memory selectedSong too, so any
         // downstream code reading selectedSong (e.g. the mixer reset) now
         // agrees with what's on R2.
         useSongStore.getState().setSelectedSong(updatedConfig);
         setSaveState('saved');
         setTimeout(() => setSaveState('idle'), 1500);
-      } catch {
+      } catch (err) {
+        if (err instanceof DocConflictError) toast(err.message, 'error');
         setSaveState('error');
         setTimeout(() => setSaveState('idle'), 2000);
       }

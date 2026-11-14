@@ -20,7 +20,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../db/client';
 import * as schema from '../db/schema';
-import { mirrorDelete, mirrorWrite, parseKey, readDocument, readDocumentUnchecked, type Db } from './documents';
+import { documentRev, mirrorDelete, mirrorWrite, parseKey, readDocument, readDocumentUnchecked, type Db } from './documents';
 import {
   r2CopyKey as rawCopy,
   r2DeleteKey as rawDelete,
@@ -29,6 +29,7 @@ import {
   r2WriteJson as rawWrite,
 } from './r2';
 import { isSiteAdminEmail } from './auth/siteAdmins';
+import { HttpError } from './http';
 import type { Actor, RouteDef } from './types';
 
 interface RequestContext {
@@ -56,6 +57,32 @@ export async function lockSong(bandLegacyId: string, songId: string): Promise<bo
     .where(and(eq(schema.song.mediaPrefix, `${bandLegacyId}/songs/${songId}`), isNull(schema.song.deletedAt)))
     .for('update');
   return rows.length > 0;
+}
+
+/**
+ * Refuse a save based on an out-of-date copy. `baseRev` is the revision the
+ * client loaded (`?baseRev=`); without one, the save goes ahead as it always
+ * has. Locks the document's row for the rest of the request, so the write
+ * that follows can't interleave with another save. A mismatch is a 409
+ * carrying the current document and its revision, for the client to merge.
+ */
+export async function assertBaseRev(key: string, baseRev: string | null): Promise<void> {
+  if (baseRev === null || baseRev === '') return;
+  const ctx = current();
+  if (!ctx) throw new Error('assertBaseRev needs a request transaction');
+  const expected = Number(baseRev);
+  if (!Number.isInteger(expected) || expected < 0) throw new HttpError(400, 'Bad baseRev');
+  // A document that isn't there yet (lyrics never written) is revision 0.
+  const rev = (await documentRev(key, ctx.tx, true)) ?? 0;
+  if (rev === expected) return;
+  const doc = rev === 0 ? null : await readDocumentUnchecked(key, ctx.tx);
+  throw new HttpError(409, 'This changed since you opened it', { current: doc, rev });
+}
+
+/** A document's revision inside the request, after its write: for the response. */
+export async function currentRev(key: string): Promise<number | null> {
+  const ctx = current();
+  return documentRev(key, ctx ? ctx.tx : db() as unknown as Db);
 }
 
 /** What R2 throws for a missing object, so handlers' `isNoSuchKey` checks keep working. */

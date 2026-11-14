@@ -11,7 +11,6 @@ import { uploadStems, waitForStems, type StemJobState } from './utils/stemJobs';
 import { StemProgress } from './components/StemProgress';
 import { prepareSheetMusicUpload, sheetMusicConfigFields } from './utils/sheetMusic';
 import { SheetMusicUploader } from './SheetMusicUploader';
-import { dataUrl } from '../utils/url';
 import { slugify } from '../utils/deriveId';
 import { dedupeSlug } from '../utils/dedupeSlug';
 import { generateId } from '../utils/generateId';
@@ -25,6 +24,7 @@ import { SongKeyInput } from './SongKeyInput';
 import { StemColorPicker } from './StemColorPicker';
 import { MixerOrderEditor, shouldShowMixerOrderEditor } from './components/MixerOrderEditor';
 import { confirmDiscard, toast } from '../store/dialogStore';
+import { fetchDoc, saveDoc } from '../utils/docRevs';
 
 const groupColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
@@ -126,7 +126,7 @@ export default function EditSongPage() {
     if (!songId || !currentBand) { if (!songId) setLoadError('No song ID in URL'); return; }
     (async () => {
       try {
-        const configRes = await fetch(dataUrl(`${currentBand.id}/songs/${songId}/config.json`));
+        const configRes = await fetchDoc(`${currentBand.id}/songs/${songId}/config.json`);
         if (!configRes.ok) { setLoadError(`Song "${songId}" config not found`); return; }
         const config = songConfigSchema.parse(await configRes.json());
         dispatch({ type: 'INIT', config });
@@ -396,12 +396,11 @@ export default function EditSongPage() {
       }
 
       // Save config to R2 (persisted before rename)
-      const res = await fetch(`/api/bands/${currentBand.id}/songs/${oldId}/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...configToSave, id: oldId }),
-      });
-      if (!res.ok) throw new Error('Failed to save config');
+      await saveDoc(
+        `${currentBand.id}/songs/${oldId}/config.json`,
+        `/api/bands/${currentBand.id}/songs/${oldId}/config`,
+        { ...configToSave, id: oldId },
+      );
 
       if (idChanged) {
         // Rename: copies R2 objects, updates discography/registry

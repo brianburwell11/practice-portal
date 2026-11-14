@@ -91,7 +91,10 @@ async function resolveActor(cookies: Record<string, string>): Promise<Actor | un
  */
 function sendCacheableJson(req: IncomingMessage, res: ServerResponse, { status, body, headers }: CoreResponse, personal: boolean): void {
   const text = JSON.stringify(body);
-  const etag = `"${createHash('sha1').update(text).digest('base64url')}"`;
+  // The document's revision is part of its identity: saving the same content
+  // again bumps it, and a 304 would hand back the old one.
+  const rev = headers?.['X-Doc-Rev'];
+  const etag = `"${createHash('sha1').update(rev ? `${rev}:${text}` : text).digest('base64url')}"`;
   setHeaders(res, headers);
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('X-Content-Type-Options', 'nosniff');

@@ -1,6 +1,8 @@
 import { isPlatformAdmin } from '../access';
 import { memo, viewerKey } from '../cache';
-import { readDocument } from '../documents';
+import { documentRev, readDocument } from '../documents';
+import { db } from '../../db/client';
+import type { Db } from '../documents';
 import { HttpError, json } from '../http';
 import type { CoreRequest, CoreResponse } from '../types';
 
@@ -20,5 +22,8 @@ export async function readData(req: CoreRequest): Promise<CoreResponse> {
   const key = req.params.key;
   const doc = await memo(`doc:${viewerKey(viewer)}:${key}`, () => readDocument(key, undefined, viewer));
   if (doc === null) throw new HttpError(404, 'Not found');
-  return json(doc);
+  // The revision a save should be based on (`?baseRev=`), for the documents
+  // that have one. Read only once the viewer is known to be allowed the doc.
+  const rev = await memo(`rev:${key}`, () => documentRev(key, db() as unknown as Db));
+  return rev === null ? json(doc) : { ...json(doc), headers: { 'X-Doc-Rev': String(rev) } };
 }

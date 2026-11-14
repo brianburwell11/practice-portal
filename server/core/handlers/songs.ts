@@ -7,7 +7,7 @@ import {
 } from '../../../src/config/schema';
 import { HttpError, ok } from '../http';
 import { isNoSuchKey, r2ListKeys } from '../r2';
-import { copyObject, deleteObject, readJson, writeJson } from '../store';
+import { assertBaseRev, copyObject, currentRev, deleteObject, readJson, writeJson } from '../store';
 import { updateSetlistEntries } from '../setlistEntries';
 import type { CoreRequest, CoreResponse } from '../types';
 import { SCORE_FILENAME } from './uploads';
@@ -27,23 +27,29 @@ export async function saveSongConfig(req: CoreRequest): Promise<CoreResponse> {
   const validated = songConfigSchema.parse(req.body);
   // Media versions are worked out when the config is served, never stored.
   delete validated.mediaVersions;
-  await writeJson(`${bandId}/songs/${songId}/config.json`, validated);
-  return ok();
+  const key = `${bandId}/songs/${songId}/config.json`;
+  await assertBaseRev(key, req.query.get('baseRev'));
+  await writeJson(key, validated);
+  return ok({ rev: await currentRev(key) });
 }
 
 export async function saveSongLyrics(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, songId } = req.params;
   const validated = lyricsDataSchema.parse(req.body);
-  await writeJson(`${bandId}/songs/${songId}/lyrics.json`, validated);
-  return ok();
+  const key = `${bandId}/songs/${songId}/lyrics.json`;
+  await assertBaseRev(key, req.query.get('baseRev'));
+  await writeJson(key, validated);
+  return ok({ rev: await currentRev(key) });
 }
 
 export async function saveSongChords(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, songId } = req.params;
   const validated = chordsDataSchema.parse(req.body);
   validated.chords.sort((a, b) => a.time - b.time);
-  await writeJson(`${bandId}/songs/${songId}/chords.json`, validated);
-  return ok();
+  const key = `${bandId}/songs/${songId}/chords.json`;
+  await assertBaseRev(key, req.query.get('baseRev'));
+  await writeJson(key, validated);
+  return ok({ rev: await currentRev(key) });
 }
 
 export async function renameSong(req: CoreRequest): Promise<CoreResponse> {

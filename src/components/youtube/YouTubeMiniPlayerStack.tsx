@@ -3,6 +3,7 @@ import { YouTubeMiniPlayer } from './YouTubeMiniPlayer';
 import { useSongStore } from '../../store/songStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 import type { Video } from '../../audio/types';
+import { saveDoc } from '../../utils/docRevs';
 
 const MAX_VIDEOS = 4;
 const PLAYER_W = 320;
@@ -60,15 +61,7 @@ export function YouTubeMiniPlayerStack({ videos, admin = false, bandId }: Props)
         v.id === videoStableId ? { ...v, offsetSeconds: offset } : v,
       );
       const updated = { ...current, videos: updatedVideos };
-      const res = await fetch(`/api/bands/${bandId}/songs/${current.id}/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? 'Failed to save offset');
-      }
+      await saveDoc(`${bandId}/songs/${current.id}/config.json`, `/api/bands/${bandId}/songs/${current.id}/config`, updated);
       useSongStore.getState().setSelectedSong(updated);
     },
     [bandId],

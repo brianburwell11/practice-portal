@@ -13,6 +13,7 @@ import type { SetlistConfig, SetlistEntry, NavLinkConfig } from '../audio/types'
 import { confirmDiscard } from '../store/dialogStore';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSortableList } from '../hooks/useSortableList';
+import { fetchDoc, saveDoc } from '../utils/docRevs';
 
 /** Legacy setlist ids are prefixed with "setlist-". New-format ids are
  *  opaque base62 (7 chars) with no prefix. Detecting the legacy shape
@@ -201,7 +202,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     const sourceId = setlistId ?? copyFromSetlistId;
     if (!sourceId || !currentBand) return;
     setLoading(true);
-    fetch(dataUrl(`${currentBand.id}/setlists/${sourceId}.json`))
+    fetchDoc(`${currentBand.id}/setlists/${sourceId}.json`)
       .then((r) => r.json())
       .then((data: SetlistConfig) => {
         if (!isCopy) {
@@ -406,15 +407,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     };
 
     try {
-      const res = await fetch(`/api/bands/${currentBand.id}/setlists/${newId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
-      });
-      if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.error ?? 'Save failed');
-      }
+      await saveDoc(`${currentBand.id}/setlists/${newId}.json`, `/api/bands/${currentBand.id}/setlists/${newId}`, config);
 
       // If renamed, delete the old setlist from R2
       if (renamed) {

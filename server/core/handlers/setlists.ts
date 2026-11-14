@@ -1,6 +1,6 @@
 import { setlistConfigSchema } from '../../../src/config/schema';
 import { ok } from '../http';
-import { deleteObject, readJson, writeJson } from '../store';
+import { assertBaseRev, currentRev, deleteObject, readJson, writeJson } from '../store';
 import type { CoreRequest, CoreResponse } from '../types';
 
 interface SetlistIndex {
@@ -21,7 +21,9 @@ export async function saveSetlist(req: CoreRequest): Promise<CoreResponse> {
   const { bandId, setlistId } = req.params;
   const validated = setlistConfigSchema.parse(req.body);
 
-  await writeJson(`${bandId}/setlists/${setlistId}.json`, validated);
+  const key = `${bandId}/setlists/${setlistId}.json`;
+  await assertBaseRev(key, req.query.get('baseRev'));
+  await writeJson(key, validated);
 
   // Update setlist index
   const index = await readIndex(bandId);
@@ -33,7 +35,7 @@ export async function saveSetlist(req: CoreRequest): Promise<CoreResponse> {
   });
   await writeJson(`${bandId}/setlists/index.json`, index);
 
-  return ok();
+  return ok({ rev: await currentRev(key) });
 }
 
 export async function deleteSetlist(req: CoreRequest): Promise<CoreResponse> {
