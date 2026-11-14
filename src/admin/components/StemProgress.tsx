@@ -1,6 +1,7 @@
 import type { StemJobState } from '../utils/stemJobs';
 
 const LABELS: Record<StemJobState['phase'], string> = {
+  compressing: 'Compressing',
   uploading: 'Uploading',
   waiting: 'Waiting',
   transcoding: 'Transcoding',
@@ -28,13 +29,13 @@ export function StemProgress({ stems, onRetry, retrying = false }: {
           const pct = Math.round(s.progress * 100);
           const width = s.phase === 'done' ? 100 : s.phase === 'waiting' ? 0 : pct;
           const colour = s.phase === 'failed' ? 'bg-red-500' : s.phase === 'done' ? 'bg-green-500'
-            : s.phase === 'uploading' ? 'bg-blue-500' : 'bg-purple-500';
+            : s.phase === 'uploading' ? 'bg-blue-500' : s.phase === 'compressing' ? 'bg-sky-400' : 'bg-purple-500';
           return (
             <li key={s.jobId} className="space-y-1">
               <div className="flex items-center gap-2 text-xs">
                 <span className="flex-1 min-w-0 truncate text-gray-200" title={s.filename}>{s.filename}</span>
                 <span className={s.phase === 'failed' ? 'text-red-400' : 'text-gray-400'}>
-                  {LABELS[s.phase]}{(s.phase === 'uploading' || s.phase === 'transcoding') && ` ${pct}%`}
+                  {LABELS[s.phase]}{(s.phase === 'compressing' || s.phase === 'uploading' || s.phase === 'transcoding') && ` ${pct}%`}
                 </span>
                 {s.phase === 'failed' && onRetry && (
                   <button

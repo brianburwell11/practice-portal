@@ -58,7 +58,7 @@ import { deleteMixerTemplate, listMixerTemplates, putMixerTemplate, setDefaultMi
 import { createNote, deleteNote, updateNote } from './handlers/notes';
 import { deleteSetlist, saveSetlist } from './handlers/setlists';
 import { adminBands, adminCosts, adminUsers, emailUser } from './handlers/siteAdmin';
-import { createStemUploads, getStemJobs, queueStemUploads, retryStemJob } from './handlers/stems';
+import { createStemUploads, getStemJobs, presignStemUpload, queueStemUploads, retryStemJob } from './handlers/stems';
 import {
   deleteSong,
   deleteSongFile,
@@ -201,6 +201,16 @@ export const routes: RouteDef[] = [
     method: 'GET',
     pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/stems$/,
     handler: getStemJobs,
+  },
+  {
+    name: 'song.stems.upload',
+    writes: 'self',
+    access: 'song.audio.write',
+    method: 'POST',
+    pattern: /^\/api\/bands\/(?<bandId>[^/]+)\/songs\/(?<songId>[^/]+)\/stems\/(?<jobId>[^/]+)\/upload$/,
+    body: 'json',
+    precheck: requireR2Precheck,
+    handler: presignStemUpload,
   },
   {
     name: 'song.stems.retry',

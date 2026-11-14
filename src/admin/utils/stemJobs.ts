@@ -5,20 +5,26 @@
  * uploading. This polls until each is done or failed. Nothing here holds a
  * long request open, so a big song can't time out.
  *
- * Uploads are the slow part (raw WAVs over a home connection), and a dropped
+ * Uploads are the slow part (raw WAVs over a home connection), so WAVs and
+ * AIFFs are compressed to FLAC first: lossless, so the finished Opus is the
+ * same, and usually about half the bytes to send. And a dropped
  * connection can leave one hanging. Each file gets a few tries; one that
  * still fails is marked `failed` with Retry beside it, instead of the whole
  * batch waiting forever.
  */
+import { compressStem } from '../flac/flacClient';
 import { uploadFileWithProgress } from './uploadWithProgress';
 
 export interface StemJobState {
   stemId: string;
   filename: string;
   jobId: string;
-  /** uploading → waiting (queued) → transcoding → done | failed */
-  phase: 'uploading' | 'waiting' | 'transcoding' | 'done' | 'failed';
-  /** 0–1 within the phase: bytes sent while uploading, the server's progress while transcoding. */
+  /** compressing → uploading → waiting (queued) → transcoding → done | failed */
+  phase: 'compressing' | 'uploading' | 'waiting' | 'transcoding' | 'done' | 'failed';
+  /**
+   * 0–1 within the phase: how much is encoded while compressing, bytes sent
+   * while uploading, the server's progress while transcoding.
+   */
   progress: number;
   error: string | null;
 }
@@ -55,7 +61,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** PUT with a few tries, a little longer apart each time. */
 async function putWithRetries(
   url: string,
-  file: File,
+  file: Blob,
   contentType: string,
   onProgress: (fraction: number) => void,
 ): Promise<void> {
@@ -71,18 +77,22 @@ async function putWithRetries(
   }
 }
 
-/** Upload one file, then hand it to the worker. */
+/** Compress one file if that helps, upload it, then hand it to the worker. */
 async function uploadAndQueue(
   base: string,
   jobId: string,
-  uploadUrl: string,
-  contentType: string,
   file: File,
   set: (patch: Partial<StemJobState>) => void,
 ): Promise<void> {
   try {
-    set({ phase: 'uploading', progress: 0, error: null });
-    await putWithRetries(uploadUrl, file, contentType, (progress) => set({ progress }));
+    set({ phase: 'compressing', progress: 0, error: null });
+    const flac = await compressStem(file, (progress) => set({ progress }));
+    const body = flac ?? file;
+    set({ phase: 'uploading', progress: 0 });
+    const { uploadUrl, contentType } = await api<{ uploadUrl: string; contentType: string }>(
+      'POST', `${base}/${jobId}/upload`, { size: body.size, ...(flac ? { format: 'flac' } : {}) },
+    );
+    await putWithRetries(uploadUrl, body, contentType, (progress) => set({ progress }));
     set({ phase: 'waiting', progress: 0 });
     await api('POST', `${base}/queue`, { jobIds: [jobId] });
   } catch (err) {
@@ -117,7 +127,9 @@ export async function uploadStems(
   onUpdate: (states: StemJobState[]) => void,
 ): Promise<{ states: StemJobState[]; publicBase: string }> {
   const base = songUrl(bandId, songId);
-  const { jobs, publicBase } = await api<{ jobs: { id: string; stemId: string; contentType: string; uploadUrl: string }[]; publicBase: string }>(
+  // The upload links that come back aren't used: each file gets a fresh one
+  // when its turn comes (see uploadAndQueue).
+  const { jobs, publicBase } = await api<{ jobs: { id: string; stemId: string }[]; publicBase: string }>(
     'POST', base, {
       normalize,
       files: stems.map(({ stemId, file }) => ({ stemId, filename: file.name, size: file.size })),
@@ -127,7 +139,7 @@ export async function uploadStems(
     stemId: j.stemId,
     filename: stems.find((s) => s.stemId === j.stemId)!.file.name,
     jobId: j.id,
-    phase: 'uploading',
+    phase: 'compressing',
     progress: 0,
     error: null,
   }));
@@ -157,7 +169,7 @@ export async function uploadStems(
   const worker = async () => {
     for (let j = queue.shift(); j; j = queue.shift()) {
       const { file } = stems.find((s) => s.stemId === j!.stemId)!;
-      await uploadAndQueue(base, j.id, j.uploadUrl, j.contentType, file, set(j.id));
+      await uploadAndQueue(base, j.id, file, set(j.id));
     }
   };
   await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, jobs.length) }, worker));
@@ -208,12 +220,10 @@ export async function retryStem(
     onUpdate(current);
   };
   onUpdate(current);
-  const res = await api<{ uploadUrl?: string; contentType?: string }>(
-    'POST', `${base}/${stem.jobId}/retry`, file ? { size: file.size } : undefined,
-  );
-  if (res.uploadUrl && res.contentType) {
+  const res = await api<{ reupload?: boolean }>('POST', `${base}/${stem.jobId}/retry`);
+  if (res.reupload) {
     if (!file) throw new Error(`Add ${stem.filename} again to retry it`);
-    await uploadAndQueue(base, stem.jobId, res.uploadUrl, res.contentType, file, set);
+    await uploadAndQueue(base, stem.jobId, file, set);
   }
   return current;
 }

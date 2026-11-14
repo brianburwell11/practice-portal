@@ -26,7 +26,7 @@ export interface TranscodePayload {
   songId: string;
   /** The stem's id in the song config; the result is `<stemId>.opus`. */
   stemId: string;
-  /** Where the browser uploaded the raw file. */
+  /** Where the browser uploaded the raw file; `.flac` when it compressed a WAV or AIFF first. */
   rawKey: string;
   /** The name it had on the uploader's computer, for messages. */
   filename: string;
@@ -176,7 +176,7 @@ async function transcodeStem(job: Job, scratch: string): Promise<{ file: string 
       .catch((err) => console.error('[worker] progress write failed:', err));
   };
 
-  const raw = path.join(scratch, `raw${path.extname(p.filename).toLowerCase()}`);
+  const raw = path.join(scratch, `raw${path.extname(p.rawKey)}`);
   await r2DownloadToFile(p.rawKey, raw);
   report(0.1, true);
 
