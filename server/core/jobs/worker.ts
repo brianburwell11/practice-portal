@@ -158,7 +158,8 @@ async function run(job: Job): Promise<void> {
 
 /**
  * Raw upload → `<band>/songs/<song>/<stemId>.opus`. Progress: download 0–10%,
- * loudness 10–45%, transcode 45–95%, upload the rest.
+ * loudness 10–45%, transcode 45–95%, upload the rest. Without a loudness
+ * measurement (it failed), the stem keeps its level.
  */
 async function transcodeStem(job: Job, scratch: string): Promise<{ file: string }> {
   const p = job.payload as TranscodePayload;

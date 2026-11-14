@@ -47,7 +47,7 @@ function synthesize(dir: string): string[] {
   const files: string[] = [];
   for (let i = 0; i < stemCount; i++) {
     const file = path.join(dir, `stem${i + 1}.wav`);
-    // A tone plus quiet noise: something loudnorm has to measure, and
+    // A tone plus quiet noise: something normalizing has to measure, and
     // that doesn't compress to nothing the way silence would.
     const r = spawnSync('ffmpeg', [
       '-hide_banner', '-loglevel', 'error', '-y',

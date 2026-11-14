@@ -74,8 +74,8 @@ check('ffprobe reads the stem', probe.channels === 2 && probe.sampleRate === 480
   `codec=${probe.codec} ch=${probe.channels} sr=${probe.sampleRate}`);
 
 const loudness = await measureLoudness(wav);
-check('two-pass loudnorm pass 1 measures', typeof loudness.input_i === 'string' && !Number.isNaN(parseFloat(loudness.input_i)),
-  `input_i=${loudness.input_i}`);
+check('ebur128 measures loudness and true peak', Number.isFinite(loudness.integrated) && Number.isFinite(loudness.truePeak),
+  `I=${loudness.integrated} TP=${loudness.truePeak} floor=${loudness.noiseFloor}`);
 
 const opus = path.join(tmp, 'tone.opus');
 await transcodeToOpus(wav, opus, probe, loudness, true);

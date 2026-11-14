@@ -217,12 +217,12 @@ export function StemsStep({ state, dispatch }: Props) {
         <p role="alert" className="-mt-4 text-sm text-red-400">{fileError}</p>
       )}
 
-      {/* Normalize toggle — applies ffmpeg loudnorm during transcode.
-          Tooltip explains the trade-off so curators can opt out for
-          mixes that are already balanced. */}
+      {/* Normalize toggle: the server turns each stem toward -16 LUFS while
+          transcoding (server/core/media/ffmpeg.ts). Tooltip explains the
+          trade-off so curators can opt out for mixes that are already balanced. */}
       <label
         className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer w-fit"
-        title="Levels each stem to a consistent loudness target (-16 LUFS) before transcoding. Not recommended for tracks that are already mixed well — normalization can squash a balanced mix."
+        title="Turns each stem up or down toward the same loudness (-16 LUFS), without squashing its dynamics. Background noise isn't turned up with it. Leave this off for stems that are already balanced as a mix, since leveling each one changes that balance."
       >
         <input
           type="checkbox"

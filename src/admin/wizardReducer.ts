@@ -36,9 +36,9 @@ export interface WizardState {
   stems: StemEntry[];
   durationSeconds: number;
   groups: StemGroupConfig[];
-  /** When true, the server runs ffmpeg's loudnorm filter on each stem
-   *  before transcoding to opus. Off for tracks that are already mixed
-   *  well — loudnorm can squash a balanced mix. Wizard-only; not
+  /** When true, the server turns each stem toward -16 LUFS while
+   *  transcoding to opus. Off for tracks that are already mixed well:
+   *  leveling each stem undoes their balance. Wizard-only; not
    *  persisted to song config. */
   normalize: boolean;
   /** Top-level mixer order: group IDs and ungrouped stem IDs. May be
@@ -178,7 +178,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case 'CLEAR_TIMING':
       return { ...state, timingMode: null, tapMap: [], importedTiming: null };
     case 'IMPORT_ABLETON':
-      // Rendered stems already carry the set's balance; loudnorm would undo it.
+      // Rendered stems already carry the set's balance; normalizing would undo it.
       return {
         ...state,
         stems: action.stems,
