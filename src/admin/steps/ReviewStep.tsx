@@ -206,9 +206,15 @@ export function ReviewStep({ state, dispatch, onSaved, onAddAnother }: Props) {
 
   const handleRetry = (jobId: string) => run(async () => {
     if (!pending || !stemStates) return;
-    await retryStem(pending.bandId, state.id, jobId);
-    const states = stemStates.map((s) => (s.jobId === jobId ? { ...s, phase: 'waiting' as const, progress: 0, error: null } : s));
-    setStemStates(states);
+    const stem = stemStates.find((s) => s.jobId === jobId);
+    if (!stem) return;
+    const file = state.stems.find((_, i) => config.stems[i]?.id === stem.stemId)?.file;
+    let states = stemStates;
+    const updated = await retryStem(pending.bandId, state.id, stem, file, (next) => {
+      states = states.map((s) => (s.jobId === jobId ? next : s));
+      setStemStates(states);
+    });
+    if (updated.phase === 'failed') throw new Error(updated.error ?? `${stem.filename} still couldn’t upload`);
     await finish(pending.bandId, pending.publicBase, states);
   });
 

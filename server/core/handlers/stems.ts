@@ -4,7 +4,8 @@
  *   1. `POST …/stems` — one job per stem, each with a presigned PUT to
  *      `_incoming/<jobId>/<name>` in R2;
  *   2. uploads every raw file straight to R2 — never through this server;
- *   3. `POST …/stems/queue` — the uploads are done; the worker takes over;
+ *   3. `POST …/stems/queue` — as each upload finishes, so the worker can
+ *      start on it while the rest are still uploading;
  *   4. polls `GET …/stems?jobs=…` for per-stem progress, retrying a failed
  *      one with `POST …/stems/:jobId/retry`.
  *
@@ -139,11 +140,23 @@ export async function getStemJobs(req: CoreRequest): Promise<CoreResponse> {
   });
 }
 
-/** `POST …/stems/:jobId/retry` — a failed stem goes back in the queue, if its upload is still there. */
+/**
+ * `POST …/stems/:jobId/retry` — a failed stem goes back in the queue, if its
+ * upload is still there. One whose upload never finished (still `uploading`)
+ * gets a fresh upload URL instead: `{ size }` → `{ uploadUrl, contentType }`;
+ * the browser uploads again and queues it as usual.
+ */
 export async function retryStemJob(req: CoreRequest): Promise<CoreResponse> {
   const band = await bandByLegacyId(req.params.bandId);
   const [row] = await db().select().from(schema.job).where(songJobs(band, req.params.songId, jobIds([req.params.jobId])));
   if (!row) throw new HttpError(404, 'No such upload for this song');
+  if (row.status === 'uploading') {
+    const { size } = (req.body ?? {}) as { size?: unknown };
+    if (typeof size !== 'number' || size <= 0 || size > MAX_STEM_BYTES) throw new HttpError(400, 'Send the file’s size');
+    await db().update(schema.job).set({ updatedAt: new Date() }).where(eq(schema.job.id, row.id));
+    const uploadUrl = await r2PresignPut((row.payload as TranscodePayload).rawKey, { contentType: RAW_STEM_TYPE, contentLength: size });
+    return json({ uploadUrl, contentType: RAW_STEM_TYPE });
+  }
   if (row.status !== 'failed') throw new HttpError(409, `It’s ${row.status}, not failed`);
   if ((await r2HeadSize((row.payload as TranscodePayload).rawKey)) === null) {
     throw new HttpError(410, 'The upload is gone — add the file again');
