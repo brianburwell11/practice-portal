@@ -11,7 +11,8 @@
  *   songs dropped first.
  * - Hashed app assets: from the cache first (they never change).
  * - Pages, `/api/data` and `/api/me`: from the network first, the cached copy
- *   only when offline (marked `X-Offline-Cache: 1`, so the app knows it
+ *   when offline, when the server takes longer than `NETWORK_TIMEOUT_MS` or
+ *   answers with a 5xx (marked `X-Offline-Cache: 1`, so the app knows it
  *   hasn't really reached the server).
  * - Root-level files (manifest, icons, the SoundTouch processor): from the
  *   network first, cached for offline.
@@ -59,12 +60,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (path === '/api/me' || path.startsWith('/api/data/')) {
-    event.respondWith(networkFirst(req, req.url));
+    event.respondWith(networkFirst(event, req, req.url));
     return;
   }
   if (path.startsWith('/api/')) return;
   if (req.mode === 'navigate') {
-    event.respondWith(networkFirst(req, SHELL_PAGE));
+    event.respondWith(networkFirst(event, req, SHELL_PAGE));
     return;
   }
   if (path.startsWith('/assets/')) {
@@ -75,7 +76,7 @@ self.addEventListener('fetch', (event) => {
   // processor). Nothing deeper: in development that would be every source
   // module the dev server hands out.
   if (path !== '/sw.js' && /^\/[^/]+\.[A-Za-z0-9]+$/.test(path)) {
-    event.respondWith(networkFirst(req, req.url));
+    event.respondWith(networkFirst(event, req, req.url));
   }
 });
 
@@ -91,16 +92,61 @@ function markedOffline(res: Response): Response {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
-async function networkFirst(req: Request, cacheKey: string): Promise<Response> {
+/**
+ * How long to wait for the server before answering from the cache. Wifi
+ * that's "connected" without reaching anything (a plane, a hotel, a server
+ * that can't reach its database) doesn't fail, it just never answers.
+ */
+const NETWORK_TIMEOUT_MS = 6_000;
+/** After a request fails or times out, how long to answer from the cache straight away. */
+const OFFLINE_HOLD_MS = 20_000;
+/** Until when requests skip waiting for the network (it just failed). */
+let offlineUntil = 0;
+
+/** The server's own failure (it's up, but can't do its job): as good as offline. */
+const serverFailed = (res: Response) => res.status >= 500;
+
+async function networkFirst(event: FetchEvent, req: Request, cacheKey: string): Promise<Response> {
   const cache = await caches.open(SHELL_CACHE);
-  try {
-    const res = await fetch(req);
+  const network = fetch(req).then(async (res) => {
     if (storable(res)) await cache.put(cacheKey, res.clone());
+    if (serverFailed(res)) offlineUntil = Date.now() + OFFLINE_HOLD_MS;
+    else offlineUntil = 0;
     return res;
-  } catch (err) {
-    const hit = await cache.match(cacheKey);
-    if (hit) return markedOffline(hit);
+  }, (err: unknown) => {
+    offlineUntil = Date.now() + OFFLINE_HOLD_MS;
     throw err;
+  });
+  // Whatever happens below, let the request finish and refresh the cache.
+  event.waitUntil(network.then(() => undefined, () => undefined));
+
+  const cached = async () => {
+    const hit = await cache.match(cacheKey);
+    return hit ? markedOffline(hit) : null;
+  };
+
+  // The network just failed: the cached copy now, if there is one.
+  if (Date.now() < offlineUntil) {
+    const hit = await cached();
+    if (hit) return hit;
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<'timeout'>((resolve) => { timer = setTimeout(() => resolve('timeout'), NETWORK_TIMEOUT_MS); });
+  try {
+    const first = await Promise.race([network, timedOut]);
+    if (first === 'timeout') {
+      offlineUntil = Date.now() + OFFLINE_HOLD_MS;
+      return (await cached()) ?? (await network);
+    }
+    if (serverFailed(first)) return (await cached()) ?? first;
+    return first;
+  } catch (err) {
+    const hit = await cached();
+    if (hit) return hit;
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
