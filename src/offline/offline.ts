@@ -46,6 +46,9 @@ export function noteBandsVerified(response: Response, bandIds: readonly string[]
   void (async () => {
     await setLastVerified();
     await purgeBands(new Set(bandIds));
+    // Online for real: bring pinned songs up to date before the next flight.
+    const { usePinStore } = await import('./pinStore');
+    await usePinStore.getState().refresh();
   })().catch((err) => console.warn('[offline] check-in failed:', err));
 }
 
@@ -55,8 +58,9 @@ export async function clearOfflineCache(): Promise<void> {
   await clearOffline().catch((err) => console.warn('[offline] clear failed:', err));
 }
 
-/** Bytes of songs kept offline. */
-export async function offlineUsageBytes(): Promise<number> {
-  if (!OFFLINE_CACHE_ENABLED || !supported()) return 0;
-  return usageBytes().catch(() => 0);
+/** Bytes kept offline: pinned songs, and songs kept because they were played. */
+export async function offlineUsageBytes(): Promise<{ pinned: number; played: number }> {
+  const none = { pinned: 0, played: 0 };
+  if (!OFFLINE_CACHE_ENABLED || !supported()) return none;
+  return usageBytes().catch(() => none);
 }

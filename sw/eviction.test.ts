@@ -33,6 +33,19 @@ describe('planEviction', () => {
   });
 });
 
+describe('planEviction with pinned songs', () => {
+  it('never drops a pinned song, and leaves it out of the cap', () => {
+    const entries = [file('pinned', 1, 900, 1), file('a', 1, 300, 5), file('b', 1, 300, 10)];
+    // 600 MB unpinned against 500: drop "a", the older one; the 900 MB pin stays.
+    expect(planEviction(entries, 500 * MB, undefined, new Set(['b/pinned']))).toEqual([entries[1].key]);
+  });
+
+  it('keeps everything when only pinned songs are over the cap', () => {
+    const entries = [file('p1', 1, 400, 1), file('p2', 1, 400, 2), file('a', 1, 50, 3)];
+    expect(planEviction(entries, 500 * MB, undefined, new Set(['b/p1', 'b/p2']))).toEqual([]);
+  });
+});
+
 describe('mediaIdentity', () => {
   it("names a song's band and song from its media path", () => {
     expect(mediaIdentity('/api/media/z17zqzxv/songs/NAf42aR/bass.opus')).toEqual({ band: 'z17zqzxv', song: 'z17zqzxv/NAf42aR' });

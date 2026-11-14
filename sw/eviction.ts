@@ -15,9 +15,18 @@ export interface MediaEntry {
  * Which files to drop so the cache fits in `capBytes`: whole songs, least
  * recently used first (a half-cached song would be no use offline). The song
  * being stored right now (`keepSong`) is never dropped, even if it alone is
- * over the cap. Returns the keys to delete, oldest songs first.
+ * over the cap, and neither is a `pinned` song. Returns the keys to delete,
+ * oldest songs first.
  */
-export function planEviction(entries: readonly MediaEntry[], capBytes: number, keepSong?: string): string[] {
+export function planEviction(
+  entries: readonly MediaEntry[],
+  capBytes: number,
+  keepSong?: string,
+  pinned: ReadonlySet<string> = new Set(),
+): string[] {
+  // Pinned songs ("Available offline") are never dropped, and don't count
+  // against the cap: it's for songs kept because they were played.
+  entries = entries.filter((e) => !pinned.has(e.song));
   let total = entries.reduce((sum, e) => sum + e.bytes, 0);
   if (total <= capBytes) return [];
 

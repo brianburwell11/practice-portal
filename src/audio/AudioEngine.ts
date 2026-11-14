@@ -4,6 +4,7 @@ import { StemPlayer, type LoopRegion } from './StemPlayer';
 import { SoundTouchFallbackNode } from './SoundTouchFallbackNode';
 import { BackgroundAudio } from './BackgroundAudio';
 import { PEAKS_PER_SECOND, computeStemEnvelope, maxOf, mixEnvelopes } from './mixPeaks';
+import { stemUrl } from './mediaUrls';
 
 /** Common interface for both AudioWorklet and ScriptProcessorNode pitch correction paths */
 interface PitchCorrectorNode {
@@ -166,11 +167,7 @@ export class AudioEngine {
         if (localFile) {
           arrayBuffer = await localFile.arrayBuffer();
         } else {
-          // `?v=` is the file's content version: the offline cache keeps a
-          // stem under it, and a replaced stem gets a new one.
-          const version = config.mediaVersions?.[stemConfig.file];
-          const url = `${basePath}/${encodeURIComponent(stemConfig.file)}${version ? `?v=${encodeURIComponent(version)}` : ''}`;
-          const response = await fetch(url);
+          const response = await fetch(stemUrl(basePath, stemConfig.file, config.mediaVersions));
           arrayBuffer = await response.arrayBuffer();
         }
         loaded++;

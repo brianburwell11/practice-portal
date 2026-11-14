@@ -107,6 +107,10 @@ ENV VITE_R2_PUBLIC_URL=${VITE_R2_PUBLIC_URL}
 # Read JSON documents from this server's /api/data (Postgres) rather than R2.
 # Other builds (dev) may leave this unset and read the R2 copies instead.
 ENV VITE_DATA_SOURCE=api
+# The offline cache: songs kept as they're played, and songs and setlists made
+# "Available offline" (src/offline/). OFFLINE_CACHE_DISABLED=1 on the server
+# switches it off everywhere without a rebuild (server/main.ts).
+ENV VITE_OFFLINE_CACHE=1
 
 WORKDIR /app
 COPY package.json package-lock.json ./

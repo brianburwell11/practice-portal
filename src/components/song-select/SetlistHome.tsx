@@ -7,6 +7,7 @@ import { dataUrl } from '../../utils/url';
 import { formatTime } from '../../utils/formatTime';
 import { getCamelotStyle } from '../../utils/camelot';
 import type { SetlistConfig, SongManifestEntry } from '../../audio/types';
+import { SetlistOfflineToggle } from '../../offline/OfflineToggle';
 
 interface SongMeta {
   key: string;
@@ -96,12 +97,15 @@ export function SetlistHome({ setlist }: { setlist: SetlistConfig }) {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-xl mx-auto px-4 py-6 md:py-10">
-        <header className="mb-4">
-          <h2 className="text-xl font-semibold text-gray-100">{setlist.name}</h2>
-          <p className="text-sm text-gray-500">
-            {songCount} {songCount === 1 ? 'song' : 'songs'}
-            {totalSeconds > 0 && <> · {formatTotal(totalSeconds)} total</>}
-          </p>
+        <header className="mb-4 flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-semibold text-gray-100">{setlist.name}</h2>
+            <p className="text-sm text-gray-500">
+              {songCount} {songCount === 1 ? 'song' : 'songs'}
+              {totalSeconds > 0 && <> · {formatTotal(totalSeconds)} total</>}
+            </p>
+          </div>
+          <SetlistOfflineToggle setlist={setlist} />
         </header>
         <ol className="flex flex-col gap-1">
           {rows.map((row, i) =>

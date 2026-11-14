@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import type { CSSProperties } from 'react';
 import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
+import { CurrentSongOfflineToggle } from './offline/OfflineToggle';
 import { TransportBar } from './components/transport/TransportBar';
 import { LyricsDisplay } from './components/LyricsDisplay';
 import { NotesLayer } from './components/notes/NotesLayer';
@@ -360,6 +361,7 @@ export default function App() {
               {/* Phones: setlist picker shares the song row */}
               {!isDesktop && <SetlistDropdown className="shrink-0 max-w-[38%] px-2" />}
               <SetlistNav />
+              <CurrentSongOfflineToggle />
             </div>
           )}
           {/* One right-aligned group. Two separate ml-auto items would split

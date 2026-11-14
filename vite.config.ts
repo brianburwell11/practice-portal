@@ -4,11 +4,12 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import { configApiPlugin } from './vite-plugin-config-api'
+import { offlineAssetsPlugin } from './vite-plugin-offline-assets'
 
 // https://vite.dev/config/
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
-  plugins: [react(), tailwindcss(), basicSsl(), configApiPlugin()],
+  plugins: [react(), tailwindcss(), basicSsl(), configApiPlugin(), offlineAssetsPlugin()],
   server: { host: true },
   // Scan only the app for dependencies to pre-bundle. By default Vite scans
   // every .html in the project, which includes muse-encore's own viewer and
