@@ -70,24 +70,28 @@ The server learns which version of a document an edit was based on, and refuses 
 
 ## Phase 3: Local edits and sync
 
-- [ ] `src/offline/connectivity.ts`: online state from `navigator.onLine`, `online`/`offline` events, failed fetches and `X-Offline-Cache` responses.
-- [ ] Status indicator in the header: "Offline", "3 changes waiting", "Syncing...", "1 needs a decision".
-- [ ] `src/offline/docs.ts` `saveDoc`: write `{ data, base, baseRev, dirty }` to IndexedDB first, then try to send with `If-Match`. Success clears `dirty` and records the new rev; a network failure leaves it queued. One pending copy per document, so repeated saves coalesce.
-- [ ] `readDoc`: your unsynced copy if there is one, otherwise the network (recording `X-Doc-Rev` as the base), otherwise the cached copy.
-- [ ] Sync loop: on `online`, on app start, and every 30 s while anything is waiting.
-  - 200: clean.
-  - 401: pause and ask you to sign in (sessions last 30 days).
-  - 403: drop the change with a message.
+- [x] `src/offline/connectivity.ts`: online state from `navigator.onLine`, `online`/`offline` events, failed fetches and `X-Offline-Cache` responses, plus a check every 30 s while offline.
+- [x] Status indicator in the header (`SyncStatus.tsx`): "Offline", "3 changes waiting", "Syncing...", "1 needs a decision", "Sign in to sync".
+- [x] `saveEdit` (`src/offline/sync.ts`): writes `{ data, base, baseRev }` to IndexedDB ("pp-edits", `editStore.ts`) first, then sends with `?baseRev=`. Success drops it and records the new revision; a network failure (or no answer in 15 s) leaves it waiting. One waiting copy per document, so repeated saves coalesce and keep the original base.
+- [x] `readDoc`: your waiting copy if there is one, otherwise the network (recording `X-Doc-Rev` and the document as the base), otherwise the cached copy. An offline copy never replaces a revision the tab already knows.
+- [x] Sync loop: on `online`, at app start, and every 30 s while anything is waiting. One run at a time, across tabs (`navigator.locks`).
+  - 200: done.
+  - 401: pauses, with "Sign in to sync".
+  - 403 (or another refusal): drops the change, with a message.
   - 409: three-way merge.
-- [ ] Merge for **config**: compare top-level keys. Mine changed versus base, theirs changed versus base; if they don't overlap, merge and resend with no prompt (you edited the tapMap, someone saved the mix). If they overlap, it's a conflict.
-- [ ] Merge for **lyrics and chords**: resend only if theirs still equals the base; otherwise it's a conflict.
-- [ ] Conflict dialog, one per document: "Keep mine", "Keep theirs", and a side-by-side view for lyrics. "Keep mine" resends with the server's rev.
-- [ ] The lyrics, chords and marker editors save through `saveDoc`. Opening a song (`SongList.tsx` `handleSelect`) and the editors (`App.tsx`) read through `readDoc`, so your offline edits show after a reload.
-- [ ] Everything else (notes, mixer Save, Edit Song, setlists, mixer templates) says "Available when you're back online" instead of failing.
-- [ ] Edit buttons stay visible offline, using the capabilities from the cached `/api/me`.
-- [ ] Tests: unit tests for the config merge, lyrics and chords conflicts, and coalescing.
-- [ ] Test: offline, edit lyrics and the tapMap on a pinned song, reload (edits still there). Change the mix from another browser, go online: syncs with no prompt.
-- [ ] Test: edit the same lyrics in both browsers: the conflict dialog appears, and both choices work.
+- [x] Merge for **config** (`merge.ts`): top-level keys. Mine changed versus base, theirs changed versus base; if they don't overlap, merge and resend with no prompt. If the server already has the result (a save that went through but never answered), it's done.
+- [x] Merge for **lyrics and chords**: resend only if theirs still equals the base; otherwise it's a conflict.
+- [x] Conflict dialog, one per document: "Keep mine", "Keep theirs", "Decide later", and a side-by-side view for lyrics. Config conflicts name the parts you both changed. "Keep mine" resends based on the server's revision. Rendered at the page's top level (the header's transform otherwise traps it under the waveform).
+- [x] The lyrics, chords and marker editors save through `saveEdit`; "Saved on this device. It syncs when you're back online." when it waits. Opening a song (`SongList.tsx`) and the editors (`App.tsx`) read through `readDoc`. A merge or "Keep theirs" updates the open song (`useSyncedDocs.ts`).
+- [x] Everything else (notes, mixer Save, mixer templates, Edit Song, stem alignment, YouTube offsets, setlists, deleting) says "Available when you're back online" instead of failing or hanging (`onlineOrSay` / `onlineFetch`).
+- [x] Edit buttons stay visible offline: the session comes from the cached `/api/me`.
+- [x] A session the server can't check (database unreachable) is a 503, not "signed out" (`server/adapters/nodeApi.ts`). Before, the server answered anonymously with a 200, so the app showed you signed out and the offline cache kept that copy. Same for guest links. Requests without a session or guest cookie are unchanged.
+- [x] Signing out with changes waiting asks first, then discards them (a shared device).
+- [x] Waiting edits belong to the account that made them (shared devices). Only that account sees or sends them (`editStore.ts` keys them per account), and each send carries `?asUser=`: the server refuses it under any other session, before checking that session's permissions (`server/core/router.ts`, 403 `wrong-user`), so it's held, never applied as someone else's or dropped. Another account's edits show as "1 change waiting for Alex", with Discard behind a confirmation. Tested end to end: Alice's offline edit wasn't sent or shown while Bob was signed in, synced as hers when she signed back in, and Bob's discard never reached the server.
+- [x] Tests: `merge.test.ts` (config merge, lyrics and chords conflicts, a save that already landed), `editStore.test.ts` (coalescing).
+- [x] Tested end to end in headless Chrome against a stand-in API (signed-in admin, real revision rules, switchable "down"): lyrics saved offline survive a reload and sync when back; both sides changed lyrics shows the dialog side by side, and Keep mine and Keep theirs both work; timing changed offline plus a mix change elsewhere merges with no prompt.
+- [ ] Test (Brian): wifi off, edit lyrics and the tapMap on a pinned song, reload (edits still there). Change the mix from another browser, wifi on: syncs with no prompt.
+- [ ] Test (Brian): edit the same lyrics in both browsers: the conflict dialog appears, and both choices work.
 
 ## Phase 4: New songs offline
 
