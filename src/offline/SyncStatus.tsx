@@ -24,31 +24,35 @@ export function SyncStatus() {
   const later = (id: string) => { setDismissed((d) => new Set(d).add(id)); setChosen(null); };
 
   const waiting = pending === 1 ? '1 change waiting' : `${pending} changes waiting`;
-  let content: React.ReactNode = null;
+  // Full words where there's room; short ones on a phone's top row.
+  let full = '';
+  let short = '';
   let tone = 'text-gray-400';
   if (needsSignIn) {
-    content = <a href={signInHref()} className="underline underline-offset-2">Sign in to sync {waiting}</a>;
+    [full, short] = [`Sign in to sync ${waiting}`, 'Sign in to sync'];
     tone = 'text-yellow-400';
   } else if (conflicts.length > 0) {
-    content = (
-      <button onClick={() => { setDismissed(new Set()); setChosen(conflicts[0].id); }} className="underline underline-offset-2">
-        {conflicts.length === 1 ? '1 needs a decision' : `${conflicts.length} need a decision`}
-      </button>
-    );
+    [full, short] = [conflicts.length === 1 ? '1 needs a decision' : `${conflicts.length} need a decision`, `${conflicts.length} to decide`];
     tone = 'text-yellow-400';
   } else if (syncing && online) {
-    content = 'Syncing...';
+    [full, short] = ['Syncing...', 'Syncing...'];
   } else if (!online) {
-    content = pending > 0 ? `Offline · ${waiting}` : 'Offline';
+    [full, short] = pending > 0 ? [`Offline · ${waiting}`, `Offline · ${pending}`] : ['Offline', 'Offline'];
   } else if (pending > 0) {
-    content = waiting;
+    [full, short] = [waiting, `${pending} waiting`];
   }
+  const words = <><span className="hidden md:inline">{full}</span><span className="md:hidden">{short}</span></>;
+  const hint = !online && pending > 0 ? `${full}. Saved on this device; syncs when you’re back online.` : full;
 
   return (
     <>
-      {content && (
-        <span role="status" className={`shrink-0 text-xs whitespace-nowrap ${tone}`} title={!online && pending > 0 ? 'Saved on this device. Syncs when you’re back online.' : undefined}>
-          {content}
+      {full && (
+        <span role="status" className={`shrink-0 text-xs whitespace-nowrap ${tone}`} title={hint}>
+          {needsSignIn ? (
+            <a href={signInHref()} className="underline underline-offset-2">{words}</a>
+          ) : conflicts.length > 0 ? (
+            <button onClick={() => { setDismissed(new Set()); setChosen(conflicts[0].id); }} className="underline underline-offset-2">{words}</button>
+          ) : words}
         </span>
       )}
       {held > 0 && <HeldForOthers count={held} names={heldFor} />}
@@ -85,8 +89,9 @@ function HeldForOthers({ count, names }: { count: number; names: string[] }) {
     await discardOthersEdits();
   };
   return (
-    <button onClick={discard} className="shrink-0 text-xs whitespace-nowrap text-gray-500 hover:text-gray-300 underline underline-offset-2" title="Saved on this device by another account">
-      {changes} waiting for {who}
+    <button onClick={discard} className="shrink-0 text-xs whitespace-nowrap text-gray-500 hover:text-gray-300 underline underline-offset-2" title={`${changes} saved on this device by ${who}`}>
+      <span className="hidden md:inline">{changes} waiting for {who}</span>
+      <span className="md:hidden">{count} held</span>
     </button>
   );
 }

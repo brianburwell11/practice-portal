@@ -4,6 +4,7 @@ import { OFFLINE_CACHE_ENABLED } from './offline';
 import { usePinStore } from './pinStore';
 import { setlistPinId, songPinId } from './pin';
 import type { SetlistConfig } from '../audio/types';
+import type { Pin } from '../../sw/store';
 import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
 
@@ -16,16 +17,22 @@ interface Props {
   name: string;
   /** Start downloading it. */
   onPin: () => void;
+  /** A pinned setlist that already keeps this song offline (its name). */
+  coveredBy?: string;
   /** Icon only (the toolbar); otherwise icon and words. */
   compact?: boolean;
 }
 
+/** The cloud's outline. */
+const CLOUD = 'M17.5 19H7a5 5 0 1 1 1.6-9.74A6 6 0 0 1 20 11.5 3.75 3.75 0 0 1 17.5 19Z';
+
 /**
  * "Available offline", like Drive's: on downloads everything the song or
- * setlist needs and keeps it on this device; off lets it go. Shows progress
- * while downloading, and a check once it's all there.
+ * setlist needs and keeps it on this device; off lets it go. In the band's
+ * accent: an outline when it isn't kept, filled when it is. Shows progress
+ * while downloading, and yellow when a download didn't finish.
  */
-export function OfflineToggle({ pinId, what, name, onPin, compact = false }: Props) {
+export function OfflineToggle({ pinId, what, name, onPin, coveredBy, compact = false }: Props) {
   const load = usePinStore((s) => s.load);
   const pin = usePinStore((s) => s.pins[pinId]);
   const progress = usePinStore((s) => s.progress[pinId]);
@@ -39,18 +46,28 @@ export function OfflineToggle({ pinId, what, name, onPin, compact = false }: Pro
 
   const downloading = !!progress;
   const ready = !!pin?.ready && !downloading;
+  // Kept by a setlist, not by itself.
+  const covered = !pin && !downloading && !!coveredBy;
+  const filled = ready || covered;
+  const partial = !!pin && !pin.ready && !downloading;
   const pct = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
   const label = downloading
     ? `Downloading ${what === 'song' ? 'this song' : 'this setlist'}: ${pct}%`
     : ready
       ? 'Available offline'
-      : pin
-        ? 'Not fully downloaded. Click to try again'
-        : 'Make available offline';
+      : covered
+        ? `Available offline with “${coveredBy}”`
+        : partial
+          ? 'Not fully downloaded. Click to try again'
+          : 'Make available offline';
 
   const onClick = async () => {
     if (downloading) return;
+    if (covered) {
+      toast(`Kept offline with the “${coveredBy}” setlist. To stop, turn it off on that setlist.`);
+      return;
+    }
     if (pin?.ready) {
       if (!(await confirmDialog({
         title: `Stop keeping “${name}” offline?`,
@@ -66,37 +83,43 @@ export function OfflineToggle({ pinId, what, name, onPin, compact = false }: Pro
   return (
     <button
       onClick={onClick}
-      aria-pressed={!!pin}
+      aria-pressed={filled}
       aria-label={label}
       title={label}
-      className={`inline-flex items-center gap-1.5 rounded text-xs font-medium transition-colors ${
-        compact ? 'p-1.5 min-h-[44px] md:min-h-0' : 'px-2 py-1'
-      } ${ready ? 'text-green-400 hover:text-green-300' : pin ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-500 hover:text-gray-300'}`}
+      className={`inline-flex items-center gap-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 ${
+        compact ? 'p-1.5 min-h-[44px] min-w-[44px] justify-center md:min-h-0 md:min-w-0' : 'px-2 py-1'
+      } ${partial ? 'text-yellow-400' : 'text-blue-400'}`}
     >
       {downloading ? (
-        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
           <path d="M12 2a10 10 0 0 1 10 10" />
         </svg>
-      ) : ready ? (
-        // Cloud with a check
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17.5 19H7a5 5 0 1 1 1.6-9.74A6 6 0 0 1 20 11.5 3.75 3.75 0 0 1 17.5 19Z" />
-          <polyline points="9 14 11.5 16.5 15.5 12" />
+      ) : filled ? (
+        // Filled cloud, the check cut out in the page's background.
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d={CLOUD} />
+          <polyline points="9 14 11.5 16.5 15.5 12" fill="none" style={{ stroke: 'var(--color-gray-950)' }} />
         </svg>
       ) : (
-        // Cloud with a down arrow
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17.5 19H7a5 5 0 1 1 1.6-9.74A6 6 0 0 1 20 11.5 3.75 3.75 0 0 1 17.5 19Z" />
+        // Outline cloud with a down arrow.
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d={CLOUD} />
           <line x1="12" y1="11" x2="12" y2="16.5" />
           <polyline points="9.5 14 12 16.5 14.5 14" />
         </svg>
       )}
       {!compact && (
-        <span>{downloading ? `Downloading ${pct}%` : ready ? 'Available offline' : pin ? 'Try again' : 'Make available offline'}</span>
+        <span>{downloading ? `Downloading ${pct}%` : ready ? 'Available offline' : partial ? 'Try again' : 'Make available offline'}</span>
       )}
     </button>
   );
+}
+
+/** The pinned setlist (ready) that keeps this song offline, if any. */
+function coveringSetlist(pins: Record<string, Pin>, band: string, songId: string): Pin | undefined {
+  return Object.values(pins).find((p) => p.kind === 'setlist' && p.band === band && p.ready
+    && (p.songIds?.includes(songId) ?? p.songs.includes(`${band}/${songId}`)));
 }
 
 /** The toolbar's toggle for the song that's open. */
@@ -105,6 +128,7 @@ export function CurrentSongOfflineToggle() {
   const selectedSong = useSongStore((s) => s.selectedSong);
   const entry = useSongStore((s) => s.manifest?.songs.find((x) => x.id === s.selectedSong?.id));
   const pinSong = usePinStore((s) => s.pinSong);
+  const coveredBy = usePinStore((s) => (band && entry ? coveringSetlist(s.pins, band, entry.id)?.label : undefined));
   if (!band || !selectedSong || !entry) return null;
   return (
     <OfflineToggle
@@ -112,6 +136,7 @@ export function CurrentSongOfflineToggle() {
       pinId={songPinId(band, entry.id)}
       what="song"
       name={entry.title}
+      coveredBy={coveredBy}
       onPin={() => void pinSong(band, entry)}
     />
   );

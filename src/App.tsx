@@ -364,14 +364,18 @@ export default function App() {
               {/* Phones: setlist picker shares the song row */}
               {!isDesktop && <SetlistDropdown className="shrink-0 max-w-[38%] px-2" />}
               <SetlistNav />
-              <CurrentSongOfflineToggle />
-              <SyncStatus />
+              {/* Phones: in the top row instead, so the song picker keeps its width. */}
+              {isDesktop && <CurrentSongOfflineToggle />}
             </div>
           )}
           {/* One right-aligned group. Two separate ml-auto items would split
               the free space and push the setlist picker behind the centered
               song picker. */}
           <div className="ml-auto flex items-center gap-2 md:gap-3">
+            {/* Here, not by the song picker, so it shows (and can ask about
+                a conflict) while an editor fills the page. */}
+            <SyncStatus />
+            {!editorFocus && !isDesktop && <CurrentSongOfflineToggle />}
             {!editorFocus && isDesktop && <SetlistDropdown />}
             {showAdmin && !isDesktop && <AdminRibbon variant="menu" {...adminProps} />}
             <AccountMenu bandId={currentBand?.id} />

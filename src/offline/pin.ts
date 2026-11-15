@@ -149,7 +149,7 @@ async function download(pin: Pin, entries: SongManifestEntry[], onProgress?: OnP
   const urls = prepared.flatMap((p) => p.urls);
   await downloadAll(urls, onProgress);
   await waitUntilKept(urls);
-  const done: Pin = { ...pin, songs: songKeys(urls), ready: true, syncedAt: Date.now() };
+  const done: Pin = { ...pin, songs: songKeys(urls), songIds: entries.map((e) => e.id), ready: true, syncedAt: Date.now() };
   await putPin(done);
   return done;
 }

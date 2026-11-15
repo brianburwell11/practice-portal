@@ -118,6 +118,8 @@ export interface Pin {
   label: string;
   /** The songs it covers, as the media cache names them (`<band>/<folder>`). */
   songs: string[];
+  /** The same songs by id (a song's folder can differ from its id). Set by downloads since it was added. */
+  songIds?: string[];
   /** True once every file it needs was downloaded. */
   ready: boolean;
   pinnedAt: number;
