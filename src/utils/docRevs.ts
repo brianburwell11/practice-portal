@@ -1,3 +1,4 @@
+import { markOffline, noteResponse, onlineFetch } from '../offline/connectivity';
 import { dataUrl } from './url';
 
 /**
@@ -11,6 +12,8 @@ import { dataUrl } from './url';
  * ahead unchecked, as they always have.
  */
 const revs = new Map<string, number>();
+/** The server's copy at that revision (null: there isn't one), what an edit made offline is merged against. */
+const bases = new Map<string, unknown>();
 
 /** Documents that have a revision on the server. */
 function hasRev(key: string): boolean {
@@ -22,9 +25,22 @@ export function knownRev(key: string): number | undefined {
   return revs.get(key);
 }
 
+/** The server's copy this tab knows for `key` (undefined: not known). */
+export function knownBase(key: string): unknown {
+  return bases.get(key);
+}
+
+/** Record that the server has `data` at `rev` for `key` (after a sync, or "keep theirs"). */
+export function setKnown(key: string, rev: number | undefined, data: unknown): void {
+  if (rev === undefined) revs.delete(key);
+  else revs.set(key, rev);
+  bases.set(key, data);
+}
+
 /** Forget what's known about `key` (a song renamed, a setlist deleted). */
 export function forgetRev(key: string): void {
   revs.delete(key);
+  bases.delete(key);
 }
 
 /**
@@ -34,11 +50,25 @@ export function forgetRev(key: string): void {
  */
 export async function fetchDoc(key: string, init?: RequestInit): Promise<Response> {
   const url = dataUrl(key);
-  const res = await fetch(url, init);
-  if (hasRev(key)) {
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (err) {
+    if (url.startsWith('/api/')) markOffline();
+    throw err;
+  }
+  noteResponse(url, res);
+  // The offline cache's copy is older than anything this tab has saved or
+  // synced since: it never replaces what's known.
+  if (hasRev(key) && !(res.headers.get('X-Offline-Cache') && revs.has(key))) {
     const header = res.headers.get('X-Doc-Rev');
-    if (header !== null && Number.isInteger(Number(header))) revs.set(key, Number(header));
-    else if (res.status === 404 && url.startsWith('/api/data/')) revs.set(key, 0);
+    if (header !== null && Number.isInteger(Number(header))) {
+      revs.set(key, Number(header));
+      if (res.ok) bases.set(key, await res.clone().json().catch(() => undefined));
+    } else if (res.status === 404 && url.startsWith('/api/data/')) {
+      revs.set(key, 0);
+      bases.set(key, null);
+    }
   }
   return res;
 }
@@ -67,7 +97,8 @@ export class DocConflictError extends Error {
 export async function saveDoc(key: string, url: string, body: unknown, method = 'POST'): Promise<number | undefined> {
   const base = revs.get(key);
   const target = base === undefined ? url : `${url}${url.includes('?') ? '&' : '?'}baseRev=${base}`;
-  const res = await fetch(target, {
+  // Offline (or a server that never answers): "Available when you're back online".
+  const res = await onlineFetch(target, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -77,6 +108,6 @@ export async function saveDoc(key: string, url: string, body: unknown, method = 
     throw new DocConflictError(json.current ?? null, json.rev ?? 0);
   }
   if (!res.ok) throw new Error(json.error ?? `Save failed: ${res.status}`);
-  if (typeof json.rev === 'number') revs.set(key, json.rev);
+  if (typeof json.rev === 'number') setKnown(key, json.rev, body);
   return json.rev ?? undefined;
 }

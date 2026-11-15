@@ -14,6 +14,7 @@ import { confirmDiscard } from '../store/dialogStore';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSortableList } from '../hooks/useSortableList';
 import { fetchDoc, saveDoc } from '../utils/docRevs';
+import { onlineOrSay } from '../offline/connectivity';
 
 /** Legacy setlist ids are prefixed with "setlist-". New-format ids are
  *  opaque base62 (7 chars) with no prefix. Detecting the legacy shape
@@ -377,6 +378,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
 
   const handleSave = async () => {
     if (!currentBand || !name.trim() || entries.length === 0) return;
+    if (!onlineOrSay()) return;
     setSaving(true);
     setError(null);
 

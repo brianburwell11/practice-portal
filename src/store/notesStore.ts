@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { onlineFetch } from '../offline/connectivity';
 import type { Note } from '../audio/types';
 
 /** How many seconds before a note's timestamp the sticky becomes visible. */
@@ -54,7 +55,8 @@ const sortByTime = (notes: Note[]) => [...notes].sort((a, b) => a.time - b.time)
 
 /** One note request; returns the server's copy of the note, if it sent one. */
 async function noteRequest(method: string, path: string, body?: unknown): Promise<Note | null> {
-  const res = await fetch(path, {
+  // Notes need the server: offline, "Available when you're back online".
+  const res = await onlineFetch(path, {
     method,
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),

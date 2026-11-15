@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { onlineFetch } from '../offline/connectivity';
 import { useBandStore } from '../store/bandStore';
 import { useSetlistStore } from '../store/setlistStore';
 import { Modal } from '../components/ui/Modal';
@@ -29,7 +30,7 @@ export function DeleteSetlistModal({ setlistId, setlistName, onClose }: Props) {
     setError(null);
 
     try {
-      const res = await fetch(`/api/bands/${currentBand.id}/setlists/${setlistId}`, { method: 'DELETE' });
+      const res = await onlineFetch(`/api/bands/${currentBand.id}/setlists/${setlistId}`, { method: 'DELETE' });
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.error ?? 'Delete failed');

@@ -25,6 +25,7 @@ import { StemColorPicker } from './StemColorPicker';
 import { MixerOrderEditor, shouldShowMixerOrderEditor } from './components/MixerOrderEditor';
 import { confirmDiscard, toast } from '../store/dialogStore';
 import { fetchDoc, saveDoc } from '../utils/docRevs';
+import { onlineOrSay } from '../offline/connectivity';
 
 const groupColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
@@ -281,6 +282,7 @@ export default function EditSongPage() {
 
   const handleSave = async () => {
     if (!config || !currentBand) return;
+    if (!onlineOrSay()) return;
     dispatch({ type: 'SET_SAVING', saving: true });
     try {
       const oldId = state.original!.id;

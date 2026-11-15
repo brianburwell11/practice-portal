@@ -7,6 +7,7 @@ import { useBandStore } from '../store/bandStore';
 import { AlignmentCanvas, type AlignmentCanvasStem } from './components/AlignmentCanvas';
 import { confirmDiscard } from '../store/dialogStore';
 import { fetchDoc, saveDoc } from '../utils/docRevs';
+import { onlineOrSay } from '../offline/connectivity';
 
 interface LoadedStem {
   id: string;
@@ -108,6 +109,7 @@ export default function AlignSongPage() {
 
   const handleSave = useCallback(async () => {
     if (load.kind !== 'ready' || !currentBand) return;
+    if (!onlineOrSay()) return;
     setSaving(true);
     setSaveError(null);
     try {

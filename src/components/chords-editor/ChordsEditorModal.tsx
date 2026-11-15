@@ -8,7 +8,7 @@ import { beatGrid, isOffGrid } from '../../audio/chordGrid';
 import type { ChordsData } from '../../audio/chordsTypes';
 import { ChordsGridPane } from './ChordsGridPane';
 import { ChordsStampPane } from './ChordsStampPane';
-import { saveDoc } from '../../utils/docRevs';
+import { saveEdit } from '../../offline/sync';
 
 const MODES: { id: ChordsEditorMode; label: string }[] = [
   { id: 'grid', label: 'Grid' },
@@ -46,13 +46,17 @@ export function ChordsEditorModal() {
     setError(null);
     try {
       const data: ChordsData = { chords };
-      await saveDoc(
-        `${currentBand.id}/songs/${selectedSong.id}/chords.json`,
-        `/api/bands/${currentBand.id}/songs/${selectedSong.id}/chords`,
+      // Kept on this device first, so it isn't lost offline.
+      const outcome = await saveEdit({
+        key: `${currentBand.id}/songs/${selectedSong.id}/chords.json`,
+        url: `/api/bands/${currentBand.id}/songs/${selectedSong.id}/chords`,
+        label: `${selectedSong.title} chords`,
+        band: currentBand.id,
         data,
-      );
+      });
       useChordsStore.getState().setChords(data.chords);
       close();
+      if (outcome === 'queued') toast('Saved on this device. It syncs when you’re back online.');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Save failed');
     } finally {

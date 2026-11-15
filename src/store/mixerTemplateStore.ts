@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { onlineFetch } from '../offline/connectivity';
 import type { MixerTemplate } from '../audio/types';
 import type { MixerTemplateMix } from '../utils/mixerTemplates';
 
@@ -66,7 +67,7 @@ export const useMixerTemplateStore = create<MixerTemplateState>((set, get) => ({
       ? get().templates.find((t) => t.name.trim().toLowerCase() === key)
       : undefined;
     const id = existing?.id ?? crypto.randomUUID();
-    const res = await fetch(`${base(bandId)}/${id}`, {
+    const res = await onlineFetch(`${base(bandId)}/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: name.trim(), ...mix }),
@@ -80,13 +81,13 @@ export const useMixerTemplateStore = create<MixerTemplateState>((set, get) => ({
   },
 
   remove: async (bandId, id) => {
-    const res = await fetch(`${base(bandId)}/${id}`, { method: 'DELETE' });
+    const res = await onlineFetch(`${base(bandId)}/${id}`, { method: 'DELETE' });
     if (!res.ok) throw await failure(res, 'Delete template failed');
     if (get().bandId === bandId) set({ templates: get().templates.filter((t) => t.id !== id) });
   },
 
   setDefault: async (bandId, id, isDefault) => {
-    const res = await fetch(`${base(bandId)}/${id}/default`, {
+    const res = await onlineFetch(`${base(bandId)}/${id}/default`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isDefault }),

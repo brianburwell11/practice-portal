@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { onlineFetch } from '../../offline/connectivity';
 import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
 import { useSetlistStore } from '../../store/setlistStore';
@@ -30,7 +31,7 @@ export function DeleteSongModal({ songId, songTitle, onClose }: Props) {
     setError(null);
 
     try {
-      const res = await fetch(`/api/bands/${currentBand!.id}/songs/${songId}`, { method: 'DELETE' });
+      const res = await onlineFetch(`/api/bands/${currentBand!.id}/songs/${songId}`, { method: 'DELETE' });
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.error ?? 'Delete failed');

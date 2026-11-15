@@ -40,6 +40,15 @@ export async function runRoute(
   loadBody: () => Promise<RequestBody>,
 ): Promise<CoreResponse> {
   try {
+    // An edit made offline names who made it (`?asUser=`). Sent under anyone
+    // else's session (someone else signed in on that device since), it's
+    // refused, never applied as theirs, and before their permissions are
+    // checked, so the app holds it for its maker rather than dropping it. No
+    // session at all is the usual 401, below.
+    const asUser = target.query.get('asUser');
+    if (asUser !== null && target.actor && target.actor.userId !== asUser) {
+      return { status: 403, body: { error: 'Signed in as someone else', code: 'wrong-user' } };
+    }
     // Authorization first: an anonymous caller learns nothing, not even
     // whether R2 is configured, and no upload is read before it passes.
     await authorizeAccess(route.access, target);

@@ -16,6 +16,7 @@ import { Licenses } from './components/legal/Licenses.tsx'
 import { NotFound } from './components/NotFound.tsx'
 import { DialogHost } from './components/ui/DialogHost.tsx'
 import { PageLoader } from './components/ui/Loading.tsx'
+import { startSync } from './offline/sync'
 
 import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage, SiteAdminPage } from './admin/lazyPages.ts'
 import { App, BandApp, HelpGuide, HelpIndex } from './lazyPages.ts'
@@ -29,6 +30,8 @@ const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
 
 // The offline cache (on only in builds with VITE_OFFLINE_CACHE=1).
 setupOfflineCache();
+// Edits made offline: send what's waiting, and keep trying while anything is.
+startSync();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -10,13 +10,13 @@ import { buildXscContent } from '../../audio/xscExporter';
 import { buildMusicXmlContent } from '../../audio/musicXmlExporter';
 import { renderStereoDownmix } from '../../audio/mixdown';
 import { encodeWav, interleaveStereo } from '../../admin/utils/audioConvert';
-import { confirmDialog, confirmDiscard } from '../../store/dialogStore';
+import { confirmDialog, confirmDiscard, toast } from '../../store/dialogStore';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { TapPadButton } from '../ui/TapPadButton';
 import type { TapMapEntry } from '../../audio/types';
 import { useTransportStore } from '../../store/transportStore';
 import { measureBeatAt } from '../../audio/tempoUtils';
-import { saveDoc } from '../../utils/docRevs';
+import { saveEdit } from '../../offline/sync';
 
 export function MarkerEditorModal() {
   const {
@@ -122,14 +122,18 @@ export function MarkerEditorModal() {
     };
 
     try {
-      await saveDoc(
-        `${currentBand!.id}/songs/${selectedSong.id}/config.json`,
-        `/api/bands/${currentBand!.id}/songs/${selectedSong.id}/config`,
-        updatedConfig,
-      );
+      // Kept on this device first, so it isn't lost offline.
+      const outcome = await saveEdit({
+        key: `${currentBand!.id}/songs/${selectedSong.id}/config.json`,
+        url: `/api/bands/${currentBand!.id}/songs/${selectedSong.id}/config`,
+        label: `${selectedSong.title} timing`,
+        band: currentBand!.id,
+        data: updatedConfig,
+      });
 
       setSelectedSong(updatedConfig);
       close();
+      if (outcome === 'queued') toast('Saved on this device. It syncs when you’re back online.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Save failed';
       setError(msg);

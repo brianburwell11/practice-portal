@@ -14,7 +14,7 @@ import { useNotesStore } from '../../store/notesStore';
 import { toast } from '../../store/dialogStore';
 import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
 import { warmSongScore } from '../sheet/scoreFiles';
-import { fetchDoc } from '../../utils/docRevs';
+import { readDoc } from '../../offline/sync';
 
 export function useSongLoader() {
   const engine = useAudioEngine();
@@ -51,7 +51,8 @@ export function useSongLoader() {
 
     try {
       const bandId = currentBand?.id;
-      const res = await fetchDoc(`${bandId}/songs/${entry.id}/config.json`);
+      // Your edits waiting to sync, if any, over the server's copy.
+      const res = await readDoc(`${bandId}/songs/${entry.id}/config.json`);
       if (!res.ok) throw new Error(`config.json: ${res.status}`);
       const configData = await res.json();
       const config = songConfigSchema.parse(configData);
@@ -59,7 +60,7 @@ export function useSongLoader() {
       // Lyrics, chords, notes and the score start downloading now, alongside the
       // audio, instead of after it has all decoded. They're shown once the
       // song is selected.
-      const fetchJson = (file: string) => fetchDoc(`${bandId}/songs/${entry.id}/${file}`)
+      const fetchJson = (file: string) => readDoc(`${bandId}/songs/${entry.id}/${file}`)
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null);
       const lyricsData = fetchJson('lyrics.json');

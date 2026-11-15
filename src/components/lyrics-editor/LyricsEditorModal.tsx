@@ -5,11 +5,11 @@ import { useLyricsEditorStore, type LyricsEditorMode } from '../../store/lyricsE
 import { useLyricsStore } from '../../store/lyricsStore';
 import { linesToText, textToLines } from '../../audio/lyricsMerge';
 import type { LyricsData } from '../../audio/lyricsTypes';
-import { confirmDialog, confirmDiscard } from '../../store/dialogStore';
+import { confirmDialog, confirmDiscard, toast } from '../../store/dialogStore';
 import { LyricsTextPane } from './LyricsTextPane';
 import { LyricsTimingPane } from './LyricsTimingPane';
 import { LyricsDisplay } from '../LyricsDisplay';
-import { saveDoc } from '../../utils/docRevs';
+import { saveEdit } from '../../offline/sync';
 
 const MODES: { id: LyricsEditorMode; label: string }[] = [
   { id: 'lyrics', label: 'Lyrics' },
@@ -96,13 +96,17 @@ export function LyricsEditorModal() {
       let end = lines.length;
       while (end > 0 && lines[end - 1].text === '' && !lines[end - 1].instrumental) end--;
       const data: LyricsData = { lines: lines.slice(0, end) };
-      await saveDoc(
-        `${currentBand.id}/songs/${selectedSong.id}/lyrics.json`,
-        `/api/bands/${currentBand.id}/songs/${selectedSong.id}/lyrics`,
+      // Kept on this device first, so it isn't lost offline.
+      const outcome = await saveEdit({
+        key: `${currentBand.id}/songs/${selectedSong.id}/lyrics.json`,
+        url: `/api/bands/${currentBand.id}/songs/${selectedSong.id}/lyrics`,
+        label: `${selectedSong.title} lyrics`,
+        band: currentBand.id,
         data,
-      );
+      });
       useLyricsStore.getState().setLyrics(data.lines);
       close();
+      if (outcome === 'queued') toast('Saved on this device. It syncs when you’re back online.');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Save failed');
     } finally {

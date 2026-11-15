@@ -3,6 +3,8 @@ import type { CSSProperties } from 'react';
 import { AudioEngineContext, useCreateEngine } from './hooks/useAudioEngine';
 import { SongList, SetlistDropdown, SetlistNav } from './components/song-select/SongList';
 import { CurrentSongOfflineToggle } from './offline/OfflineToggle';
+import { SyncStatus } from './offline/SyncStatus';
+import { useSyncedDocs } from './offline/useSyncedDocs';
 import { TransportBar } from './components/transport/TransportBar';
 import { LyricsDisplay } from './components/LyricsDisplay';
 import { NotesLayer } from './components/notes/NotesLayer';
@@ -41,7 +43,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import practicePortalLogo from './assets/practice-portal-logo.png';
 import { useMixerPersistence } from './hooks/useMixerPersistence';
 import { useMediaQuery } from './hooks/useMediaQuery';
-import { fetchDoc } from './utils/docRevs';
+import { readDoc } from './offline/sync';
 
 
 const SetlistModal = lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })));
@@ -86,6 +88,7 @@ async function copyGuestLink(bandId: string, setlistSlug: string): Promise<void>
 export default function App() {
   const engine = useCreateEngine();
   useMixerPersistence();
+  useSyncedDocs();
   useNotesKeyboard();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const openMarkerEditor = useMarkerEditorStore((s) => s.open);
@@ -265,7 +268,7 @@ export default function App() {
       if (!(await closeOtherEditors('chords'))) return;
       setShowEditBandModal(false);
       // The saved chords, not the store's: the store may lag a save made elsewhere.
-      fetchDoc(`${currentBand.id}/songs/${selectedSong.id}/chords.json`)
+      readDoc(`${currentBand.id}/songs/${selectedSong.id}/chords.json`)
         .then((r) => (r.ok ? r.json() : { chords: [] }))
         .then((data) => {
           const parsed = chordsDataSchema.safeParse(data);
@@ -277,7 +280,7 @@ export default function App() {
       if (!selectedSong || !currentBand) return;
       if (!(await closeOtherEditors('lyrics'))) return;
       setShowEditBandModal(false);
-      fetchDoc(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`)
+      readDoc(`${currentBand.id}/songs/${selectedSong.id}/lyrics.json`)
         .then((r) => (r.ok ? r.json() : { lines: [] }))
         .then((data) => openLyricsEditor(data.lines ?? []))
         .catch(() => openLyricsEditor([]));
@@ -362,6 +365,7 @@ export default function App() {
               {!isDesktop && <SetlistDropdown className="shrink-0 max-w-[38%] px-2" />}
               <SetlistNav />
               <CurrentSongOfflineToggle />
+              <SyncStatus />
             </div>
           )}
           {/* One right-aligned group. Two separate ml-auto items would split

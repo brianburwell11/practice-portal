@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { clearOfflineCache } from '../offline/offline';
+import { allEdits, clearEdits } from '../offline/editStore';
+import { confirmDialog } from './dialogStore';
 import { useBandStore } from './bandStore';
 
 export type BandRole = 'owner' | 'manager' | 'editor' | 'member';
@@ -98,8 +100,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   signOut: async () => {
+    // Edits waiting to sync go too: say so first.
+    const waiting = (await allEdits().catch(() => [])).length;
+    if (waiting > 0 && !(await confirmDialog({
+      title: 'Sign out with changes not synced?',
+      message: `${waiting === 1 ? '1 change' : `${waiting} changes`} saved on this device haven’t reached the server yet. Signing out discards ${waiting === 1 ? 'it' : 'them'}.`,
+      confirmLabel: 'Sign out and discard',
+      danger: true,
+    }))) return;
     // Songs kept offline go with the account: this may be a shared device.
     await clearOfflineCache();
+    await clearEdits().catch(() => undefined);
     await fetch('/api/auth/logout', { method: 'POST' });
     // A full load of the home page, so every cached band list and document is
     // refetched as anonymous — and a Members-only band isn't left on screen.

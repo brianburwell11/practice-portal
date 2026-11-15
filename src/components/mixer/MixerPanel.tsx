@@ -20,6 +20,7 @@ import { MixerTemplateMenu } from './MixerTemplateMenu';
 import { resolveMixerOrder } from '../../audio/mixerOrder';
 import { groupKey, stemKey, useFaderSelectionStore } from '../../store/faderSelectionStore';
 import { DocConflictError, saveDoc } from '../../utils/docRevs';
+import { OFFLINE_MESSAGE, onlineOrSay } from '../../offline/connectivity';
 
 type SaveState = 'idle' | 'pending' | 'cancelled' | 'saving' | 'saved' | 'error';
 
@@ -152,6 +153,7 @@ export function MixerPanel() {
     }
 
     if (saveState !== 'idle') return;
+    if (!onlineOrSay()) return;
 
     setSaveState('pending');
     saveTimerRef.current = setTimeout(async () => {
@@ -185,7 +187,7 @@ export function MixerPanel() {
         setSaveState('saved');
         setTimeout(() => setSaveState('idle'), 1500);
       } catch (err) {
-        if (err instanceof DocConflictError) toast(err.message, 'error');
+        if (err instanceof DocConflictError || (err as Error).message === OFFLINE_MESSAGE) toast((err as Error).message, 'error');
         setSaveState('error');
         setTimeout(() => setSaveState('idle'), 2000);
       }
