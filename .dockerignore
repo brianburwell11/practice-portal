@@ -7,3 +7,5 @@ docs/node_modules
 .env.*
 .claude
 *.log
+# Local trusted certificates (mkcert): never leave this machine
+.certs
