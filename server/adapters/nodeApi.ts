@@ -67,7 +67,7 @@ async function resolveGuestCookie(cookies: Record<string, string>): Promise<Gues
     return await memo(key, () => resolveGuests(tokens));
   } catch (err) {
     console.error('[auth] guest link lookup failed:', err);
-    return [];
+    throw new IdentityUnavailable();
   }
 }
 
@@ -79,11 +79,15 @@ async function resolveActor(cookies: Record<string, string>): Promise<Actor | un
     // Signing out is a write, which clears the cache.
     return await memo(`session:${hashToken(token)}`, () => resolveSession(token));
   } catch (err) {
-    // A database hiccup makes this request anonymous rather than failing it.
+    // Not "signed out": answering anonymously here would show a signed-in
+    // person as signed out, and the offline cache would keep that answer.
     console.error('[auth] session lookup failed:', err);
-    return undefined;
+    throw new IdentityUnavailable();
   }
 }
+
+/** The session or guest link couldn't be checked (the database is unreachable). */
+class IdentityUnavailable extends Error {}
 
 /**
  * A successful read, revalidated on every use — the same `no-cache` R2 sets
@@ -188,8 +192,18 @@ export function createApiHandler() {
       return true;
     }
 
-    const actor = await resolveActor(cookies);
-    const guests = await resolveGuestCookie(cookies);
+    let actor: Actor | undefined;
+    let guests: GuestGrant[];
+    try {
+      actor = await resolveActor(cookies);
+      guests = await resolveGuestCookie(cookies);
+    } catch (err) {
+      if (!(err instanceof IdentityUnavailable)) throw err;
+      // A failure, so the app (and its offline cache) keeps what it knew.
+      res.setHeader('Retry-After', '5');
+      sendJson(res, { status: 503, body: { error: 'Can’t reach the server’s database right now. Try again in a moment.' } });
+      return true;
+    }
 
     const query = new URLSearchParams(search);
     const tmpDir = route.body === 'multipart'
