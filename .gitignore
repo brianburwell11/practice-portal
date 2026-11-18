@@ -38,3 +38,7 @@ public/sw.js
 
 # Local trusted certificates (mkcert)
 .certs
+
+# Claude Code and Impeccable (local skills, agents, live mode sessions)
+.claude/
+.impeccable/
