@@ -7,8 +7,8 @@
  * - Songs (stems and scores) are kept as they're played, under their plain
  *   same-origin URL with its `?v=` content version, never under a signed R2
  *   URL. A new version is a new key, so a replaced file is fetched afresh.
- *   Unversioned media isn't kept. At most `CAP_BYTES`, least recently played
- *   songs dropped first.
+ *   Unversioned media isn't kept. At most this device's cap (`capBytes`,
+ *   500 MB unless changed), least recently played songs dropped first.
  * - Hashed app assets: from the cache first (they never change).
  * - Pages, `/api/data` and `/api/me`: from the network first, the cached copy
  *   when offline, when the server takes longer than `NETWORK_TIMEOUT_MS` or

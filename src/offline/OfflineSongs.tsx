@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { confirmDialog } from '../store/dialogStore';
-import { clearOfflineCache, OFFLINE_CACHE_ENABLED, OFFLINE_CAP_BYTES, offlineUsageBytes } from './offline';
+import {
+  clearOfflineCache, OFFLINE_CACHE_ENABLED, OFFLINE_CAP_CHOICES, offlineCapBytes, offlineUsageBytes, setOfflineCapBytes,
+} from './offline';
 import { usePinStore } from './pinStore';
 
 const mb = (bytes: number) => Math.round(bytes / (1024 * 1024));
+const size = (bytes: number) => (mb(bytes) >= 1024 ? `${+(mb(bytes) / 1024).toFixed(1)} GB` : `${mb(bytes)} MB`);
 
 /**
  * The account menu's section about songs kept on this device: what's
@@ -14,6 +17,7 @@ const mb = (bytes: number) => Math.round(bytes / (1024 * 1024));
 export function OfflineSongs() {
   const [bytes, setBytes] = useState<{ pinned: number; played: number } | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [cap, setCap] = useState<number | null>(null);
   const load = usePinStore((s) => s.load);
   const pins = usePinStore((s) => s.pins);
   const progress = usePinStore((s) => s.progress);
@@ -26,11 +30,16 @@ export function OfflineSongs() {
     void load();
     let cancelled = false;
     void offlineUsageBytes().then((b) => { if (!cancelled) setBytes(b); });
+    void offlineCapBytes().then((c) => { if (!cancelled) setCap(c); });
     return () => { cancelled = true; };
     // Re-measured when a download finishes or a pin goes.
   }, [load, pins, busy]);
 
-  if (!OFFLINE_CACHE_ENABLED || bytes === null) return null;
+  if (!OFFLINE_CACHE_ENABLED || bytes === null || cap === null) return null;
+
+  const choices = OFFLINE_CAP_CHOICES.includes(cap as (typeof OFFLINE_CAP_CHOICES)[number])
+    ? OFFLINE_CAP_CHOICES
+    : [...OFFLINE_CAP_CHOICES, cap].sort((a, b) => a - b);
 
   return (
     <div className="px-4 py-2 space-y-1.5">
@@ -38,7 +47,7 @@ export function OfflineSongs() {
         <div className="min-w-0">
           <div>Offline songs</div>
           <div className="text-xs text-gray-400">
-            {mb(bytes.pinned)} MB kept offline · {mb(bytes.played)} MB of {mb(OFFLINE_CAP_BYTES)} MB recently played
+            {size(bytes.pinned)} kept offline · {size(bytes.played)} of {size(cap)} recently played
           </div>
         </div>
         <button
@@ -61,6 +70,22 @@ export function OfflineSongs() {
           {clearing ? 'Clearing' : 'Clear'}
         </button>
       </div>
+      <label className="flex items-center justify-between gap-2 text-xs text-gray-400">
+        <span>Keep recently played songs up to</span>
+        <select
+          value={cap}
+          onChange={async (e) => {
+            const next = Number(e.target.value);
+            setCap(next);
+            await setOfflineCapBytes(next);
+            setBytes(await offlineUsageBytes());
+          }}
+          disabled={clearing}
+          className="shrink-0 rounded bg-gray-800 px-1.5 py-1 text-xs text-gray-200"
+        >
+          {choices.map((c) => <option key={c} value={c}>{size(c)}</option>)}
+        </select>
+      </label>
       {pinList.length > 0 && (
         <ul className="space-y-0.5">
           {pinList.map((p) => (

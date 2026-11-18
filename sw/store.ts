@@ -11,8 +11,11 @@ import { planEviction, type MediaEntry } from './eviction';
 export const CACHE_PREFIX = 'pp-';
 export const MEDIA_CACHE = 'pp-media-v1';
 export const SHELL_CACHE = 'pp-shell-v1';
-/** Songs are dropped, least recently used first, past this. */
-export const CAP_BYTES = 500 * 1024 * 1024;
+const MB = 1024 * 1024;
+/** Played songs are dropped, least recently used first, past the cap. This is the cap until someone picks another. */
+export const DEFAULT_CAP_BYTES = 500 * MB;
+/** The caps people can pick from (the account menu's Offline songs). */
+export const CAP_CHOICES = [100 * MB, 250 * MB, 500 * MB, 1024 * MB, 2048 * MB, 5120 * MB] as const;
 /** Cached songs aren't played offline once this long has passed without the app reaching the server. */
 export const OFFLINE_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -144,10 +147,22 @@ export async function pinnedSongs(): Promise<Set<string>> {
   return new Set((await allPins()).flatMap((p) => p.songs));
 }
 
-/** Keeps the cache under `CAP_BYTES`, never dropping `keepSong` or a pinned song. */
+/** This device's cap on played songs (bytes), kept in IndexedDB so the worker and the app both see it. */
+export async function capBytes(): Promise<number> {
+  const v = await withStore<number>(META, 'readonly', (s) => s.get('capBytes')).catch(() => undefined);
+  return typeof v === 'number' && v > 0 ? v : DEFAULT_CAP_BYTES;
+}
+
+/** Sets this device's cap, and drops played songs past it right away. */
+export async function setCapBytes(bytes: number): Promise<void> {
+  await withStore(META, 'readwrite', (s) => s.put(bytes, 'capBytes'));
+  await enforceCap();
+}
+
+/** Keeps played songs under this device's cap, never dropping `keepSong` or a pinned song. */
 export async function enforceCap(keepSong?: string): Promise<void> {
-  const [entries, pinned] = await Promise.all([allEntries(), pinnedSongs()]);
-  await deleteMedia(planEviction(entries, CAP_BYTES, keepSong, pinned));
+  const [entries, pinned, cap] = await Promise.all([allEntries(), pinnedSongs(), capBytes()]);
+  await deleteMedia(planEviction(entries, cap, keepSong, pinned));
 }
 
 /** Drops every cached song and pin from a band not in `allowedBands` (a band left, or a guest link gone). */
@@ -176,8 +191,9 @@ export async function setLastVerified(now = Date.now()): Promise<void> {
   await withStore(META, 'readwrite', (s) => s.put(now, 'lastVerified'));
 }
 
-/** Everything gone: every `pp-` cache, every record and every pin (sign-out, the Clear button). */
+/** Everything gone: every `pp-` cache, every record and every pin (sign-out, the Clear button). The cap setting stays. */
 export async function clearOffline(): Promise<void> {
+  const cap = await withStore<number>(META, 'readonly', (s) => s.get('capBytes')).catch(() => undefined);
   for (const name of await caches.keys()) {
     if (name.startsWith(CACHE_PREFIX)) await caches.delete(name);
   }
@@ -187,6 +203,7 @@ export async function clearOffline(): Promise<void> {
       const tx = db.transaction([MEDIA, META, PINS], 'readwrite');
       tx.objectStore(MEDIA).clear();
       tx.objectStore(META).clear();
+      if (typeof cap === 'number') tx.objectStore(META).put(cap, 'capBytes');
       tx.objectStore(PINS).clear();
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);

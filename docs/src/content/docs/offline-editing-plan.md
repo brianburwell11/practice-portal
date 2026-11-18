@@ -57,7 +57,7 @@ The server learns which version of a document an edit was based on, and refuses 
 
 - [x] Build production with `VITE_OFFLINE_CACHE=1` (set in the Dockerfile). The server's `OFFLINE_CACHE_DISABLED` kill switch still works.
 - [x] `pins` store in `sw/store.ts` (IndexedDB version 2): `{ band, song }`, plus setlist pins that expand to their songs.
-- [x] `planEviction` / `enforceCap` (`sw/eviction.ts`, `sw/store.ts`) never drop a pinned song. Pinned bytes are counted separately from the 500 MB played-songs cap.
+- [x] `planEviction` / `enforceCap` (`sw/eviction.ts`, `sw/store.ts`) never drop a pinned song. Pinned bytes are counted separately from the played-songs cap (500 MB by default, set per device in Offline songs).
 - [x] `src/offline/pin.ts` downloader: `config.json`, `lyrics.json`, `chords.json`, `notes.json`, then every stem and score at the exact versioned URL the player asks for (`AudioEngine.ts`, `scoreFiles.ts`, both from `mediaVersions`), plus `band.json`, the discography and the setlist index.
 - [x] ~~Media fetched for a pin is stored even when the 30-day check is stale.~~ Not needed: loading the band list online renews the check before any pin downloads. Pinned songs still stop playing after 30 days without reaching the server, like other offline songs.
 - [x] Pinned songs refresh on app start when online, so they're current before you leave.

@@ -6,10 +6,10 @@
  * removes a worker an earlier build installed and clears what it kept, so
  * turning the flag off is also a way to switch the cache off everywhere.
  */
-import { CAP_BYTES, clearOffline, purgeBands, setLastVerified, usageBytes } from '../../sw/store';
+import { capBytes, CAP_CHOICES, clearOffline, DEFAULT_CAP_BYTES, purgeBands, setCapBytes, setLastVerified, usageBytes } from '../../sw/store';
 
 export const OFFLINE_CACHE_ENABLED = import.meta.env.VITE_OFFLINE_CACHE === '1';
-export const OFFLINE_CAP_BYTES = CAP_BYTES;
+export const OFFLINE_CAP_CHOICES = CAP_CHOICES;
 
 const supported = () => typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof caches !== 'undefined';
 
@@ -63,4 +63,16 @@ export async function offlineUsageBytes(): Promise<{ pinned: number; played: num
   const none = { pinned: 0, played: 0 };
   if (!OFFLINE_CACHE_ENABLED || !supported()) return none;
   return usageBytes().catch(() => none);
+}
+
+/** This device's cap on recently played songs (bytes). */
+export async function offlineCapBytes(): Promise<number> {
+  if (!OFFLINE_CACHE_ENABLED || !supported()) return DEFAULT_CAP_BYTES;
+  return capBytes().catch(() => DEFAULT_CAP_BYTES);
+}
+
+/** Changes this device's cap; played songs past a lower cap go right away. */
+export async function setOfflineCapBytes(bytes: number): Promise<void> {
+  if (!OFFLINE_CACHE_ENABLED || !supported()) return;
+  await setCapBytes(bytes).catch((err) => console.warn('[offline] could not set cap:', err));
 }
