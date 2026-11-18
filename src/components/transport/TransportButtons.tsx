@@ -55,6 +55,7 @@ export function PlayPauseButton({ size = 'md', longPressStops = false }: { size?
       disabled={disabled}
       {...handlers}
       data-help={longPressStops ? 'Play, hold to stop' : 'Play or pause {Space}'}
+      data-tour="play"
       data-help-at="top-right"
       title={(playing ? 'Pause' : 'Play') + hint}
       aria-label={playing ? 'Pause' : 'Play'}
@@ -106,6 +107,7 @@ export function LoopButton({ size = 'md', verb = 'Click' }: { size?: TransportBu
       {...handlers}
       data-help={verb === 'Tap' ? 'Tap to set loop in/loop out. Hold to clear.' : 'Click to set loop in/loop out. {Shift} + click to clear.'}
       data-help-at="right"
+      data-tour="loop"
       title={label}
       aria-label={label}
       aria-pressed={loopA !== null && loopB !== null ? loopEnabled : undefined}

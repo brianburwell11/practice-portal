@@ -28,8 +28,8 @@ export function HelpButton() {
       onClick={toggleLabels}
       data-tour="help"
       aria-pressed={labelsOpen}
-      aria-label="Show what each control does"
-      title="What does each control do? (?)"
+      aria-label="Help"
+      title="Help: what each control does (?)"
       className={`shrink-0 size-9 rounded-full flex items-center justify-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
         labelsOpen ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
       }`}

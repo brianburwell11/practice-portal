@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Kbd, withKeys } from '../components/ui/Kbd';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { isShown, isTyping, useOnboardingStore } from './onboardingStore';
 import { SHORTCUT_GROUPS } from './shortcuts';
 
@@ -49,6 +50,9 @@ export function ControlLabels() {
 }
 
 function LabelsOverlay() {
+  // Phones get no labels (too little room beside the controls) and no
+  // keyboard shortcuts: just the bar, with the tour and the guides.
+  const phone = !useMediaQuery('(min-width: 768px)');
   const hideLabels = useOnboardingStore((s) => s.hideLabels);
   const startTour = useOnboardingStore((s) => s.startTour);
   const shortcutsShown = useOnboardingStore((s) => s.shortcutsShown);
@@ -65,6 +69,10 @@ function LabelsOverlay() {
 
   // What's labelled right now: the first visible control for each text.
   const collect = useCallback(() => {
+    if (phone) {
+      setItems((prev) => (prev.length ? [] : prev));
+      return;
+    }
     // A view that covers the page (`data-help-scope`, like full screen sheet
     // music) has the labels to itself; the page under it isn't in view.
     const scopes = [...document.querySelectorAll<HTMLElement>('[data-help-scope]')].filter((el) => isShown(el));
@@ -86,11 +94,10 @@ function LabelsOverlay() {
       boxes.push({ l: r.left, t: r.top, r: r.right, b: r.bottom });
     }
     setControls((prev) => (sameBoxes(prev, boxes) ? prev : boxes));
-  }, []);
+  }, [phone]);
 
   useEffect(() => {
-    collect();
-    let frame = 0;
+    let frame = requestAnimationFrame(collect);
     const soon = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(collect);
@@ -257,16 +264,18 @@ function LabelsOverlay() {
           aria-label="Help"
           className="pointer-events-auto w-full max-w-2xl rounded-xl border border-gray-700 bg-gray-900 shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
         >
-          {shortcutsShown && <ShortcutList />}
+          {shortcutsShown && !phone && <ShortcutList />}
           <div className="px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center">
             <p className="flex-1 text-sm text-gray-300 text-pretty">
-              Each label says what its control does. Everything still works while they’re up.
+              {phone
+                ? 'Take the tour for a quick look at the player, or read the Help guides.'
+                : 'Each label says what its control does. Everything still works while they’re up.'}
             </p>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button onClick={startTour} className={SECONDARY}>
                 Take the tour
               </button>
-              <button
+              {!phone && <button
                 onClick={toggleShortcuts}
                 aria-expanded={shortcutsShown}
                 aria-controls="help-shortcuts"
@@ -279,7 +288,7 @@ function LabelsOverlay() {
                 >
                   <path d="m6 15 6-6 6 6" />
                 </svg>
-              </button>
+              </button>}
               <a href="/help" target="_blank" rel="noopener" className={`${SECONDARY} inline-flex items-center`}>
                 Help guides
               </a>

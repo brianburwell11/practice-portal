@@ -225,7 +225,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
       {/* Desktop: controls cluster (buttons + sliders grouped together, shrink-0) */}
       <div className="hidden md:flex md:flex-col md:gap-1 md:shrink-0">
         {/* Transport buttons — centered over sliders */}
-        <div data-tour="transport" className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-2">
           <StopButton />
           <PlayPauseButton />
           <LoopButton verb="Click" />
@@ -384,7 +384,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
       {/* Mobile: transport buttons (row 2), one row whatever the song has.
           Order: play and loop, where you are, what you read along with
           (chords, lyrics, sheet music), then the mixer. */}
-      <div data-tour="transport" className={`flex items-center gap-1.5 mt-2 md:hidden ${minimal ? '' : 'justify-center'}`}>
+      <div className={`flex items-center gap-1.5 mt-2 md:hidden ${minimal ? '' : 'justify-center'}`}>
         <PlayPauseButton size={minimal ? 'lg' : 'fluid'} longPressStops />
         {/* Editors: volume and speed sit right of play/pause, always shown */}
         {minimal && <MasterSliders className="flex-1 min-w-0 ml-1" />}
@@ -397,6 +397,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
           }`}
           onClick={() => setShowBookmark(!showBookmark)}
           data-help="Jump to a time or section"
+          data-tour="phone-tools"
           title="Position & Sections"
           aria-label="Position and sections"
           aria-pressed={showBookmark}
@@ -413,6 +414,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
           }`}
           onClick={toggleChordsMobileVisible}
           data-help="Chords"
+          data-tour="phone-tools"
           title="Chords"
           aria-label="Chords"
           aria-pressed={chordsMobileVisible}
@@ -427,6 +429,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
           }`}
           onClick={toggleLyricsMobileVisible}
           data-help="Lyrics"
+          data-tour="phone-tools"
           title="Lyrics"
           aria-label="Lyrics"
           aria-pressed={lyricsMobileVisible}
@@ -447,6 +450,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
           }`}
           onClick={openSheetMusic}
           data-help="Sheet music"
+          data-tour="phone-tools"
           title="Sheet music"
           aria-label="Sheet music"
           aria-pressed={sheetMusicOpen}
@@ -461,7 +465,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
           }`}
           onClick={onToggleSliders}
           data-help="Mixer and speed"
-          data-tour="mixer-toggle"
+          data-tour="phone-tools"
           title="Mixer & Sliders"
           aria-label="Mixer and sliders"
           aria-pressed={showSliders}

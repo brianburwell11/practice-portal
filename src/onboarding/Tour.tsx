@@ -1,22 +1,29 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { withKeys } from '../components/ui/Kbd';
-import { firstVisible, isTyping, useOnboardingStore } from './onboardingStore';
+import { firstVisible, isShown, isTyping, useOnboardingStore } from './onboardingStore';
 
 interface StepView {
   title: string;
   body: string;
+  /** A short list under the body: what each of several buttons is for. */
+  points?: { name: string; what: string }[];
 }
 
-/** A tour step: the first of its targets that's on the page, and what to say about it. */
+/**
+ * A tour step: the first of its targets that's on the page, and what to say
+ * about it. A target is every visible element tagged `data-tour="<tour>"`,
+ * spotlit together.
+ */
 interface Step {
   targets: { tour: string; view: (touch: boolean) => StepView }[];
 }
 
 /**
- * Six stops, in the order a first practice goes: load a song or setlist,
- * find the hard part, play and loop it, slow it down, hear your own part, and where help lives. A step
- * whose controls aren't on the page (a phone with the mixer closed, say) is
- * left out.
+ * The stops, in the order a first practice goes: load a song or setlist,
+ * find the hard part, play, loop it, (on phones) the other buttons' tools,
+ * slow it down, hear your own part, and where help lives. A step whose
+ * controls aren't on the page (the phone buttons on a computer, the mixer
+ * closed on a phone) is left out.
  */
 const STEPS: Step[] = [
   {
@@ -41,32 +48,51 @@ const STEPS: Step[] = [
   },
   {
     targets: [{
-      tour: 'transport',
+      tour: 'play',
       view: (touch) => ({
-        title: 'Play, pause and loop',
+        title: 'Play and pause',
         body: touch
-          ? 'Hold play to stop and go back to the start. The loop button marks a loop: tap where it starts, then where it ends.'
-          : '{Space} plays and pauses. The loop button marks a loop: click where it starts, then where it ends.',
+          ? 'Tap to play or pause. Press and hold to stop and go back to the start.'
+          : 'Click to play or pause, or press {Space}. The square button beside it stops and goes back to the start.',
       }),
     }],
   },
   {
-    targets: [
-      {
-        tour: 'speed',
-        view: () => ({
-          title: 'Slow it down',
-          body: 'Speed goes as low as 25% and the song stays in key, so a fast part can be learned slowly. Double-click a slider to reset it.',
-        }),
+    targets: [{
+      tour: 'loop',
+      view: (touch) => ({
+        title: 'Loop a passage',
+        body: touch
+          ? 'Tap where the loop should start, then tap again where it should end. Tap to turn it off and on, press and hold to clear it.'
+          : 'Click where the loop should start, then click again where it should end. Click to turn it off and on, {Shift} + click to clear it.',
+      }),
+    }],
+  },
+  {
+    targets: [{
+      tour: 'phone-tools',
+      view: () => {
+        // Chords, lyrics and sheet music buttons show only when the song has them.
+        const has = (label: string) => !!firstVisible(`[data-tour="phone-tools"][aria-label="${label}"]`);
+        const points = [
+          { name: 'Bookmark', what: 'jump to a timestamp, measure or section' },
+          has('Chords') && { name: 'Chords', what: 'show or hide the chords' },
+          has('Lyrics') && { name: 'Lyrics', what: 'show or hide the lyrics' },
+          has('Sheet music') && { name: 'Sheet music', what: 'open it full screen' },
+          { name: 'Sliders', what: 'the mixer, volume and playback speed' },
+        ].filter((p): p is { name: string; what: string } => !!p);
+        return { title: 'More tools', body: 'These buttons show and hide the rest:', points };
       },
-      {
-        tour: 'mixer-toggle',
-        view: () => ({
-          title: 'Slow it down',
-          body: 'This button opens speed, volume and the mixer. Speed goes as low as 25% and the song stays in key.',
-        }),
-      },
-    ],
+    }],
+  },
+  {
+    targets: [{
+      tour: 'speed',
+      view: () => ({
+        title: 'Slow it down',
+        body: 'Speed goes as low as 25% and the song stays in key, so a fast part can be learned slowly. Double-click a slider to reset it.',
+      }),
+    }],
   },
   {
     targets: [{
@@ -85,19 +111,29 @@ const STEPS: Step[] = [
       view: (touch) => ({
         title: 'Help is always here',
         body: touch
-          ? 'Tap {?} any time to label every control, or to take this tour again.'
+          ? 'Tap {?} any time to take this tour again or open the Help guides.'
           : 'Press {?} any time to label every control, take this tour again, or see the keyboard shortcuts.',
       }),
     }],
   },
 ];
 
-function resolve(step: Step, touch: boolean): { el: HTMLElement; view: StepView } | null {
+function resolve(step: Step, touch: boolean): { els: HTMLElement[]; view: StepView } | null {
   for (const t of step.targets) {
-    const el = firstVisible(`[data-tour="${t.tour}"]`);
-    if (el) return { el, view: t.view(touch) };
+    const els = [...document.querySelectorAll<HTMLElement>(`[data-tour="${t.tour}"]`)].filter((el) => isShown(el, false));
+    if (els.length) return { els, view: t.view(touch) };
   }
   return null;
+}
+
+/** The box around all of `els`. */
+function unionRect(els: HTMLElement[]): DOMRect {
+  const rs = els.map((el) => el.getBoundingClientRect());
+  const l = Math.min(...rs.map((r) => r.left));
+  const t = Math.min(...rs.map((r) => r.top));
+  const r = Math.max(...rs.map((x) => x.right));
+  const b = Math.max(...rs.map((x) => x.bottom));
+  return new DOMRect(l, t, r - l, b - t);
 }
 
 export function Tour() {
@@ -137,17 +173,18 @@ function TourRun() {
     else if (step && !target) next();
   });
 
-  // Bring the control into view, hand focus to the card, and keep the
-  // spotlight on the control as the page scrolls and shifts.
-  const el = target?.el;
+  // Bring the controls into view, hand focus to the card, and keep the
+  // spotlight on them as the page scrolls and shifts.
+  const els = target?.els;
+  const first = els?.[0];
   useEffect(() => {
-    if (!el) return;
-    el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+    if (!first || !els) return;
+    first.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
     primary.current?.focus({ preventScroll: true });
     let frame = 0;
     let prev: DOMRect | null = null;
     const track = () => {
-      const r = el.getBoundingClientRect();
+      const r = unionRect(els);
       if (!prev || r.left !== prev.left || r.top !== prev.top || r.width !== prev.width || r.height !== prev.height) {
         prev = r;
         setRect(r);
@@ -156,7 +193,9 @@ function TourRun() {
     };
     track();
     return () => cancelAnimationFrame(frame);
-  }, [el, reduceMotion]);
+    // `els` is a new array each render; the step's first element stands for it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [first, index, reduceMotion]);
 
   // The card's size, for placing it (it renders once the spotlight has a place).
   const shown = !!(target && rect);
@@ -226,6 +265,15 @@ function TourRun() {
       >
         <h2 id={titleId} className="text-[0.9375rem] font-semibold text-gray-50 text-balance">{target.view.title}</h2>
         <p id={bodyId} className="mt-1.5 text-sm leading-relaxed text-gray-300 text-pretty">{withKeys(target.view.body)}</p>
+        {target.view.points && (
+          <ul className="mt-2 space-y-1 text-sm leading-snug text-gray-300">
+            {target.view.points.map((p) => (
+              <li key={p.name}>
+                <span className="font-medium text-gray-100">{p.name}</span>: {p.what}
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="mt-4 flex items-center gap-2">
           <span className="text-xs text-gray-500 tabular-nums" aria-label={`Step ${index + 1} of ${steps.length}`}>
             {index + 1} of {steps.length}
