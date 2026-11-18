@@ -8,6 +8,8 @@ interface PanKnobProps {
   label: string;
   /** Double-click (and Enter) target: the stem's default pan. */
   resetValue: number;
+  /** What it does, for the band page's control labels (`data-help`). */
+  help?: string;
 }
 
 /** Pixels of vertical drag for the full left-to-right sweep. */
@@ -41,7 +43,7 @@ function valueText(v: number): string {
  * Logic-style pan knob. Drag up/down to turn (Shift for fine), scroll,
  * arrow keys, or double-click to go back to the default pan.
  */
-export function PanKnob({ value, onChange, color, label, resetValue }: PanKnobProps) {
+export function PanKnob({ value, onChange, color, label, resetValue, help }: PanKnobProps) {
   const drag = useRef<{ y: number; value: number } | null>(null);
   const el = useRef<HTMLDivElement>(null);
   const latest = useRef({ value, onChange });
@@ -71,6 +73,7 @@ export function PanKnob({ value, onChange, color, label, resetValue }: PanKnobPr
       ref={el}
       role="slider"
       tabIndex={0}
+      data-help={help}
       aria-label={label}
       aria-valuemin={-1}
       aria-valuemax={1}

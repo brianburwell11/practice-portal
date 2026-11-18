@@ -42,6 +42,8 @@ export function TempoControl() {
         onChange={handleChange}
         onDoubleClick={() => handleChange(1.0)}
         label="Speed"
+        help="Adjust playback speed"
+        helpAt="right"
       />
       {editing ? (
         <input

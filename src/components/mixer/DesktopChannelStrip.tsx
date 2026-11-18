@@ -139,7 +139,7 @@ export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelSt
           <span className="block w-4 h-4 rounded-full -ml-1.5" style={{ backgroundColor: color, opacity: 0.7 }} />
         </span>
       ) : (
-        <PanKnob value={stemState.pan} onChange={c.setPan} resetValue={stemConfig.defaultPan} color={color} label={`${label} pan`} />
+        <PanKnob value={stemState.pan} onChange={c.setPan} resetValue={stemConfig.defaultPan} color={color} label={`${label} pan`} help="Pan" />
       )}
       panReadout={!stemState.stereo && (
         <EditableReadout
@@ -158,6 +158,8 @@ export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelSt
           onReset={() => gang.reset(stemConfig.defaultVolume)}
           color={color}
           label={`${label} volume`}
+          help="Adjust stem volume"
+          helpAt="right"
         />
       )}
       dbReadout={(

@@ -59,7 +59,7 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
       {/* Volume slider */}
       <div className="flex items-center gap-2">
         <label className="text-xs text-gray-500 w-7">Vol</label>
-        <TouchSlider min={0} max={1.5} step={0.01} value={stemState.volume} onChange={c.setVolume} label={`${stemConfig.label} volume`} className="flex-1" />
+        <TouchSlider min={0} max={1.5} step={0.01} value={stemState.volume} onChange={c.setVolume} label={`${stemConfig.label} volume`} className="flex-1" help="Adjust stem volume" helpAt="right" />
         <span className="text-xs text-gray-500 w-8 text-right font-mono">
           {Math.round(stemState.volume * 100)}
         </span>
@@ -70,7 +70,7 @@ export function ChannelStrip({ stemConfig }: ChannelStripProps) {
         <SliderRowSpacer />
       ) : (
         <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500 w-7">Pan</label>
+          <label className="text-xs text-gray-500 w-7" data-help="Pan">Pan</label>
           <TouchSlider min={-1} max={1} step={0.01} value={stemState.pan} onChange={c.setPan} onDoubleClick={() => c.setPan(stemConfig.defaultPan)} label={`${stemConfig.label} pan`} className="flex-1" />
           <span className="text-xs text-gray-500 w-8 text-right font-mono">{formatPan(stemState.pan)}</span>
         </div>

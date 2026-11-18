@@ -276,6 +276,8 @@ export function MixerPanel() {
               : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
           }`}
           title="Reset mixer to defaults"
+          data-help="Reset to default mix"
+          data-help-at="top-right"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
             <path d="M12 2a10 10 0 0 1 8.5 4.7l-2.3-.4a1.2 1.2 0 1 0-.4 2.4l4.6.8a1.2 1.2 0 0 0 1.4-1l.8-4.6a1.2 1.2 0 0 0-2.4-.4l-.3 1.8A12 12 0 0 0 0 12a1.2 1.2 0 0 0 2.4 0A9.6 9.6 0 0 1 12 2ZM12 22a10 10 0 0 1-8.5-4.7l2.3.4a1.2 1.2 0 1 0 .4-2.4l-4.6-.8a1.2 1.2 0 0 0-1.4 1l-.8 4.6a1.2 1.2 0 0 0 2.4.4l.3-1.8A12 12 0 0 0 24 12a1.2 1.2 0 0 0-2.4 0A9.6 9.6 0 0 1 12 22Z" />
@@ -287,6 +289,8 @@ export function MixerPanel() {
             {...(anyMuted ? muteHandlers : {})}
             disabled={!anyMuted}
             aria-label="Mute group on or off (long-press to clear)"
+            data-help="All mutes on/off {M}"
+            data-help-at="above"
             aria-pressed={anyMuted ? globalMuteActive : undefined}
             className={`flex-1 flex items-center justify-center gap-0.5 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
               !anyMuted
@@ -306,6 +310,8 @@ export function MixerPanel() {
             {...(anySoloed ? soloHandlers : {})}
             disabled={!anySoloed}
             aria-label="Solo group on or off (long-press to clear)"
+            data-help="All solos on/off {S}"
+            data-help-at="above"
             aria-pressed={anySoloed ? globalSoloActive : undefined}
             className={`flex-1 flex items-center justify-center gap-0.5 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
               !anySoloed
@@ -330,6 +336,8 @@ export function MixerPanel() {
             mixerIsAtDefaults ? 'text-gray-700 cursor-default' : 'text-gray-500 hover:text-gray-300'
           }`}
           title="Reset mixer to defaults"
+          data-help="Reset to default mix"
+          data-help-at="top-right"
           aria-label="Reset mixer to defaults"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
@@ -349,6 +357,8 @@ export function MixerPanel() {
                     : 'text-gray-500 hover:text-gray-300'
             }`}
             title="Save current mixer as default"
+            data-help="Save as default mix"
+            data-help-at="top-right"
             aria-label="Save current mixer as default"
           >
             {saveState === 'idle' && (
@@ -393,6 +403,8 @@ export function MixerPanel() {
           onClick={() => minimizePanel('mixer')}
           className="hidden md:inline-flex items-center gap-1 text-xs px-2 py-1 ml-auto rounded font-medium text-gray-500 hover:text-gray-300 transition-colors"
           title="Minimize mixer"
+          data-help="Show/hide mixer {X}"
+          data-help-at="left"
           aria-label="Minimize mixer"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -407,7 +419,7 @@ export function MixerPanel() {
           get pb-1 (room for the scrollbar) so their rows line up. */}
       {isDesktop ? (
         <div className="flex gap-1.5 h-[300px] shrink-0">
-          <div className="flex flex-row flex-nowrap gap-1.5 flex-1 min-w-0 h-full overflow-x-auto pb-1">
+          <div data-tour="mixer" className="flex flex-row flex-nowrap gap-1.5 flex-1 min-w-0 h-full overflow-x-auto pb-1">
             <StripHeader />
             {strips}
           </div>
@@ -416,7 +428,7 @@ export function MixerPanel() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div data-tour="mixer" className="flex flex-col gap-3">
           {strips}
         </div>
       )}

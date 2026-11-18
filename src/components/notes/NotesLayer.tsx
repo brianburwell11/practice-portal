@@ -236,6 +236,7 @@ function AddNoteButton({
       onClick={onClick}
       disabled={disabled}
       title="Add a note (N)"
+        data-help="Add a note {N}"
       aria-label="Add a note"
       // On desktop, pull the button left by its own width + the flex gap
       // (40px + 8px) so the first sticky still lands at the focused-lyric

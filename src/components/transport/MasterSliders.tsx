@@ -30,6 +30,7 @@ export function MasterSliders({ className = '' }: Props) {
 
   return (
     <div
+      data-tour="speed"
       className={`grid grid-cols-[2rem_1fr_2.5rem] md:grid-cols-[2rem_6rem_2.5rem] gap-x-2 gap-y-0.5 items-center ${className}`}
     >
       <label className="text-xs text-gray-400 text-right">Vol</label>
@@ -41,6 +42,8 @@ export function MasterSliders({ className = '' }: Props) {
         onChange={handleMasterVolume}
         onDoubleClick={() => handleMasterVolume(1.0)}
         label="Master Volume"
+        help="Adjust master volume"
+        helpAt="right"
       />
       {volEditing ? (
         <input

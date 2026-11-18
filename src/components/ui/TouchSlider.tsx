@@ -11,6 +11,9 @@ interface TouchSliderProps {
   label?: string;
   className?: string;
   accentColor?: string;
+  /** What it does, for the band page's control labels (`data-help`), and where that label prefers to sit. */
+  help?: string;
+  helpAt?: 'below' | 'above' | 'right' | 'left' | 'top-right' | 'bottom-right' | 'top-left' | 'bottom-left';
 }
 
 const LOCK_THRESHOLD = 8;
@@ -25,6 +28,8 @@ export function TouchSlider({
   label,
   className = '',
   accentColor = 'var(--color-blue-500)',
+  help,
+  helpAt,
 }: TouchSliderProps) {
   const rootRef = useRef<HTMLSpanElement>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
@@ -69,6 +74,8 @@ export function TouchSlider({
   return (
     <Slider.Root
       ref={rootRef}
+      data-help={help}
+      data-help-at={helpAt}
       className={`relative flex items-center select-none touch-none h-5 md:h-4 ${className}`}
       min={min}
       max={max}

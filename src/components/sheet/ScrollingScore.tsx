@@ -747,6 +747,8 @@ export function ScrollingScore() {
               className="flex items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
               title="Full screen sheet music (F)"
               aria-label="Full screen sheet music"
+              data-help="View in full screen {F}"
+              data-help-at="left"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />

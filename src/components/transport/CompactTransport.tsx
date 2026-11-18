@@ -22,7 +22,10 @@ export function CompactTransport({ touch = false }: { touch?: boolean }) {
       {!touch && <StopButton size={size} />}
       <PlayPauseButton size={size} longPressStops={touch} />
       <LoopButton size={size} verb={touch ? 'Tap' : 'Click'} />
-      <div className="min-w-0 flex-1">
+      <div
+        className="min-w-0 flex-1"
+        data-help={touch ? 'Tap to jump. Hold, then drag, to loop a section.' : 'Click to jump. Click and drag to loop a section.'}
+      >
         <WaveformTimeline compact />
       </div>
       <div className="shrink-0 text-right font-mono text-xs leading-tight text-gray-300">

@@ -31,6 +31,10 @@ interface VerticalFaderProps {
   onReset?: () => void;
   color: string;
   label: string;
+  /** What it does, for the band page's control labels (`data-help`). */
+  help?: string;
+  /** Where that label prefers to sit (`data-help-at`). */
+  helpAt?: string;
 }
 
 /**
@@ -79,7 +83,7 @@ const GAIN_PER_PX = 0.0003;
 /** Pixels per `deltaMode` unit: pixels, lines (Firefox), pages. */
 const DELTA_MODE_PX = [1, 33, 800];
 
-export function VerticalFader({ value, onChange, resetValue, onReset, color, label }: VerticalFaderProps) {
+export function VerticalFader({ value, onChange, resetValue, onReset, color, label, help, helpAt }: VerticalFaderProps) {
   const root = useRef<HTMLSpanElement>(null);
   const latest = useRef({ value, onChange });
   useEffect(() => { latest.current = { value, onChange }; });
@@ -104,7 +108,7 @@ export function VerticalFader({ value, onChange, resetValue, onReset, color, lab
   }, []);
 
   return (
-    <div className="flex h-full min-h-[100px] gap-0.5">
+    <div className="flex h-full min-h-[100px] gap-0.5" data-help={help} data-help-at={helpAt}>
       <FaderScale />
 
       <Slider.Root

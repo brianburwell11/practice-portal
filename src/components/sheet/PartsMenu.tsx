@@ -61,6 +61,7 @@ export function PartsMenu({ parts, hiddenPartIds, onApply, className = '' }: Pro
         }}
         className={`px-2 py-0.5 rounded ${hiddenPartIds.size > 0 ? 'bg-blue-600 text-accent-ink' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'} ${className}`}
         title="Pick which instrument parts to display"
+        data-help="Pick which parts to show"
         aria-expanded={open}
       >
         parts ({parts.length - hiddenPartIds.size}/{parts.length})

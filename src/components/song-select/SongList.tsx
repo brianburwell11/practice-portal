@@ -375,6 +375,8 @@ export function SongSelectDropdown() {
 
   return (
     <select
+      data-help="Load a song"
+      data-tour="pick"
       className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 flex-1 min-w-0 text-center md:flex-initial md:text-left md:w-auto md:shrink-0"
       value={inSetlist ? (selectedSong ? String(activeIndex) : '-1') : (selectedSong?.id ?? '')}
       onChange={(e) => {
@@ -496,6 +498,7 @@ export function SetlistDropdown({ className = 'ml-auto' }: { className?: string 
       value={activeSetlist?.id ?? (activeTag ? TAG_PREFIX + activeTag : '')}
       onChange={(e) => handleSetlistChange(e.target.value)}
       aria-label="Setlist or collection"
+      data-help="Load a setlist or filter by collection"
     >
       <option value="">All Songs</option>
       {setlists.length > 0 && (
@@ -543,6 +546,7 @@ export function SetlistNav() {
           <button
             disabled={!prevSong || loading}
             onClick={() => navigate(activeIndex - 1)}
+            data-help="Previous song"
             className="text-sm md:text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default"
           >
             {prevSong ? (
@@ -560,6 +564,7 @@ export function SetlistNav() {
           <button
             disabled={!nextSong || loading}
             onClick={() => navigate(nextIndex)}
+            data-help="Next song"
             className="text-sm md:text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default"
           >
             {nextSong ? (

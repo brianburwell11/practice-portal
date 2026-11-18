@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type CSSProperties } from 'react';
-import { HelpModal } from '../components/HelpModal';
+import { useOnboardingStore } from '../onboarding/onboardingStore';
 import { useBandStore } from '../store/bandStore';
 import { useSessionStore } from '../store/sessionStore';
 import { safeHref } from '../utils/url';
@@ -105,7 +105,6 @@ export function AdminRibbon({
 }: Props) {
   const [open, setOpen] = useState<DropdownId>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
   const ribbonRef = useRef<HTMLDivElement>(null);
 
   // A press anywhere else (mouse, touch or pen) or Escape closes the open menu.
@@ -244,7 +243,7 @@ export function AdminRibbon({
               )}
               <div className="py-1 border-t border-gray-800">
                 <button
-                  onClick={() => { setSheetOpen(false); setShowHelp(true); }}
+                  onClick={() => { setSheetOpen(false); useOnboardingStore.getState().showLabels(); }}
                   className={`${row} text-gray-200 active:bg-gray-800`}
                 >
                   Help
@@ -253,7 +252,6 @@ export function AdminRibbon({
             </div>
           </div>
         )}
-        {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
       </>
     );
   }
@@ -342,17 +340,7 @@ export function AdminRibbon({
           <span aria-hidden="true" className="text-[10px] opacity-70">↗</span>
         </a>
       ))}
-
-      <button
-        onClick={() => setShowHelp(true)}
-        className="ml-auto w-5 h-5 rounded-full bg-on-accent/15 hover:bg-on-accent/30 flex items-center justify-center text-[11px] font-semibold leading-none transition-colors"
-        title="Help"
-        aria-label="Help"
-      >
-        ?
-      </button>
     </div>
-    {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </>
   );
 }

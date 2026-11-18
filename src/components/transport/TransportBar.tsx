@@ -1,3 +1,4 @@
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useEffect, useState } from 'react';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
@@ -132,6 +133,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
   // A song on its way in, the first or the next: placeholders for the waveform and time.
   const songLoading = useSongStore((s) => s.loading || (!s.selectedSong && !s.manifest));
   const [showBookmark, setShowBookmark] = useState(false);
+  const touch = useMediaQuery('(pointer: coarse)');
   const lyricsMobileVisible = useLyricsStore((s) => s.mobileVisible);
   const toggleLyricsMobileVisible = useLyricsStore((s) => s.toggleMobileVisible);
   const hasLyrics = useLyricsStore((s) => s.lines.length > 0);
@@ -223,7 +225,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
       {/* Desktop: controls cluster (buttons + sliders grouped together, shrink-0) */}
       <div className="hidden md:flex md:flex-col md:gap-1 md:shrink-0">
         {/* Transport buttons — centered over sliders */}
-        <div className="flex items-center justify-center gap-2">
+        <div data-tour="transport" className="flex items-center justify-center gap-2">
           <StopButton />
           <PlayPauseButton />
           <LoopButton verb="Click" />
@@ -238,7 +240,11 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
         className={`md:flex-1 md:min-w-0 flex items-center gap-2 ${sticky ? 'sticky z-20 px-4 pt-3 pb-2' : ''}`}
         style={sticky ? { top: stickyTop, backgroundColor: 'var(--band-bg, var(--color-page))' } : undefined}
       >
-        <div className="flex-1 min-w-0">
+        <div
+          className="flex-1 min-w-0"
+          data-tour="waveform"
+          data-help={touch ? 'Tap to jump. Hold, then drag, to loop a section.' : 'Click to jump. Click and drag to loop a section.'}
+        >
           {songLoading ? <WaveformSkeleton progress={loadProgress} /> : <WaveformTimeline />}
         </div>
         {songLoading ? (
@@ -247,7 +253,11 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             <Skeleton className="h-4 w-10" />
           </div>
         ) : (
-        <div className="hidden md:flex md:flex-col md:items-center font-mono text-sm text-gray-300 shrink-0 -mt-1">
+        <div
+          className="hidden md:flex md:flex-col md:items-center font-mono text-sm text-gray-300 shrink-0 -mt-1"
+          data-help="Jump to specific section, timestamp, or measure|beat"
+          data-help-at="left"
+        >
           <div>
             {editingTime ? (
               <input
@@ -374,7 +384,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
       {/* Mobile: transport buttons (row 2), one row whatever the song has.
           Order: play and loop, where you are, what you read along with
           (chords, lyrics, sheet music), then the mixer. */}
-      <div className={`flex items-center gap-1.5 mt-2 md:hidden ${minimal ? '' : 'justify-center'}`}>
+      <div data-tour="transport" className={`flex items-center gap-1.5 mt-2 md:hidden ${minimal ? '' : 'justify-center'}`}>
         <PlayPauseButton size={minimal ? 'lg' : 'fluid'} longPressStops />
         {/* Editors: volume and speed sit right of play/pause, always shown */}
         {minimal && <MasterSliders className="flex-1 min-w-0 ml-1" />}
@@ -386,6 +396,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             showBookmark ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={() => setShowBookmark(!showBookmark)}
+          data-help="Jump to a time or section"
           title="Position & Sections"
           aria-label="Position and sections"
           aria-pressed={showBookmark}
@@ -401,6 +412,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             chordsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={toggleChordsMobileVisible}
+          data-help="Chords"
           title="Chords"
           aria-label="Chords"
           aria-pressed={chordsMobileVisible}
@@ -414,6 +426,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             lyricsMobileVisible ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={toggleLyricsMobileVisible}
+          data-help="Lyrics"
           title="Lyrics"
           aria-label="Lyrics"
           aria-pressed={lyricsMobileVisible}
@@ -433,6 +446,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             sheetMusicOpen ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={openSheetMusic}
+          data-help="Sheet music"
           title="Sheet music"
           aria-label="Sheet music"
           aria-pressed={sheetMusicOpen}
@@ -446,6 +460,8 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             showSliders ? 'bg-blue-600 hover:bg-blue-500 text-accent-ink' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
           }`}
           onClick={onToggleSliders}
+          data-help="Mixer and speed"
+          data-tour="mixer-toggle"
           title="Mixer & Sliders"
           aria-label="Mixer and sliders"
           aria-pressed={showSliders}
@@ -465,7 +481,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
 
       {/* Mobile: bookmark panel (position, measure/beat, section jump) */}
       {showBookmark && !minimal && (
-        <div className="mt-2 md:hidden flex items-center justify-center gap-4">
+        <div className="mt-2 md:hidden flex items-center justify-center gap-4" data-help="Jump to specific section, timestamp, or measure|beat">
           <div className="font-mono text-sm text-gray-300">
             {editingTime ? (
               <input

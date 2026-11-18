@@ -112,6 +112,8 @@ export function MixerTemplateMenu() {
         className="flex items-center gap-1.5 text-xs px-2 py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors text-gray-500 hover:text-gray-300"
         title="Mixer templates"
         aria-label="Mixer templates"
+        data-help="Load from mixer template"
+        data-help-at="right"
       >
         {/* Sliders */}
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

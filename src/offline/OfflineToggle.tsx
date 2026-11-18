@@ -86,6 +86,7 @@ export function OfflineToggle({ pinId, what, name, onPin, coveredBy, compact = f
       aria-pressed={filled}
       aria-label={label}
       title={label}
+      data-help={what === 'song' ? 'Make this song available offline' : 'Make this setlist available offline'}
       className={`inline-flex items-center gap-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 ${
         compact ? 'p-1.5 min-h-[44px] min-w-[44px] justify-center md:min-h-0 md:min-w-0' : 'px-2 py-1'
       } ${partial ? 'text-yellow-400' : 'text-blue-400'}`}

@@ -79,6 +79,8 @@ export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPart
       aria-modal="true"
       aria-label={`Sheet music: ${title}`}
       tabIndex={-1}
+      // Covers the page: while it's open, the ? labels are for what's in here.
+      data-help-scope
       className="fixed inset-0 z-[90] flex flex-col bg-gray-950 text-sm text-gray-200 outline-none"
     >
       <div
@@ -89,6 +91,7 @@ export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPart
         <label className="flex items-center gap-1 text-xs text-gray-400">
           <span className="sr-only sm:not-sr-only">Layout</span>
           <select
+            data-help="Page layout"
             className="rounded bg-gray-800 px-1.5 py-1 text-gray-200"
             value={layout}
             onChange={(e) => setLayout(e.target.value as PageLayoutMode)}
@@ -97,15 +100,16 @@ export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPart
           </select>
         </label>
         <div className="flex items-center gap-1">
-          <button className={btn} onClick={() => setZoom(zoom / 1.15)} aria-label="Zoom out">−</button>
-          <button className={`${btn} w-14 tabular-nums`} onClick={() => setZoom(1)} title="Fit">{Math.round(zoom * 100)}%</button>
-          <button className={btn} onClick={() => setZoom(zoom * 1.15)} aria-label="Zoom in">+</button>
+          <button className={btn} onClick={() => setZoom(zoom / 1.15)} aria-label="Zoom out" data-help="Zoom out">−</button>
+          <button className={`${btn} w-14 tabular-nums`} onClick={() => setZoom(1)} title="Fit" data-help="Fit to the screen">{Math.round(zoom * 100)}%</button>
+          <button className={btn} onClick={() => setZoom(zoom * 1.15)} aria-label="Zoom in" data-help="Zoom in">+</button>
         </div>
         <button
           className={`${btn} ${invert ? 'bg-blue-600 text-accent-ink hover:bg-blue-500' : ''}`}
           onClick={() => setInvert(!invert)}
           aria-pressed={invert}
           title="Light notes on dark pages"
+          data-help="Light notes on dark pages"
         >
           Dark pages
         </button>
@@ -115,6 +119,7 @@ export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPart
           onClick={onClose}
           aria-label="Close full screen sheet music"
           title="Close (Esc)"
+          data-help="Close full screen {Esc}"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" />

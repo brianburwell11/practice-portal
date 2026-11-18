@@ -44,6 +44,7 @@ import practicePortalLogo from './assets/practice-portal-logo.png';
 import { useMixerPersistence } from './hooks/useMixerPersistence';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { readDoc } from './offline/sync';
+import { HelpButton, OnboardingLayer } from './onboarding/Onboarding';
 
 
 const SetlistModal = lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })));
@@ -378,9 +379,12 @@ export default function App() {
             {!editorFocus && !isDesktop && <CurrentSongOfflineToggle />}
             {!editorFocus && isDesktop && <SetlistDropdown />}
             {showAdmin && !isDesktop && <AdminRibbon variant="menu" {...adminProps} />}
+            {!editorFocus && <HelpButton />}
             <AccountMenu bandId={currentBand?.id} />
           </div>
         </header>
+        {/* First-run tour and control labels, in the band's colors. */}
+        <OnboardingLayer editorOpen={editorFocus || showEditBandModal} />
         {membersOpen && currentBand && (
           <MembersModal
             bandId={currentBand.id}

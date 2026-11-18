@@ -573,6 +573,8 @@ function LaneControls() {
         className="rounded px-1 text-[11px] tabular-nums text-gray-500 hover:bg-gray-800 hover:text-gray-200"
         title="How far ahead the chords show (Cmd + scroll or pinch on the lane to zoom)"
         aria-label={`Show chords ${shown} seconds ahead`}
+        data-help="Adjust chord lookahead time"
+        data-help-at="left"
       >
         {shown}s
       </button>
@@ -582,6 +584,8 @@ function LaneControls() {
         className="flex items-center justify-center rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-200"
         title="Minimize chords"
         aria-label="Minimize chords"
+        data-help="Show/hide chords {K}"
+        data-help-at="top-left"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <line x1="5" y1="19" x2="19" y2="19" />

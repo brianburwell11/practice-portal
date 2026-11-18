@@ -378,7 +378,7 @@ export function ChordsGridPane() {
         {anchor !== null ? (
           <span className="text-xs text-blue-300">
             {barOf[rangeLo] === barOf[rangeHi] ? `Bar ${barOf[rangeLo] + 1}` : `Bars ${barOf[rangeLo] + 1}–${barOf[rangeHi] + 1}`} selected
-            ({rangeHi - rangeLo + 1} {rangeHi === rangeLo ? 'beat' : 'beats'}): ⌘C copy, ⌘X cut, ⌘V paste, ⌫ delete
+            ({rangeHi - rangeLo + 1} {rangeHi === rangeLo ? 'beat' : 'beats'}): <Kbd>⌘C</Kbd> copy, <Kbd>⌘X</Kbd> cut, <Kbd>⌘V</Kbd> paste, <Kbd>⌫</Kbd> delete
           </span>
         ) : (
           <span className="text-xs text-gray-500 font-mono">

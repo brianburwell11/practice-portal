@@ -30,6 +30,7 @@ export function StopButton({ size = 'md' }: { size?: TransportButtonSize }) {
       className={`${BASE} ${SIZE[size]} bg-gray-700 hover:bg-gray-600`}
       disabled={disabled}
       onClick={() => engine.stop()}
+      data-help="Back to the start"
       title="Stop"
       aria-label="Stop"
     >
@@ -53,6 +54,8 @@ export function PlayPauseButton({ size = 'md', longPressStops = false }: { size?
       className={`${BASE} ${SIZE[size]} bg-blue-600 hover:bg-blue-500 text-accent-ink`}
       disabled={disabled}
       {...handlers}
+      data-help={longPressStops ? 'Play, hold to stop' : 'Play or pause {Space}'}
+      data-help-at="top-right"
       title={(playing ? 'Pause' : 'Play') + hint}
       aria-label={playing ? 'Pause' : 'Play'}
     >
@@ -101,6 +104,8 @@ export function LoopButton({ size = 'md', verb = 'Click' }: { size?: TransportBu
       className={`${BASE} ${SIZE[size]} ${color}`}
       disabled={disabled}
       {...handlers}
+      data-help={verb === 'Tap' ? 'Tap to set loop in/loop out. Hold to clear.' : 'Click to set loop in/loop out. {Shift} + click to clear.'}
+      data-help-at="right"
       title={label}
       aria-label={label}
       aria-pressed={loopA !== null && loopB !== null ? loopEnabled : undefined}
