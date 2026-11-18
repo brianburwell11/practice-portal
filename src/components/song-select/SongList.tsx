@@ -377,7 +377,7 @@ export function SongSelectDropdown() {
     <select
       data-help="Load a song"
       data-tour="pick"
-      className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 flex-1 min-w-0 text-center md:flex-initial md:text-left md:w-auto md:shrink-0"
+      className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 flex-1 min-w-0 text-center md:flex-initial md:text-left md:w-auto md:max-w-[26rem]"
       value={inSetlist ? (selectedSong ? String(activeIndex) : '-1') : (selectedSong?.id ?? '')}
       onChange={(e) => {
         if (inSetlist) {
@@ -540,19 +540,22 @@ export function SetlistNav() {
   };
 
   return (
-    <div className="flex items-center gap-1 md:gap-3 flex-1 min-w-0 md:flex-initial md:w-auto md:max-w-none">
+    <div className="flex items-center gap-1 md:gap-3 flex-1 min-w-0 md:flex-initial">
       <div className="shrink-0 text-left py-2 px-2 md:px-0">
         {activeSetlist && (
           <button
             disabled={!prevSong || loading}
             onClick={() => navigate(activeIndex - 1)}
             data-help="Previous song"
+            aria-label={prevSong ? `Previous song: ${prevSong.title}` : undefined}
+            title={prevSong?.title}
             className="text-sm md:text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default"
           >
             {prevSong ? (
               <>
                 <span>{'\u2190'}</span>
-                <span className="hidden md:inline"> {prevSong.title}</span>
+                {/* Titles only where the header has room for them. */}
+                <span className="hidden xl:inline-block max-w-[10rem] truncate align-bottom">&nbsp;{prevSong.title}</span>
               </>
             ) : ''}
           </button>
@@ -565,11 +568,13 @@ export function SetlistNav() {
             disabled={!nextSong || loading}
             onClick={() => navigate(nextIndex)}
             data-help="Next song"
+            aria-label={nextSong ? `Next song: ${nextSong.title}` : undefined}
+            title={nextSong?.title}
             className="text-sm md:text-xs text-gray-500 hover:text-gray-300 disabled:text-gray-700 disabled:cursor-default"
           >
             {nextSong ? (
               <>
-                <span className="hidden md:inline">{nextSong.title} </span>
+                <span className="hidden xl:inline-block max-w-[10rem] truncate align-bottom">{nextSong.title}&nbsp;</span>
                 <span>{'\u2192'}</span>
               </>
             ) : ''}
