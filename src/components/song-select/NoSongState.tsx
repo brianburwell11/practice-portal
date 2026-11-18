@@ -5,12 +5,12 @@ import { useSongStore } from '../../store/songStore';
 import { useSongLoader } from './SongList';
 import { MixerSkeleton } from '../mixer/MixerSkeleton';
 import { useSetlistStore } from '../../store/setlistStore';
-import { SetlistHome } from './SetlistHome';
+import { AllSongsHome, SetlistHome } from './SetlistHome';
 
 /**
  * What fills the screen before a song is playing: a failed load and its
  * Retry, a band with no songs yet (and, for those who can, how to add one),
- * an open setlist's song list, or a prompt to pick a song.
+ * an open setlist's song list, or every song (the open collection's, if any).
  */
 export function NoSongState({ onInvite }: { onInvite: () => void }) {
   const { handleSelect } = useSongLoader();
@@ -75,7 +75,7 @@ export function NoSongState({ onInvite }: { onInvite: () => void }) {
 
   if (activeSetlist) return <SetlistHome setlist={activeSetlist} />;
 
-  return <Centered><p className="text-gray-500">Pick a song to get started.</p></Centered>;
+  return <AllSongsHome />;
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

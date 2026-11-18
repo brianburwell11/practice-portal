@@ -8,6 +8,7 @@ import { formatTime } from '../../utils/formatTime';
 import { getCamelotStyle } from '../../utils/camelot';
 import type { SetlistConfig, SongManifestEntry } from '../../audio/types';
 import { SetlistOfflineToggle } from '../../offline/OfflineToggle';
+import { collectionLabel } from '../../utils/collections';
 
 interface SongMeta {
   key: string;
@@ -26,7 +27,6 @@ type Row =
 export function SetlistHome({ setlist }: { setlist: SetlistConfig }) {
   const { handleSelect } = useSongLoader();
   const manifest = useSongStore((s) => s.manifest);
-  const bandId = useBandStore((s) => s.currentBand?.id);
   const setActiveIndex = useSetlistStore((s) => s.setActiveIndex);
 
   // Same numbering as the song dropdown: songs missing from the manifest
@@ -44,6 +44,44 @@ export function SetlistHome({ setlist }: { setlist: SetlistConfig }) {
     }
     return out;
   }, [setlist, manifest]);
+
+  return (
+    <SongsHome
+      title={setlist.name}
+      rows={rows}
+      aside={<SetlistOfflineToggle setlist={setlist} />}
+      onOpen={(idx, song) => {
+        setActiveIndex(idx);
+        handleSelect(song);
+      }}
+    />
+  );
+}
+
+/**
+ * The band's home when no setlist is open and no song is: every song A–Z
+ * (or the open collection's), with keys and lengths, like a setlist's home.
+ */
+export function AllSongsHome() {
+  const { filteredSongs, handleSelect } = useSongLoader();
+  const activeTag = useSetlistStore((s) => s.activeTag);
+  const rows = useMemo<Row[]>(() => filteredSongs.map((song, idx) => ({ type: 'song', idx, song })), [filteredSongs]);
+  return (
+    <SongsHome
+      title={activeTag ? collectionLabel(activeTag) : 'All songs'}
+      rows={rows}
+      onOpen={(_, song) => handleSelect(song)}
+    />
+  );
+}
+
+function SongsHome({ title, rows, aside, onOpen }: {
+  title: string;
+  rows: Row[];
+  aside?: React.ReactNode;
+  onOpen: (idx: number, song: SongManifestEntry) => void;
+}) {
+  const bandId = useBandStore((s) => s.currentBand?.id);
 
   // The manifest has no keys or lengths; they live in each song's config.
   const [meta, setMeta] = useState<Record<string, SongMeta>>({});
@@ -89,23 +127,18 @@ export function SetlistHome({ setlist }: { setlist: SetlistConfig }) {
     return out;
   }, [rows, meta]);
 
-  const open = (idx: number, song: SongManifestEntry) => {
-    setActiveIndex(idx);
-    handleSelect(song);
-  };
-
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-xl mx-auto px-4 py-6 md:py-10">
         <header className="mb-4 flex items-start gap-3">
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-semibold text-gray-100">{setlist.name}</h2>
+            <h2 className="text-xl font-semibold text-gray-100">{title}</h2>
             <p className="text-sm text-gray-500">
               {songCount} {songCount === 1 ? 'song' : 'songs'}
               {totalSeconds > 0 && <> · {formatTotal(totalSeconds)} total</>}
             </p>
           </div>
-          <SetlistOfflineToggle setlist={setlist} />
+          {aside}
         </header>
         <ol className="flex flex-col gap-1">
           {rows.map((row, i) =>
@@ -124,7 +157,7 @@ export function SetlistHome({ setlist }: { setlist: SetlistConfig }) {
             ) : (
               <li key={`s-${i}`}>
                 <button
-                  onClick={() => open(row.idx, row.song)}
+                  onClick={() => onOpen(row.idx, row.song)}
                   className="w-full flex items-center gap-3 rounded px-3 py-2 min-h-11 text-left bg-gray-800/60 hover:bg-gray-700/70 focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
                 >
                   <span className="text-xs text-gray-500 w-5 text-right shrink-0">{row.idx + 1}.</span>
