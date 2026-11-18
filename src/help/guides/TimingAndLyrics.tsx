@@ -5,19 +5,19 @@ export default function TimingAndLyrics() {
   return (
     <>
       <p>
-        Three editors make a song easier to practice: the <Ui>TapMap Editor</Ui> marks where its sections and measures
+        Three editors make a song easier to practice: the <Ui>Beat Map Editor</Ui> marks where its sections and measures
         fall, and the <Ui>Lyrics Editor</Ui> and <Ui>Chords Editor</Ui> line the words and chords up with the music. All
         three are in the <Ui>Songs</Ui> menu while a song is open.
       </p>
 
-      <HelpSection title="The tap map">
+      <HelpSection title="The beat map">
         <p>
-          A song’s tap map is the list of where each section, measure and beat starts. Once a song has one, the player
+          A song’s beat map is the list of where each section, measure and beat starts. Once a song has one, the player
           shows measure and beat numbers, <Ui>Jump to Section</Ui> lists the sections, and the sheet music follows
           along. Managers and the Owner can edit it.
         </p>
         <Steps>
-          <li>Open <Ui>Songs</Ui> → <Ui>TapMap Editor</Ui> and play the song.</li>
+          <li>Open <Ui>Songs</Ui> → <Ui>Beat Map Editor</Ui> and play the song.</li>
           <li>
             Tap along: <Key>S</Key> where a new section starts, <Key>M</Key> on the first beat of each measure, and{' '}
             <Key>B</Key> on other beats if you want them. Sections are named A, B, C and so on.
@@ -63,7 +63,7 @@ export default function TimingAndLyrics() {
           and you can use both on the same song.
         </p>
         <p>
-          <Ui>Grid</Ui> lays the song out in bars, one box per beat, from its tap map. Click a box and type:
+          <Ui>Grid</Ui> lays the song out in bars, one box per beat, from its beat map. Click a box and type:
         </p>
         <Steps>
           <li>
@@ -83,7 +83,7 @@ export default function TimingAndLyrics() {
           </li>
         </Steps>
         <p>
-          <Ui>Stamp</Ui> is for parts with no bars to type into, like a free-time intro, or a song without a tap map:
+          <Ui>Stamp</Ui> is for parts with no bars to type into, like a free-time intro, or a song without a beat map:
         </p>
         <Steps>
           <li>
@@ -106,7 +106,7 @@ export default function TimingAndLyrics() {
           you’re done.
         </p>
         <Note>
-          If the tap map changes after chords were added, the editor says how many chords are now off the grid, and{' '}
+          If the beat map changes after chords were added, the editor says how many chords are now off the grid, and{' '}
           <Ui>Snap to grid</Ui> moves them back onto the nearest half beat.
         </Note>
       </HelpSection>
@@ -122,7 +122,7 @@ export default function TimingAndLyrics() {
 
       <HelpSection title="Who can do what">
         <Bullets>
-          <li>TapMap Editor: Managers and the Owner.</li>
+          <li>Beat Map Editor: Managers and the Owner.</li>
           <li>Lyrics Editor, Chords Editor and video sync: Owners, Managers and Editors.</li>
         </Bullets>
         <p>The full list is in <GuideLink slug="roles-and-permissions">Roles and permissions</GuideLink>.</p>

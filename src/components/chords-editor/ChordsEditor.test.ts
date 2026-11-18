@@ -154,10 +154,10 @@ describe('Grid mode', () => {
     expect(host.textContent).toContain('Cmaj7');
   });
 
-  it('points to Stamp when the song has no tapMap', () => {
+  it('points to Stamp when the song has no beat map', () => {
     setSong([]);
     render(ChordsGridPane);
-    expect(host.textContent).toContain('no tapMap');
+    expect(host.textContent).toContain('no beat map');
     expect(cellInput()).toBeNull();
   });
 });

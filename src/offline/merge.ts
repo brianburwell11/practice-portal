@@ -73,7 +73,7 @@ export function resolveConflict(kind: MergeKind, base: unknown, mine: unknown, t
 
 /** Plain names for the parts of a song's config, for the conflict dialog. */
 const PART_NAMES: Record<string, string> = {
-  tapMap: 'timing (tap map)',
+  tapMap: 'timing (beat map)',
   tempoMap: 'tempo',
   timeSignatureMap: 'time signatures',
   beatOffset: 'beat offset',

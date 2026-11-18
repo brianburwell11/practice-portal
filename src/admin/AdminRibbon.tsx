@@ -153,7 +153,7 @@ export function AdminRibbon({
       items: [
         { label: 'Add Song', show: can('song.create'), enabled: true, onClick: onAddSong },
         { label: 'Edit Song', show: can('song.content.write'), enabled: !!hasSong, onClick: onEditSong },
-        { label: 'TapMap Editor', show: can('song.timing.write'), enabled: !!hasSong, onClick: onTapMapEditor },
+        { label: 'Beat Map Editor', show: can('song.timing.write'), enabled: !!hasSong, onClick: onTapMapEditor },
         { label: 'Lyrics Editor', show: can('song.content.write'), enabled: !!hasSong, onClick: onLyricsEditor },
         { label: 'Chords Editor', show: can('song.content.write'), enabled: !!hasSong, onClick: onChordsEditor },
         { label: 'Delete Song', show: can('song.delete'), enabled: !!hasSong, danger: true, onClick: onDeleteSong },

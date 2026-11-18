@@ -112,7 +112,7 @@ export function SectionList() {
   if (sections.length === 0) {
     return (
       <div className="text-sm text-gray-500 italic px-3 py-4">
-        No sections yet. Add section entries to the tap map.
+        No sections yet. Add section entries to the beat map.
       </div>
     );
   }

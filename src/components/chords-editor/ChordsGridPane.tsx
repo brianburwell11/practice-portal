@@ -119,11 +119,11 @@ export function ChordsGridPane() {
   if (grid.length === 0) {
     return (
       <div className="flex-1 overflow-y-auto max-w-2xl w-full mx-auto px-3 md:px-0 py-4 text-sm text-gray-400 space-y-2">
-        <p>This song has no tapMap, so there's no beat grid to type on.</p>
+        <p>This song has no beat map, so there's no beat grid to type on.</p>
         <p>
           Use{' '}
           <button type="button" className="underline text-gray-200" onClick={() => setMode('stamp')}>Stamp</button>{' '}
-          to tap chords in as the song plays, or add a tapMap in the TapMap Editor first.
+          to tap chords in as the song plays, or add a beat map in the Beat Map Editor first.
         </p>
         <FreeTimeList chords={free} />
       </div>
@@ -456,7 +456,7 @@ export function ChordsGridPane() {
                               className={`relative text-sm font-semibold whitespace-nowrap truncate pointer-events-none ${
                                 isPlaying ? 'text-amber-300' : 'text-gray-100'
                               }`}
-                              title={placed.offGrid ? 'Off the grid since the tapMap changed' : placed.push ? 'Pushed: comes in on the "and" before' : undefined}
+                              title={placed.offGrid ? 'Off the grid since the beat map changed' : placed.push ? 'Pushed: comes in on the "and" before' : undefined}
                             >
                               {placed.push && <span className="text-amber-400 mr-px">›</span>}
                               {displayChord(placed.chord.symbol)}

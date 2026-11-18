@@ -158,7 +158,7 @@ export function MarkerEditorModal() {
       const content = reader.result as string;
       const entries = parseXscFile(content);
       if (tapMap.length > 0) {
-        if (!(await confirmDialog({ title: 'Replace the existing tap map?', confirmLabel: 'Replace', danger: true }))) return;
+        if (!(await confirmDialog({ title: 'Replace the existing beat map?', confirmLabel: 'Replace', danger: true }))) return;
       }
       importTapMap(entries);
     };
@@ -285,13 +285,13 @@ export function MarkerEditorModal() {
   );
 
   return (
-    <div className="theme-default bg-page flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar \u2014 mirrors the LyricsEditor layout: actions left/right,
           centered title, no song name (shown in the header above). On
           phones the file actions collapse into a More menu. */}
       <div className="relative flex items-center justify-between gap-2 px-3 md:px-5 py-2">
         <h2 className="absolute inset-0 hidden md:flex items-center justify-center text-sm font-semibold text-gray-100 pointer-events-none">
-          Edit TapMap
+          Edit Beat Map
         </h2>
         <div className="flex items-center gap-2 relative z-10 min-w-0">
           <button className={`${btn} hidden md:inline-block`} onClick={() => fileInputRef.current?.click()}>

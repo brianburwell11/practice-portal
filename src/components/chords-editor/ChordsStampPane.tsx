@@ -238,7 +238,7 @@ export function ChordsStampPane() {
                 {barBeat(c.time, grid)}
               </span>
               <span className="flex-1 min-w-0 truncate text-base md:text-sm font-semibold text-gray-100">{displayChord(c.symbol)}</span>
-              {off && <span className="text-xs text-orange-400" title="Off the grid since the tapMap changed">off grid</span>}
+              {off && <span className="text-xs text-orange-400" title="Off the grid since the beat map changed">off grid</span>}
             </div>
           );
         })}
@@ -261,7 +261,7 @@ export function ChordsStampPane() {
               </button>
             ))}
           </div>
-          <span className="text-xs text-gray-600">{grid.length === 0 ? 'No tapMap: nothing to snap to' : 'Never in free time'}</span>
+          <span className="text-xs text-gray-600">{grid.length === 0 ? 'No beat map: nothing to snap to' : 'Never in free time'}</span>
         </div>
 
         {coarse ? (

@@ -24,7 +24,7 @@ const ROWS: { group: string; items: { label: string; capability: Capability }[] 
       { label: 'Edit song details, lyrics and chords', capability: 'song.content.write' },
       { label: 'Upload or replace audio, and save the mixer’s default levels', capability: 'song.audio.write' },
       { label: 'Upload or replace sheet music', capability: 'song.score.write' },
-      { label: 'Edit a song’s timing (its tap map and sections)', capability: 'song.timing.write' },
+      { label: 'Edit a song’s timing (its beat map and sections)', capability: 'song.timing.write' },
       { label: 'Delete songs', capability: 'song.delete' },
       { label: 'Create, edit and delete setlists', capability: 'setlist.write' },
     ],

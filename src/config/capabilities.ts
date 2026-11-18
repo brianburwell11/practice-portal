@@ -24,7 +24,7 @@ export const CAPABILITIES = {
   'song.delete': 'Delete a song',
   'song.read': 'View and play songs',
   'song.audio.write': 'Upload and replace audio stems',
-  'song.timing.write': 'Edit tapMap, tempoMap, and markers',
+  'song.timing.write': 'Edit beat map, tempo map, and markers',
   'song.score.write': 'Upload and replace sheet music',
   'song.content.write': 'Edit lyrics and song metadata',
   'note.create': 'Add timestamp notes to songs, and edit or delete your own',

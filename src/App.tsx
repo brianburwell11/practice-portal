@@ -59,7 +59,7 @@ const ADMIN_CAPABILITIES = new Set([
 ]);
 
 const LYRICS_UNSAVED = 'You have unsaved lyrics changes.';
-const TAPMAP_UNSAVED = 'You have unsaved tapMap changes.';
+const TAPMAP_UNSAVED = 'You have unsaved beat map changes.';
 const CHORDS_UNSAVED = 'You have unsaved chord changes.';
 
 /**

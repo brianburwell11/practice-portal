@@ -94,7 +94,7 @@ export default function KeyboardShortcuts() {
         />
       </HelpSection>
 
-      <HelpSection title="TapMap editor">
+      <HelpSection title="Beat map editor">
         <Table
           head={['To', 'Press']}
           rows={[
