@@ -85,7 +85,7 @@ export function DesktopGroupStrip({ groupConfig, stemConfigs }: DesktopGroupStri
           >
             {!open && (
               <span
-                className="shrink-0 flex items-center gap-0.5 text-[10px] font-medium leading-none"
+                className="shrink-0 flex items-center gap-0.5 text-[11px] font-medium leading-none"
                 title={`Track stack, ${stemConfigs.length} tracks`}
               >
                 <StackIcon />

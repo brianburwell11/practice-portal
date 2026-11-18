@@ -21,7 +21,7 @@ const LABEL_INSET_PX = 7;
 const LANE_HEIGHT = 44;
 /** Height of the section-name row across the top, when the song has sections. */
 const SECTION_ROW_PX = 14;
-const SECTION_PX = 10;
+const SECTION_PX = 11;
 const NOW_PX = 18;
 const NEXT_PX = 14;
 /** Gap kept between the current chord and the next one pushing it. */
@@ -343,8 +343,10 @@ function SectionMarks({
         type="button"
         onClick={() => onSeek(s.time)}
         title={`Play from ${s.label}`}
-        className={`absolute top-0 left-0 flex items-center whitespace-nowrap uppercase tracking-wide font-semibold hover:text-amber-200 ${
-          i === cur ? 'text-amber-400' : 'text-amber-400/70'
+        className={`absolute top-0 left-0 flex items-center whitespace-nowrap uppercase tracking-wide font-semibold hover:text-gray-50 ${
+          // Solid hues the theme keeps readable on any band color; an
+          // opacity would slip under its contrast floor.
+          i === cur ? 'text-amber-300' : 'text-amber-500'
         }`}
         style={{ height: SECTION_ROW_PX, fontSize: SECTION_PX, paddingLeft: 3, transform: `translateX(${left}px)` }}
       >
@@ -482,7 +484,7 @@ function SlotLane({ chords, className }: LaneProps) {
             type="button"
             onClick={() => seek(curSection.time)}
             title={`Play from ${curSection.label}`}
-            className="absolute top-0 left-1.5 right-2 truncate text-left uppercase tracking-wide font-semibold text-amber-400"
+            className="absolute top-0 left-1.5 right-2 truncate text-left uppercase tracking-wide font-semibold text-amber-300"
             style={{ height: SECTION_ROW_PX, fontSize: SECTION_PX, lineHeight: `${SECTION_ROW_PX}px` }}
           >
             {curSection.label}

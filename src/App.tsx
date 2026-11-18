@@ -37,7 +37,7 @@ import { chordsDataSchema } from './config/schema';
 import { phonePanelOpen, rememberPhonePanel } from './utils/phonePanels';
 import { useSongStore } from './store/songStore';
 import { useBandStore } from './store/bandStore';
-import { bandTheme } from './utils/bandTheme';
+import { bandTheme, DEFAULT_PAGE_BG } from './utils/bandTheme';
 import { useSetlistStore } from './store/setlistStore';
 import { Link, useNavigate } from 'react-router-dom';
 import practicePortalLogo from './assets/practice-portal-logo.png';
@@ -152,8 +152,10 @@ export default function App() {
   const previewColors = useBandStore((s) => s.previewColors);
   const themeBg = (previewColors ?? currentBand?.colors)?.background;
   const themeAccent = (previewColors ?? currentBand?.colors)?.accent;
+  // A band without colors gets the same treatment on the stock navy, so its
+  // labels read on their buttons too.
   const theme = useMemo(
-    () => (themeBg ? bandTheme({ background: themeBg, accent: themeAccent }) : null),
+    () => bandTheme({ background: themeBg ?? DEFAULT_PAGE_BG, accent: themeAccent }),
     [themeBg, themeAccent],
   );
   const navigate = useNavigate();

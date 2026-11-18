@@ -78,11 +78,11 @@ export function StripFrame({
       <div className="h-7 w-full flex items-center justify-center gap-0.5">
         {knob}
         {panReadout && (
-          <div className="w-8 flex justify-center text-[10px] leading-none font-mono text-gray-400">{panReadout}</div>
+          <div className="w-8 flex justify-center text-[11px] leading-none font-mono text-gray-400">{panReadout}</div>
         )}
       </div>
       <div className="flex-1 min-h-0 w-full flex justify-center">{fader}</div>
-      <div className="h-3.5 w-full flex items-center justify-center text-[10px] leading-none font-mono text-gray-300">{dbReadout}</div>
+      <div className="h-3.5 w-full flex items-center justify-center text-[11px] leading-none font-mono text-gray-300">{dbReadout}</div>
       <div className="h-5 w-full flex items-center gap-1">{buttons}</div>
     </div>
   );
@@ -98,7 +98,7 @@ export function NameBlock({ label }: { label: string }) {
 /** Logic's row labels, in a column pinned to the mixer's left edge. */
 export function StripHeader() {
   const label = (text: string) => (
-    <span className="w-full text-right text-[10px] text-gray-500 whitespace-nowrap">{text}</span>
+    <span className="w-full text-right text-[11px] text-gray-500 whitespace-nowrap">{text}</span>
   );
   return (
     <StripFrame

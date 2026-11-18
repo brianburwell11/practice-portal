@@ -1529,7 +1529,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
             onPointerDown={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-700">
+            <div className="px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-700">
               Change type
             </div>
             {(['section', 'measure', 'beat'] as const).map((t) => {
@@ -1547,13 +1547,13 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
                   }`}
                 >
                   <span className="capitalize">{t}</span>
-                  {isCurrent && <span className="text-[10px]">current</span>}
+                  {isCurrent && <span className="text-[11px]">current</span>}
                 </button>
               );
             })}
             {contextMenuSection && (
               <>
-                <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-400 border-t border-b border-gray-700">
+                <div className="px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400 border-t border-b border-gray-700">
                   <span className="truncate">
                     In section {contextMenuSection.label}
                   </span>
@@ -1581,7 +1581,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
                       }`}
                     >
                       <span>{label}</span>
-                      <span className="text-[10px] text-gray-400 tabular-nums">
+                      <span className="text-[11px] text-gray-400 tabular-nums">
                         {count}
                       </span>
                     </button>

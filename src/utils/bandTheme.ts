@@ -235,28 +235,102 @@ function mixLab(a: Lab, b: Lab, t: number): Lab {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
 
+/**
+ * Text steps that also sit on button and card surfaces (`bg-gray-700`,
+ * `bg-gray-800`), and the surfaces each one has to read on. Measuring them
+ * against the page alone let a label pass there and fail on its button.
+ */
+const TEXT_ON_SURFACE: Partial<Record<GrayStep, GrayStep[]>> = {
+  50: [700, 800],
+  100: [700, 800],
+  200: [700, 800],
+  300: [700, 800],
+  400: [700, 800],
+  500: [800],
+};
+
+/** Contrast text needs on a surface (WCAG AA for small text). */
+const TEXT_ON_SURFACE_MIN = 4.5;
+
+/**
+ * Contrast the ink keeps on a surface, so the text steps under it have room
+ * to sit apart and still reach `TEXT_ON_SURFACE_MIN`.
+ */
+const SURFACE_INK_MIN = 5.6;
+
+/**
+ * How little a surface may stand out from the background when it has to
+ * give ground to the text on it. Buttons keep their borders, so they still
+ * read as buttons.
+ */
+const SURFACE_MIN_SHOW: Partial<Record<GrayStep, number>> = { 700: 1.25, 800: 1.12 };
+
+/** The surface steps, placed first: the text steps are measured on them. */
+const SURFACE_STEPS: GrayStep[] = [700, 800];
+
 /** Each step's position between background (0) and ink (1), floors applied. */
 function scalePositions(bg: RGB, ink: RGB): Record<GrayStep, number> {
   const bgLab = rgbToOklab(bg);
   const inkLab = rgbToOklab(ink);
-  const inkContrast = contrastRatio(ink, bg);
   const at = (t: number) => oklabToRgb(mixLab(bgLab, inkLab, t));
-
-  const positions = { ...STEP_POSITION };
-  for (const step of GRAY_STEPS) {
-    const floor = STEP_FLOOR[step];
-    if (!floor) continue;
-    const cap = inkContrast * (FLOOR_CAP_SHARE[step] ?? 1);
-    const min = Math.max(1, Math.min(floor + HEADROOM, cap));
-    if (contrastRatio(at(positions[step]), bg) >= min) continue;
-    let lo = positions[step];
+  /** Smallest position in [lo, 1] where `ok` holds (it must only ever turn true). */
+  const lowest = (lo: number, ok: (t: number) => boolean): number => {
+    if (ok(lo)) return lo;
     let hi = 1;
     for (let i = 0; i < 24; i++) {
       const mid = (lo + hi) / 2;
-      if (contrastRatio(at(mid), bg) >= min) hi = mid;
+      if (ok(mid)) hi = mid;
       else lo = mid;
     }
-    positions[step] = hi;
+    return hi;
+  };
+  /** The floor a step asks for, capped by what the ink reaches on `under`. */
+  const need = (step: GrayStep, floor: number, under: RGB) =>
+    Math.max(1, Math.min(floor + HEADROOM, contrastRatio(ink, under) * (FLOOR_CAP_SHARE[step] ?? 1)));
+
+  const positions = { ...STEP_POSITION };
+
+  // 1. Surfaces: far enough from the background to show, but never so far
+  // toward the ink that text can't read on them. On a mid-tone background
+  // (a saturated red, a mid gray) the ink has little room, so the surfaces
+  // stay closer to the page.
+  for (const step of SURFACE_STEPS) {
+    const show = need(step, STEP_FLOOR[step]!, bg);
+    let t = lowest(positions[step], (x) => contrastRatio(at(x), bg) >= show);
+    if (contrastRatio(ink, at(t)) < SURFACE_INK_MIN + HEADROOM) {
+      const least = lowest(0, (x) => contrastRatio(at(x), bg) >= (SURFACE_MIN_SHOW[step] ?? 1));
+      // Ink contrast falls as the surface moves toward the ink: take the
+      // furthest position that still leaves it enough, but keep it showing.
+      let lo = least;
+      let hi = t;
+      if (contrastRatio(ink, at(lo)) < SURFACE_INK_MIN + HEADROOM) t = lo;
+      else {
+        for (let i = 0; i < 24; i++) {
+          const mid = (lo + hi) / 2;
+          if (contrastRatio(ink, at(mid)) >= SURFACE_INK_MIN + HEADROOM) lo = mid;
+          else hi = mid;
+        }
+        t = lo;
+      }
+    }
+    positions[step] = t;
+  }
+
+  // 2. Text and the remaining steps: their floor on the background, and the
+  // text steps also on each surface they sit on.
+  for (const step of GRAY_STEPS) {
+    if (SURFACE_STEPS.includes(step)) continue;
+    const floor = STEP_FLOOR[step];
+    if (!floor) continue;
+    const onBg = need(step, floor, bg);
+    const surfaces = (TEXT_ON_SURFACE[step] ?? []).map((s) => {
+      const surface = at(positions[s]);
+      return { surface, min: need(step, TEXT_ON_SURFACE_MIN, surface) };
+    });
+    positions[step] = lowest(positions[step], (x) => {
+      const c = at(x);
+      return contrastRatio(c, bg) >= onBg && surfaces.every(({ surface, min }) => contrastRatio(c, surface) >= min);
+    });
   }
   // Keep the scale in order: a lower step never sits closer to the
   // background than the step after it.
@@ -297,14 +371,18 @@ export function buildMixerSurfaces(bg: RGB, ink: RGB): Partial<Record<GrayStep, 
   const bgLab = rgbToOklab(bg);
   const inkLab = rgbToOklab(ink);
   const at = (t: number) => oklabToRgb(mixLab(bgLab, inkLab, t));
-  // Readouts on the cards are gray-400; a bump never costs them legibility.
-  const readout = at(positions[400]);
+  // The dimmest text each card surface carries (readouts are gray-400,
+  // labels like "Vol" gray-500); a bump never takes it below AA.
+  const textOn: Partial<Record<GrayStep, GrayStep>> = { 600: 400, 700: 400, 800: 500, 900: 500 };
   const bumped = { ...positions };
   for (const [key, bump] of Object.entries(MIXER_SURFACE_BUMP)) {
     const step = Number(key) as GrayStep;
-    const need = Math.min(3 + HEADROOM, contrastRatio(readout, at(positions[step])));
+    const text = at(positions[textOn[step] ?? 400]);
+    // The fader track (600) carries no text, only the thumb: 3:1 is enough.
+    const floor = step === 600 ? 3 : TEXT_ON_SURFACE_MIN;
+    const need = Math.min(floor + HEADROOM, contrastRatio(text, at(positions[step])));
     let b = bump;
-    while (b > 0.005 && contrastRatio(readout, at(positions[step] + b)) < need) b /= 2;
+    while (b > 0.005 && contrastRatio(text, at(positions[step] + b)) < need) b /= 2;
     bumped[step] = positions[step] + (b > 0.005 ? b : 0);
   }
   // Stay below the text steps above them (500 and up).

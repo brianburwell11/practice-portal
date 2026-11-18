@@ -24,6 +24,8 @@ const CASES: [string, string][] = [
   ['forest green', '#3a6b4c'],
   ['beige', '#e8e0d0'],
   ['three-digit hex', '#fff'],
+  ['saturated red', '#97000c'],
+  ['saturated green', '#2f7d32'],
 ];
 
 describe('bandTheme', () => {
@@ -71,9 +73,18 @@ describe('bandTheme', () => {
         }
       });
 
+      it('text reads on the buttons and cards it sits on, as far as the ink allows', () => {
+        for (const [steps, surface] of [[[50, 100, 200, 300, 400], 700], [[50, 100, 200, 300, 400, 500], 800]] as const) {
+          const room = contrastHex(theme.ink, gray(surface));
+          for (const s of steps) expect(contrastHex(gray(s), gray(surface))).toBeGreaterThanOrEqual(Math.min(4.5, room * 0.85) - 0.05);
+        }
+      });
+
       it('mixer cards are a bit more solid, and their readouts still read', () => {
-        expect(contrastHex(theme.vars['--mixer-gray-800'], bg)).toBeGreaterThanOrEqual(contrastHex(gray(800), bg) - 0.01);
-        expect(contrastHex(gray(400), theme.vars['--mixer-gray-800'])).toBeGreaterThanOrEqual(Math.min(3, contrastHex(gray(400), gray(800))) - 0.05);
+        const mixer = (s: number) => theme.vars[`--mixer-gray-${s}`];
+        expect(contrastHex(mixer(800), bg)).toBeGreaterThanOrEqual(contrastHex(gray(800), bg) - 0.01);
+        expect(contrastHex(gray(400), mixer(700))).toBeGreaterThanOrEqual(Math.min(4.5, contrastHex(gray(400), gray(700))) - 0.05);
+        expect(contrastHex(gray(500), mixer(800))).toBeGreaterThanOrEqual(Math.min(4.5, contrastHex(gray(500), gray(800))) - 0.05);
       });
 
       it('accent hues used as text meet their floors', () => {
