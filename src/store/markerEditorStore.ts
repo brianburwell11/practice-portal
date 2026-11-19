@@ -11,6 +11,8 @@ interface TapMapEditorState {
   tapMap: TapMapEntry[];
   dirty: boolean;
   selectedIndex: number | null;
+  /** A span dragged out on the waveform: every marker inside it is selected */
+  rangeSelection: { start: number; end: number } | null;
   undoStack: TapMapEntry[][];
   onComplete: ((tapMap: TapMapEntry[]) => void) | null;
 
@@ -23,6 +25,9 @@ interface TapMapEditorState {
   updateEntryType: (index: number, type: TapMapEntry['type'], label?: string) => void;
   deleteEntriesWhere: (predicate: (entry: TapMapEntry) => boolean) => void;
   setSelectedIndex: (index: number | null) => void;
+  setRangeSelection: (range: { start: number; end: number } | null) => void;
+  /** Delete every marker in the range selection, as one undo step */
+  deleteRangeSelection: () => void;
   undo: () => void;
   importTapMap: (entries: TapMapEntry[]) => void;
 }
@@ -32,6 +37,7 @@ const initialState = {
   tapMap: [] as TapMapEntry[],
   dirty: false,
   selectedIndex: null as number | null,
+  rangeSelection: null as { start: number; end: number } | null,
   undoStack: [] as TapMapEntry[][],
   onComplete: null as ((tapMap: TapMapEntry[]) => void) | null,
 };
@@ -51,6 +57,7 @@ export const useMarkerEditorStore = create<TapMapEditorState>((set) => ({
       tapMap: sortByTime(tapMap),
       dirty: false,
       selectedIndex: null,
+      rangeSelection: null,
       undoStack: [],
       onComplete: onComplete ?? null,
     }),
@@ -125,7 +132,24 @@ export const useMarkerEditorStore = create<TapMapEditorState>((set) => ({
       };
     }),
 
-  setSelectedIndex: (index) => set({ selectedIndex: index }),
+  setSelectedIndex: (index) => set({ selectedIndex: index, rangeSelection: null }),
+
+  setRangeSelection: (range) => set({ rangeSelection: range, selectedIndex: null }),
+
+  deleteRangeSelection: () =>
+    set((state) => {
+      const range = state.rangeSelection;
+      if (!range) return state;
+      const next = state.tapMap.filter((e) => e.time < range.start || e.time > range.end);
+      if (next.length === state.tapMap.length) return { rangeSelection: null };
+      return {
+        undoStack: pushUndo(state.undoStack, state.tapMap),
+        tapMap: next,
+        rangeSelection: null,
+        selectedIndex: null,
+        dirty: true,
+      };
+    }),
 
   undo: () =>
     set((state) => {
@@ -135,6 +159,7 @@ export const useMarkerEditorStore = create<TapMapEditorState>((set) => ({
       return {
         undoStack: stack,
         tapMap: previous,
+        rangeSelection: null,
         dirty: true,
       };
     }),

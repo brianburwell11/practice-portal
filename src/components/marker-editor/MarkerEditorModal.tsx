@@ -21,8 +21,9 @@ import { saveEdit } from '../../offline/sync';
 
 export function MarkerEditorModal() {
   const {
-    isOpen, tapMap, dirty, selectedIndex,
+    isOpen, tapMap, dirty, selectedIndex, rangeSelection,
     close, importTapMap, addEntry, deleteEntry, updateEntryType, setSelectedIndex, undo, onComplete,
+    setRangeSelection, deleteRangeSelection,
   } = useMarkerEditorStore();
   const selectedSong = useSongStore((s) => s.selectedSong);
   const setSelectedSong = useSongStore((s) => s.setSelectedSong);
@@ -85,6 +86,12 @@ export function MarkerEditorModal() {
         return;
       }
 
+      if (rangeSelection && (e.key === 'Backspace' || e.key === 'Delete')) {
+        e.preventDefault();
+        deleteRangeSelection();
+        return;
+      }
+
       if (selectedIndex !== null && (e.key === 'Backspace' || e.key === 'Delete')) {
         e.preventDefault();
         deleteEntry(selectedIndex);
@@ -102,7 +109,7 @@ export function MarkerEditorModal() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, selectedIndex, tap, deleteEntry, undo]);
+  }, [isOpen, selectedIndex, rangeSelection, tap, deleteEntry, deleteRangeSelection, undo]);
 
   if (!isOpen || (!selectedSong && !onComplete)) return null;
 
@@ -252,6 +259,31 @@ export function MarkerEditorModal() {
     ? mb.beat + 1
     : tapMap.filter((e) => e.type === 'beat' && e.time <= position).length + 1;
 
+  // Markers inside a span dragged out on the waveform: delete them together
+  const inRange = rangeSelection
+    ? tapMap.filter((e) => e.time >= rangeSelection.start && e.time <= rangeSelection.end)
+    : [];
+  const rangeSections = inRange.filter((e) => e.type === 'section').length;
+  const rangeBar = rangeSelection ? (
+    <div className="flex items-center gap-2 rounded-lg border border-blue-400/40 bg-blue-500/10 px-3 py-2 text-sm" aria-live="polite">
+      <span className="flex-1 text-gray-200">
+        {inRange.length === 0
+          ? 'No markers in the selection'
+          : `${inRange.length} ${inRange.length === 1 ? 'marker' : 'markers'} selected${
+              rangeSections > 0 ? `, including ${rangeSections} ${rangeSections === 1 ? 'section' : 'sections'}` : ''
+            }`}
+      </span>
+      {inRange.length > 0 && (
+        <button className={`${btn} text-red-300`} onClick={deleteRangeSelection}>
+          Delete
+        </button>
+      )}
+      <button className={btn} onClick={() => setRangeSelection(null)}>
+        Clear
+      </button>
+    </div>
+  ) : null;
+
   // Tap pads: the S/M/B keys as buttons. On desktop they show their
   // shortcut and light up when the key is pressed.
   const pads = (
@@ -378,6 +410,7 @@ export function MarkerEditorModal() {
 
       {coarse ? (
         <div className="mt-3 max-w-2xl w-full mx-auto px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2">
+          {rangeBar}
           {pads}
           {selectedEntry && selectedIndex !== null ? (
             /* A marker is selected (tap it on the waveform or in the
@@ -420,7 +453,10 @@ export function MarkerEditorModal() {
         </div>
       ) : (
         <>
-          <div className="mt-3 mb-3 max-w-2xl w-full mx-auto">{pads}</div>
+          <div className="mt-3 mb-3 max-w-2xl w-full mx-auto space-y-2">
+            {rangeBar}
+            {pads}
+          </div>
           {/* Footer hints \u2014 mirrors the LyricsEditor footer style so the
             two editors feel like the same family. `mt-auto` pins it to
             the bottom of the flex column so the panel's breathing room
@@ -430,7 +466,9 @@ export function MarkerEditorModal() {
           <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">M</kbd> measure</span>
           <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">B</kbd> beat</span>
           <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">click</kbd> select</span>
-          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">drag</kbd> move</span>
+          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">drag</kbd> move marker</span>
+          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">drag</kbd> empty space to select markers</span>
+          <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⇧ drag</kbd> loop</span>
           <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">Del</kbd> remove</span>
           <span><kbd className="px-1 py-0.5 bg-gray-800 rounded text-gray-400">⌘Z</kbd> undo</span>
         </div>

@@ -108,6 +108,8 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
   const moveMarkerEntry = useMarkerEditorStore((s) => s.moveEntry);
   const updateMarkerEntryType = useMarkerEditorStore((s) => s.updateEntryType);
   const deleteMarkerEntriesWhere = useMarkerEditorStore((s) => s.deleteEntriesWhere);
+  const markerRange = useMarkerEditorStore((s) => s.rangeSelection);
+  const setMarkerRange = useMarkerEditorStore((s) => s.setRangeSelection);
   const displayTapMap: TapMapEntry[] | undefined = markerEditorOpen
     ? editorTapMap
     : selectedSong?.tapMap;
@@ -150,8 +152,9 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
   // hold, then drag, so a one-finger drag still pans. `active` once the
   // selection has started; until then it may still turn into a click,
   // a pan or a pinch. Committed on release, so a slip can't clobber the
-  // current loop mid-drag.
-  const loopSelectRef = useRef<{ anchor: number; current: number; startX: number; active: boolean } | null>(null);
+  // current loop mid-drag. In the tapMap editor a plain drag selects the
+  // markers in the span instead (`markers`); Shift-drag still makes a loop.
+  const loopSelectRef = useRef<{ anchor: number; current: number; startX: number; active: boolean; markers?: boolean } | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const [loopSelecting, setLoopSelecting] = useState(false);
   const [loopSelectTick, setLoopSelectTick] = useState(0);
@@ -627,16 +630,18 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       // Empty waveform: maybe the start of a loop selection.
       cancelLoopSelect();
       if (!duration || e.button !== 0) return;
-      const anchor = snapLoopEdge(x, false).time;
+      const markers = markerEditorOpen && !e.shiftKey;
+      // Marker selection takes the exact span: no snapping to bars
+      const anchor = snapLoopEdge(x, markers).time;
       if (e.pointerType === 'mouse') {
         // Plain drag selects; Alt/Option-drag pans like before.
         if (e.altKey) return;
         dragStartRef.current = null;
-        loopSelectRef.current = { anchor, current: anchor, startX: e.clientX, active: false };
+        loopSelectRef.current = { anchor, current: anchor, startX: e.clientX, active: false, markers };
         return;
       }
       // Touch / pen: hold still for a moment to start selecting.
-      loopSelectRef.current = { anchor, current: anchor, startX: e.clientX, active: false };
+      loopSelectRef.current = { anchor, current: anchor, startX: e.clientX, active: false, markers };
       longPressTimerRef.current = window.setTimeout(() => {
         longPressTimerRef.current = null;
         const sel = loopSelectRef.current;
@@ -648,7 +653,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         setLoopSelectTick((n) => n + 1);
       }, LONG_PRESS_MS);
     },
-    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestChordMarker, hitTestNote, editorTapMap, lyricsLines, editorChords, notes, canEditNote, setMarkerSelectedIndex, effectiveViewDuration, viewStart, duration, snapLoopEdge, cancelLoopSelect],
+    [hitTestEditorEntry, hitTestLoopMarker, hitTestLyricMarker, hitTestChordMarker, hitTestNote, editorTapMap, lyricsLines, editorChords, notes, canEditNote, setMarkerSelectedIndex, effectiveViewDuration, viewStart, duration, snapLoopEdge, cancelLoopSelect, markerEditorOpen],
   );
 
   const handlePointerMove = useCallback(
@@ -754,7 +759,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
           const { width } = sizeRef.current;
           const cx = Math.max(0, Math.min(x, width));
           // Hold Alt/Option mid-drag to place an edge off the grid.
-          const edge = snapLoopEdge(cx, isMouse && e.altKey);
+          const edge = snapLoopEdge(cx, sel.markers || (isMouse && e.altKey));
           sel.current = edge.time;
           setHoveredTime(edge.snapped ? edge.time : null);
           setLoopSelectTick((n) => n + 1);
@@ -829,14 +834,14 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       if (dragEditorEntryRef.current) {
         const { index, time, moved } = dragEditorEntryRef.current;
         // Only commit a move if the pointer actually moved enough
-        // to qualify as a drag. A plain click just selects; on touch a
-        // tap also moves playback to the marker, like tapping a row in
-        // the section list.
+        // to qualify as a drag. A plain click selects the marker and
+        // moves playback to it, like clicking a row in the section list.
         if (moved) {
           moveMarkerEntry(index, time);
           suppressClickRef.current = true;
-        } else if (isCoarse) {
+        } else {
           engine.seek(time);
+          setFollowPlayhead(true);
         }
         dragEditorEntryRef.current = null;
         dragStartRef.current = null;
@@ -900,7 +905,11 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         const a = Math.min(sel.anchor, sel.current);
         const b = Math.max(sel.anchor, sel.current);
         const { width } = sizeRef.current;
-        if (secondsToPixel(b, width) - secondsToPixel(a, width) >= DRAG_THRESHOLD) {
+        const wide = secondsToPixel(b, width) - secondsToPixel(a, width) >= DRAG_THRESHOLD;
+        if (sel.markers) {
+          setMarkerRange(wide ? { start: a, end: b } : null);
+          suppressClickRef.current = true;
+        } else if (wide) {
           engine.setLoop(a, b);
           const pos = useTransportStore.getState().position;
           if (pos < a || pos >= b) {
@@ -929,9 +938,11 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         const seconds = snap ?? pixelToSeconds(x, sizeRef.current.width);
         engine.seek(Math.max(0, Math.min(seconds, duration)));
         setFollowPlayhead(true);
+        // A plain click drops a marker range selection
+        if (markerEditorOpen && useMarkerEditorStore.getState().rangeSelection) setMarkerRange(null);
       }
     },
-    [draggingMarker, moveLyricLine, moveMarkerEntry, setNoteTime, notes, duration, findSnapMarker, pixelToSeconds, secondsToPixel, engine, setFollowPlayhead, cancelLoopSelect],
+    [draggingMarker, moveLyricLine, moveMarkerEntry, setNoteTime, notes, duration, findSnapMarker, pixelToSeconds, secondsToPixel, engine, setFollowPlayhead, cancelLoopSelect, markerEditorOpen, setMarkerRange],
   );
 
   const handlePointerLeave = useCallback(
@@ -1009,14 +1020,19 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
     return () => container.removeEventListener('wheel', handleWheel);
   }, [duration, effectiveViewDuration, isZoomed, pixelToSeconds, clampViewStart, setFollowPlayhead]);
 
-  // Auto-scroll during playback when zoomed
+  // Auto-scroll during playback when zoomed. In the tapMap editor the view
+  // always follows the playhead: scrolling away while paused is fine, but
+  // any move of the playhead (playing, seeking, stepping) brings it back.
+  const lastFollowPosRef = useRef(position);
   useEffect(() => {
-    if (!followPlayhead || !isZoomed || !duration) return;
+    const moved = position !== lastFollowPosRef.current;
+    lastFollowPosRef.current = position;
+    if (!(followPlayhead || (markerEditorOpen && moved)) || !isZoomed || !duration) return;
     const rightThreshold = viewStart + effectiveViewDuration * 0.85;
     if (position > rightThreshold || position < viewStart) {
       setViewStart(clampViewStart(position - effectiveViewDuration * 0.25, effectiveViewDuration));
     }
-  }, [position, isZoomed, viewStart, effectiveViewDuration, duration, clampViewStart, followPlayhead]);
+  }, [position, isZoomed, viewStart, effectiveViewDuration, duration, clampViewStart, followPlayhead, markerEditorOpen]);
 
   // ResizeObserver for main canvas
   useEffect(() => {
@@ -1078,6 +1094,12 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
           .map((e) => toPixel(e.time))
           .sort((a, b) => a - b);
 
+        // Markers inside a range selection (dragged out now, or kept) draw as selected
+        const sel = loopSelectRef.current;
+        const range = markerEditorOpen && sel?.active && sel.markers
+          ? { start: Math.min(sel.anchor, sel.current), end: Math.max(sel.anchor, sel.current) }
+          : markerEditorOpen ? markerRange : null;
+
         for (let i = 0; i < tapMap.length; i++) {
           const entry = tapMap[i];
           // Substitute the live drag time for whichever entry is
@@ -1088,7 +1110,9 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
           const x = toPixel(displayTime);
           if (x < -1 || x > width + 1) continue;
 
-          const isSelected = markerEditorOpen && markerSelectedIndex === i;
+          const isSelected = markerEditorOpen && (
+            markerSelectedIndex === i || (range !== null && entry.time >= range.start && entry.time <= range.end)
+          );
 
           // Beats and bars in the band's text color, faint, so they read on light and dark panels.
           if (entry.type === 'beat') {
@@ -1240,7 +1264,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         }
       }
     },
-    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, lyricsEditorOpen, lyricsLines, chordsEditorOpen, editorChords, chordDragTick, notes, noteDragTick, editorDragTick],
+    [selectedSong, displayTapMap, markerEditorOpen, markerSelectedIndex, markerRange, lyricsEditorOpen, lyricsLines, chordsEditorOpen, editorChords, chordDragTick, notes, noteDragTick, editorDragTick],
   );
 
   // Draw main canvas (viewport-relative)
@@ -1324,9 +1348,28 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       }
     }
 
+    // Marker range selection (tapMap editor): a blue band, kept after release
+    const markerSel = loopSelectRef.current?.active && loopSelectRef.current.markers
+      ? { start: Math.min(loopSelectRef.current.anchor, loopSelectRef.current.current), end: Math.max(loopSelectRef.current.anchor, loopSelectRef.current.current) }
+      : markerEditorOpen ? markerRange : null;
+    if (markerSel) {
+      const x1 = secondsToPixel(markerSel.start, width);
+      const x2 = secondsToPixel(markerSel.end, width);
+      ctx.fillStyle = 'rgba(96, 165, 250, 0.18)';
+      ctx.fillRect(x1, 0, x2 - x1, height);
+      ctx.strokeStyle = 'rgba(96, 165, 250, 0.7)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x1, 0);
+      ctx.lineTo(x1, height);
+      ctx.moveTo(x2, 0);
+      ctx.lineTo(x2, height);
+      ctx.stroke();
+    }
+
     // Loop selection in progress: a brighter band with dashed ends
     const sel = loopSelectRef.current;
-    if (sel?.active) {
+    if (sel?.active && !sel.markers) {
       const x1 = secondsToPixel(Math.min(sel.anchor, sel.current), width);
       const x2 = secondsToPixel(Math.max(sel.anchor, sel.current), width);
       ctx.fillStyle = 'rgba(234, 179, 8, 0.25)';
@@ -1363,7 +1406,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       ctx.fillStyle = colors.ink;
       ctx.fillRect(Math.round(playheadX) - 1, 0, 2, height);
     }
-  }, [engine.peakData, engine.peaksPerSecond, peaksVersion, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB, loopEnabled, canvasReady, loopSelectTick]);
+  }, [engine.peakData, engine.peaksPerSecond, peaksVersion, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB, loopEnabled, canvasReady, loopSelectTick, markerEditorOpen, markerRange]);
 
   // Draw overview canvas (full song, only when zoomed)
   useEffect(() => {
