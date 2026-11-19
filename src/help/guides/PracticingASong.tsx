@@ -130,7 +130,9 @@ export default function PracticingASong() {
         <Bullets>
           <li>
             Lyrics scroll in time with the song. Click a line to jump there. On a phone they start open; the lyrics
-            button hides or shows them, and your phone remembers which you chose.
+            button hides or shows them, and your phone remembers which you chose. Drag the lyrics up or down to look
+            ahead or back; they pick up again when the song reaches that line, or when you pause. To get past them,
+            tap the arrow at the bottom right, which brings the next panel up under the waveform.
           </li>
           <li>
             If a song has chords, they scroll in from the right just above the lyrics, and each one takes over as it

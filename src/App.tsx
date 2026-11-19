@@ -13,6 +13,7 @@ import { UndoToast } from './components/notes/UndoToast';
 import { useNotesKeyboard } from './hooks/useNotesKeyboard';
 import { ScrollingScore } from './components/sheet/ScrollingScore';
 import { MixerPanel } from './components/mixer/MixerPanel';
+import { PhoneSectionJump } from './components/PhoneSectionJump';
 import { NoSongState } from './components/song-select/NoSongState';
 import { MinimizedRibbon } from './components/MinimizedRibbon';
 import { YouTubeMiniPlayerStack } from './components/youtube/YouTubeMiniPlayerStack';
@@ -178,6 +179,9 @@ export default function App() {
   // The header's height (it wraps on narrow phones), so the waveform can pin
   // right under it while the page scrolls.
   const headerRef = useRef<HTMLElement>(null);
+  // The page scroller and the panel column, for the phone's next-section arrow.
+  const pageScrollRef = useRef<HTMLDivElement>(null);
+  const panelColumnRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   useEffect(() => {
     const el = headerRef.current;
@@ -308,6 +312,7 @@ export default function App() {
   return (
     <AudioEngineContext.Provider value={engine}>
       <div
+        ref={pageScrollRef}
         className={`h-screen flex flex-col ${phonePageScroll ? 'overflow-y-auto' : 'overflow-hidden'}`}
         style={{
           ...(theme?.vars as CSSProperties | undefined),
@@ -318,6 +323,7 @@ export default function App() {
         {/* Header */}
         <header
           ref={headerRef}
+          data-phone-pin
           className={`px-3 py-2 md:px-4 md:py-3 border-b border-gray-700 flex flex-wrap items-center gap-y-1.5 md:relative ${
             phonePageScroll ? 'sticky top-0 z-30' : ''
           }`}
@@ -429,7 +435,7 @@ export default function App() {
             it (flex-1 min-h-0) and scroll themselves, as before. On a phone
             with no editor open the whole page scrolls instead, header and
             transport too, so chords, lyrics and the mixer all have room. */}
-        <div className={phonePageScroll ? 'flex flex-col shrink-0' : 'flex-1 min-h-0 flex flex-col overflow-y-auto'}>
+        <div ref={panelColumnRef} className={phonePageScroll ? 'flex flex-col shrink-0' : 'flex-1 min-h-0 flex flex-col overflow-y-auto'}>
           {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
           {!editorFocus && !showEditBandModal && <NotesLayer />}
 
@@ -477,6 +483,8 @@ export default function App() {
             </div>
           )}
         </div>
+        {/* Inside the themed page so it takes the band's colors. */}
+        {phonePageScroll && selectedSong && <PhoneSectionJump scrollerRef={pageScrollRef} columnRef={panelColumnRef} />}
       </div>
       {showDeleteModal && selectedSong && (
         <DeleteSongModal

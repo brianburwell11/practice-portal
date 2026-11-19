@@ -281,6 +281,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
 
       {/* Waveform + timestamp — full width on mobile (row 1), flex-1 on desktop */}
       <div
+        data-phone-pin={sticky || undefined}
         className={`md:flex-1 md:min-w-0 flex items-center gap-2 ${sticky ? 'sticky z-20 px-4 pt-3 pb-2' : ''}`}
         style={sticky ? { top: stickyTop, backgroundColor: 'var(--band-bg, var(--color-page))' } : undefined}
       >
