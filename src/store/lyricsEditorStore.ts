@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { LyricsLine } from '../audio/lyricsTypes';
 import { END_MARKER, isAdminAnnotation, isInstrumentalAnnotation } from '../audio/lyricSections';
+import { editorSwap } from '../utils/editorSwap';
 
 const MAX_UNDO = 50;
 
@@ -90,20 +91,24 @@ const initialState = {
   reviewIndex: null as number | null,
 };
 
-export const useLyricsEditorStore = create<LyricsEditorState>((set) => ({
+export const useLyricsEditorStore = create<LyricsEditorState>((set, get) => ({
   ...initialState,
 
   open: (lines) =>
-    set({
-      ...initialState,
-      isOpen: true,
-      // No words yet: start in the text box. Otherwise go straight to timing.
-      mode: hasContent(lines) ? 'timing' : 'lyrics',
-      lines,
-      currentSyncIndex: nextNonBlankIndex(lines, 0),
-    }),
+    editorSwap(() =>
+      set({
+        ...initialState,
+        isOpen: true,
+        // No words yet: start in the text box. Otherwise go straight to timing.
+        mode: hasContent(lines) ? 'timing' : 'lyrics',
+        lines,
+        currentSyncIndex: nextNonBlankIndex(lines, 0),
+      }),
+    ),
 
-  close: () => set({ ...initialState }),
+  // Only an actual close swaps the page; closing what's shut (a band
+  // switch closes all three) just resets.
+  close: () => (get().isOpen ? editorSwap(() => set({ ...initialState })) : set({ ...initialState })),
 
   setMode: (mode) =>
     set((s) => {

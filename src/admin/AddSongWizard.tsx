@@ -19,6 +19,13 @@ function Wizard({ onAddAnother }: { onAddAnother: () => void }) {
   const [saved, setSaved] = useState(false);
   const { bandSlug = '' } = useParams();
   const navigate = useNavigate();
+  // Which way the steps last moved, so the next one slides in from that side.
+  const [shownStep, setShownStep] = useState(state.step);
+  const [forward, setForward] = useState(true);
+  if (shownStep !== state.step) {
+    setForward(state.step > shownStep);
+    setShownStep(state.step);
+  }
 
   // Everything lives in memory until Save, so leaving loses it.
   const dirty = !saved && (state.title.trim() !== '' || state.stems.length > 0 || !!state.sheetMusicFile);
@@ -63,12 +70,12 @@ function Wizard({ onAddAnother }: { onAddAnother: () => void }) {
             <div key={label} className="flex items-center">
               {i > 0 && (
                 <div
-                  className={`w-8 h-px mx-1 ${isCompleted ? 'bg-blue-500' : 'bg-gray-700'}`}
+                  className={`w-8 h-px mx-1 transition-colors duration-300 ${isCompleted ? 'bg-blue-500' : 'bg-gray-700'}`}
                 />
               )}
               <div className="flex items-center gap-1.5">
                 <div
-                  className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-medium ${
+                  className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-medium transition-colors duration-300 ${
                     isCurrent
                       ? 'bg-blue-600 text-accent-ink'
                       : isCompleted
@@ -79,7 +86,7 @@ function Wizard({ onAddAnother }: { onAddAnother: () => void }) {
                   {stepNum}
                 </div>
                 <span
-                  className={`text-xs hidden sm:inline ${
+                  className={`text-xs hidden sm:inline transition-colors duration-300 ${
                     isCurrent ? 'text-gray-200' : 'text-gray-500'
                   }`}
                 >
@@ -93,9 +100,13 @@ function Wizard({ onAddAnother }: { onAddAnother: () => void }) {
 
       {/* Step content */}
       <main className="max-w-2xl mx-auto px-4 py-6">
-        {state.step === 1 && <MetadataStep state={state} dispatch={dispatch} />}
-        {state.step === 2 && <StemsStep state={state} dispatch={dispatch} />}
-        {state.step === 3 && <ReviewStep state={state} dispatch={dispatch} onSaved={() => setSaved(true)} onAddAnother={onAddAnother} />}
+        {/* Keyed by step: each one slides in from the side it lies on. The
+            first step just appears, with the page. */}
+        <div key={state.step} className={shownStep === 1 && forward ? '' : forward ? 'animate-step-forward' : 'animate-step-back'}>
+          {state.step === 1 && <MetadataStep state={state} dispatch={dispatch} />}
+          {state.step === 2 && <StemsStep state={state} dispatch={dispatch} />}
+          {state.step === 3 && <ReviewStep state={state} dispatch={dispatch} onSaved={() => setSaved(true)} onAddAnother={onAddAnother} />}
+        </div>
       </main>
     </div>
   );

@@ -79,7 +79,7 @@ export function Modal({
 
   return (
     <div
-      className={`theme-default fixed inset-0 ${zClassName} flex items-center justify-center bg-black/70`}
+      className={`theme-default fixed inset-0 ${zClassName} flex items-center justify-center bg-black/70 animate-backdrop-in`}
       // Only a press that starts and ends on the backdrop closes: not a text
       // selection dragged out of the panel.
       onMouseDown={(e) => { if (e.target === e.currentTarget) e.currentTarget.dataset.down = '1'; }}
@@ -97,7 +97,7 @@ export function Modal({
         aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : ariaLabel}
         tabIndex={-1}
-        className={`${className} focus:outline-none`}
+        className={`${className} focus:outline-none animate-dialog-in`}
       >
         {(title || showClose) && (
           <div className="flex items-center justify-between gap-4">

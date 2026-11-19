@@ -319,7 +319,7 @@ export function MarkerEditorModal() {
   );
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="editor-slot flex-1 flex flex-col min-h-0">
       {/* Toolbar \u2014 mirrors the LyricsEditor layout: actions left/right,
           centered title, no song name (shown in the header above). On
           phones the file actions collapse into a More menu. */}

@@ -264,7 +264,7 @@ export function MixerPanel() {
       // Desktop: grows to fill leftover height (so it sits at the bottom)
       // but never shrinks below its content, so a tall score pushes it down
       // the page's scroll instead of squeezing it away.
-      className={`mixer-surfaces flex-1 p-4 overflow-auto md:flex-[1_0_auto] md:overflow-visible md:flex md:flex-col md:justify-end ${minimized ? 'md:hidden' : ''}`}
+      className={`editor-slot mixer-surfaces flex-1 p-4 overflow-auto md:flex-[1_0_auto] md:overflow-visible md:flex md:flex-col md:justify-end ${minimized ? 'md:hidden' : ''}`}
       style={isDesktop && ribbonVisible ? { paddingBottom: `calc(1rem + ${MINIMIZED_RIBBON_HEIGHT}px)` } : undefined}
     >
       {/* Global mute/solo + save defaults. On desktop, indented past the
@@ -424,16 +424,16 @@ export function MixerPanel() {
           get pb-1 (room for the scrollbar) so their rows line up. */}
       {isDesktop ? (
         <div className="flex gap-1.5 h-[300px] shrink-0">
-          <div data-tour="mixer" className="flex flex-row flex-nowrap gap-1.5 flex-1 min-w-0 h-full overflow-x-auto pb-1">
+          <div data-tour="mixer" className="stagger-in flex flex-row flex-nowrap gap-1.5 flex-1 min-w-0 h-full overflow-x-auto pb-1">
             <StripHeader />
             {strips}
           </div>
-          <div className="h-full pb-1 shrink-0">
+          <div className="h-full pb-1 shrink-0 animate-ready-in">
             <DesktopMasterStrip />
           </div>
         </div>
       ) : (
-        <div data-tour="mixer" className="flex flex-col gap-3">
+        <div data-tour="mixer" className="stagger-in flex flex-col gap-3">
           {strips}
         </div>
       )}

@@ -16,6 +16,7 @@ import { Licenses } from './components/legal/Licenses.tsx'
 import { NotFound } from './components/NotFound.tsx'
 import { DialogHost } from './components/ui/DialogHost.tsx'
 import { PageLoader } from './components/ui/Loading.tsx'
+import { ScreenTransition } from './components/ui/ScreenTransition.tsx'
 import { startSync } from './offline/sync'
 
 import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage, SiteAdminPage } from './admin/lazyPages.ts'
@@ -36,6 +37,7 @@ startSync();
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter basename={basename}>
+      <ScreenTransition>
       <Routes>
         <Route path="/" element={<BandPicker />} />
         <Route path="/invite/:token" element={<InvitePage />} />
@@ -85,6 +87,7 @@ createRoot(document.getElementById('root')!).render(
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </ScreenTransition>
       <DialogHost />
       <SignInHandoff />
     </BrowserRouter>

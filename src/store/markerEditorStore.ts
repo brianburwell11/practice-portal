@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { TapMapEntry } from '../audio/types';
+import { editorSwap } from '../utils/editorSwap';
 
 const MAX_UNDO = 50;
 
@@ -48,21 +49,25 @@ const pushUndo = (stack: TapMapEntry[][], snapshot: TapMapEntry[]): TapMapEntry[
   return next;
 };
 
-export const useMarkerEditorStore = create<TapMapEditorState>((set) => ({
+export const useMarkerEditorStore = create<TapMapEditorState>((set, get) => ({
   ...initialState,
 
   open: (tapMap, onComplete) =>
-    set({
-      isOpen: true,
-      tapMap: sortByTime(tapMap),
-      dirty: false,
-      selectedIndex: null,
-      rangeSelection: null,
-      undoStack: [],
-      onComplete: onComplete ?? null,
-    }),
+    editorSwap(() =>
+      set({
+        isOpen: true,
+        tapMap: sortByTime(tapMap),
+        dirty: false,
+        selectedIndex: null,
+        rangeSelection: null,
+        undoStack: [],
+        onComplete: onComplete ?? null,
+      }),
+    ),
 
-  close: () => set({ ...initialState }),
+  // Only an actual close swaps the page; closing what's shut (a band
+  // switch closes all three) just resets.
+  close: () => (get().isOpen ? editorSwap(() => set({ ...initialState })) : set({ ...initialState })),
 
   addEntry: (entry) =>
     set((state) => ({

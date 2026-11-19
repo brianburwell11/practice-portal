@@ -484,7 +484,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
 
   return (
     <div
-      className="theme-default fixed inset-0 z-50 flex items-stretch md:items-center justify-center bg-black/70"
+      className="theme-default fixed inset-0 z-50 flex items-stretch md:items-center justify-center bg-black/70 animate-backdrop-in"
       onClick={requestClose}
       onKeyDown={(e) => {
         e.stopPropagation();
@@ -521,7 +521,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="setlist-modal-title"
-        className="bg-gray-900 md:border border-gray-700 md:rounded-lg shadow-xl w-full md:max-w-2xl md:mx-4 h-[100dvh] md:h-auto md:max-h-[85vh] flex flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6"
+        className="bg-gray-900 md:border border-gray-700 md:rounded-lg shadow-xl w-full md:max-w-2xl md:mx-4 h-[100dvh] md:h-auto md:max-h-[85vh] flex flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6 animate-dialog-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between shrink-0 mb-4">

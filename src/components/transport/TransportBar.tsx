@@ -84,10 +84,11 @@ function WaveformSkeleton({ progress }: { progress: { loaded: number; total: num
       </span>
       {/* Marked as the waveform: notes, lyrics and the score line up on its
           left edge, and look it up by this attribute. */}
-      <div aria-hidden="true" data-waveform-timeline className="h-[80px] md:h-[108px] rounded bg-gray-800/60 flex items-center gap-[3px] px-2 overflow-hidden motion-safe:animate-pulse">
+      <div aria-hidden="true" data-waveform-timeline className="relative h-[80px] md:h-[108px] rounded bg-gray-800/60 flex items-center gap-[3px] px-2 overflow-hidden">
         {SKELETON_BARS.map((h, i) => (
           <div key={i} className="flex-1 min-w-[2px] rounded-full bg-gray-700" style={{ height: `${h}%` }} />
         ))}
+        <div className="waveform-scan" />
       </div>
       <div className="flex items-center gap-2">
         <div className="flex-1 h-5 relative rounded overflow-hidden border border-gray-700/50">
@@ -152,6 +153,14 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
   const disabled = !selectedSong;
   // A song on its way in, the first or the next: placeholders for the waveform and time.
   const songLoading = useSongStore((s) => s.loading || (!s.selectedSong && !s.manifest));
+  // Sweep the waveform in only when it replaces the placeholder here, not
+  // when the bar mounts with a song already in (a layout change).
+  const [arrived, setArrived] = useState(false);
+  const [wasLoading, setWasLoading] = useState(songLoading);
+  if (wasLoading !== songLoading) {
+    setWasLoading(songLoading);
+    if (!songLoading) setArrived(true);
+  }
   const [showBookmark, setShowBookmark] = useState(false);
   const touch = useMediaQuery('(pointer: coarse)');
   const lyricsMobileVisible = useLyricsStore((s) => s.mobileVisible);
@@ -280,7 +289,9 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
           data-tour="waveform"
           data-help={touch ? 'Tap to jump. Hold, then drag, to loop a section.' : 'Click to jump. Click and drag to loop a section.'}
         >
-          {songLoading ? <WaveformSkeleton progress={loadProgress} /> : <WaveformTimeline />}
+          {songLoading ? <WaveformSkeleton progress={loadProgress} /> : (
+            <div className={`flex ${arrived ? 'animate-waveform-in' : ''}`}><WaveformTimeline /></div>
+          )}
         </div>
         {songLoading ? (
           <div className="hidden md:flex md:flex-col md:items-center md:gap-2 shrink-0">
@@ -289,7 +300,9 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
           </div>
         ) : (
         <div
-          className="hidden md:flex md:flex-col md:items-center font-mono text-sm text-gray-300 shrink-0 -mt-1"
+          className={`hidden md:flex md:flex-col md:items-center font-mono text-sm text-gray-300 shrink-0 -mt-1 ${arrived ? 'animate-ready-in' : ''}`}
+          // Lands as the waveform's sweep reaches it.
+          style={arrived ? { animationDelay: '0.25s' } : undefined}
           data-help="Jump to specific section, timestamp, or measure|beat"
           data-help-at="left"
         >

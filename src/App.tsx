@@ -45,12 +45,14 @@ import { useMixerPersistence } from './hooks/useMixerPersistence';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { readDoc } from './offline/sync';
 import { HelpButton, OnboardingLayer } from './onboarding/Onboarding';
+import { editorSwap } from './utils/editorSwap';
 
 
 const SetlistModal = lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })));
 const DeleteSetlistModal = lazy(() => import('./admin/DeleteSetlistModal').then((m) => ({ default: m.DeleteSetlistModal })));
 const ViewAllSetlistsModal = lazy(() => import('./admin/ViewAllSetlistsModal').then((m) => ({ default: m.ViewAllSetlistsModal })));
-const EditBandModal = lazy(() => import('./admin/EditBandModal').then((m) => ({ default: m.EditBandModal })));
+const loadEditBandModal = () => import('./admin/EditBandModal');
+const EditBandModal = lazy(() => loadEditBandModal().then((m) => ({ default: m.EditBandModal })));
 const DeleteBandModal = lazy(() => import('./admin/DeleteBandModal').then((m) => ({ default: m.DeleteBandModal })));
 
 /** Capabilities that come with something to manage — beyond reading and playing. */
@@ -165,7 +167,11 @@ export default function App() {
   const [copySetlistId, setCopySetlistId] = useState<string | undefined>(undefined);
   const [showDeleteSetlistModal, setShowDeleteSetlistModal] = useState(false);
   const [showViewAllSetlistsModal, setShowViewAllSetlistsModal] = useState(false);
-  const [showEditBandModal, setShowEditBandModal] = useState(false);
+  const [showEditBandModal, setShowEditBandModalNow] = useState(false);
+  // Band settings is an on-page editor too: it swaps with the mixer the same way.
+  const setShowEditBandModal = (show: boolean) => {
+    if (show !== showEditBandModal) editorSwap(() => setShowEditBandModalNow(show));
+  };
   /** Phones with no editor open scroll the whole page; editors keep the
    *  fixed layout they fill and scroll inside. */
   const phonePageScroll = !isDesktop && !editorFocus && !showEditBandModal;
@@ -256,6 +262,8 @@ export default function App() {
     onManageMembers: () => setShowMembersModal(true),
     onEditBand: async () => {
       if (!(await closeOtherEditors())) return;
+      // Its code first, so the swap lands on the editor, not an empty slot.
+      await loadEditBandModal().catch(() => {});
       setShowEditBandModal(true);
     },
     onDeleteBand: () => setShowDeleteBandModal(true),

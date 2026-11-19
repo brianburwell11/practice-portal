@@ -81,7 +81,7 @@ export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPart
       tabIndex={-1}
       // Covers the page: while it's open, the ? labels are for what's in here.
       data-help-scope
-      className="fixed inset-0 z-[90] flex flex-col bg-gray-950 text-sm text-gray-200 outline-none"
+      className="fixed inset-0 z-[90] flex flex-col bg-gray-950 text-sm text-gray-200 outline-none animate-screen-in"
     >
       <div
         className="flex flex-wrap items-center gap-2 border-b border-gray-800 px-3 py-1.5"

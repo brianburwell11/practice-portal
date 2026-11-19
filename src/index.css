@@ -21,6 +21,141 @@
   /* A quick pop to confirm something changed off-screen (setlist tab count). */
   --animate-pop: pop 0.35s ease-out;
   --animate-toast-in: toast-in 0.2s ease-out;
+  /* Dialogs (ui/Modal): the backdrop dims while the panel rises and settles. */
+  --animate-backdrop-in: backdrop-in 0.18s ease-out;
+  --animate-dialog-in: dialog-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  /* A full-screen view (the score) just fades up. */
+  --animate-screen-in: backdrop-in 0.2s ease-out;
+  /* A loaded song's waveform, swept in left to right like the playhead. */
+  --animate-waveform-in: waveform-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  /* The time readout and mixer strips settling in once a song is ready. */
+  --animate-ready-in: ready-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  /* Add Song wizard: Next brings the step in from the right, Back from the left. */
+  --animate-step-forward: step-forward 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-step-back: step-back 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes step-forward {
+  from { opacity: 0; transform: translateX(1.5rem); }
+}
+
+@keyframes step-back {
+  from { opacity: 0; transform: translateX(-1.5rem); }
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+}
+
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(0.5rem) scale(0.97); }
+}
+
+/* A soft edge travels across: transparent ahead of it, the waveform behind.
+   No forwards fill, so the mask is gone once the sweep lands. */
+@keyframes waveform-in {
+  from { -webkit-mask-position: 100% 0; mask-position: 100% 0; }
+  to { -webkit-mask-position: 0 0; mask-position: 0 0; }
+}
+.animate-waveform-in {
+  -webkit-mask-image: linear-gradient(90deg, #000 40%, transparent 60%);
+  mask-image: linear-gradient(90deg, #000 40%, transparent 60%);
+  -webkit-mask-size: 250% 100%;
+  mask-size: 250% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+@keyframes ready-in {
+  from { opacity: 0; transform: translateY(0.375rem); }
+}
+
+/* The mixer's strips arrive in order, left to right (top to bottom on
+   phones). The stagger stops growing after eight, so a big song isn't slow. */
+.stagger-in > * { animation: var(--animate-ready-in); }
+.stagger-in > :nth-child(2) { animation-delay: 30ms; }
+.stagger-in > :nth-child(3) { animation-delay: 60ms; }
+.stagger-in > :nth-child(4) { animation-delay: 90ms; }
+.stagger-in > :nth-child(5) { animation-delay: 120ms; }
+.stagger-in > :nth-child(6) { animation-delay: 150ms; }
+.stagger-in > :nth-child(7) { animation-delay: 180ms; }
+.stagger-in > :nth-child(n + 8) { animation-delay: 210ms; }
+
+/* A loading waveform: a soft band of light scans across the placeholder
+   bars, the way the playhead will once the song is in. */
+@keyframes waveform-scan {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+.waveform-scan {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.07), transparent);
+  animation: waveform-scan 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  pointer-events: none;
+}
+
+/* An on-page editor opening or closing (utils/editorSwap). The editor and
+   the mixer share one slot: the browser grows or shrinks the slot between
+   them while the outgoing view fades out and the incoming one settles in.
+   Everything else on the page (the header's pickers, the transport losing
+   its extra buttons, the score and notes) crossfades. Named only during a
+   swap, so nothing else is affected. */
+.editor-swap .editor-slot {
+  view-transition-name: editor-slot;
+}
+::view-transition-group(editor-slot) {
+  animation-duration: 0.34s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* Pinned to the top and left uncropped, not stretched: the slot changes
+   shape, the views inside it don't. */
+::view-transition-old(editor-slot),
+::view-transition-new(editor-slot) {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  object-position: top left;
+  overflow: clip;
+}
+::view-transition-old(editor-slot) {
+  animation: 0.14s ease-in both editor-out;
+}
+::view-transition-new(editor-slot) {
+  animation: 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.06s both editor-in;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.22s;
+}
+@keyframes editor-out {
+  to { opacity: 0; }
+}
+@keyframes editor-in {
+  from { opacity: 0; transform: translateY(0.75rem); }
+}
+
+/* Reduce Motion: nothing travels. Dialogs, the waveform and the strips
+   still fade in, so it's clear something arrived. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-dialog-in,
+  .animate-step-forward,
+  .animate-step-back,
+  .animate-waveform-in,
+  .stagger-in > *,
+  .animate-ready-in {
+    animation: backdrop-in 0.2s ease-out backwards;
+  }
+  .animate-waveform-in {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .waveform-scan { display: none; }
+  /* Editors: no growing slot or rise, just the crossfade. */
+  ::view-transition-group(editor-slot) { animation: none; }
+  ::view-transition-new(editor-slot) { animation: 0.2s ease-out both backdrop-in; }
 }
 
 @keyframes toast-in {

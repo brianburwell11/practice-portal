@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { ChordEvent } from '../audio/chordsTypes';
 import { isOffGrid, round3, snapTime, type GridLine, type Snap } from '../audio/chordGrid';
 import type { Clip } from '../components/chords-editor/gridRange';
+import { editorSwap } from '../utils/editorSwap';
 
 const MAX_UNDO = 50;
 /** Two chords this close (seconds) are the same spot. */
@@ -124,9 +125,11 @@ export const useChordsEditorStore = create<ChordsEditorState>((set, get) => ({
   snap: typeof window === 'undefined' ? 'half' : loadSnap(),
   clipboard: null,
 
-  open: (chords) => set({ ...initialState, isOpen: true, chords: sortChords(chords) }),
+  open: (chords) => editorSwap(() => set({ ...initialState, isOpen: true, chords: sortChords(chords) })),
 
-  close: () => set({ ...initialState }),
+  // Only an actual close swaps the page; closing what's shut (a band
+  // switch closes all three) just resets.
+  close: () => (get().isOpen ? editorSwap(() => set({ ...initialState })) : set({ ...initialState })),
 
   setMode: (mode) => set({ mode }),
 
