@@ -287,7 +287,7 @@ export function MixerPanel() {
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
             <path d="M12 2a10 10 0 0 1 8.5 4.7l-2.3-.4a1.2 1.2 0 1 0-.4 2.4l4.6.8a1.2 1.2 0 0 0 1.4-1l.8-4.6a1.2 1.2 0 0 0-2.4-.4l-.3 1.8A12 12 0 0 0 0 12a1.2 1.2 0 0 0 2.4 0A9.6 9.6 0 0 1 12 2ZM12 22a10 10 0 0 1-8.5-4.7l2.3.4a1.2 1.2 0 1 0 .4-2.4l-4.6-.8a1.2 1.2 0 0 0-1.4 1l-.8 4.6a1.2 1.2 0 0 0 2.4.4l.3-1.8A12 12 0 0 0 24 12a1.2 1.2 0 0 0-2.4 0A9.6 9.6 0 0 1 12 22Z" />
           </svg>
-          RESET MIXER TO DEFAULT SETTINGS
+          Reset mix
         </button>
         <div className="flex gap-2 w-full md:w-[230px]">
           <button
@@ -396,8 +396,8 @@ export function MixerPanel() {
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             )}
-            {saveState === 'pending' && <span>Saving Default Mixer State - Click again to cancel</span>}
-            {saveState === 'saving' && <span>Saving...</span>}
+            {saveState === 'pending' && <span>Saving as the default mix. Click again to cancel</span>}
+            {saveState === 'saving' && <span>Saving…</span>}
             {saveState === 'cancelled' && <span>Save cancelled</span>}
             {saveState === 'saved' && <span>Saved</span>}
             {saveState === 'error' && <span>Save failed</span>}

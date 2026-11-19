@@ -192,7 +192,7 @@ export function YouTubeMiniPlayer({
             whiteSpace: 'nowrap',
           }}
         >
-          {calibrating ? 'Calibrating — line up the anchor' : title || videoId}
+          {calibrating ? 'Calibrating: line up the anchor' : title || videoId}
         </span>
         {admin && onSaveOffset && (
           calibrating ? (
@@ -239,7 +239,7 @@ export function YouTubeMiniPlayer({
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); setCalibrating(true); }}
-              title="Calibrate sync — scrub YT to match the song's anchor"
+              title="Calibrate sync: scrub the video to match the song's anchor"
               style={{
                 background: 'transparent',
                 border: '1px solid #4b5563',

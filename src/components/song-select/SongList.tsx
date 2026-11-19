@@ -394,13 +394,13 @@ export function SongSelectDropdown() {
       disabled={loading}
     >
       <option value={inSetlist ? '-1' : ''} disabled>
-        {loading ? 'Loading...' : 'Select a song'}
+        {loading ? 'Loading…' : 'Select a song'}
       </option>
       {inSetlist && setlistOptions
         ? setlistOptions.map((group, gi) => {
             const options = group.songs.map(({ idx, song }) => (
               <option key={idx} value={String(idx)}>
-                {song.title} — {song.artist}
+                {song.artist ? `${song.title} by ${song.artist}` : song.title}
               </option>
             ));
             return group.label
@@ -409,7 +409,7 @@ export function SongSelectDropdown() {
           })
         : filteredSongs.map((song) => (
             <option key={song.id} value={song.id}>
-              {song.title} — {song.artist}
+              {song.artist ? `${song.title} by ${song.artist}` : song.title}
             </option>
           ))
       }

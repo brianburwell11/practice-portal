@@ -21,7 +21,7 @@ export function TermsOfService() {
       </p>
 
       <Section title="The service">
-        <p>Practice Portal lets bands keep stems, sheet music, lyrics, notes and setlists in one place and practice along with them. It’s free to use today. We may add, change or remove features, and we may introduce paid plans — if we do, we’ll say so clearly before anything costs you money.</p>
+        <p>Practice Portal lets bands keep stems, sheet music, lyrics, notes and setlists in one place and practice along with them. It’s free to use today. We may add, change or remove features, and we may introduce paid plans. If we do, we’ll say so clearly before anything costs you money.</p>
       </Section>
 
       <Section title="Who can use it">
@@ -29,7 +29,7 @@ export function TermsOfService() {
       </Section>
 
       <Section title="Your account">
-        <p>You sign in with your Google account. Keep it secure — anything done while signed in as you is your responsibility. If you think someone else has used your account, tell us at {mail}.</p>
+        <p>You sign in with your Google account. Keep it secure: anything done while signed in as you is your responsibility. If you think someone else has used your account, tell us at {mail}.</p>
       </Section>
 
       <Section title="Bands and roles">
@@ -39,14 +39,14 @@ export function TermsOfService() {
       </Section>
 
       <Section title="Your content">
-        <p>You keep ownership of everything you upload or write — audio, sheet music, lyrics, notes, setlists, images and the rest.</p>
-        <p>So that we can run the site, you give us permission to store, copy, convert and display your content, and to make it available to the people your band shares it with. Converting includes things like transcoding audio and turning MuseScore files into MusicXML. This permission is worldwide and free of charge, and lasts only as long as we need it to provide the service — it ends when the content is deleted, apart from copies that briefly remain in backups and logs.</p>
+        <p>You keep ownership of everything you upload or write: audio, sheet music, lyrics, notes, setlists, images and the rest.</p>
+        <p>So that we can run the site, you give us permission to store, copy, convert and display your content, and to make it available to the people your band shares it with. Converting includes things like transcoding audio and turning MuseScore files into MusicXML. This permission is worldwide and free of charge, and lasts only as long as we need it to provide the service. It ends when the content is deleted, apart from copies that briefly remain in backups and logs.</p>
         <p>Content added to a band is the band’s to manage: if you leave a band, what you added stays with it unless its Owner or Managers remove it.</p>
       </Section>
 
       <Section title="Only upload what you have the rights to">
-        <p>Bands often practice songs written and recorded by other people. Before you upload a recording, stems or sheet music, make sure you have the right to — your own work, something you have permission to use, or material whose license allows it. You’re responsible for what you upload.</p>
-        <p>Public bands can be seen by anyone with the link, and today uploaded files can be opened by anyone who has their exact web address, even in Members-only bands — see the {privacy}. Don’t upload anything you couldn’t accept becoming public.</p>
+        <p>Bands often practice songs written and recorded by other people. Before you upload a recording, stems or sheet music, make sure you have the right to: your own work, something you have permission to use, or material whose license allows it. You’re responsible for what you upload.</p>
+        <p>Public bands can be seen by anyone with the link, and today uploaded files can be opened by anyone who has their exact web address, even in Members-only bands (see the {privacy}). Don’t upload anything you couldn’t accept becoming public.</p>
       </Section>
 
       <Section title="Things you must not do">
@@ -64,7 +64,7 @@ export function TermsOfService() {
         <p>If you believe something on Practice Portal infringes your copyright, email {mail} with:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>the work you believe is infringed;</li>
-          <li>where it appears on Practice Portal — the band and song, or a link;</li>
+          <li>where it appears on Practice Portal, such as the band and song, or a link;</li>
           <li>your name and how to contact you;</li>
           <li>a statement that you believe in good faith the use isn’t authorized by you, your agent or the law;</li>
           <li>a statement that your notice is accurate and that, under penalty of perjury, you own the copyright or are authorized to act for the owner; and</li>
@@ -78,16 +78,16 @@ export function TermsOfService() {
       </Section>
 
       <Section title="Keep your own copies">
-        <p>We work to keep the site running and your content safe, but we can’t promise it’ll always be available or that nothing will ever be lost. Practice Portal isn’t a backup — keep the original files of anything that matters to you.</p>
+        <p>We work to keep the site running and your content safe, but we can’t promise it’ll always be available or that nothing will ever be lost. Practice Portal isn’t a backup, so keep the original files of anything that matters to you.</p>
       </Section>
 
       <Section title="Ending your use">
-        <p>You can stop using Practice Portal at any time, leave any band (unless you’re its Owner — hand ownership on first), or ask us to delete your account at {mail}.</p>
+        <p>You can stop using Practice Portal at any time, leave any band (unless you’re its Owner, in which case hand ownership on first), or ask us to delete your account at {mail}.</p>
         <p>We may suspend or end your access, or remove content, if you break these terms, if we’re required to by law, or to protect the site or the people using it. Where it’s reasonable, we’ll tell you first and give you a chance to put things right.</p>
       </Section>
 
       <Section title="No warranty">
-        <p>Practice Portal is provided “as is” and “as available”. To the fullest extent the law allows, we make no promises about it — including that it will be uninterrupted, error-free or fit for any particular purpose.</p>
+        <p>Practice Portal is provided “as is” and “as available”. To the fullest extent the law allows, we make no promises about it, including that it will be uninterrupted, error-free or fit for any particular purpose.</p>
       </Section>
 
       <Section title="Limits on liability">

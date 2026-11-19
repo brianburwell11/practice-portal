@@ -25,12 +25,20 @@ import { bandPageTitle } from '../../utils/pageTitle';
  * A band's guest link is the band's own address plus `?guest=<token>`. Open it
  * (the server sets the `pp_guest` cookie), then reload without the token, so
  * every document is fetched again as a guest and the address bar is clean.
- * Resolves to an error message if the link can't be opened.
+ * Resolves to why the link didn't open, and whether trying again later
+ * will help (too many opens in a short while).
  */
-async function openGuestLink(token: string): Promise<string> {
+async function openGuestLink(token: string): Promise<{ message: string; retry: boolean }> {
   const res = await fetch(`/api/guest/${encodeURIComponent(token)}`, { method: 'POST' }).catch(() => null);
+  if (res?.status === 429) {
+    const minutes = Math.max(1, Math.ceil(Number(res.headers.get('Retry-After') ?? 60) / 60));
+    return {
+      message: `This guest link has been opened too many times in this time period. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+      retry: true,
+    };
+  }
   const data = await res?.json().catch(() => ({}));
-  if (!res?.ok) return data?.error ?? 'This guest link isn’t valid';
+  if (!res?.ok) return { message: data?.error ?? 'This guest link isn’t valid', retry: false };
   const params = new URLSearchParams(window.location.search);
   params.delete('guest');
   const qs = params.toString();
@@ -66,13 +74,21 @@ export function BandApp() {
   const [error, setError] = useState<string | null>(null);
   const [guestToken] = useState(() => new URLSearchParams(window.location.search).get('guest'));
   const [guestError, setGuestError] = useState<string | null>(null);
+  // Too many opens: the link itself is fine, so offer to try it again.
+  const [guestRetry, setGuestRetry] = useState(false);
   const guestPending = !!guestToken && guestError === null;
 
   // A guest link: open it before anything else loads.
   useEffect(() => {
     if (!guestToken) return;
-    openGuestLink(guestToken).then((message) => {
-      // It didn't open — drop the token from the address bar and carry on as before.
+    openGuestLink(guestToken).then(({ message, retry }) => {
+      setGuestRetry(retry);
+      // It didn't open. Drop the token from the address bar (unless trying
+      // again later will work) and carry on as before.
+      if (retry) {
+        setGuestError(message);
+        return;
+      }
       const params = new URLSearchParams(window.location.search);
       params.delete('guest');
       const qs = params.toString();
@@ -153,7 +169,7 @@ export function BandApp() {
   }, [currentBand]);
 
   if (error) {
-    return <BandUnavailable slug={bandSlug ?? ''} error={error} guestError={guestError} />;
+    return <BandUnavailable slug={bandSlug ?? ''} error={error} guestError={guestError} guestRetry={guestRetry} />;
   }
 
   if (!currentBand || guestPending) {
@@ -168,7 +184,7 @@ export function BandApp() {
  * rather than missing: then the screen to sign in or ask to join. A band
  * that doesn't exist at all gets the site's 404 page.
  */
-function BandUnavailable({ slug, error, guestError }: { slug: string; error: string; guestError: string | null }) {
+function BandUnavailable({ slug, error, guestError, guestRetry }: { slug: string; error: string; guestError: string | null; guestRetry: boolean }) {
   const { available, loaded, user, load } = useSessionStore();
   useEffect(() => {
     load();
@@ -179,6 +195,24 @@ function BandUnavailable({ slug, error, guestError }: { slug: string; error: str
     return <div className="min-h-screen bg-page text-red-400 p-8">{error}</div>;
   }
   if (!available) return <NotFound />;
+
+  // A guest link that's busy, not a band they can't see: no sign-in wall.
+  if (guestError && guestRetry) {
+    return (
+      <div className="theme-default min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
+        <div className="max-w-sm text-center space-y-4">
+          <h1 className="text-lg font-semibold">Guest link is busy</h1>
+          <p className="text-sm text-gray-300">{guestError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-md bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <RequestAccess

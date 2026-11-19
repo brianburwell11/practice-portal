@@ -423,8 +423,8 @@ export function MembersModal({ bandId, bandName, onClose }: Props) {
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-300">Guest link</h3>
           <p className="text-xs text-gray-500">
-            Anyone with the link can play this band’s songs and setlists — read-only, no account needed. Good for
-            subs. Reset it to cut off everyone who has the current one.
+            Anyone with the link can play this band’s songs and setlists without an account, but can’t change
+            anything. Good for subs. Reset it to cut off everyone who has the current one.
             {visibility === 'public' && ' This band is Public, so the link only matters if you make it Members only.'}
           </p>
           {guestLink === null ? (
