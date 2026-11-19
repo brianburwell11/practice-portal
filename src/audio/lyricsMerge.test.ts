@@ -28,9 +28,24 @@ describe('lyrics text round trip', () => {
 });
 
 describe('mergeLyricTimes', () => {
-  it('clears only the line that was edited', () => {
-    const out = edit((r) => r.map((x) => (x === 'second line' ? 'second line, fixed' : x)));
-    expect(times(out)).toEqual([null, 1, null, null, 3, 4, 5]);
+  it('keeps the time of a line whose text was edited', () => {
+    const out = edit((r) => r.map((x) => (x === 'second line' ? 'totally different words' : x)));
+    expect(times(out)).toEqual([null, 1, 2, null, 3, 4, 5]);
+  });
+
+  it('keeps times when several adjacent lines are edited', () => {
+    const out = edit((r) => r.map((x) => (x === 'first line' ? 'first!' : x === 'second line' ? 'second!' : x)));
+    expect(times(out)).toEqual([null, 1, 2, null, 3, 4, 5]);
+  });
+
+  it('gives the edited line its time, not a new line typed next to it', () => {
+    const out = edit((r) => [...r.slice(0, 2), 'brand new words', 'second line, fixed', ...r.slice(3)]);
+    expect(times(out)).toEqual([null, 1, null, 2, null, 3, 4, 5]);
+  });
+
+  it('leaves a line untimed when it replaces a blank or a marker', () => {
+    const out = edit((r) => r.map((x) => (x === '#VERSE' ? 'now a lyric' : x)));
+    expect(out[0].time).toBeNull();
   });
 
   it('keeps times around an inserted line', () => {
@@ -50,7 +65,6 @@ describe('mergeLyricTimes', () => {
 
   it('restores a time when a line is typed back to its old text', () => {
     const changed = edit((r) => r.map((x) => (x === 'first line' ? 'first' : x)));
-    expect(changed[1].time).toBeNull();
     const retyped = linesToText(changed).replace(/^first$/m, 'first line');
     const back = mergeLyricTimes(timed, textToLines(retyped));
     expect(times(back)).toEqual(times(timed));

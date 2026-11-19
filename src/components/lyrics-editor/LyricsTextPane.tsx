@@ -5,8 +5,9 @@ import { linesToText, mergeLyricTimes, textToLines } from '../../audio/lyricsMer
 
 /**
  * Lyrics mode: the words in one text box, one lyric per line. Edits keep
- * the timestamps of every line whose text is unchanged since the box was
- * opened; only changed and new lines need timing again.
+ * timestamps: unchanged lines keep theirs, and a line whose words were
+ * changed in place keeps the time of the line it replaced. Only new lines
+ * need timing.
  */
 export function LyricsTextPane() {
   const lines = useLyricsEditorStore((s) => s.lines);
