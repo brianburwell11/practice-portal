@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LyricsLine } from './lyricsTypes';
 import { linesToText, mergeLyricTimes, textToLines } from './lyricsMerge';
+import { isSectionMarker } from './lyricSections';
 
 const timed: LyricsLine[] = [
   { text: '#VERSE', time: null },
@@ -24,6 +25,29 @@ describe('lyrics text round trip', () => {
   it('writes instrumental lines as #INSTRUMENTAL and reads them back', () => {
     expect(linesToText(timed).split('\n')[4]).toBe('#INSTRUMENTAL');
     expect(textToLines('[Instrumental]')[0]).toEqual({ text: '', time: null, instrumental: true });
+  });
+
+  it('reads bracketed section headings as # markers', () => {
+    const texts = textToLines('[Chorus]\n[verse 2]\n[Pre Chorus]\n[Pre-Chorus]\n[ Bridge ]\n[Guitar solo]\nChorus')
+      .map((l) => l.text);
+    expect(texts).toEqual(['#CHORUS', '#VERSE2', '#PRE-CHORUS', '#PRE-CHORUS', '#BRIDGE', '[Guitar solo]', 'Chorus']);
+  });
+
+  it('keeps times when a # marker is retyped in brackets', () => {
+    const out = mergeLyricTimes(timed, textToLines(linesToText(timed).replace('#VERSE', '[Verse]')));
+    expect(out).toEqual(timed);
+  });
+});
+
+describe('isSectionMarker', () => {
+  it('treats any #HEADING or [heading] as a marker', () => {
+    for (const t of ['#VERSE', '#Tag', '#GUITAR SOLO', '[Guitar solo]', '[Chorus x2]', '  [Ad lib]  '])
+      expect(isSectionMarker(t)).toBe(true);
+  });
+
+  it('leaves lyrics, #END and instrumentals alone', () => {
+    for (const t of ['a lyric', '#', '# ', '#END', '#INSTRUMENTAL', '[Instrumental]', 'half [bracket]'])
+      expect(isSectionMarker(t)).toBe(false);
   });
 });
 

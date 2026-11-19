@@ -38,9 +38,8 @@ export function LyricsDisplay({ overrideLines, only }: LyricsDisplayProps) {
   );
 
   // Use override lines (from editor) or store lines, excluding blank lines
-  // and admin-only section markers like `#VERSE` or legacy bracket
-  // annotations like `[chorus]` — these are notes for the editor, never
-  // shown in the song view. `[Instrumental]` is the exception: it survives
+  // and section markers, any `#HEADING` or `[heading]` line. These are
+  // notes for the editor, never shown in the song view. `[Instrumental]` is the exception: it survives
   // the filter and renders as the music-note icon, same as an
   // `instrumental: true` line.
   const lines = useMemo(() => {
@@ -50,7 +49,6 @@ export function LyricsDisplay({ overrideLines, only }: LyricsDisplayProps) {
       if (l.text === '') return false;
       if (isInstrumentalAnnotation(l.text)) return true;
       if (isSectionMarker(l.text)) return false;
-      if (/^\s*\[.*\]\s*$/.test(l.text)) return false;
       return true;
     });
   }, [overrideLines, storeLines]);

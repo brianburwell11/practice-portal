@@ -146,7 +146,7 @@ export function LyricsTextPane() {
       </div>
 
       <p className="mt-2 text-xs text-gray-500">
-        One lyric per line. Blank lines are gaps. Lines like #VERSE are section markers and never show in the song view. #END marks where the lyrics stop.
+        One lyric per line. Blank lines are gaps. Lines like #VERSE or [Guitar solo] are section markers and never show in the song view. #END marks where the lyrics stop.
       </p>
     </div>
   );

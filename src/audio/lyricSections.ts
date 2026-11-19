@@ -10,10 +10,21 @@ export const LYRIC_SECTIONS = [
 
 export type LyricSection = (typeof LYRIC_SECTIONS)[number];
 
-const SECTION_RE = new RegExp(
-  `^\\s*#(${LYRIC_SECTIONS.join('|')})\\d*\\s*$`,
-  'i',
-);
+// Any `#HEADING` or `[heading]` line is a section marker: a note for the
+// editor, never shown in the song view. `#END` and `#INSTRUMENTAL` /
+// `[Instrumental]` are checked first and keep their own meanings.
+const HEADING_RE = /^\s*(?:#\S.*|\[.*\])\s*$/;
+
+// `[Chorus]`, `[Verse 2]`, `[Pre Chorus]`: the bracket style lyric sites use.
+const BRACKET_SECTION_RE = /^\s*\[\s*(intro|hook|verse|pre[\s-]?chorus|chorus|bridge|outro)\s*(\d*)\s*\]\s*$/i;
+
+/** `[Verse 2]` → `#VERSE2`, or null when the line isn't a bracketed section heading. */
+export function bracketSectionToMarker(text: string): string | null {
+  const m = BRACKET_SECTION_RE.exec(text);
+  if (!m) return null;
+  const name = m[1].toUpperCase().replace(/^PRE[\s-]?/, 'PRE-');
+  return `#${name}${m[2]}`;
+}
 
 const INSTRUMENTAL_RE = /^\s*(?:#instrumental|\[\s*instrumental\s*\])\s*$/i;
 
@@ -26,20 +37,14 @@ export function isEndMarker(text: string): boolean {
   return END_RE.test(text);
 }
 
-const LEGACY_BRACKET_RE = /^\s*\[.*\]\s*$/;
-
 export function isSectionMarker(text: string): boolean {
-  return SECTION_RE.test(text);
+  return HEADING_RE.test(text) && !isEndMarker(text) && !isInstrumentalAnnotation(text);
 }
 
 export function isInstrumentalAnnotation(text: string): boolean {
   return INSTRUMENTAL_RE.test(text);
 }
 
-export function isLegacyBracketAnnotation(text: string): boolean {
-  return LEGACY_BRACKET_RE.test(text);
-}
-
 export function isAdminAnnotation(text: string): boolean {
-  return isSectionMarker(text) || isLegacyBracketAnnotation(text);
+  return isSectionMarker(text);
 }

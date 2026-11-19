@@ -1,5 +1,5 @@
 import type { LyricsLine } from './lyricsTypes';
-import { isInstrumentalAnnotation } from './lyricSections';
+import { bracketSectionToMarker, isInstrumentalAnnotation, isSectionMarker } from './lyricSections';
 
 /** The text form of lyrics: one line per lyric, instrumental lines as
  *  `#INSTRUMENTAL`. Same shape as the .txt export. */
@@ -8,13 +8,14 @@ export function linesToText(lines: LyricsLine[]): string {
 }
 
 /** Parse lyrics text into untimed lines. `[Instrumental]` / `#INSTRUMENTAL`
- *  (any case) become instrumental lines; everything else is trimmed. */
+ *  (any case) become instrumental lines, bracketed headings like `[Chorus]`
+ *  become `#CHORUS` markers; everything else is trimmed. */
 export function textToLines(text: string): LyricsLine[] {
   const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   return normalized.split('\n').map((raw) => {
     const t = raw.trim();
     if (isInstrumentalAnnotation(t)) return { text: '', time: null, instrumental: true };
-    return { text: t, time: null };
+    return { text: bracketSectionToMarker(t) ?? t, time: null };
   });
 }
 
@@ -22,11 +23,10 @@ function key(line: LyricsLine): string {
   return line.instrumental ? '#INSTRUMENTAL' : line.text.trim();
 }
 
-/** Lines that can carry a time: lyrics and instrumentals, not blanks or #MARKERS. */
+/** Lines that can carry a time: lyrics and instrumentals, not blanks or section markers. */
 function stampable(line: LyricsLine): boolean {
   if (line.instrumental) return true;
-  const t = line.text.trim();
-  return t !== '' && !t.startsWith('#');
+  return line.text.trim() !== '' && !isSectionMarker(line.text);
 }
 
 function bigrams(s: string): Map<string, number> {
