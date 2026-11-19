@@ -732,7 +732,9 @@ export function ScrollingScore() {
 
   return (
     <>
-    <div className="relative border-b border-gray-800">
+    {/* On wider screens the score sits on the band's color as a sheet,
+        inset with rounded corners, not a white band cut edge to edge. */}
+    <div className="relative border-b border-gray-800 shrink-0 md:border-0 md:mx-3 md:mt-1 md:mb-3 md:rounded-lg md:overflow-hidden md:shadow-[0_2px_10px_rgb(0_0_0/0.25)]">
       {/* Gear + parts triggers — absolutely positioned in the top-right so
           the score renders flush with the top of the panel. Both triggers
           live in the same row-flex wrapper, anchored together. The

@@ -29,6 +29,23 @@ const BEAT_SNAP_PX = isCoarse ? 12 : 7;
 /** Chord markers in the chords editor: pink, apart from lyric cyan, section gold and loop yellow. */
 const CHORD_MARKER_COLOR = '#f472b6';
 
+/**
+ * The waveform's colors, from the band theme on the page around it, so the
+ * panel sits in the band's colors instead of a fixed navy: the panel on the
+ * deepest surface tone, peaks on a mid tone, the playhead in the text color.
+ */
+function waveColors(canvas: Element) {
+  // Read past the wrapper's `theme-default`, which keeps the overlays stock.
+  const cs = getComputedStyle(canvas.closest('.theme-default')?.parentElement ?? canvas);
+  const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
+  return {
+    panel: v('--color-gray-900', '#111827'),
+    empty: v('--color-gray-800', '#1f2937'),
+    peaks: v('--color-gray-600', '#4B5563'),
+    ink: v('--band-ink', '#f3f4f6'),
+  };
+}
+
 const MIN_VIEW = 5;
 /** How long a finger must rest on the waveform before a drag selects a loop instead of panning. */
 const LONG_PRESS_MS = 450;
@@ -1033,6 +1050,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       toPixel: (seconds: number) => number,
     ) => {
       const tapMap = displayTapMap;
+      const ink = waveColors(ctx.canvas).ink;
       if (tapMap && tapMap.length > 0) {
         ctx.font = '10px ui-monospace, monospace';
         ctx.textBaseline = 'top';
@@ -1049,11 +1067,14 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
 
           const isSelected = markerEditorOpen && markerSelectedIndex === i;
 
+          // Beats and bars in the band's text color, faint, so they read on light and dark panels.
           if (entry.type === 'beat') {
-            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.strokeStyle = ink;
+            ctx.globalAlpha = 0.15;
             ctx.lineWidth = 0.5;
           } else if (entry.type === 'measure') {
-            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.strokeStyle = ink;
+            ctx.globalAlpha = 0.35;
             ctx.lineWidth = 1.5;
           } else {
             ctx.strokeStyle = '#f59e0b';
@@ -1067,10 +1088,12 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
             ctx.lineWidth = 2;
           }
 
+          if (isSelected) ctx.globalAlpha = 1;
           ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, height);
           ctx.stroke();
+          ctx.globalAlpha = 1;
 
           if (isSelected) {
             ctx.shadowColor = 'transparent';
@@ -1205,27 +1228,30 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
+    const colors = waveColors(canvas);
     const peakData = engine.peakData;
     if (!peakData || !duration) {
-      ctx.fillStyle = '#1f2937';
+      ctx.fillStyle = colors.empty;
       ctx.fillRect(0, 0, width, height);
       return;
     }
 
     // Background
-    ctx.fillStyle = '#111827';
+    ctx.fillStyle = colors.panel;
     ctx.fillRect(0, 0, width, height);
 
     // Waveform — viewport-relative
     const centerY = height / 2;
     const halfHeight = height / 2 - 2;
-    drawPeaks(ctx, peakData, engine.peaksPerSecond, viewStart, effectiveViewDuration, width, centerY, halfHeight, '#4B5563');
+    drawPeaks(ctx, peakData, engine.peaksPerSecond, viewStart, effectiveViewDuration, width, centerY, halfHeight, colors.peaks);
 
     // Played region tint
     const playheadX = secondsToPixel(position, width);
     if (playheadX > 0) {
-      ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+      ctx.fillStyle = colors.ink;
+      ctx.globalAlpha = 0.08;
       ctx.fillRect(0, 0, Math.min(playheadX, width), height);
+      ctx.globalAlpha = 1;
     }
 
     // Markers
@@ -1305,7 +1331,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
 
     // Playhead
     if (playheadX >= 0 && playheadX <= width) {
-      ctx.fillStyle = '#3B82F6';
+      ctx.fillStyle = colors.ink;
       ctx.fillRect(Math.round(playheadX) - 1, 0, 2, height);
     }
   }, [engine.peakData, engine.peaksPerSecond, peaksVersion, position, duration, selectedSong, hoveredTime, viewStart, effectiveViewDuration, secondsToPixel, drawMarkers, loopA, loopB, loopEnabled, canvasReady, loopSelectTick]);
@@ -1329,13 +1355,14 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
     if (!peakData || !duration) return;
 
     // Background
-    ctx.fillStyle = '#1a1a2e';
+    const colors = waveColors(canvas);
+    ctx.fillStyle = colors.panel;
     ctx.fillRect(0, 0, width, height);
 
     // Waveform (full song)
     const centerY = height / 2;
     const halfHeight = height / 2 - 1;
-    drawPeaks(ctx, peakData, engine.peaksPerSecond, 0, duration, width, centerY, halfHeight, '#374151');
+    drawPeaks(ctx, peakData, engine.peaksPerSecond, 0, duration, width, centerY, halfHeight, colors.peaks);
 
     // Section markers only (keep overview clean)
     const tapMap = selectedSong?.tapMap;
@@ -1375,15 +1402,18 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
     // Viewport indicator
     const vx1 = (viewStart / duration) * width;
     const vx2 = ((viewStart + effectiveViewDuration) / duration) * width;
-    ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
+    ctx.fillStyle = colors.ink;
+    ctx.globalAlpha = 0.12;
     ctx.fillRect(vx1, 0, vx2 - vx1, height);
-    ctx.strokeStyle = 'rgba(59, 130, 246, 0.5)';
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = colors.ink;
     ctx.lineWidth = 1;
     ctx.strokeRect(vx1, 0, vx2 - vx1, height);
+    ctx.globalAlpha = 1;
 
     // Playhead
     const phx = (position / duration) * width;
-    ctx.fillStyle = '#3B82F6';
+    ctx.fillStyle = colors.ink;
     ctx.fillRect(Math.round(phx) - 0.5, 0, 1.5, height);
   }, [engine.peakData, engine.peaksPerSecond, peaksVersion, position, duration, selectedSong, isZoomed, viewStart, effectiveViewDuration, loopA, loopB, loopEnabled]);
 
