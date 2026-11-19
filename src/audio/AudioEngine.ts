@@ -59,10 +59,12 @@ export class AudioEngine {
   private _loopEnabled = true;
   private wakeLock: WakeLockSentinel | null = null;
   private background: BackgroundAudio;
+  /** The listener's manual correction on top of what the browser reports, in seconds */
+  private latencyAdjust = 0;
 
   constructor() {
     this.ctx = new AudioContext();
-    this.clock = new TransportClock(this.ctx);
+    this.clock = new TransportClock(this.ctx, () => this.outputLatencySeconds);
     this.masterGain = this.ctx.createGain();
     // Speakers directly, or on iOS through an <audio> element so playback survives backgrounding
     this.background = new BackgroundAudio(this.ctx, this.masterGain);
@@ -81,6 +83,62 @@ export class AudioEngine {
         this.pause();
       }
     });
+  }
+
+  /** Output delay the browser reports for the current device, in seconds.
+   *  Includes Bluetooth where the OS knows about it (Chrome on macOS does);
+   *  0 where the browser reports nothing. Changes when headphones connect,
+   *  so read it live. */
+  get detectedLatencySeconds(): number {
+    const out = this.ctx.outputLatency;
+    const base = this.ctx.baseLatency;
+    return (Number.isFinite(out) ? out : 0) + (Number.isFinite(base) ? base : 0);
+  }
+
+  /** Total delay between the audio clock and the ear: detected plus the manual adjustment */
+  get outputLatencySeconds(): number {
+    return Math.max(0, this.detectedLatencySeconds + this.latencyAdjust);
+  }
+
+  /** The listener's correction to the detected latency, in milliseconds */
+  setLatencyAdjustMs(ms: number): void {
+    this.latencyAdjust = ms / 1000;
+  }
+
+  /** Get ready to play calibration clicks: pauses the song and opens the
+   *  output. Call synchronously inside the user's tap, so iOS allows it. */
+  async beginCalibration(): Promise<void> {
+    this.pause();
+    this.background.start();
+    if (this.ctx.state !== 'running') await this.ctx.resume();
+    // A fresh pitch node, so the clicks take the song's path with no
+    // leftover song audio buffered inside it
+    if (this.stems.size > 0) await this.connectPitchNode();
+  }
+
+  /** Close the output opened by beginCalibration, unless the song is playing again */
+  endCalibration(): void {
+    if (!this.clock.playing) this.background.stop();
+  }
+
+  /** A metronome click at `when` (audio clock seconds), routed through the
+   *  song's path so it picks up the same output delay. Returns a cancel. */
+  scheduleClick(when: number, accent = false): () => void {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.frequency.value = accent ? 1500 : 1000;
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(accent ? 0.9 : 0.6, when + 0.001);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.03);
+    osc.connect(gain);
+    gain.connect(this.pitchNode ? this.mixBus : this.masterGain);
+    osc.start(when);
+    osc.stop(when + 0.04);
+    osc.onended = () => gain.disconnect();
+    return () => {
+      try { osc.stop(); } catch { /* already stopped */ }
+      gain.disconnect();
+    };
   }
 
   get songConfig(): SongConfig | null {

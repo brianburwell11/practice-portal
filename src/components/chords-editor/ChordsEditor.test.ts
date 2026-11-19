@@ -21,7 +21,7 @@ const TAP_MAP: TapMapEntry[] = [
 
 let host: HTMLDivElement;
 let root: Root;
-const engine = { seek: vi.fn(), play: vi.fn(), pause: vi.fn(), clock: { currentTime: 0 } };
+const engine = { seek: vi.fn(), play: vi.fn(), pause: vi.fn(), clock: { audibleTime: 0 } };
 
 function setSong(tapMap: TapMapEntry[]) {
   useSongStore.getState().setSelectedSong({
@@ -331,9 +331,9 @@ describe('Stamp mode', () => {
     press(box, 'Enter');
     expect(store().queue).toEqual([{ symbol: 'G' }, { symbol: 'C7' }]);
 
-    engine.clock.currentTime = 12.38; // snaps to 12.5
+    engine.clock.audibleTime = 12.38; // snaps to 12.5
     press(window, 'Tab');
-    engine.clock.currentTime = 3.21; // free time: no snap
+    engine.clock.audibleTime = 3.21; // free time: no snap
     press(window, 'Tab');
     expect(chords()).toEqual(['C7@3.21', 'G@12.5']);
 
@@ -392,11 +392,11 @@ describe('Stamp mode', () => {
     expect(host.querySelector('textarea')).toBeNull(); // panel closed
 
     for (const t of [1, 2, 3, 4]) {
-      engine.clock.currentTime = t;
+      engine.clock.audibleTime = t;
       press(window, 'Tab');
     }
     expect(host.textContent).toContain('Stamp C (Chorus)');
-    engine.clock.currentTime = 5;
+    engine.clock.audibleTime = 5;
     press(window, 'Tab');
     expect(chords()).toEqual(['Am@1', 'F@2', 'Am@3', 'F@4', 'C@5']);
   });

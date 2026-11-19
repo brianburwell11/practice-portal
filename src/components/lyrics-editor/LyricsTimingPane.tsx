@@ -47,8 +47,8 @@ export function LyricsTimingPane() {
   // Past the last line with no end marker yet, the same control adds one.
   const hasEnd = lines.some((l) => isEndMarker(l.text));
   const stampNext = useCallback(() => {
-    if (currentSyncIndex < lines.length) syncLine(currentSyncIndex, engine.clock.currentTime);
-    else if (!hasEnd && lines.length > 0) cueEnd(engine.clock.currentTime);
+    if (currentSyncIndex < lines.length) syncLine(currentSyncIndex, engine.clock.audibleTime);
+    else if (!hasEnd && lines.length > 0) cueEnd(engine.clock.audibleTime);
   }, [currentSyncIndex, lines.length, hasEnd, syncLine, cueEnd, engine]);
 
   const reviewLine = reviewIndex !== null ? lines[reviewIndex] : undefined;

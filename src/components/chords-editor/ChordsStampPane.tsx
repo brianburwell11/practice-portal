@@ -88,7 +88,7 @@ export function ChordsStampPane() {
   // Read the engine clock directly so the stamp matches the keypress or
   // finger-down, not the last UI tick.
   const stampNext = useCallback(() => {
-    stamp(snapTime(engine.clock.currentTime, grid, snap));
+    stamp(snapTime(engine.clock.audibleTime, grid, snap));
   }, [engine, stamp, grid, snap]);
 
   const replay = useCallback(() => {

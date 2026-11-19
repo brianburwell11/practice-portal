@@ -44,7 +44,7 @@ export function useYouTubeSync(
   // stays paused there until the song catches up.
   useEffect(() => {
     if (!ready || !player || disabled) return;
-    const t = engine.clock.currentTime;
+    const t = engine.clock.audibleTime;
     const target = t + offsetSeconds;
     player.seekTo(Math.max(0, target), true);
     lastPosRef.current = t;
@@ -74,7 +74,7 @@ export function useYouTubeSync(
   // YT once the song crosses into the playable range.
   useEffect(() => {
     if (!ready || !player || disabled) return;
-    const target = engine.clock.currentTime + offsetSeconds;
+    const target = engine.clock.audibleTime + offsetSeconds;
     if (playing && target >= 0) player.play();
     else player.pause();
   }, [playing, ready, player, offsetSeconds, engine, disabled]);
@@ -91,7 +91,7 @@ export function useYouTubeSync(
     if (!ready || !player || !playing || disabled) return;
     const interval = setInterval(() => {
       if (player.getPlayerState() === YT_BUFFERING) return;
-      const target = engine.clock.currentTime + offsetSeconds;
+      const target = engine.clock.audibleTime + offsetSeconds;
       const state = player.getPlayerState();
 
       if (target < 0) {

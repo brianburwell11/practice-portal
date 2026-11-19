@@ -129,7 +129,7 @@ export function YouTubeMiniPlayer({
   const handleSetSync = async () => {
     if (!playerRef.current || !onSaveOffset) return;
     const ytTime = playerRef.current.getCurrentTime();
-    const songTime = engine.clock.currentTime;
+    const songTime = engine.clock.audibleTime;
     const newOffset = ytTime - songTime;
     setSavingSync(true);
     setSyncError(null);

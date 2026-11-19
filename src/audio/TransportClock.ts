@@ -8,9 +8,17 @@ export class TransportClock {
   private _duration = 0;
   private _tempoRatio = 1.0;
   private loop: LoopRegion | null = null;
+  /** True right after play or seek: the shifted clock holds at the start
+   *  point until the first sound reaches the ear. False after a rebase
+   *  (tempo or loop change), where earlier audio is still in the pipe. */
+  private freshStart = true;
+  private getOutputLatency: () => number;
 
-  constructor(ctx: AudioContext) {
+  /** `getOutputLatency` returns seconds between the audio clock and the ear
+   *  (Bluetooth headphones add 150 to 250 ms). */
+  constructor(ctx: AudioContext, getOutputLatency: () => number = () => 0) {
     this.ctx = ctx;
+    this.getOutputLatency = getOutputLatency;
   }
 
   get playing(): boolean {
@@ -33,6 +41,7 @@ export class TransportClock {
     if (this._playing) {
       this.songTimeAtPlay = this.currentTime;
       this.contextTimeAtPlay = this.ctx.currentTime;
+      this.freshStart = false;
     }
     this._tempoRatio = ratio;
   }
@@ -42,25 +51,40 @@ export class TransportClock {
     if (this._playing) {
       this.songTimeAtPlay = this.currentTime;
       this.contextTimeAtPlay = this.ctx.currentTime;
+      this.freshStart = false;
     }
     this.loop = loop;
   }
 
-  /** Current song position in seconds */
+  /** Song position the audio is being scheduled at, in seconds. Drives
+   *  playback, seeking and looping. */
   get currentTime(): number {
+    return this.positionAt(this.ctx.currentTime);
+  }
+
+  /** Song position the listener is hearing right now: `currentTime` minus
+   *  the output latency. Drives visuals and anything stamped by ear. */
+  get audibleTime(): number {
+    return this.positionAt(this.ctx.currentTime - this.getOutputLatency());
+  }
+
+  private positionAt(contextTime: number): number {
     if (!this._playing) return this.songTimeAtPlay;
-    const elapsed = (this.ctx.currentTime - this.contextTimeAtPlay) * this._tempoRatio;
+    const elapsed = (contextTime - this.contextTimeAtPlay) * this._tempoRatio;
+    // Nothing audible yet since play or seek: hold at the start point
+    if (elapsed < 0 && this.freshStart) return this.songTimeAtPlay;
     let pos = this.songTimeAtPlay + elapsed;
     const loop = this.loop;
     if (loop && this.songTimeAtPlay < loop.end && pos >= loop.end) {
       pos = loop.start + (pos - loop.start) % (loop.end - loop.start);
     }
-    return Math.min(pos, this._duration);
+    return Math.max(0, Math.min(pos, this._duration));
   }
 
   play(): void {
     if (this._playing) return;
     this.contextTimeAtPlay = this.ctx.currentTime;
+    this.freshStart = true;
     this._playing = true;
   }
 
@@ -80,6 +104,7 @@ export class TransportClock {
     this.songTimeAtPlay = clamped;
     if (this._playing) {
       this.contextTimeAtPlay = this.ctx.currentTime;
+      this.freshStart = true;
     }
   }
 }

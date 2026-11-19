@@ -4,6 +4,7 @@ import { useBandStore } from '../../store/bandStore';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { SectionList } from './SectionList';
+import { AudioLatencyDialog } from './AudioLatencyDialog';
 import { parseXscFile } from '../../audio/xscParser';
 import { autoLabelSection } from '../../audio/tapMapUtils';
 import { buildXscContent } from '../../audio/xscExporter';
@@ -32,6 +33,7 @@ export function MarkerEditorModal() {
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [latencyOpen, setLatencyOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const coarse = useMediaQuery('(pointer: coarse)');
   const position = useTransportStore((s) => s.position);
@@ -42,7 +44,7 @@ export function MarkerEditorModal() {
   // S/M/B keys and the touch pads.
   const listRef = useRef<HTMLDivElement>(null);
   const tap = useCallback((type: TapMapEntry['type']) => {
-    const time = engine.clock.currentTime;
+    const time = engine.clock.audibleTime;
     if (type === 'section') addEntry({ time, type, label: autoLabelSection(tapMap) });
     else addEntry({ time, type });
     // Bring the section row this tap landed in (or created) into view.
@@ -297,6 +299,13 @@ export function MarkerEditorModal() {
           <button className={`${btn} hidden md:inline-block`} onClick={() => fileInputRef.current?.click()}>
             Import .xsc
           </button>
+          <button
+            className={`${btn} hidden md:inline-block`}
+            onClick={() => setLatencyOpen(true)}
+            title="Line up taps and the beat counter with what you hear on Bluetooth headphones"
+          >
+            Calibrate Audio Latency
+          </button>
           <div ref={moreMenuRef} className="relative md:hidden">
             <button className={btn} onClick={() => setMoreOpen((v) => !v)}>
               More ▾
@@ -311,6 +320,9 @@ export function MarkerEditorModal() {
                 </button>
                 <button className={menuItem} disabled={tapMap.length === 0 || exporting} onClick={() => { setMoreOpen(false); handleExportMusicXml(); }}>
                   Export MusicXML
+                </button>
+                <button className={menuItem} onClick={() => { setMoreOpen(false); setLatencyOpen(true); }}>
+                  Calibrate Audio Latency
                 </button>
               </div>
             )}
@@ -424,6 +436,7 @@ export function MarkerEditorModal() {
         </div>
         </>
       )}
+      {latencyOpen && <AudioLatencyDialog onClose={() => setLatencyOpen(false)} />}
     </div>
   );
 }

@@ -304,7 +304,7 @@ export function MarkerEditorCanvas({
         return;
       }
 
-      const currentPos = engine.clock.currentTime;
+      const currentPos = engine.clock.audibleTime;
 
       if (key === 'S') {
         const label = autoLabelSection(tapMap);

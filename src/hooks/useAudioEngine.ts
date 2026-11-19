@@ -1,6 +1,7 @@
 import { createContext, useContext, useRef, useEffect } from 'react';
 import { AudioEngine } from '../audio/AudioEngine';
 import { useTransportStore } from '../store/transportStore';
+import { useLatencyStore } from '../store/latencyStore';
 
 export const AudioEngineContext = createContext<AudioEngine | null>(null);
 
@@ -34,7 +35,8 @@ export function useCreateEngine(): AudioEngine {
 
     engine.setOnStateChange(() => {
       setPlaying(engine.clock.playing);
-      setPosition(engine.clock.currentTime);
+      // What the listener hears, so visuals line up on Bluetooth headphones too
+      setPosition(engine.clock.audibleTime);
       setDuration(engine.clock.duration);
       // Sync loop state
       const { setLoopA, setLoopB, setLoopEnabled } = useTransportStore.getState();
@@ -45,6 +47,11 @@ export function useCreateEngine(): AudioEngine {
     });
 
     // Don't dispose — singleton survives StrictMode remounts
+  }, [engine]);
+
+  useEffect(() => {
+    engine.setLatencyAdjustMs(useLatencyStore.getState().adjustMs);
+    return useLatencyStore.subscribe((s) => engine.setLatencyAdjustMs(s.adjustMs));
   }, [engine]);
 
   return engine;
