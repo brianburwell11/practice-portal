@@ -277,8 +277,8 @@ export function MixerPanel() {
           disabled={mixerIsAtDefaults}
           className={`md:hidden flex items-center justify-center gap-2 w-full py-2 rounded text-xs font-medium transition-colors ${
             mixerIsAtDefaults
-              ? 'bg-gray-900 text-gray-600 cursor-default'
-              : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+              ? 'border border-gray-700 text-gray-600 cursor-default'
+              : 'border border-transparent bg-gray-800 hover:bg-gray-700 text-gray-300'
           }`}
           title="Reset mixer to defaults"
           data-help="Reset to default mix"
@@ -299,7 +299,7 @@ export function MixerPanel() {
             aria-pressed={anyMuted ? globalMuteActive : undefined}
             className={`flex-1 flex items-center justify-center gap-0.5 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
               !anyMuted
-                ? 'bg-gray-800 text-gray-600 border-transparent cursor-default'
+                ? 'bg-transparent text-gray-600 border-gray-700 cursor-default'
                 : globalMuteActive
                   ? 'bg-red-600 text-white border-red-600'
                   : 'bg-gray-700 text-gray-400 border-red-600'
@@ -320,7 +320,7 @@ export function MixerPanel() {
             aria-pressed={anySoloed ? globalSoloActive : undefined}
             className={`flex-1 flex items-center justify-center gap-0.5 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
               !anySoloed
-                ? 'bg-gray-800 text-gray-600 border-transparent cursor-default'
+                ? 'bg-transparent text-gray-600 border-gray-700 cursor-default'
                 : globalSoloActive
                   ? 'bg-yellow-500 text-black border-yellow-500'
                   : 'bg-gray-700 text-gray-400 border-yellow-500'

@@ -30,6 +30,25 @@ const BEAT_SNAP_PX = isCoarse ? 12 : 7;
 const CHORD_MARKER_COLOR = '#f472b6';
 
 /**
+ * `text` cut to fit `maxWidth` with an ellipsis, or null when not even one
+ * letter and the ellipsis fit, so labels of close sections don't run together.
+ */
+function fitLabel(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string | null {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  for (let n = text.length - 1; n >= 1; n--) {
+    const cut = text.slice(0, n).trimEnd() + '…';
+    if (ctx.measureText(cut).width <= maxWidth) return cut;
+  }
+  return null;
+}
+
+/** Where the label starting at `x` must end: just short of the next marker after it. */
+function labelRoom(xs: number[], x: number, width: number): number {
+  const next = xs.find((nx) => nx > x + 1) ?? width;
+  return next - x - 10;
+}
+
+/**
  * The waveform's colors, from the band theme on the page around it, so the
  * panel sits in the band's colors instead of a fixed navy: the panel on the
  * deepest surface tone, peaks on a mid tone, the playhead in the text color.
@@ -1054,6 +1073,10 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       if (tapMap && tapMap.length > 0) {
         ctx.font = '10px ui-monospace, monospace';
         ctx.textBaseline = 'top';
+        const sectionXs = tapMap
+          .filter((e) => e.type === 'section')
+          .map((e) => toPixel(e.time))
+          .sort((a, b) => a - b);
 
         for (let i = 0; i < tapMap.length; i++) {
           const entry = tapMap[i];
@@ -1100,19 +1123,23 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
             ctx.shadowBlur = 0;
           }
 
-          if (entry.type === 'section' && entry.label) {
-            const textWidth = ctx.measureText(entry.label).width;
+          const label = entry.type === 'section' && entry.label
+            ? fitLabel(ctx, entry.label, labelRoom(sectionXs, x, width))
+            : null;
+          if (label) {
+            const textWidth = ctx.measureText(label).width;
             const labelX = Math.min(x + 3, width - textWidth - 4);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(labelX - 1, 1, textWidth + 4, 13);
             ctx.fillStyle = '#f59e0b';
-            ctx.fillText(entry.label, labelX + 1, 3);
+            ctx.fillText(label, labelX + 1, 3);
           }
         }
       } else if (selectedSong) {
         const markers = markersToSeconds(selectedSong.markers, selectedSong.tempoMap, selectedSong.beatOffset);
         ctx.font = '10px ui-monospace, monospace';
         ctx.textBaseline = 'top';
+        const markerXs = markers.map((m) => toPixel(m.seconds)).sort((a, b) => a - b);
 
         for (const marker of markers) {
           const x = toPixel(marker.seconds);
@@ -1125,12 +1152,14 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
           ctx.lineTo(x, height);
           ctx.stroke();
 
-          const textWidth = ctx.measureText(marker.name).width;
+          const name = fitLabel(ctx, marker.name, labelRoom(markerXs, x, width));
+          if (!name) continue;
+          const textWidth = ctx.measureText(name).width;
           const labelX = Math.min(x + 3, width - textWidth - 4);
           ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
           ctx.fillRect(labelX - 1, 1, textWidth + 4, 13);
           ctx.fillStyle = marker.color;
-          ctx.fillText(marker.name, labelX + 1, 3);
+          ctx.fillText(name, labelX + 1, 3);
         }
       }
 

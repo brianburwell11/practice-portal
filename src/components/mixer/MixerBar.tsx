@@ -141,7 +141,7 @@ export function MixerBar({
       </div>
       <button
         onClick={() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })}
-        className="shrink-0 inline-flex items-center gap-1 rounded-md bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-600 hover:text-gray-50 transition-colors"
+        className="shrink-0 inline-flex items-center gap-1 rounded-md bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-200 hover:text-gray-50 hover:shadow-[inset_0_0_0_1px_var(--band-ink,#f3f4f6)] transition-colors"
         title="Show the full mixer"
       >
         Mixer

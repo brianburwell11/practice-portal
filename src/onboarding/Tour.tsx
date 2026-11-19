@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { withKeys } from '../components/ui/Kbd';
+import { useSongStore } from '../store/songStore';
 import { firstVisible, isShown, isTyping, useOnboardingStore } from './onboardingStore';
 
 interface StepView {
@@ -29,10 +30,16 @@ const STEPS: Step[] = [
   {
     targets: [{
       tour: 'pick',
-      view: () => ({
-        title: 'Load a song or a setlist',
-        body: 'Pick any song from this menu. To practice a set in order, load a setlist from the setlist menu instead.',
-      }),
+      // A link that opened a song has already done the loading: say how to switch instead.
+      view: () => (useSongStore.getState().selectedSong
+        ? {
+          title: 'Switch songs or setlists',
+          body: 'Your song is loaded and ready. Pick another one from this menu, or load a setlist from the setlist menu to practice a set in order.',
+        }
+        : {
+          title: 'Load a song or a setlist',
+          body: 'Pick any song from this menu. To practice a set in order, load a setlist from the setlist menu instead.',
+        }),
     }],
   },
   {

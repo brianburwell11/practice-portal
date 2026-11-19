@@ -1,5 +1,7 @@
 /**
- * M and S buttons for a stem or a group. The colors and states are shared by
+ * M and S buttons for a stem or a group. Hover brightens the letter rather
+ * than lifting the button: the mixer's lighter surface is a mid tone under
+ * some band colors, and the letter got lost on it. The colors and states are shared by
  * the mobile cards and the desktop strips; callers size them with
  * `buttonClassName`.
  */
@@ -29,7 +31,7 @@ export function StemMuteSolo({
             ? 'bg-red-600 text-white border-red-600'
             : muted && !globalMuteActive
               ? 'bg-gray-700 text-gray-400 border-red-600'
-              : 'bg-gray-700 text-gray-400 hover:bg-gray-600 border-transparent'
+              : 'bg-gray-700 text-gray-400 hover:text-gray-50 border-transparent'
         }`}
       >
         M
@@ -43,7 +45,7 @@ export function StemMuteSolo({
             ? 'bg-yellow-500 text-black border-yellow-500'
             : soloed && !globalSoloActive
               ? 'bg-gray-700 text-gray-400 border-yellow-500'
-              : 'bg-gray-700 text-gray-400 hover:bg-gray-600 border-transparent'
+              : 'bg-gray-700 text-gray-400 hover:text-gray-50 border-transparent'
         }`}
       >
         S
@@ -85,7 +87,7 @@ export function GroupMuteSolo({
         } ${
           globalMuteActive && allMuted
             ? 'bg-red-600 text-white'
-            : 'bg-gray-700 hover:bg-gray-600 ' + (mutedCount > 0 && globalMuteActive ? 'text-gray-50' : 'text-gray-300')
+            : 'bg-gray-700 hover:text-gray-50 ' + (mutedCount > 0 && globalMuteActive ? 'text-gray-50' : 'text-gray-300')
         }`}
         style={
           mutedCount > 0 && globalMuteActive && !allMuted
@@ -104,7 +106,7 @@ export function GroupMuteSolo({
         } ${
           globalSoloActive && allSoloed
             ? 'bg-yellow-500 text-black'
-            : 'bg-gray-700 hover:bg-gray-600 ' + (soloedCount > 0 && globalSoloActive ? 'text-gray-50' : 'text-gray-300')
+            : 'bg-gray-700 hover:text-gray-50 ' + (soloedCount > 0 && globalSoloActive ? 'text-gray-50' : 'text-gray-300')
         }`}
         style={
           soloedCount > 0 && globalSoloActive && !allSoloed

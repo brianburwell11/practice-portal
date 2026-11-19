@@ -550,16 +550,18 @@ function ChordLabel({
   );
 }
 
-/** A chord with no room for its name: a short mark where it starts. */
-const TICK_PX = 12;
+/** A chord with no room for its name: a dot under the names' line, where it starts. */
+const TICK_PX = 5;
+
 function ChordTick({ chord, left, top = 0 }: { chord: ChordEvent; left: number; top?: number }) {
   return (
     <div
       data-chord-tick
       title={displayChord(chord.symbol)}
-      className="absolute left-0 w-0.5 rounded-full bg-gray-500"
-      // Centered on the chord names' line, below the section row.
-      style={{ top: top + (LANE_HEIGHT - TICK_PX) / 2, height: TICK_PX, transform: `translateX(${left}px)` }}
+      className="absolute left-0 rounded-full bg-gray-500"
+      // A dot just under the names, not a bar beside them: a bar at letter
+      // height read as part of the name before it ("Dm" then a bar, "Dml").
+      style={{ top: top + LANE_HEIGHT / 2 + 8, width: TICK_PX, height: TICK_PX, transform: `translateX(${left - TICK_PX / 2}px)` }}
     />
   );
 }

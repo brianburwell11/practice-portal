@@ -81,7 +81,7 @@ function LabelsOverlay() {
     const out: Item[] = [];
     for (const el of root.querySelectorAll<HTMLElement>('[data-help]')) {
       const text = el.dataset.help?.trim();
-      if (!text || seen.has(text) || !isShown(el)) continue;
+      if (!text || seen.has(text) || !isShown(el) || isCovered(el)) continue;
       seen.add(text);
       const at = el.dataset.helpAt;
       out.push({ text, rect: el.getBoundingClientRect(), at: at && SIDES.includes(at) ? (at as Side) : undefined });
@@ -358,6 +358,21 @@ function ShortcutList() {
 function grow(r: DOMRect | Box, by: number): Box {
   const box = 'l' in r ? r : { l: r.left, t: r.top, r: r.right, b: r.bottom };
   return { l: box.l - by, t: box.t - by, r: box.r + by, b: box.b + by };
+}
+
+/**
+ * Something else sits on top of `el` (a bar pinned over a scrolled column,
+ * say): no label for a control you can't see. Sampled at its middle and
+ * both ends, so a small overlay on part of it doesn't count.
+ */
+function isCovered(el: HTMLElement): boolean {
+  const r = el.getBoundingClientRect();
+  const y = Math.min(Math.max(r.top + r.height / 2, 0), window.innerHeight - 1);
+  const xs = [r.left + 2, r.left + r.width / 2, r.right - 2].map((x) => Math.min(Math.max(x, 0), window.innerWidth - 1));
+  return xs.every((x) => {
+    const hit = document.elementFromPoint(x, y);
+    return !!hit && !el.contains(hit) && !hit.contains(el) && !hit.closest('[data-onboarding-ui]');
+  });
 }
 
 function overlaps(a: Box, b: Box): boolean {
