@@ -87,7 +87,6 @@ export function TouchSlider({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      aria-label={label}
     >
       <Slider.Track className="relative grow rounded-full h-2 md:h-1.5 bg-gray-600">
         <Slider.Range
@@ -95,7 +94,9 @@ export function TouchSlider({
           style={{ backgroundColor: accentColor }}
         />
       </Slider.Track>
+      {/* The thumb carries the slider role, so the name goes here. */}
       <Slider.Thumb
+        aria-label={label}
         className="block w-5 h-5 md:w-4 md:h-4 rounded-full bg-white shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </Slider.Root>

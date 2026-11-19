@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { drawPeaks } from './drawPeaks';
 import { useTransportStore } from '../../store/transportStore';
+import { formatTime } from '../../utils/formatTime';
 import { useSongStore } from '../../store/songStore';
 import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
 import { useChordsEditorStore } from '../../store/chordsEditorStore';
@@ -74,6 +75,12 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
   const displayTapMap: TapMapEntry[] | undefined = markerEditorOpen
     ? editorTapMap
     : selectedSong?.tapMap;
+
+  // What a screen reader hears for the position slider: whole seconds, so
+  // playback doesn't change it many times a second, and the section.
+  const wholeSecond = Math.floor(position);
+  const sectionNow = displayTapMap?.filter((e) => e.type === 'section' && e.time <= position).at(-1)?.label;
+  const positionText = `${formatTime(wholeSecond)} of ${formatTime(duration)}${sectionNow ? `, ${sectionNow}` : ''}`;
 
   // Main canvas refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1473,7 +1480,18 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
       >
         <canvas
           ref={canvasRef}
-          className="w-full h-full"
+          // The song's position as a slider: the transport's arrow keys move
+          // it by a bar (Shift: a section), Home goes to the start.
+          role="slider"
+          tabIndex={0}
+          data-transport-keys
+          aria-label="Song position"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(duration)}
+          aria-valuenow={wholeSecond}
+          aria-valuetext={positionText}
+          aria-keyshortcuts="ArrowLeft ArrowRight Shift+ArrowLeft Shift+ArrowRight Home"
+          className="focus-inset w-full h-full"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

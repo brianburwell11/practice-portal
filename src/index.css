@@ -158,3 +158,19 @@ body {
   --color-gray-900: var(--mixer-gray-900, oklch(21% 0.034 264.665));
 }
 }
+
+/* One keyboard focus ring for every control, on any band's colors: an
+   outline in the band's ink, with a ring of the page color between it and
+   the control, so it shows on accent fills and the white score alike.
+   Unlayered on purpose, so it wins over `focus:outline-none` utilities. */
+:focus-visible {
+  outline: 2px solid var(--band-ink, #e5e7eb);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--band-bg, var(--color-page));
+}
+
+/* Inside a clipping box (the waveform), the ring sits within the edge. */
+.focus-inset:focus-visible {
+  outline-offset: -3px;
+  box-shadow: none;
+}

@@ -52,6 +52,7 @@ export function TempoControl() {
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={commitEdit}
+          aria-label="Speed, percent"
           onKeyDown={(e) => {
             if (e.key === 'Enter') commitEdit();
             if (e.key === 'Escape') setEditing(false);
@@ -65,6 +66,7 @@ export function TempoControl() {
             setEditing(true);
           }}
           className="text-xs text-gray-300 font-mono text-right hover:text-gray-50 cursor-text"
+          aria-label={`Speed ${Math.round(tempoRatio * 100)}%. Type a speed`}
         >
           {Math.round(tempoRatio * 100)}%
         </button>

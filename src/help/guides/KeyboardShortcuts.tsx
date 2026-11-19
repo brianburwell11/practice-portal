@@ -14,6 +14,9 @@ export default function KeyboardShortcuts() {
           head={['To', 'Press']}
           rows={[
             ['Play or pause', <Key>Space</Key>],
+            ['Go back or ahead a bar, without stopping', <><Key>←</Key> or <Key>→</Key></>],
+            ['Go to the previous or next section', <><Key>Shift</Key>+<Key>←</Key> or <Key>→</Key></>],
+            ['Go back to the start', <Key>Home</Key>],
             ['Set where the loop starts', <Key>[</Key>],
             ['Set where the loop ends', <Key>]</Key>],
             ['Turn the loop on or off', <><Key>\</Key> or <Key>c</Key></>],

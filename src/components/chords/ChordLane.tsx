@@ -341,6 +341,7 @@ function SectionMarks({
       <button
         key={`label-${s.time}`}
         type="button"
+        tabIndex={-1}
         onClick={() => onSeek(s.time)}
         title={`Play from ${s.label}`}
         className={`absolute top-0 left-0 flex items-center whitespace-nowrap uppercase tracking-wide font-semibold hover:text-gray-50 ${
@@ -482,6 +483,7 @@ function SlotLane({ chords, className }: LaneProps) {
         {curSection && (
           <button
             type="button"
+            tabIndex={-1}
             onClick={() => seek(curSection.time)}
             title={`Play from ${curSection.label}`}
             className="absolute top-0 left-1.5 right-2 truncate text-left uppercase tracking-wide font-semibold text-amber-300"
@@ -493,6 +495,7 @@ function SlotLane({ chords, className }: LaneProps) {
         {cur && (
           <button
             type="button"
+            tabIndex={-1}
             onClick={() => seek(cur.time)}
             className="font-semibold text-gray-100 whitespace-nowrap truncate"
             style={{ fontSize: NOW_PX }}
@@ -532,6 +535,9 @@ function ChordLabel({
   return (
     <button
       type="button"
+      // Out of the Tab order: these move while the song plays. The arrow
+      // keys step by bar and section from anywhere on the page instead.
+      tabIndex={-1}
       onClick={() => onSeek(chord.time)}
       title={`Play from ${displayChord(chord.symbol)}`}
       className={`absolute bottom-0 left-0 flex items-center whitespace-nowrap hover:text-gray-50 ${marker ? 'border-l-2' : ''} ${TONE_CLASS[tone]}`}

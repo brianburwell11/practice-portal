@@ -19,6 +19,9 @@ export const SHORTCUT_GROUPS: { title: string; shortcuts: Shortcut[] }[] = [
     title: 'Playing',
     shortcuts: [
       { action: 'Play or pause', keys: [['Space']] },
+      { action: 'Back or ahead a bar', keys: [['←'], ['→']] },
+      { action: 'Previous or next section', keys: [['Shift', '←'], ['Shift', '→']] },
+      { action: 'Back to the start', keys: [['Home']] },
       { action: 'Follow the playhead', keys: [['`']] },
       { action: 'Add a note here', keys: [['N']] },
     ],

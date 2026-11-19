@@ -377,6 +377,7 @@ export function SongSelectDropdown() {
     <select
       data-help="Load a song"
       data-tour="pick"
+      aria-label="Song"
       className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 flex-1 min-w-0 text-center md:flex-initial md:text-left md:w-auto md:max-w-[26rem]"
       value={inSetlist ? (selectedSong ? String(activeIndex) : '-1') : (selectedSong?.id ?? '')}
       onChange={(e) => {

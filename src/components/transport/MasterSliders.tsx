@@ -52,6 +52,7 @@ export function MasterSliders({ className = '' }: Props) {
           value={volEditValue}
           onChange={(e) => setVolEditValue(e.target.value)}
           onBlur={commitVolEdit}
+          aria-label="Master volume, percent"
           onKeyDown={(e) => {
             if (e.key === 'Enter') commitVolEdit();
             if (e.key === 'Escape') setVolEditing(false);
@@ -65,6 +66,7 @@ export function MasterSliders({ className = '' }: Props) {
             setVolEditing(true);
           }}
           className="text-xs text-gray-300 font-mono text-right hover:text-gray-50 cursor-text"
+          aria-label={`Master volume ${Math.round(masterVolume * 100)}%. Type a volume`}
         >
           {Math.round(masterVolume * 100)}%
         </button>

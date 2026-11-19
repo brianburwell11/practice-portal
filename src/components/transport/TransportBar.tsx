@@ -18,6 +18,11 @@ import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 
 import type { TapMapEntry } from '../../audio/types';
+import { barStarts, sectionStarts, stepTarget, STEP_SEC } from '../../audio/seekSteps';
+import { useMarkerEditorStore } from '../../store/markerEditorStore';
+import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
+import { useChordsEditorStore } from '../../store/chordsEditorStore';
+import { useOnboardingStore } from '../../onboarding/onboardingStore';
 
 function parseTimeDigits(digits: string): number | null {
   if (!digits) return null;
@@ -102,6 +107,21 @@ function WaveformSkeleton({ progress }: { progress: { loaded: number; total: num
   );
 }
 
+/**
+ * Whether the arrow keys belong to something else right now: a control that
+ * uses them (a slider, a picker, a text field), an editor, or the tour.
+ * The waveform's position slider hands them on to the transport.
+ */
+function arrowKeysTaken(e: KeyboardEvent): boolean {
+  const el = e.target instanceof HTMLElement ? e.target : null;
+  if (el?.isContentEditable) return true;
+  if (el?.closest('select, [role="slider"]:not([data-transport-keys]), [role="radiogroup"], [role="tablist"], [role="menu"], [role="listbox"], [role="dialog"]')) return true;
+  return useMarkerEditorStore.getState().isOpen
+    || useLyricsEditorStore.getState().isOpen
+    || useChordsEditorStore.getState().isOpen
+    || useOnboardingStore.getState().tourOpen;
+}
+
 interface TransportBarProps {
   showSliders: boolean;
   onToggleSliders: () => void;
@@ -160,6 +180,21 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
         e.preventDefault();
         playing ? engine.pause() : engine.play();
       }
+      // Back or ahead a bar; with Shift, a section. Playback carries on.
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !disabled && !e.altKey && !e.metaKey && !e.ctrlKey && !arrowKeysTaken(e)) {
+        e.preventDefault();
+        const dir = e.key === 'ArrowLeft' ? -1 : 1;
+        const tapMap = selectedSong?.tapMap;
+        const starts = e.shiftKey ? sectionStarts(tapMap) : barStarts(tapMap);
+        const target = starts.length > 0
+          ? stepTarget(starts, position, dir)
+          : e.shiftKey ? null : Math.min(duration, Math.max(0, position + dir * STEP_SEC));
+        if (target !== null) engine.seek(target);
+      }
+      if (e.key === 'Home' && !disabled && !arrowKeysTaken(e)) {
+        e.preventDefault();
+        engine.seek(0);
+      }
       if (e.key === '[' && !disabled) {
         e.preventDefault();
         engine.setLoop(position, engine.loopB);
@@ -215,7 +250,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [engine, playing, disabled, loopA, loopB, loopEnabled, position, toggleFollowPlayhead, mixerStems, globalSoloActive, globalMuteActive, toggleGlobalSolo, toggleGlobalMute, clearSoloGroup, clearMuteGroup]);
+  }, [engine, playing, disabled, loopA, loopB, loopEnabled, position, duration, selectedSong, toggleFollowPlayhead, mixerStems, globalSoloActive, globalMuteActive, toggleGlobalSolo, toggleGlobalMute, clearSoloGroup, clearMuteGroup]);
 
   return (
     // Sticky phone layout: this box steps aside (`contents`) so the waveform
@@ -275,12 +310,15 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
                   if (e.key === 'Enter') { setEditingTime(false); const t = parseTimeDigits(timeEditValue); if (t !== null && t >= 0 && t <= duration) engine.seek(t); }
                   if (e.key === 'Escape') setEditingTime(false);
                 }}
+                aria-label="Jump to time, minutes and seconds"
                 className="w-[5ch] text-sm text-center bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
               />
             ) : (
               <button
-                onClick={() => { if (playing) engine.pause(); setTimeEditValue(''); setEditingTime(true); }}
+                onClick={() => { setTimeEditValue(''); setEditingTime(true); }}
                 className="hover:text-gray-50 cursor-text"
+                aria-label={`Time ${formatTime(position)}. Type a time to jump there`}
+                title="Type a time to jump there"
               >{formatTime(position)}</button>
             )}
             <span> / {formatTime(duration)}</span>
@@ -293,7 +331,6 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             const beat = mb?.beat ?? 0;
 
             const startMeasureEdit = () => {
-              if (playing) engine.pause();
               setMeasureEditValue(String(measure));
               setEditingMeasure(true);
             };
@@ -306,7 +343,6 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
               }
             };
             const startBeatEdit = () => {
-              if (playing) engine.pause();
               setBeatEditValue(String(beat));
               setEditingBeat(true);
             };
@@ -330,10 +366,11 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
                     onChange={(e) => setMeasureEditValue(e.target.value)}
                     onBlur={commitMeasure}
                     onKeyDown={(e) => { if (e.key === 'Enter') commitMeasure(); if (e.key === 'Escape') setEditingMeasure(false); }}
+                    aria-label="Jump to measure"
                     className="w-[3ch] text-sm text-right bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
                   />
                 ) : (
-                  <button onClick={startMeasureEdit} className="inline-block w-[2.5ch] text-right hover:text-gray-300 cursor-text">{measure}</button>
+                  <button onClick={startMeasureEdit} aria-label={`Measure ${measure}. Type a measure to jump there`} title="Measure" className="inline-block w-[2.5ch] text-right hover:text-gray-300 cursor-text">{measure}</button>
                 )}
                 <span className="text-gray-600 mx-0.5">|</span>
                 {editingBeat ? (
@@ -345,10 +382,11 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
                     onChange={(e) => setBeatEditValue(e.target.value)}
                     onBlur={commitBeat}
                     onKeyDown={(e) => { if (e.key === 'Enter') commitBeat(); if (e.key === 'Escape') setEditingBeat(false); }}
+                    aria-label="Jump to beat"
                     className="w-[2ch] text-sm bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
                   />
                 ) : (
-                  <button onClick={startBeatEdit} className="inline-block w-[1.5ch] hover:text-gray-300 cursor-text">{beat}</button>
+                  <button onClick={startBeatEdit} aria-label={`Beat ${beat}. Type a beat to jump there`} title="Beat" className="inline-block w-[1.5ch] hover:text-gray-300 cursor-text">{beat}</button>
                 )}
               </div>
             );
@@ -360,12 +398,11 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
               <select
                 className="text-xs bg-gray-700 border border-gray-600 rounded px-1 py-0.5 text-gray-400 cursor-pointer outline-none focus:border-blue-500 font-sans"
                 value=""
+                aria-label="Jump to section"
                 onChange={(e) => {
                   const time = parseFloat(e.target.value);
-                  if (!isNaN(time)) {
-                    if (playing) engine.pause();
-                    engine.seek(time);
-                  }
+                  // Jump with the music still going: musicians jump to the chorus mid-take.
+                  if (!isNaN(time)) engine.seek(time);
                   e.target.value = '';
                 }}
               >
@@ -503,12 +540,15 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
                   if (e.key === 'Enter') { setEditingTime(false); const t = parseTimeDigits(timeEditValue); if (t !== null && t >= 0 && t <= duration) engine.seek(t); }
                   if (e.key === 'Escape') setEditingTime(false);
                 }}
+                aria-label="Jump to time, minutes and seconds"
                 className="w-[5ch] text-sm text-center bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
               />
             ) : (
               <button
-                onClick={() => { if (playing) engine.pause(); setTimeEditValue(''); setEditingTime(true); }}
+                onClick={() => { setTimeEditValue(''); setEditingTime(true); }}
                 className="hover:text-gray-50 cursor-text"
+                aria-label={`Time ${formatTime(position)}. Type a time to jump there`}
+                title="Type a time to jump there"
               >{formatTime(position)}</button>
             )}
             <span> / {formatTime(duration)}</span>
@@ -520,7 +560,6 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             const measure = mb?.measure ?? 0;
             const beat = mb?.beat ?? 0;
             const startMeasureEdit = () => {
-              if (playing) engine.pause();
               setMeasureEditValue(String(measure));
               setEditingMeasure(true);
             };
@@ -533,7 +572,6 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
               }
             };
             const startBeatEdit = () => {
-              if (playing) engine.pause();
               setBeatEditValue(String(beat));
               setEditingBeat(true);
             };
@@ -556,10 +594,11 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
                     onChange={(e) => setMeasureEditValue(e.target.value)}
                     onBlur={commitMeasure}
                     onKeyDown={(e) => { if (e.key === 'Enter') commitMeasure(); if (e.key === 'Escape') setEditingMeasure(false); }}
+                    aria-label="Jump to measure"
                     className="w-[3ch] text-sm text-right bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
                   />
                 ) : (
-                  <button onClick={startMeasureEdit} className="inline-block w-[2.5ch] text-right hover:text-gray-300 cursor-text">{measure}</button>
+                  <button onClick={startMeasureEdit} aria-label={`Measure ${measure}. Type a measure to jump there`} title="Measure" className="inline-block w-[2.5ch] text-right hover:text-gray-300 cursor-text">{measure}</button>
                 )}
                 <span className="text-gray-600 mx-0.5">|</span>
                 {editingBeat ? (
@@ -571,10 +610,11 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
                     onChange={(e) => setBeatEditValue(e.target.value)}
                     onBlur={commitBeat}
                     onKeyDown={(e) => { if (e.key === 'Enter') commitBeat(); if (e.key === 'Escape') setEditingBeat(false); }}
+                    aria-label="Jump to beat"
                     className="w-[2ch] text-sm bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
                   />
                 ) : (
-                  <button onClick={startBeatEdit} className="inline-block w-[1.5ch] hover:text-gray-300 cursor-text">{beat}</button>
+                  <button onClick={startBeatEdit} aria-label={`Beat ${beat}. Type a beat to jump there`} title="Beat" className="inline-block w-[1.5ch] hover:text-gray-300 cursor-text">{beat}</button>
                 )}
               </div>
             );
@@ -586,12 +626,11 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
               <select
                 className="text-xs bg-gray-700 border border-gray-600 rounded px-1 py-1.5 min-h-[44px] text-gray-400 cursor-pointer outline-none focus:border-blue-500 font-sans"
                 value=""
+                aria-label="Jump to section"
                 onChange={(e) => {
                   const time = parseFloat(e.target.value);
-                  if (!isNaN(time)) {
-                    if (playing) engine.pause();
-                    engine.seek(time);
-                  }
+                  // Jump with the music still going: musicians jump to the chorus mid-take.
+                  if (!isNaN(time)) engine.seek(time);
                   e.target.value = '';
                 }}
               >
