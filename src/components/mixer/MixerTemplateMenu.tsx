@@ -14,7 +14,7 @@ import { Modal } from '../ui/Modal';
  * name, or apply a saved one to this song's mixer by matching track and stack
  * names. Applying only moves the faders; Save keeps them.
  */
-export function MixerTemplateMenu() {
+export function MixerTemplateMenu({ className }: { className?: string } = {}) {
   const engine = useAudioEngine();
   const bandId = useBandStore((s) => s.currentBand?.id);
   const selectedSong = useSongStore((s) => s.selectedSong);
@@ -109,7 +109,7 @@ export function MixerTemplateMenu() {
     <>
       <button
         onClick={openMenu}
-        className="flex items-center gap-1.5 text-xs px-2 py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors text-gray-500 hover:text-gray-300"
+        className={`${className ?? 'flex items-center gap-1.5 text-xs px-2 py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors'} text-gray-500 hover:text-gray-300`}
         title="Mixer templates"
         aria-label="Mixer templates"
         data-help="Load from mixer template"
@@ -127,7 +127,9 @@ export function MixerTemplateMenu() {
           <line x1="9" y1="8" x2="15" y2="8" />
           <line x1="17" y1="16" x2="23" y2="16" />
         </svg>
-        {status && <span role="status" className="text-gray-300">{status}</span>}
+        {status
+          ? <span role="status" className="truncate text-gray-300">{status}</span>
+          : className && <span className="md:hidden">Templates</span>}
       </button>
 
       {open && (

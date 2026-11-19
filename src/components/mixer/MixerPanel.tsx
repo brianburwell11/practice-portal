@@ -256,6 +256,9 @@ export function MixerPanel() {
       : <ChannelStrip key={item.id} stemConfig={item.stem} />;
   });
 
+  // Save and templates: a third of the row on phones, a bare icon on desktop.
+  const mobileRowBtn = 'flex items-center justify-center md:justify-start gap-1.5 min-w-0 text-xs px-2 py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors bg-gray-800 md:bg-transparent';
+
   return (
     <>
     {/* Desktop: pinned to the bottom left, clear of the minimized ribbon. */}
@@ -271,24 +274,6 @@ export function MixerPanel() {
           row-label column (w-[84px] + the strips' gap-1.5) to line up with
           the first channel strip. */}
       <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3 md:pl-[90px]">
-        {/* Mobile-only full-width reset bar, above the M/S buttons */}
-        <button
-          onClick={handleResetAll}
-          disabled={mixerIsAtDefaults}
-          className={`md:hidden flex items-center justify-center gap-2 w-full py-2 rounded text-xs font-medium transition-colors ${
-            mixerIsAtDefaults
-              ? 'border border-gray-700 text-gray-600 cursor-default'
-              : 'border border-transparent bg-gray-800 hover:bg-gray-700 text-gray-300'
-          }`}
-          title="Reset mixer to defaults"
-          data-help="Reset to default mix"
-          data-help-at="top-right"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-            <path d="M12 2a10 10 0 0 1 8.5 4.7l-2.3-.4a1.2 1.2 0 1 0-.4 2.4l4.6.8a1.2 1.2 0 0 0 1.4-1l.8-4.6a1.2 1.2 0 0 0-2.4-.4l-.3 1.8A12 12 0 0 0 0 12a1.2 1.2 0 0 0 2.4 0A9.6 9.6 0 0 1 12 2ZM12 22a10 10 0 0 1-8.5-4.7l2.3.4a1.2 1.2 0 1 0 .4-2.4l-4.6-.8a1.2 1.2 0 0 0-1.4 1l-.8 4.6a1.2 1.2 0 0 0 2.4.4l.3-1.8A12 12 0 0 0 24 12a1.2 1.2 0 0 0-2.4 0A9.6 9.6 0 0 1 12 22Z" />
-          </svg>
-          Reset mix
-        </button>
         <div className="flex gap-2 w-full md:w-[230px]">
           <button
             {...(anyMuted ? muteHandlers : {})}
@@ -333,77 +318,101 @@ export function MixerPanel() {
             </svg>
           </button>
         </div>
-        {/* Desktop-only reset icon — sits left of the save button */}
-        <button
-          onClick={handleResetAll}
-          disabled={mixerIsAtDefaults}
-          className={`hidden md:inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded font-medium transition-colors ${
-            mixerIsAtDefaults ? 'text-gray-700 cursor-default' : 'text-gray-500 hover:text-gray-300'
-          }`}
-          title="Reset mixer to defaults"
-          data-help="Reset to default mix"
-          data-help-at="top-right"
-          aria-label="Reset mixer to defaults"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-            <path d="M12 2a10 10 0 0 1 8.5 4.7l-2.3-.4a1.2 1.2 0 1 0-.4 2.4l4.6.8a1.2 1.2 0 0 0 1.4-1l.8-4.6a1.2 1.2 0 0 0-2.4-.4l-.3 1.8A12 12 0 0 0 0 12a1.2 1.2 0 0 0 2.4 0A9.6 9.6 0 0 1 12 2ZM12 22a10 10 0 0 1-8.5-4.7l2.3.4a1.2 1.2 0 1 0 .4-2.4l-4.6-.8a1.2 1.2 0 0 0-1.4 1l-.8 4.6a1.2 1.2 0 0 0 2.4.4l.3-1.8A12 12 0 0 0 24 12a1.2 1.2 0 0 0-2.4 0A9.6 9.6 0 0 1 12 22Z" />
-          </svg>
-        </button>
-        {canSaveMix && (
+        {/* Reset, save and templates. Phones: one row of equal buttons above
+            M/S (admins), or just the full-width reset. Desktop: the wrapper
+            dissolves and they sit after M/S as before. */}
+        <div className={`order-first md:order-none md:contents ${canSaveMix ? 'grid grid-cols-3 gap-2' : 'flex'}`}>
+          {/* Mobile-only reset: full width for players, a third of the row for admins */}
           <button
-            onClick={handleSaveClick}
-            className={`flex items-center gap-1.5 text-xs px-2 py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors ${
-              saveState === 'saved'
-                ? 'text-green-400'
-                : saveState === 'error'
-                  ? 'text-red-400'
-                  : saveState === 'cancelled'
-                    ? 'text-gray-400'
-                    : 'text-gray-500 hover:text-gray-300'
+            onClick={handleResetAll}
+            disabled={mixerIsAtDefaults}
+            className={`md:hidden flex items-center justify-center gap-2 w-full py-2 min-h-[44px] rounded text-xs font-medium transition-colors ${
+              mixerIsAtDefaults
+                ? 'border border-gray-700 text-gray-600 cursor-default'
+                : 'border border-transparent bg-gray-800 hover:bg-gray-700 text-gray-300'
             }`}
-            title="Save current mixer as default"
-            data-help="Save as default mix"
+            title="Reset mixer to defaults"
+            data-help="Reset to default mix"
             data-help-at="top-right"
-            aria-label="Save current mixer as default"
           >
-            {saveState === 'idle' && (
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                <polyline points="17 21 17 13 7 13 7 21" />
-                <polyline points="7 3 7 8 15 8" />
-              </svg>
-            )}
-            {(saveState === 'pending' || saveState === 'saving') && (
-              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                <path d="M12 2a10 10 0 0 1 10 10" strokeOpacity="1" />
-              </svg>
-            )}
-            {saveState === 'cancelled' && (
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            )}
-            {saveState === 'saved' && (
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-            {saveState === 'error' && (
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            )}
-            {saveState === 'pending' && <span>Saving as the default mix. Click again to cancel</span>}
-            {saveState === 'saving' && <span>Saving…</span>}
-            {saveState === 'cancelled' && <span>Save cancelled</span>}
-            {saveState === 'saved' && <span>Saved</span>}
-            {saveState === 'error' && <span>Save failed</span>}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+              <path d="M12 2a10 10 0 0 1 8.5 4.7l-2.3-.4a1.2 1.2 0 1 0-.4 2.4l4.6.8a1.2 1.2 0 0 0 1.4-1l.8-4.6a1.2 1.2 0 0 0-2.4-.4l-.3 1.8A12 12 0 0 0 0 12a1.2 1.2 0 0 0 2.4 0A9.6 9.6 0 0 1 12 2ZM12 22a10 10 0 0 1-8.5-4.7l2.3.4a1.2 1.2 0 1 0 .4-2.4l-4.6-.8a1.2 1.2 0 0 0-1.4 1l-.8 4.6a1.2 1.2 0 0 0 2.4.4l.3-1.8A12 12 0 0 0 24 12a1.2 1.2 0 0 0-2.4 0A9.6 9.6 0 0 1 12 22Z" />
+            </svg>
+            {canSaveMix ? 'Reset' : 'Reset mix'}
           </button>
-        )}
-        {canSaveMix && <MixerTemplateMenu />}
+          {/* Desktop-only reset icon — sits left of the save button */}
+          <button
+            onClick={handleResetAll}
+            disabled={mixerIsAtDefaults}
+            className={`hidden md:inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded font-medium transition-colors ${
+              mixerIsAtDefaults ? 'text-gray-700 cursor-default' : 'text-gray-500 hover:text-gray-300'
+            }`}
+            title="Reset mixer to defaults"
+            data-help="Reset to default mix"
+            data-help-at="top-right"
+            aria-label="Reset mixer to defaults"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+              <path d="M12 2a10 10 0 0 1 8.5 4.7l-2.3-.4a1.2 1.2 0 1 0-.4 2.4l4.6.8a1.2 1.2 0 0 0 1.4-1l.8-4.6a1.2 1.2 0 0 0-2.4-.4l-.3 1.8A12 12 0 0 0 0 12a1.2 1.2 0 0 0 2.4 0A9.6 9.6 0 0 1 12 2ZM12 22a10 10 0 0 1-8.5-4.7l2.3.4a1.2 1.2 0 1 0 .4-2.4l-4.6-.8a1.2 1.2 0 0 0-1.4 1l-.8 4.6a1.2 1.2 0 0 0 2.4.4l.3-1.8A12 12 0 0 0 24 12a1.2 1.2 0 0 0-2.4 0A9.6 9.6 0 0 1 12 22Z" />
+            </svg>
+          </button>
+          {canSaveMix && (
+            <button
+              onClick={handleSaveClick}
+              className={`${mobileRowBtn} ${
+                saveState === 'saved'
+                  ? 'text-green-400'
+                  : saveState === 'error'
+                    ? 'text-red-400'
+                    : saveState === 'cancelled'
+                      ? 'text-gray-400'
+                      : 'text-gray-500 hover:text-gray-300'
+              }`}
+              title="Save current mixer as default"
+              data-help="Save as default mix"
+              data-help-at="top-right"
+              aria-label="Save current mixer as default"
+            >
+              {saveState === 'idle' && (
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+              )}
+              {(saveState === 'pending' || saveState === 'saving') && (
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                  <path d="M12 2a10 10 0 0 1 10 10" strokeOpacity="1" />
+                </svg>
+              )}
+              {saveState === 'cancelled' && (
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              )}
+              {saveState === 'saved' && (
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+              {saveState === 'error' && (
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              )}
+              {saveState === 'idle' && <span className="md:hidden">Save</span>}
+              {saveState === 'pending' && <span><span className="md:hidden">Tap to cancel</span><span className="hidden md:inline">Saving as the default mix. Click again to cancel</span></span>}
+              {saveState === 'saving' && <span>Saving…</span>}
+              {saveState === 'cancelled' && <span>Save cancelled</span>}
+              {saveState === 'saved' && <span>Saved</span>}
+              {saveState === 'error' && <span>Save failed</span>}
+            </button>
+          )}
+          {canSaveMix && <MixerTemplateMenu className={mobileRowBtn} />}
+        </div>
         <button
           onClick={() => minimizePanel('mixer')}
           className="hidden md:inline-flex items-center gap-1 text-xs px-2 py-1 ml-auto rounded font-medium text-gray-500 hover:text-gray-300 transition-colors"
