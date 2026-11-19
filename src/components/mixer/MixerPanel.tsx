@@ -17,6 +17,7 @@ import { usePanelShortcut } from '../../hooks/usePanelShortcut';
 import { MINIMIZED_RIBBON_HEIGHT } from '../MinimizedRibbon';
 import { MixerSkeleton } from './MixerSkeleton';
 import { MixerTemplateMenu } from './MixerTemplateMenu';
+import { MixerBar } from './MixerBar';
 import { resolveMixerOrder } from '../../audio/mixerOrder';
 import { groupKey, stemKey, useFaderSelectionStore } from '../../store/faderSelectionStore';
 import { DocConflictError, saveDoc } from '../../utils/docRevs';
@@ -233,6 +234,8 @@ export function MixerPanel() {
   usePanelShortcut('x', 'mixer');
   // The minimized ribbon is fixed over the page's bottom edge (desktop only).
   const ribbonVisible = usePanelMinimizeStore((s) => s.items.length > 0);
+  // The slim bar watches this to know when the full strips are on screen.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // `NoSongState` (App.tsx) has the screen until a song loads.
   if (!selectedSong) return null;
@@ -254,8 +257,10 @@ export function MixerPanel() {
   });
 
   return (
-    // Desktop: pinned to the bottom left, clear of the minimized ribbon.
+    <>
+    {/* Desktop: pinned to the bottom left, clear of the minimized ribbon. */}
     <div
+      ref={panelRef}
       // Desktop: grows to fill leftover height (so it sits at the bottom)
       // but never shrinks below its content, so a tall score pushes it down
       // the page's scroll instead of squeezing it away.
@@ -433,5 +438,7 @@ export function MixerPanel() {
         </div>
       )}
     </div>
+    {isDesktop && !minimized && <MixerBar items={mixerItems} stems={selectedSong.stems} panelRef={panelRef} />}
+    </>
   );
 }
