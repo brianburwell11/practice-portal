@@ -15,6 +15,7 @@ import { toast } from '../../store/dialogStore';
 import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
 import { warmSongScore } from '../sheet/scoreFiles';
 import { readDoc } from '../../offline/sync';
+import { prefetchedOr } from '../../data/prefetch';
 
 export function useSongLoader() {
   const engine = useAudioEngine();
@@ -175,7 +176,8 @@ export function SongList() {
 
   useEffect(() => {
     if (!currentBand) return;
-    fetch(dataUrl(`${currentBand.id}/songs/discography.json`))
+    const discographyKey = `${currentBand.id}/songs/discography.json`;
+    prefetchedOr(discographyKey, () => fetch(dataUrl(discographyKey)))
       .then((r) => {
         if (!r.ok) throw new Error(`discography.json: ${r.status}`);
         return r.json();
@@ -197,7 +199,8 @@ export function SongList() {
     if (!currentBand) return;
     const r2Base = import.meta.env.VITE_R2_PUBLIC_URL;
     if (!r2Base) return;
-    fetch(dataUrl(`${currentBand.id}/setlists/index.json`))
+    const indexKey = `${currentBand.id}/setlists/index.json`;
+    prefetchedOr(indexKey, () => fetch(dataUrl(indexKey)))
       .then((r) => {
         if (!r.ok) throw new Error('No setlists');
         return r.json();

@@ -13,6 +13,7 @@ import { useChordsEditorStore } from '../../store/chordsEditorStore';
 import { stopSharedEngine } from '../../hooks/useAudioEngine';
 import { bandConfigSchema, bandsManifestSchema } from '../../config/schema';
 import { dataUrl } from '../../utils/url';
+import { prefetchBand, prefetchedOr, rememberBandRoute } from '../../data/prefetch';
 import { useSessionStore } from '../../store/sessionStore';
 import { AccountMenu } from '../account/AccountMenu';
 import { RequestAccess } from '../account/RequestAccess';
@@ -100,7 +101,7 @@ export function BandApp() {
   // Load bands manifest
   useEffect(() => {
     if (bandsManifest || guestPending) return;
-    fetch(dataUrl('registry.json'))
+    prefetchedOr('registry.json', () => fetch(dataUrl('registry.json')))
       .then(async (r) => {
         const manifest = bandsManifestSchema.parse(await r.json());
         // The offline cache checks in, and drops bands no longer listed.
@@ -127,8 +128,14 @@ export function BandApp() {
     if (lastBandId && lastBandId !== indexEntry.id) resetBandState();
     lastBandId = indexEntry.id;
 
+    // Start the band's documents together (src/data/prefetch.ts), and remember
+    // the route so the next visit can start them before the registry arrives.
+    rememberBandRoute(bandSlug, indexEntry.id);
+    prefetchBand(indexEntry.id);
+
     let cancelled = false;
-    fetch(dataUrl(`${indexEntry.id}/band.json`))
+    const bandKey = `${indexEntry.id}/band.json`;
+    prefetchedOr(bandKey, () => fetch(dataUrl(bandKey)))
       .then((r) => {
         if (!r.ok) throw new Error(`band.json fetch failed (${r.status})`);
         return r.json();

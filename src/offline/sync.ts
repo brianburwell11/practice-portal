@@ -16,6 +16,7 @@
 import { toast } from '../store/dialogStore';
 import { useSessionStore } from '../store/sessionStore';
 import { fetchDoc, knownBase, knownRev, setKnown } from '../utils/docRevs';
+import { prefetchedOr } from '../data/prefetch';
 import { markOffline, markOnline, noteResponse, useConnectivity } from './connectivity';
 import { allEdits, coalesce, deleteEdit, editId, getEdit, putEdit, supported, type PendingEdit } from './editStore';
 import { mergeKindOf, resolveConflict } from './merge';
@@ -106,7 +107,8 @@ export async function readDoc(key: string): Promise<Response> {
   if (edit) {
     return new Response(JSON.stringify(edit.data), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Local-Edit': '1' } });
   }
-  return fetchDoc(key);
+  // A song opened from a link may already be downloading (src/data/prefetch.ts).
+  return prefetchedOr(key, () => fetchDoc(key));
 }
 
 /** The edit (by `id`) waiting for a decision. */

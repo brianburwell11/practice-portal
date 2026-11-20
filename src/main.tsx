@@ -10,9 +10,6 @@ import { AppSignInPage } from './components/account/AppSignInPage.tsx'
 import { SignInHandoff } from './components/account/SignInHandoff.tsx'
 import { EmailUnsubscribe } from './components/account/EmailUnsubscribe.tsx'
 import { RequireCan } from './components/account/RequireCan.tsx'
-import { PrivacyPolicy } from './components/legal/PrivacyPolicy.tsx'
-import { TermsOfService } from './components/legal/TermsOfService.tsx'
-import { Licenses } from './components/legal/Licenses.tsx'
 import { NotFound } from './components/NotFound.tsx'
 import { DialogHost } from './components/ui/DialogHost.tsx'
 import { PageLoader } from './components/ui/Loading.tsx'
@@ -20,8 +17,12 @@ import { ScreenTransition } from './components/ui/ScreenTransition.tsx'
 import { startSync } from './offline/sync'
 
 import { AddSongWizard, AlignSongPage, EditSongPage, NewBandPage, SiteAdminPage } from './admin/lazyPages.ts'
-import { App, BandApp, HelpGuide, HelpIndex } from './lazyPages.ts'
+import { App, BandApp, HelpGuide, HelpIndex, Licenses, PrivacyPolicy, TermsOfService } from './lazyPages.ts'
 import { setupOfflineCache } from './offline/offline.ts'
+import { prefetchFromUrl } from './data/prefetch.ts'
+
+// A band page's documents start downloading now, before its code arrives.
+prefetchFromUrl()
 
 const adminFallback = <PageLoader label="Loading admin" />;
 
@@ -46,9 +47,9 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/email/unsubscribe" element={<EmailUnsubscribe />} />
         <Route path="/help" element={<Suspense fallback={pageFallback}><HelpIndex /></Suspense>} />
         <Route path="/help/:slug" element={<Suspense fallback={pageFallback}><HelpGuide /></Suspense>} />
-        <Route path="/legal/privacy" element={<PrivacyPolicy />} />
-        <Route path="/legal/terms" element={<TermsOfService />} />
-        <Route path="/legal/licenses" element={<Licenses />} />
+        <Route path="/legal/privacy" element={<Suspense fallback={pageFallback}><PrivacyPolicy /></Suspense>} />
+        <Route path="/legal/terms" element={<Suspense fallback={pageFallback}><TermsOfService /></Suspense>} />
+        <Route path="/legal/licenses" element={<Suspense fallback={pageFallback}><Licenses /></Suspense>} />
         <Route path="/admin" element={<Suspense fallback={pageFallback}><SiteAdminPage /></Suspense>} />
         <Route
           path="/admin/new-band"
