@@ -113,9 +113,24 @@ function sendCacheableJson(req: IncomingMessage, res: ServerResponse, { status, 
   }
   res.statusCode = status;
   // A song config with its tapMap runs to tens of KB of very repetitive JSON.
-  if (text.length > 1024 && /\bgzip\b/.test(String(req.headers['accept-encoding'] ?? ''))) {
-    res.setHeader('Content-Encoding', 'gzip');
-    res.end(zlib.gzipSync(text));
+  // Compressed off the event loop, so one big response doesn't hold up others.
+  // Brotli where the browser takes it (smaller), else gzip.
+  const accept = String(req.headers['accept-encoding'] ?? '');
+  if (text.length > 1024 && /\b(br|gzip)\b/.test(accept)) {
+    const br = /\bbr\b/.test(accept);
+    const done = (err: Error | null, out: Buffer) => {
+      if (err) {
+        res.end(text);
+        return;
+      }
+      res.setHeader('Content-Encoding', br ? 'br' : 'gzip');
+      res.end(out);
+    };
+    if (br) {
+      zlib.brotliCompress(text, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } }, done);
+    } else {
+      zlib.gzip(text, done);
+    }
     return;
   }
   res.end(text);
