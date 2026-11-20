@@ -234,13 +234,30 @@ export class AudioEngine {
       }),
     );
 
-    // Decode audible stems now, defer muted ones
-    for (const { config: stemConfig, arrayBuffer } of fetched) {
-      if (stemConfig.defaultVolume === 0) {
-        this.pendingStems.set(stemConfig.id, { config: stemConfig, arrayBuffer });
-        continue;
+    // Decode audible stems now, defer muted ones. Decodes run off the main
+    // thread, so they overlap: all at once on desktop, two at a time on phones
+    // to cap peak memory. Each envelope is computed as its decode lands.
+    const audible = fetched.filter(({ config: c, arrayBuffer }) => {
+      if (c.defaultVolume !== 0) return true;
+      this.pendingStems.set(c.id, { config: c, arrayBuffer });
+      return false;
+    });
+    const decoded: { audioBuffer: AudioBuffer; envelope: Float32Array }[] = new Array(audible.length);
+    let next = 0;
+    const decodeWorker = async () => {
+      while (next < audible.length) {
+        const i = next++;
+        const audioBuffer = await this.decodeAudio(audible[i].arrayBuffer);
+        decoded[i] = { audioBuffer, envelope: computeStemEnvelope(audioBuffer) };
       }
-      const audioBuffer = await this.decodeAudio(arrayBuffer);
+    };
+    const decodeConcurrency = isMobile ? 2 : audible.length;
+    await Promise.all(Array.from({ length: Math.min(decodeConcurrency, audible.length) }, decodeWorker));
+
+    // Build players in config order
+    for (let i = 0; i < audible.length; i++) {
+      const stemConfig = audible[i].config;
+      const { audioBuffer, envelope } = decoded[i];
       const player = new StemPlayer(
         this.ctx,
         audioBuffer,
@@ -253,7 +270,7 @@ export class AudioEngine {
         player.stereo = true;
       }
       this.stems.set(stemConfig.id, player);
-      this.stemEnvelopes.set(stemConfig.id, computeStemEnvelope(audioBuffer));
+      this.stemEnvelopes.set(stemConfig.id, envelope);
     }
 
     // Initialize group state
