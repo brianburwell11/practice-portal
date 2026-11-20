@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useBandStore } from '../store/bandStore';
 import { useSetlistStore } from '../store/setlistStore';
+import { useSongStore } from '../store/songStore';
 import { dataUrl } from '../utils/url';
 import { DeleteSetlistModal } from './DeleteSetlistModal';
 import type { SetlistConfig } from '../audio/types';
@@ -21,6 +22,7 @@ function formatDuration(seconds: number): string {
 export function ViewAllSetlistsModal({ onClose }: Props) {
   const currentBand = useBandStore((s) => s.currentBand);
   const index = useSetlistStore((s) => s.index);
+  const manifest = useSongStore((s) => s.manifest);
 
   const [durations, setDurations] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -50,9 +52,17 @@ export function ViewAllSetlistsModal({ onClose }: Props) {
           for (const e of cfg.entries) if (e.type === 'song') songIds.add(e.songId);
         }
 
+        // Lengths come with the discography; fetch a config only for an
+        // entry cached before they were added.
         const songDurations = new Map<string, number>();
+        const missing: string[] = [];
+        for (const songId of songIds) {
+          const d = manifest?.songs.find((s) => s.id === songId)?.durationSeconds;
+          if (d !== undefined) songDurations.set(songId, d);
+          else missing.push(songId);
+        }
         await Promise.all(
-          [...songIds].map(async (songId) => {
+          missing.map(async (songId) => {
             try {
               const res = await fetch(dataUrl(`${bandId}/songs/${songId}/config.json`));
               if (!res.ok) return;
@@ -86,7 +96,7 @@ export function ViewAllSetlistsModal({ onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [currentBand, index]);
+  }, [currentBand, index, manifest]);
 
   const sortedIndex = useMemo(() => {
     if (!index) return [];

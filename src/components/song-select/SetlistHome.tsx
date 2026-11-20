@@ -1,19 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useBandStore } from '../../store/bandStore';
 import { useSongStore } from '../../store/songStore';
 import { useSetlistStore } from '../../store/setlistStore';
 import { useSongLoader } from './SongList';
-import { dataUrl } from '../../utils/url';
+import { useSongMeta } from '../../hooks/useSongMeta';
 import { formatTime } from '../../utils/formatTime';
 import { getCamelotStyle } from '../../utils/camelot';
 import type { SetlistConfig, SongManifestEntry } from '../../audio/types';
 import { SetlistOfflineToggle } from '../../offline/OfflineToggle';
 import { collectionLabel } from '../../utils/collections';
-
-interface SongMeta {
-  key: string;
-  durationSeconds: number;
-}
 
 type Row =
   | { type: 'heading'; label: string }
@@ -83,28 +78,8 @@ function SongsHome({ title, rows, aside, onOpen }: {
 }) {
   const bandId = useBandStore((s) => s.currentBand?.id);
 
-  // The manifest has no keys or lengths; they live in each song's config.
-  const [meta, setMeta] = useState<Record<string, SongMeta>>({});
-  useEffect(() => {
-    if (!bandId) return;
-    let cancelled = false;
-    const ids = [...new Set(rows.flatMap((r) => (r.type === 'song' ? [r.song.id] : [])))];
-    Promise.all(
-      ids.map(async (id): Promise<[string, SongMeta] | null> => {
-        try {
-          const res = await fetch(dataUrl(`${bandId}/songs/${id}/config.json`));
-          if (!res.ok) return null;
-          const config = await res.json();
-          return [id, { key: config.key ?? '', durationSeconds: config.durationSeconds ?? 0 }];
-        } catch {
-          return null;
-        }
-      }),
-    ).then((results) => {
-      if (!cancelled) setMeta(Object.fromEntries(results.filter((r) => r !== null)));
-    });
-    return () => { cancelled = true; };
-  }, [rows, bandId]);
+  const songs = useMemo(() => rows.flatMap((r) => (r.type === 'song' ? [r.song] : [])), [rows]);
+  const meta = useSongMeta(songs, bandId);
 
   const totalSeconds = rows.reduce(
     (sum, r) => sum + (r.type === 'song' ? meta[r.song.id]?.durationSeconds ?? 0 : 0),

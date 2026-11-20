@@ -136,6 +136,10 @@ export interface SongManifestEntry {
   audioBasePath?: string;
   /** The song's tags, which the player offers as collections. */
   tags?: string[];
+  /** The song's key, from its config (server-built discography only). */
+  key?: string;
+  /** The song's length in seconds, from its config (server-built discography only). */
+  durationSeconds?: number;
 }
 
 export interface SongManifest {

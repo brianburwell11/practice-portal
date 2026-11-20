@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { useBandStore } from '../store/bandStore';
 import { useSongStore } from '../store/songStore';
 import { useSetlistStore } from '../store/setlistStore';
-import { dataUrl } from '../utils/url';
 import { getCamelotStyle, getCamelotHue, toCamelotCode } from '../utils/camelot';
 import { slugify, cleanSlugInput } from '../utils/deriveId';
 import { dedupeSlug } from '../utils/dedupeSlug';
@@ -12,6 +11,7 @@ import { CamelotWheel } from '../components/CamelotWheel';
 import type { SetlistConfig, SetlistEntry, NavLinkConfig } from '../audio/types';
 import { confirmDiscard } from '../store/dialogStore';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useSongMeta } from '../hooks/useSongMeta';
 import { useSortableList } from '../hooks/useSortableList';
 import { fetchDoc, saveDoc } from '../utils/docRevs';
 import { onlineOrSay } from '../offline/connectivity';
@@ -24,11 +24,6 @@ function isLegacySetlistId(id: string): boolean {
   return id.startsWith('setlist-');
 }
 
-interface SongMeta {
-  key: string;
-  durationSeconds: number;
-  tags: string[];
-}
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -231,28 +226,8 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     return manifest.songs;
   }, [manifest, currentBand]);
 
-  // Fetch song metadata (key, duration) from config files
-  const [songMeta, setSongMeta] = useState<Record<string, SongMeta>>({});
-  useEffect(() => {
-    if (availableSongs.length === 0 || !currentBand) return;
-    const bandId = currentBand.id;
-    const fetchMeta = async () => {
-      const results: [string, SongMeta][] = [];
-      await Promise.all(
-        availableSongs.map(async (song) => {
-          try {
-            const res = await fetch(dataUrl(`${bandId}/songs/${song.id}/config.json`));
-            const config = await res.json();
-            results.push([song.id, { key: config.key ?? '', durationSeconds: config.durationSeconds ?? 0, tags: config.tags ?? [] }]);
-          } catch {
-            // skip songs whose config can't be loaded
-          }
-        }),
-      );
-      setSongMeta(Object.fromEntries(results));
-    };
-    fetchMeta();
-  }, [availableSongs]);
+  // Key, length and tags come with the discography
+  const songMeta = useSongMeta(availableSongs, currentBand?.id);
 
   // Resolve a songId to its manifest entry
   const resolveSong = (id: string) => manifest?.songs.find((s) => s.id === id);

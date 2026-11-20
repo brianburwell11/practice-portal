@@ -204,6 +204,9 @@ export const songManifestEntrySchema = z.object({
   audioBasePath: z.string().optional(),
   /** The song's tags, which the player offers as collections. */
   tags: z.array(z.string()).optional(),
+  /** Key and length, from the song's config (server-built discography only). */
+  key: z.string().optional(),
+  durationSeconds: z.number().optional(),
 });
 
 // A new band has no songs yet, so an empty list is valid.

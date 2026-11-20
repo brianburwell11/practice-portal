@@ -224,7 +224,9 @@ async function read(key: string, d: Db, viewer: Viewer | typeof UNCHECKED): Prom
         .orderBy(asc(schema.song.createdAt), asc(schema.song.title));
       return {
         songs: songs.map(({ config, mediaPrefix }) => {
-          const c = config as { id: string; slug?: string; title: string; artist: string; tags?: string[] };
+          const c = config as {
+            id: string; slug?: string; title: string; artist: string; tags?: string[]; key?: string; durationSeconds?: number;
+          };
           const entry: Record<string, unknown> = { id: c.id };
           if (c.slug) entry.slug = c.slug;
           entry.title = c.title;
@@ -232,6 +234,9 @@ async function read(key: string, d: Db, viewer: Viewer | typeof UNCHECKED): Prom
           entry.audioBasePath = publicUrl(mediaPrefix!);
           // Tags are the band's collections in the player.
           if (c.tags?.length) entry.tags = c.tags;
+          // Key and length, so song and setlist lists don't fetch every config.
+          if (c.key) entry.key = c.key;
+          if (c.durationSeconds) entry.durationSeconds = c.durationSeconds;
           return entry;
         }),
       };
