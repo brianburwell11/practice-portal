@@ -18,8 +18,13 @@ import { stemKey } from '../../store/faderSelectionStore';
  */
 export const CARD_BELOW_NAME = 'linear-gradient(to bottom, transparent 1.75rem, var(--color-gray-800) 1.75rem)';
 
+/** A strip's width: fixed on desktop; on tablets the strips share the row's
+ *  width between a finger-friendly minimum and a cap, so a short song fills
+ *  the screen and a long one still scrolls sideways. */
+export const STRIP_WIDTH = 'w-[76px] tab:w-auto tab:min-w-[80px] tab:max-w-[136px] tab:grow tab:basis-0';
+
 /** Classes the desktop M/S buttons share, stems and groups alike. */
-export const STRIP_MS_BUTTON = 'flex-1 h-5 text-[11px] leading-none';
+export const STRIP_MS_BUTTON = 'flex-1 h-5 text-[11px] leading-none tab:h-10 tab:text-sm';
 
 interface StripFrameProps {
   /** The pan knob, the stereo circles, or empty for a group. */
@@ -50,19 +55,19 @@ interface StripFrameProps {
  */
 export function StripFrame({
   knob, panReadout, fader, dbReadout, buttons, stackRow, bandColor, name, nameStyle,
-  className = 'w-[76px] bg-gray-800 rounded-md', style, selected, events,
+  className = `${STRIP_WIDTH} bg-gray-800 rounded-md`, style, selected, events,
 }: StripFrameProps) {
   return (
     <div
       {...events}
       data-selected={selected || undefined}
-      className={`flex flex-col items-center gap-1 shrink-0 h-full p-1 px-1.5 ${className} ${
+      className={`flex flex-col items-center gap-1 tab:gap-1.5 shrink-0 h-full p-1 px-1.5 tab:p-1.5 ${className} ${
         selected ? 'outline-2 -outline-offset-2 outline-blue-400' : ''
       }`}
       style={style}
     >
       <div
-        className="h-5 w-full shrink-0 rounded-sm flex items-center justify-center text-[11px] font-medium"
+        className="h-5 tab:h-7 w-full shrink-0 rounded-sm flex items-center justify-center text-[11px] tab:text-xs font-medium"
         style={nameStyle}
       >
         {name}
@@ -70,20 +75,20 @@ export function StripFrame({
       {/* Bleeds past the strip's edges, over the 1px dividers, so an open
           stack's band runs unbroken across its tracks. */}
       <div
-        className="h-4 w-[calc(100%+0.75rem+2px)] shrink-0 flex items-center justify-center"
+        className="h-4 tab:h-6 w-[calc(100%+0.75rem+2px)] shrink-0 flex items-center justify-center"
         style={bandColor ? { backgroundColor: bandColor, color: textOn(bandColor) } : undefined}
       >
         {stackRow}
       </div>
-      <div className="h-7 w-full flex items-center justify-center gap-0.5">
+      <div className="h-7 tab:h-10 w-full flex items-center justify-center gap-0.5 tab:gap-1">
         {knob}
         {panReadout && (
-          <div className="w-8 flex justify-center text-[11px] leading-none font-mono text-gray-400">{panReadout}</div>
+          <div className="w-8 flex justify-center text-[11px] tab:text-[13px] leading-none font-mono text-gray-400">{panReadout}</div>
         )}
       </div>
       <div className="flex-1 min-h-0 w-full flex justify-center">{fader}</div>
-      <div className="h-3.5 w-full flex items-center justify-center text-[11px] leading-none font-mono text-gray-300">{dbReadout}</div>
-      <div className="h-5 w-full flex items-center gap-1">{buttons}</div>
+      <div className="h-3.5 tab:h-5 w-full flex items-center justify-center text-[11px] tab:text-[13px] leading-none font-mono text-gray-300">{dbReadout}</div>
+      <div className="h-5 tab:h-10 w-full flex items-center gap-1">{buttons}</div>
     </div>
   );
 }
@@ -92,17 +97,17 @@ export function StripFrame({
 export function NameBlock({ label }: { label: string }) {
   // Fills the whole block (leading-5 = its h-5) so hovering anywhere on it
   // shows the full name, not just over the text.
-  return <span className="block w-full px-1 truncate text-center leading-5" title={label}>{label}</span>;
+  return <span className="block w-full px-1 truncate text-center leading-5 tab:leading-7" title={label}>{label}</span>;
 }
 
 /** Logic's row labels, in a column pinned to the mixer's left edge. */
 export function StripHeader() {
   const label = (text: string) => (
-    <span className="w-full text-right text-[11px] text-gray-500 whitespace-nowrap">{text}</span>
+    <span className="w-full text-right text-[11px] tab:text-xs text-gray-500 whitespace-nowrap">{text}</span>
   );
   return (
     <StripFrame
-      className="w-[84px] sticky left-0 z-10 bg-[var(--band-bg,var(--color-page))]"
+      className="w-[84px] tab:w-[72px] sticky left-0 z-10 bg-[var(--band-bg,var(--color-page))]"
       fader={<div className="flex h-full min-h-[100px] w-full justify-end"><FaderScale className="w-8" /></div>}
       knob={label('Pan')}
       dbReadout={label('dB')}
@@ -128,15 +133,15 @@ export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelSt
 
   return (
     <StripFrame
-      className={`w-[76px] ${stackColor ? '' : 'bg-gray-800 rounded-md'}`}
+      className={`${STRIP_WIDTH} ${stackColor ? '' : 'bg-gray-800 rounded-md'}`}
       style={stackColor ? { background: CARD_BELOW_NAME } : undefined}
       bandColor={stackColor}
       selected={gang.selected}
       events={gang.events}
       knob={stemState.stereo ? (
         <span className="flex items-center" title="Stereo" aria-label={`${label} is stereo`} role="img">
-          <span className="block w-4 h-4 rounded-full" style={{ backgroundColor: color }} />
-          <span className="block w-4 h-4 rounded-full -ml-1.5" style={{ backgroundColor: color, opacity: 0.7 }} />
+          <span className="block w-4 h-4 tab:w-5 tab:h-5 rounded-full" style={{ backgroundColor: color }} />
+          <span className="block w-4 h-4 tab:w-5 tab:h-5 rounded-full -ml-1.5" style={{ backgroundColor: color, opacity: 0.7 }} />
         </span>
       ) : (
         <PanKnob value={stemState.pan} onChange={c.setPan} resetValue={stemConfig.defaultPan} color={color} label={`${label} pan`} help="Pan" />
@@ -185,7 +190,7 @@ export function DesktopChannelStrip({ stemConfig, stackColor }: DesktopChannelSt
       stackRow={(
         <>
           {stackColor && (
-            <span className="flex-1 min-w-0 truncate px-1 text-center text-[11px] font-medium leading-4" title={label}>{label}</span>
+            <span className="flex-1 min-w-0 truncate px-1 text-center text-[11px] tab:text-[13px] font-medium leading-4" title={label}>{label}</span>
           )}
           {!c.isAtDefaults && (
             <button

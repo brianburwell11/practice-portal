@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { StemGroupConfig, StemConfig } from '../../audio/types';
 import { formatDb, parseDb } from '../../audio/db';
 import { useGroupControls } from './useGroupControls';
@@ -5,7 +6,7 @@ import { GroupMuteSolo } from './MuteSoloButtons';
 import { MAX_GAIN, VerticalFader } from './VerticalFader';
 import { EditableReadout } from './EditableReadout';
 import {
-  DesktopChannelStrip, NameBlock, STRIP_MS_BUTTON, StripFrame,
+  DesktopChannelStrip, NameBlock, STRIP_MS_BUTTON, STRIP_WIDTH, StripFrame,
 } from './DesktopChannelStrip';
 import { textOn } from './textOn';
 import { useFaderGang } from './useFaderGang';
@@ -34,10 +35,13 @@ export function DesktopGroupStrip({ groupConfig, stemConfigs }: DesktopGroupStri
     <div
       role="group"
       aria-label={`${label} track stack`}
-      className="flex h-full shrink-0 gap-px rounded-md overflow-hidden"
+      // Tablets: grows like that many strips, so an open stack's tracks
+      // come out the same width as the strips around it.
+      className="flex h-full shrink-0 gap-px rounded-md overflow-hidden tab:grow-(--strips) tab:basis-0 tab:min-w-[calc(var(--strips)*80px)] tab:max-w-[calc(var(--strips)*137px)]"
+      style={{ '--strips': open ? stemConfigs.length + 1 : 1 } as CSSProperties}
     >
       <StripFrame
-        className="w-[76px] bg-gray-800"
+        className={`${STRIP_WIDTH} bg-gray-800`}
         bandColor={color}
         selected={gang.selected}
         events={gang.events}
@@ -85,7 +89,7 @@ export function DesktopGroupStrip({ groupConfig, stemConfigs }: DesktopGroupStri
           >
             {!open && (
               <span
-                className="shrink-0 flex items-center gap-0.5 text-[11px] font-medium leading-none"
+                className="shrink-0 flex items-center gap-0.5 text-[11px] tab:text-[13px] font-medium leading-none"
                 title={`Track stack, ${stemConfigs.length} tracks`}
               >
                 <StackIcon />

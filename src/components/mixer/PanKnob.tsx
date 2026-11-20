@@ -109,7 +109,7 @@ export function PanKnob({ value, onChange, color, label, resetValue, help }: Pan
         onChange(clamp(next));
       }}
     >
-      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden>
+      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="tab:size-9" aria-hidden>
         {/* Track: the full 270° sweep */}
         <path
           d={`M ${startX} ${startY} A ${R} ${R} 0 1 1 ${endX} ${endY}`}

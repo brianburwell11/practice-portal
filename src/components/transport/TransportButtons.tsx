@@ -13,7 +13,7 @@ export type TransportButtonSize = 'sm' | 'md' | 'lg' | 'fluid';
 
 const SIZE: Record<TransportButtonSize, string> = {
   sm: 'w-9 h-9 text-base',
-  md: 'w-10 h-10 text-lg',
+  md: 'w-10 h-10 text-lg tab:w-14 tab:h-14 tab:text-2xl',
   lg: 'w-12 h-12 text-lg',
   /** Phone button row: share the row evenly, square, up to the `lg` size. */
   fluid: PHONE_ROW_BUTTON + ' text-lg',

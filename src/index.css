@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Tablets: a touch screen wide enough for the desktop layout. The desktop
+   widgets stay, sized for fingers and arm's length on a music stand. A
+   desktop or laptop with a mouse never matches. `tab:` in markup, and
+   `useIsTablet()` in code that sizes things itself. */
+@custom-variant tab (@media (width >= 48rem) and (pointer: coarse));
+
 /* The background behind everything: non-band pages, and a band that hasn't
    picked its own. `bg-page` in markup. */
 @theme {

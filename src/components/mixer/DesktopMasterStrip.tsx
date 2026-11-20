@@ -30,7 +30,7 @@ export function DesktopMasterStrip() {
 
   return (
     <StripFrame
-      className="w-[76px] bg-gray-800 rounded-md"
+      className="w-[76px] tab:w-[96px] bg-gray-800 rounded-md"
       name={<NameBlock label="Master" />}
       nameStyle={{ backgroundColor: accent, color: textOn(accent) }}
       fader={(

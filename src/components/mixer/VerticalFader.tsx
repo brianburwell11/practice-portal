@@ -60,7 +60,7 @@ export function FaderScale({ className = 'w-6' }: { className?: string }) {
             className="absolute right-0 flex items-center gap-0.5 translate-y-1/2"
             style={{ bottom: `${position(db) * 100}%` }}
           >
-            <span className={`text-[8px] leading-none font-mono ${db === 0 ? 'text-gray-300' : 'text-gray-500'}`}>
+            <span className={`text-[8px] tab:text-[10px] leading-none font-mono ${db === 0 ? 'text-gray-300' : 'text-gray-500'}`}>
               {text}
             </span>
             <span className={`block h-px ${db === 0 ? 'w-1.5 bg-gray-300' : 'w-1 bg-gray-500'}`} />
@@ -121,10 +121,10 @@ export function VerticalFader({ value, onChange, resetValue, onReset, color, lab
         onValueChange={([v]) => onChange(v)}
         onDoubleClick={() => (onReset ? onReset() : onChange(resetValue))}
         data-fader
-        className="relative flex flex-col items-center select-none touch-none w-7 h-full"
+        className="relative flex flex-col items-center select-none touch-none w-7 tab:w-11 h-full"
         title="Double-click to reset"
       >
-        <Slider.Track className="relative grow w-1.5 rounded-full bg-gray-900">
+        <Slider.Track className="relative grow w-1.5 tab:w-2 rounded-full bg-gray-900">
           <Slider.Range className="absolute w-full rounded-full" style={{ backgroundColor: color }} />
         </Slider.Track>
         {/* The label goes on the thumb, the element with role="slider";
@@ -132,9 +132,9 @@ export function VerticalFader({ value, onChange, resetValue, onReset, color, lab
         <Slider.Thumb
           aria-label={label}
           aria-valuetext={`${formatDb(value)} dB`}
-          className="block w-7 h-4 rounded-sm bg-gradient-to-b from-gray-200 to-gray-400 shadow-md border border-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="block w-7 h-4 tab:w-11 tab:h-6 rounded-sm bg-gradient-to-b from-gray-200 to-gray-400 shadow-md border border-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
-          <span aria-hidden className="block mx-1 mt-[7px] h-px bg-gray-600" />
+          <span aria-hidden className="block mx-1 mt-[7px] tab:mt-[11px] h-px bg-gray-600" />
         </Slider.Thumb>
       </Slider.Root>
     </div>

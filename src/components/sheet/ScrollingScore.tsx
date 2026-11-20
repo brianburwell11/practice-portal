@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { focusEdgeLeft } from '../../utils/focusEdge';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
@@ -415,7 +416,8 @@ export function ScrollingScore() {
     let focusRightPx = viewport;
     if (waveformEl) {
       const wfRect = waveformEl.getBoundingClientRect();
-      focusLeftPx = Math.max(0, wfRect.left - hostRect.left);
+      // The waveform's left edge on desktop; further left on tablets.
+      focusLeftPx = Math.max(0, (focusEdgeLeft() ?? wfRect.left) - hostRect.left);
       focusRightPx = Math.min(viewport, wfRect.right - hostRect.left + FOCUS_RIGHT_NUDGE_PX);
     }
     focusLeftPx = Math.min(focusLeftPx + FOCUS_LEFT_NUDGE_PX, focusRightPx - 40);

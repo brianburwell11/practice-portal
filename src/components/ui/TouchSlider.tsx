@@ -76,7 +76,7 @@ export function TouchSlider({
       ref={rootRef}
       data-help={help}
       data-help-at={helpAt}
-      className={`relative flex items-center select-none touch-none h-5 md:h-4 ${className}`}
+      className={`relative flex items-center select-none touch-none h-5 md:h-4 tab:h-8 ${className}`}
       min={min}
       max={max}
       step={step}
@@ -88,7 +88,7 @@ export function TouchSlider({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
-      <Slider.Track className="relative grow rounded-full h-2 md:h-1.5 bg-gray-600">
+      <Slider.Track className="relative grow rounded-full h-2 md:h-1.5 tab:h-2 bg-gray-600">
         <Slider.Range
           className="absolute rounded-full h-full"
           style={{ backgroundColor: accentColor }}
@@ -97,7 +97,7 @@ export function TouchSlider({
       {/* The thumb carries the slider role, so the name goes here. */}
       <Slider.Thumb
         aria-label={label}
-        className="block w-5 h-5 md:w-4 md:h-4 rounded-full bg-white shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="block w-5 h-5 md:w-4 md:h-4 tab:w-6 tab:h-6 rounded-full bg-white shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </Slider.Root>
   );

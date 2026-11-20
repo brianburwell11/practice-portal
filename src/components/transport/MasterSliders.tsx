@@ -31,9 +31,9 @@ export function MasterSliders({ className = '' }: Props) {
   return (
     <div
       data-tour="speed"
-      className={`grid grid-cols-[2rem_1fr_2.5rem] md:grid-cols-[2rem_6rem_2.5rem] gap-x-2 gap-y-0.5 items-center ${className}`}
+      className={`grid grid-cols-[2rem_1fr_2.5rem] md:grid-cols-[2rem_6rem_2.5rem] tab:grid-cols-[2.5rem_6rem_2.5rem] gap-x-2 gap-y-0.5 tab:gap-y-1.5 items-center ${className}`}
     >
-      <label className="text-xs text-gray-400 text-right">Vol</label>
+      <label className="text-xs tab:text-sm text-gray-400 text-right">Vol</label>
       <TouchSlider
         min={0}
         max={1.5}
@@ -65,7 +65,7 @@ export function MasterSliders({ className = '' }: Props) {
             setVolEditValue(String(Math.round(masterVolume * 100)));
             setVolEditing(true);
           }}
-          className="text-xs text-gray-300 font-mono text-right hover:text-gray-50 cursor-text"
+          className="text-xs tab:text-sm text-gray-300 font-mono text-right hover:text-gray-50 cursor-text"
           aria-label={`Master volume ${Math.round(masterVolume * 100)}%. Type a volume`}
         >
           {Math.round(masterVolume * 100)}%

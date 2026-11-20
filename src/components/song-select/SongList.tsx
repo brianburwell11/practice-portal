@@ -378,7 +378,7 @@ export function SongSelectDropdown() {
       data-help="Load a song"
       data-tour="pick"
       aria-label="Song"
-      className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 flex-1 min-w-0 text-center md:flex-initial md:text-left md:w-auto md:max-w-[26rem]"
+      className="bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm tab:text-base tab:min-h-11 border border-gray-600 focus:outline-none focus:border-blue-500 flex-1 min-w-0 text-center md:flex-initial md:text-left md:w-auto md:max-w-[26rem]"
       value={inSetlist ? (selectedSong ? String(activeIndex) : '-1') : (selectedSong?.id ?? '')}
       onChange={(e) => {
         if (inSetlist) {
@@ -495,7 +495,7 @@ export function SetlistDropdown({ className = 'ml-auto' }: { className?: string 
 
   return (
     <select
-      className={`bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm border border-gray-600 focus:outline-none focus:border-blue-500 ${className}`}
+      className={`bg-gray-800 text-gray-200 rounded px-3 py-1.5 text-sm tab:text-base tab:min-h-11 border border-gray-600 focus:outline-none focus:border-blue-500 ${className}`}
       value={activeSetlist?.id ?? (activeTag ? TAG_PREFIX + activeTag : '')}
       onChange={(e) => handleSetlistChange(e.target.value)}
       aria-label="Setlist or collection"

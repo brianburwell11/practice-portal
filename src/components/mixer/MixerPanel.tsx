@@ -257,7 +257,7 @@ export function MixerPanel() {
   });
 
   // Save and templates: a third of the row on phones, a bare icon on desktop.
-  const mobileRowBtn = 'flex items-center justify-center md:justify-start gap-1.5 min-w-0 text-xs px-2 py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors bg-gray-800 md:bg-transparent';
+  const mobileRowBtn = 'flex items-center justify-center md:justify-start gap-1.5 min-w-0 text-xs px-2 py-1 min-h-[44px] md:min-h-0 tab:min-h-11 tab:min-w-11 rounded font-medium transition-colors bg-gray-800 md:bg-transparent';
 
   return (
     <>
@@ -273,8 +273,8 @@ export function MixerPanel() {
       {/* Global mute/solo + save defaults. On desktop, indented past the
           row-label column (w-[84px] + the strips' gap-1.5) to line up with
           the first channel strip. */}
-      <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3 md:pl-[90px]">
-        <div className="flex gap-2 w-full md:w-[230px]">
+      <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3 md:pl-[90px] tab:pl-[78px]">
+        <div className="flex gap-2 w-full md:w-[230px] tab:w-[320px]">
           <button
             {...(anyMuted ? muteHandlers : {})}
             disabled={!anyMuted}
@@ -282,7 +282,7 @@ export function MixerPanel() {
             data-help="All mutes on/off {M}"
             data-help-at="above"
             aria-pressed={anyMuted ? globalMuteActive : undefined}
-            className={`flex-1 flex items-center justify-center gap-0.5 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
+            className={`flex-1 flex items-center justify-center gap-0.5 text-xs tab:text-sm py-1 min-h-[44px] md:min-h-0 tab:min-h-11 rounded font-medium transition-colors border-2 ${
               !anyMuted
                 ? 'bg-transparent text-gray-600 border-gray-700 cursor-default'
                 : globalMuteActive
@@ -303,7 +303,7 @@ export function MixerPanel() {
             data-help="All solos on/off {S}"
             data-help-at="above"
             aria-pressed={anySoloed ? globalSoloActive : undefined}
-            className={`flex-1 flex items-center justify-center gap-0.5 text-xs py-1 min-h-[44px] md:min-h-0 rounded font-medium transition-colors border-2 ${
+            className={`flex-1 flex items-center justify-center gap-0.5 text-xs tab:text-sm py-1 min-h-[44px] md:min-h-0 tab:min-h-11 rounded font-medium transition-colors border-2 ${
               !anySoloed
                 ? 'bg-transparent text-gray-600 border-gray-700 cursor-default'
                 : globalSoloActive
@@ -344,7 +344,7 @@ export function MixerPanel() {
           <button
             onClick={handleResetAll}
             disabled={mixerIsAtDefaults}
-            className={`hidden md:inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded font-medium transition-colors ${
+            className={`hidden md:inline-flex items-center justify-center gap-1.5 text-xs px-2 py-1 tab:min-h-11 tab:min-w-11 rounded font-medium transition-colors ${
               mixerIsAtDefaults ? 'text-gray-700 cursor-default' : 'text-gray-500 hover:text-gray-300'
             }`}
             title="Reset mixer to defaults"
@@ -415,7 +415,7 @@ export function MixerPanel() {
         </div>
         <button
           onClick={() => minimizePanel('mixer')}
-          className="hidden md:inline-flex items-center gap-1 text-xs px-2 py-1 ml-auto rounded font-medium text-gray-500 hover:text-gray-300 transition-colors"
+          className="hidden md:inline-flex items-center justify-center gap-1 text-xs px-2 py-1 tab:min-h-11 tab:min-w-11 ml-auto rounded font-medium text-gray-500 hover:text-gray-300 transition-colors"
           title="Minimize mixer"
           data-help="Show/hide mixer {X}"
           data-help-at="left"
@@ -432,7 +432,7 @@ export function MixerPanel() {
           with the Master strip pinned to the right outside the scroll. Both
           get pb-1 (room for the scrollbar) so their rows line up. */}
       {isDesktop ? (
-        <div className="flex gap-1.5 h-[300px] shrink-0">
+        <div className="flex gap-1.5 h-[300px] tab:h-[380px] shrink-0">
           <div data-tour="mixer" className="stagger-in flex flex-row flex-nowrap gap-1.5 flex-1 min-w-0 h-full overflow-x-auto pb-1">
             <StripHeader />
             {strips}

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
+import { focusEdgeLeft } from '../utils/focusEdge';
 import { useAudioEngine } from '../hooks/useAudioEngine';
 import { useTransportStore } from '../store/transportStore';
 import { useLyricsStore } from '../store/lyricsStore';
@@ -141,11 +142,10 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
   const computeReadingX = useCallback((): number => {
     const container = containerRef.current;
     if (!container) return 0;
-    const waveformEl = document.querySelector('[data-waveform-timeline]') as HTMLElement | null;
-    if (!waveformEl) return container.offsetWidth * 0.22 + FOCUS_LEFT_NUDGE_PX;
+    const edge = focusEdgeLeft();
+    if (edge === null) return container.offsetWidth * 0.22 + FOCUS_LEFT_NUDGE_PX;
     const containerRect = container.getBoundingClientRect();
-    const wfRect = waveformEl.getBoundingClientRect();
-    return Math.max(0, wfRect.left - containerRect.left) + FOCUS_LEFT_NUDGE_PX;
+    return Math.max(0, edge - containerRect.left) + FOCUS_LEFT_NUDGE_PX;
   }, []);
 
   // Compute autoscroll translateX for a given index
@@ -239,17 +239,16 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
     <div className={`relative ${className ?? ''}`}>
       <div
         ref={containerRef}
-        className="relative overflow-hidden py-2"
+        className="relative overflow-hidden py-2 h-10 tab:h-14 tab:[--fade-from:calc(15vw-88px)] tab:[--fade-to:calc(15vw-32px)]"
         style={{
-          height: 40,
-          maskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 160px), transparent calc(100% - 112px))',
-          WebkitMaskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 160px), transparent calc(100% - 112px))',
+          maskImage: 'linear-gradient(to right, transparent var(--fade-from, 112px), black var(--fade-to, 160px), black calc(100% - 160px), transparent calc(100% - 112px))',
+          WebkitMaskImage: 'linear-gradient(to right, transparent var(--fade-from, 112px), black var(--fade-to, 160px), black calc(100% - 160px), transparent calc(100% - 112px))',
         }}
       >
         {/* Scrolling lyrics */}
         <div
           ref={trackRef}
-          className="flex items-center gap-4 whitespace-nowrap h-full"
+          className="flex items-center gap-4 tab:gap-6 whitespace-nowrap h-full"
           style={{
             transform: `translateX(${translateX}px)`,
             transition: scrollLockedRef.current ? 'none' : 'transform 500ms ease',
@@ -265,7 +264,7 @@ function HorizontalTrack({ lines, targetIndex, className }: TrackProps) {
                 key={i}
                 ref={(el) => { itemRefs.current[i] = el; }}
                 onClick={() => { if (line.time !== null) engine.seek(line.time); }}
-                className={`text-sm transition-all duration-300 shrink-0 cursor-pointer hover:text-gray-100 ${isEndMarker(line.text) ? 'inline-block w-24' : ''} ${
+                className={`text-sm tab:text-xl transition-all duration-300 shrink-0 cursor-pointer hover:text-gray-100 ${isEndMarker(line.text) ? 'inline-block w-24' : ''} ${
                   instrumental
                     ? isCurrent
                       ? 'mx-3 text-gray-100 font-medium'

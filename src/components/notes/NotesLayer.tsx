@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { focusEdgeLeft } from '../../utils/focusEdge';
 import { useCan, useSessionStore } from '../../store/sessionStore';
 import { useNotePermissions } from '../../hooks/useNotePermissions';
 import { Avatar } from '../account/AccountMenu';
@@ -113,10 +114,9 @@ export function NotesLayer() {
   const [leftPadding, setLeftPadding] = useState<number | null>(null);
   useEffect(() => {
     const measure = () => {
-      const waveformEl = document.querySelector('[data-waveform-timeline]') as HTMLElement | null;
-      if (!waveformEl) return;
-      const rect = waveformEl.getBoundingClientRect();
-      setLeftPadding(rect.left + FOCUS_LEFT_NUDGE_PX);
+      const edge = focusEdgeLeft();
+      if (edge === null) return;
+      setLeftPadding(edge + FOCUS_LEFT_NUDGE_PX);
     };
     measure();
     const waveformEl = document.querySelector('[data-waveform-timeline]');

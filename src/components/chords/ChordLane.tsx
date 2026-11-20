@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { focusEdgeLeft } from '../../utils/focusEdge';
 import { displayChord } from '../../audio/chordSymbols';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useTransportStore } from '../../store/transportStore';
 import { useSongStore } from '../../store/songStore';
 import { useChordsStore, LOOK_AHEAD_OPTIONS } from '../../store/chordsStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
-import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useIsTablet, useMediaQuery } from '../../hooks/useMediaQuery';
 import { usePanelShortcut } from '../../hooks/usePanelShortcut';
 import { beatGrid, lastAtOrBefore, type GridLine } from '../../audio/chordGrid';
 import type { ChordEvent } from '../../audio/chordsTypes';
@@ -106,7 +107,7 @@ interface LaneProps {
 
 /** What every lane needs each frame. `viewTime`, when set, lays the lane
  *  out as if playback were there (a lane scrolled by hand). */
-function useLaneState(chords: ChordEvent[], viewTime: number | null = null) {
+function useLaneState(chords: ChordEvent[], viewTime: number | null = null, scale = 1) {
   const playhead = useTransportStore((s) => s.position);
   const position = viewTime ?? playhead;
   const lookAhead = useChordsStore((s) => s.lookAhead);
@@ -134,7 +135,7 @@ function useLaneState(chords: ChordEvent[], viewTime: number | null = null) {
     upcoming,
     sections,
     /** Chords sit below the section row when there is one. */
-    chordTop: sections.length > 0 ? SECTION_ROW_PX : 0,
+    chordTop: sections.length > 0 ? SECTION_ROW_PX * scale : 0,
   };
 }
 
@@ -158,12 +159,12 @@ function useReadingX(containerRef: React.RefObject<HTMLElement | null>): number 
     const measure = () => {
       const container = containerRef.current;
       if (!container) return;
-      const waveformEl = document.querySelector('[data-waveform-timeline]') as HTMLElement | null;
-      if (!waveformEl) {
+      const edge = focusEdgeLeft();
+      if (edge === null) {
         setX(container.offsetWidth * 0.22 + FOCUS_LEFT_NUDGE_PX);
         return;
       }
-      const left = waveformEl.getBoundingClientRect().left - container.getBoundingClientRect().left;
+      const left = edge - container.getBoundingClientRect().left;
       setX(Math.max(0, left) + FOCUS_LEFT_NUDGE_PX);
     };
     measure();
@@ -308,8 +309,10 @@ function BeatLines({ grid, position, x, from, to }: { grid: GridLine[]; position
  * the next pushes it off to the left. Clicking one plays from it.
  */
 function SectionMarks({
-  sections, position, x, pinX, to, onSeek,
+  sections, position, x, pinX, to, onSeek, scale = 1,
 }: {
+  /** Tablets draw the lane larger. */
+  scale?: number;
   sections: Section[];
   position: number;
   x: (t: number) => number;
@@ -325,7 +328,7 @@ function SectionMarks({
     const nextX = i + 1 < sections.length ? x(sections[i + 1].time) : Infinity;
     let left: number;
     if (i === cur) {
-      left = Math.min(pinX, nextX - sectionWidth(s.label) - GAP_PX);
+      left = Math.min(pinX, nextX - sectionWidth(s.label) * scale - GAP_PX);
     } else {
       left = x(s.time);
       if (left > to) break;
@@ -349,7 +352,7 @@ function SectionMarks({
           // opacity would slip under its contrast floor.
           i === cur ? 'text-amber-300' : 'text-amber-500'
         }`}
-        style={{ height: SECTION_ROW_PX, fontSize: SECTION_PX, paddingLeft: 3, transform: `translateX(${left}px)` }}
+        style={{ height: SECTION_ROW_PX * scale, fontSize: SECTION_PX * scale, paddingLeft: 3, transform: `translateX(${left}px)` }}
       >
         {s.label}
       </button>,
@@ -372,38 +375,43 @@ function PinnedLane({ chords, className }: LaneProps) {
   const width = useWidth(containerRef);
   const readingX = useReadingX(containerRef);
   const lookAhead = useChordsStore((s) => s.lookAhead);
+  // Tablets: read from a music stand, so everything half again as big.
+  const k = useIsTablet() ? 1.5 : 1;
+  const nowPx = NOW_PX * k;
+  const nextPx = NEXT_PX * k;
+  const laneHeight = LANE_HEIGHT * k;
   const hit = readingX - LABEL_INSET_PX;
   const pps = Math.max(20, (width - hit) / lookAhead);
   const heldAt = useShiftScroll(containerRef, pps);
   useLaneZoom(containerRef);
-  const { position, grid, cur, prev, next, upcoming, sections, chordTop } = useLaneState(chords, heldAt);
+  const { position, grid, cur, prev, next, upcoming, sections, chordTop } = useLaneState(chords, heldAt, k);
   const x = (t: number) => hit + (t - position) * pps;
-  const named = namedChords(upcoming, x, NOW_PX, NEXT_PX);
+  const named = namedChords(upcoming, x, nowPx, nextPx);
 
-  const curX = cur && next ? Math.min(hit, x(next.time) - labelWidth(cur.symbol, NOW_PX) - GAP_PX) : hit;
-  const prevX = prev ? Math.min(hit, curX) - labelWidth(prev.symbol, NOW_PX) - GAP_PX : 0;
+  const curX = cur && next ? Math.min(hit, x(next.time) - labelWidth(cur.symbol, nowPx) - GAP_PX) : hit;
+  const prevX = prev ? Math.min(hit, curX) - labelWidth(prev.symbol, nowPx) - GAP_PX : 0;
 
   return (
     <div className={`relative ${className ?? ''}`}>
       <div
         ref={containerRef}
-        className="relative overflow-hidden"
+        className="relative overflow-hidden tab:[--fade-from:calc(15vw-88px)] tab:[--fade-to:calc(15vw-32px)]"
         style={{
-          height: LANE_HEIGHT + chordTop,
-          maskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 120px), transparent calc(100% - 40px))',
-          WebkitMaskImage: 'linear-gradient(to right, transparent 112px, black 160px, black calc(100% - 120px), transparent calc(100% - 40px))',
+          height: laneHeight + chordTop,
+          maskImage: 'linear-gradient(to right, transparent var(--fade-from, 112px), black var(--fade-to, 160px), black calc(100% - 120px), transparent calc(100% - 40px))',
+          WebkitMaskImage: 'linear-gradient(to right, transparent var(--fade-from, 112px), black var(--fade-to, 160px), black calc(100% - 120px), transparent calc(100% - 40px))',
         }}
       >
         {width > 0 && (
           <>
             <BeatLines grid={grid} position={position} x={x} from={hit} to={width} />
-            <SectionMarks sections={sections} position={position} x={x} pinX={hit} to={width} onSeek={seek} />
+            <SectionMarks sections={sections} position={position} x={x} pinX={hit} to={width} onSeek={seek} scale={k} />
             {prev && (
-              <ChordLabel chord={prev} left={prevX} top={chordTop} px={NOW_PX} tone="past" onSeek={seek} />
+              <ChordLabel chord={prev} left={prevX} top={chordTop} px={nowPx} tone="past" onSeek={seek} />
             )}
             {upcoming.map((c, i) => {
               const cx = x(c.time);
-              if (!named[i]) return <ChordTick key={c.time} chord={c} left={cx} top={chordTop} />;
+              if (!named[i]) return <ChordTick key={c.time} chord={c} left={cx} top={chordTop} laneHeight={laneHeight} />;
               const grow = c === next ? Math.max(0, Math.min(1, 1 - (cx - hit) / (GROW_SEC * pps))) : 0;
               return (
                 <ChordLabel
@@ -411,7 +419,7 @@ function PinnedLane({ chords, className }: LaneProps) {
                   chord={c}
                   left={cx}
                   top={chordTop}
-                  px={NEXT_PX}
+                  px={nextPx}
                   scale={1 + grow * (NOW_PX / NEXT_PX - 1)}
                   tone={grow > 0.3 ? 'arriving' : 'upcoming'}
                   marker
@@ -419,7 +427,7 @@ function PinnedLane({ chords, className }: LaneProps) {
                 />
               );
             })}
-            {cur && <ChordLabel chord={cur} left={curX} top={chordTop} px={NOW_PX} tone="now" marker onSeek={seek} />}
+            {cur && <ChordLabel chord={cur} left={curX} top={chordTop} px={nowPx} tone="now" marker onSeek={seek} />}
           </>
         )}
       </div>
@@ -553,7 +561,7 @@ function ChordLabel({
 /** A chord with no room for its name: a dot under the names' line, where it starts. */
 const TICK_PX = 5;
 
-function ChordTick({ chord, left, top = 0 }: { chord: ChordEvent; left: number; top?: number }) {
+function ChordTick({ chord, left, top = 0, laneHeight = LANE_HEIGHT }: { chord: ChordEvent; left: number; top?: number; laneHeight?: number }) {
   return (
     <div
       data-chord-tick
@@ -561,7 +569,7 @@ function ChordTick({ chord, left, top = 0 }: { chord: ChordEvent; left: number; 
       className="absolute left-0 rounded-full bg-gray-500"
       // A dot just under the names, not a bar beside them: a bar at letter
       // height read as part of the name before it ("Dm" then a bar, "Dml").
-      style={{ top: top + LANE_HEIGHT / 2 + 8, width: TICK_PX, height: TICK_PX, transform: `translateX(${left - TICK_PX / 2}px)` }}
+      style={{ top: top + laneHeight / 2 + 8 * (laneHeight / LANE_HEIGHT), width: TICK_PX, height: TICK_PX, transform: `translateX(${left - TICK_PX / 2}px)` }}
     />
   );
 }

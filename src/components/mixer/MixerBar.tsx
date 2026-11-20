@@ -7,14 +7,14 @@ import { useGroupControls } from './useGroupControls';
 import { useStemControls } from './useStemControls';
 import type { MixerOrderItem } from '../../audio/mixerOrder';
 
-const BAR_MS_BUTTON = 'w-6 h-6 text-[11px] leading-none shrink-0';
-const BAR_ITEM = 'flex items-center gap-1.5 shrink-0 rounded-md bg-gray-800 pl-1 pr-2 py-1';
+const BAR_MS_BUTTON = 'w-6 h-6 text-[11px] leading-none shrink-0 tab:w-10 tab:h-10 tab:text-sm';
+const BAR_ITEM = 'flex items-center gap-1.5 tab:gap-2 shrink-0 rounded-md bg-gray-800 pl-1 pr-2 py-1 tab:pl-1.5 tab:pr-3';
 
 /** The stem's name on its own color, like the strips' name blocks. */
 function Name({ label, color }: { label: string; color: string }) {
   return (
     <span
-      className="max-w-[7rem] truncate rounded-sm px-1.5 text-[11px] font-medium leading-5"
+      className="max-w-[7rem] tab:max-w-[9rem] truncate rounded-sm px-1.5 text-[11px] tab:text-sm font-medium leading-5 tab:leading-7"
       style={{ backgroundColor: color, color: textOn(color) }}
       title={label}
     >
@@ -47,7 +47,7 @@ function StemItem({ stemConfig }: { stemConfig: StemConfig }) {
         onChange={c.setVolume}
         onDoubleClick={() => c.setVolume(stemConfig.defaultVolume)}
         label={`${stemConfig.label} volume`}
-        className="w-20"
+        className="w-20 tab:w-32"
       />
     </div>
   );
@@ -79,7 +79,7 @@ function GroupItem({ groupConfig, stemConfigs }: { groupConfig: StemGroupConfig;
         onChange={g.setVolume}
         onDoubleClick={() => g.setVolume(groupConfig.defaultVolume ?? 1)}
         label={`${groupConfig.label} volume`}
-        className="w-20"
+        className="w-20 tab:w-32"
       />
     </div>
   );

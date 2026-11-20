@@ -12,3 +12,9 @@ export function useMediaQuery(query: string): boolean {
     () => false,
   );
 }
+
+/** A tablet: a touch screen wide enough for the desktop layout. Matches the
+ *  CSS `tab:` variant, for code that sizes things itself. */
+export function useIsTablet(): boolean {
+  return useMediaQuery('(min-width: 768px) and (pointer: coarse)');
+}

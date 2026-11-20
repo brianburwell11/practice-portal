@@ -84,7 +84,7 @@ function WaveformSkeleton({ progress }: { progress: { loaded: number; total: num
       </span>
       {/* Marked as the waveform: notes, lyrics and the score line up on its
           left edge, and look it up by this attribute. */}
-      <div aria-hidden="true" data-waveform-timeline className="relative h-[80px] md:h-[108px] rounded bg-gray-800/60 flex items-center gap-[3px] px-2 overflow-hidden">
+      <div aria-hidden="true" data-waveform-timeline className="relative h-[80px] md:h-[108px] tab:h-[140px] rounded bg-gray-800/60 flex items-center gap-[3px] px-2 overflow-hidden">
         {SKELETON_BARS.map((h, i) => (
           <div key={i} className="flex-1 min-w-[2px] rounded-full bg-gray-700" style={{ height: `${h}%` }} />
         ))}
@@ -265,11 +265,13 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
     // Sticky phone layout: this box steps aside (`contents`) so the waveform
     // row can pin to the page's scroll area, and the rows below get their
     // own box that scrolls.
-    <div className={sticky ? 'contents' : 'flex flex-col md:flex-row md:items-center md:gap-4 px-4 py-3 border-b border-gray-700'}>
-      {/* Desktop: controls cluster (buttons + sliders grouped together, shrink-0) */}
-      <div className="hidden md:flex md:flex-col md:gap-1 md:shrink-0">
+    <div className={sticky ? 'contents' : 'flex flex-col md:flex-row md:items-center md:gap-4 tab:gap-5 px-4 py-3 border-b border-gray-700'}>
+      {/* Desktop: controls cluster (buttons + sliders grouped together, shrink-0).
+          The waveform's left edge is the reading point the lyrics, chords and
+          score line up on, so this cluster keeps it off the screen's edge. */}
+      <div className="hidden md:flex md:flex-col md:gap-1 tab:gap-2 md:shrink-0">
         {/* Transport buttons — centered over sliders */}
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-2 tab:gap-3">
           <StopButton />
           <PlayPauseButton />
           <LoopButton verb="Click" />
@@ -282,7 +284,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
       {/* Waveform + timestamp — full width on mobile (row 1), flex-1 on desktop */}
       <div
         data-phone-pin={sticky || undefined}
-        className={`md:flex-1 md:min-w-0 flex items-center gap-2 ${sticky ? 'sticky z-20 px-4 pt-3 pb-2' : ''}`}
+        className={`md:flex-1 md:min-w-0 flex items-center gap-2 tab:gap-4 ${sticky ? 'sticky z-20 px-4 pt-3 pb-2' : ''}`}
         style={sticky ? { top: stickyTop, backgroundColor: 'var(--band-bg, var(--color-page))' } : undefined}
       >
         <div
@@ -301,7 +303,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
           </div>
         ) : (
         <div
-          className={`hidden md:flex md:flex-col md:items-center font-mono text-sm text-gray-300 shrink-0 -mt-1 ${arrived ? 'animate-ready-in' : ''}`}
+          className={`hidden md:flex md:flex-col md:items-center tab:gap-1 font-mono text-sm tab:text-lg text-gray-300 shrink-0 -mt-1 ${arrived ? 'animate-ready-in' : ''}`}
           // Lands as the waveform's sweep reaches it.
           style={arrived ? { animationDelay: '0.25s' } : undefined}
           data-help="Jump to specific section, timestamp, or measure|beat"
@@ -410,7 +412,7 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
             if (!sections || sections.length === 0) return null;
             return (
               <select
-                className="text-xs bg-gray-700 border border-gray-600 rounded px-1 py-0.5 text-gray-400 cursor-pointer outline-none focus:border-blue-500 font-sans"
+                className="text-xs tab:text-sm bg-gray-700 border border-gray-600 rounded px-1 py-0.5 tab:px-2 tab:min-h-11 text-gray-400 cursor-pointer outline-none focus:border-blue-500 font-sans"
                 value=""
                 aria-label="Jump to section"
                 onChange={(e) => {

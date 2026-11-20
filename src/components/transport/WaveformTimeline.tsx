@@ -1576,7 +1576,7 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         ref={containerRef}
         data-waveform-timeline={compact ? undefined : true}
         // The waveform paints its own dark panel; overlays keep the stock colors.
-        className={`theme-default ${compact ? 'h-[44px]' : 'h-[80px] md:h-[108px]'} relative rounded overflow-hidden`}
+        className={`theme-default ${compact ? 'h-[44px]' : 'h-[80px] md:h-[108px] tab:h-[140px]'} relative rounded overflow-hidden`}
         // No iOS callout or text selection on the press-and-hold that starts a loop.
         style={{ cursor: cursorStyle, touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
       >

@@ -33,7 +33,7 @@ export function TempoControl() {
 
   return (
     <>
-      <label className="text-xs text-gray-400 text-right">Speed</label>
+      <label className="text-xs tab:text-sm text-gray-400 text-right">Speed</label>
       <TouchSlider
         min={MIN}
         max={MAX}
@@ -65,7 +65,7 @@ export function TempoControl() {
             setEditValue(String(Math.round(tempoRatio * 100)));
             setEditing(true);
           }}
-          className="text-xs text-gray-300 font-mono text-right hover:text-gray-50 cursor-text"
+          className="text-xs tab:text-sm text-gray-300 font-mono text-right hover:text-gray-50 cursor-text"
           aria-label={`Speed ${Math.round(tempoRatio * 100)}%. Type a speed`}
         >
           {Math.round(tempoRatio * 100)}%
