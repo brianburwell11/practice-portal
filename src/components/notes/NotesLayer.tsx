@@ -82,7 +82,13 @@ interface VisibleEntry {
   editable: boolean;
 }
 
-export function NotesLayer() {
+/**
+ * The notes near the playhead, as sticky notes. Normally a row under the
+ * transport, its first note on the reading point. As an `overlay` (the full
+ * screen sheet music), a row floating over the bottom left of the page, with
+ * no Export or minimize (there's no ribbon in there to bring it back from).
+ */
+export function NotesLayer({ overlay = false }: { overlay?: boolean } = {}) {
   // Everyone sees every note. Members add them and edit their own; Managers
   // and the Owner edit anyone's (useNotePermissions).
   const { canAdd, canEdit } = useNotePermissions();
@@ -113,6 +119,7 @@ export function NotesLayer() {
   // focused-lyric reading point (waveform.left + FOCUS_LEFT_NUDGE_PX).
   const [leftPadding, setLeftPadding] = useState<number | null>(null);
   useEffect(() => {
+    if (overlay) return;
     const measure = () => {
       const edge = focusEdgeLeft();
       if (edge === null) return;
@@ -128,7 +135,7 @@ export function NotesLayer() {
       ro.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, []);
+  }, [overlay]);
 
   const selectedSong = useSongStore((s) => s.selectedSong);
   const minimized = usePanelMinimizeStore((s) =>
@@ -136,7 +143,7 @@ export function NotesLayer() {
   );
   const minimizePanel = usePanelMinimizeStore((s) => s.minimizePanel);
 
-  if (minimized) return null;
+  if (minimized && !overlay) return null;
 
   const handleAdd = () => {
     if (!useNotesStore.getState().loaded) return;
@@ -159,6 +166,30 @@ export function NotesLayer() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  if (overlay) {
+    return (
+      // Clicks between the stickies go through to the score.
+      <div className="theme-default pointer-events-none absolute bottom-3 left-3 z-10 hidden md:flex max-w-[calc(100%-8rem)] flex-wrap-reverse items-end gap-2">
+        {canAdd && (
+          <div className="pointer-events-auto">
+            <AddNoteButton onClick={handleAdd} disabled={!loaded} bg={THEME.bg} iconClass="text-gray-900" inline />
+          </div>
+        )}
+        {visible.map((entry) => (
+          <div key={entry.note.id} className="pointer-events-auto">
+            <Sticky
+              note={entry.note}
+              isDirty={entry.isDirty}
+              editable={entry.editable}
+              theme={THEME}
+              actions={actions}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -224,11 +255,14 @@ function AddNoteButton({
   disabled,
   bg,
   iconClass,
+  inline = false,
 }: {
   onClick: () => void;
   disabled: boolean;
   bg: string;
   iconClass: string;
+  /** Sits in line with the stickies instead of left of the reading point. */
+  inline?: boolean;
 }) {
   return (
     <button
@@ -242,7 +276,7 @@ function AddNoteButton({
       // (40px + 8px) so the first sticky still lands at the focused-lyric
       // edge. On mobile (flex-col) the button stacks above the stickies,
       // so the negative margin doesn't apply.
-      className={`w-10 h-10 rounded-lg flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition hover:brightness-110 shrink-0 shadow-md md:-ml-12 ${iconClass}`}
+      className={`w-10 h-10 rounded-lg flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition hover:brightness-110 shrink-0 shadow-md ${inline ? '' : 'md:-ml-12'} ${iconClass}`}
       style={{ backgroundColor: bg }}
     >
       <svg

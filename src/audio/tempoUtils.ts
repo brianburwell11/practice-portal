@@ -149,3 +149,26 @@ export function measureBeatAt(tapMap: TapMapEntry[] | undefined, position: numbe
   }
   return measure > 0 ? { measure, beat } : null;
 }
+
+/** When measure `targetMeasure`, beat `targetBeat` (1-based) starts, by the tapMap;
+ *  the start of the measure if it has no such beat, null if there's no such measure. */
+export function measureBeatToTime(tapMap: TapMapEntry[] | undefined, targetMeasure: number, targetBeat: number): number | null {
+  if (!tapMap || tapMap.length === 0) return null;
+  let measure = 0;
+  let beat = 0;
+  let measureStart: number | null = null;
+  for (const entry of tapMap) {
+    if (entry.type === 'section' || entry.type === 'measure') {
+      measure++;
+      beat = 1;
+    } else {
+      beat++;
+    }
+    if (measure > targetMeasure) break;
+    if (measure === targetMeasure) {
+      if (beat === 1) measureStart = entry.time;
+      if (beat === targetBeat) return entry.time;
+    }
+  }
+  return measureStart;
+}

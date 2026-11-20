@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useWakeLock } from '../../../hooks/useWakeLock';
 import { useSheetMusicStore } from '../../../store/sheetMusicStore';
 import { useTransportStore } from '../../../store/transportStore';
+import { NotesLayer } from '../../notes/NotesLayer';
 import { CompactTransport } from '../../transport/CompactTransport';
 import type { PartInfo } from '../EngravedStripRenderer';
 import { PartsMenu } from '../PartsMenu';
@@ -127,8 +128,9 @@ export function ScoreFullView({ title, files, parts, hiddenPartIds, onHiddenPart
         </button>
       </div>
 
-      <div className="min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1">
         <PageScoreView files={files} hiddenPartIds={hiddenPartIds} onParts={onParts} repeatAfterDcDs={repeatAfterDcDs} layoutMode={layout} />
+        <NotesLayer overlay />
       </div>
 
       <div

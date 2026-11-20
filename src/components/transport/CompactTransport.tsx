@@ -1,20 +1,17 @@
-import { measureBeatAt } from '../../audio/tempoUtils';
-import { useSongStore } from '../../store/songStore';
-import { useTransportStore } from '../../store/transportStore';
-import { formatTime } from '../../utils/formatTime';
+import { MasterSliders } from './MasterSliders';
+import { MeasureBeatJump, TimeJump } from './PositionJump';
 import { LoopButton, PlayPauseButton, StopButton } from './TransportButtons';
 import { WaveformTimeline } from './WaveformTimeline';
 
+const INPUT = 'text-xs bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-200 font-mono';
+
 /**
  * A one-row transport for docking under a full-screen view: stop, play, the
- * A/B loop, a short waveform (seek, drag a loop on it, as usual), and where
- * playback is. Touch layouts get bigger buttons and long-press to stop.
+ * A/B loop, volume and speed (wide screens), a short waveform (seek, drag a
+ * loop on it, as usual), and where playback is, which can be typed into to
+ * jump. Touch layouts get bigger buttons and long-press to stop.
  */
 export function CompactTransport({ touch = false }: { touch?: boolean }) {
-  const position = useTransportStore((s) => s.position);
-  const duration = useTransportStore((s) => s.duration);
-  const tapMap = useSongStore((s) => s.selectedSong?.tapMap);
-  const mb = measureBeatAt(tapMap, position);
   const size = touch ? 'lg' : 'sm';
 
   return (
@@ -22,15 +19,22 @@ export function CompactTransport({ touch = false }: { touch?: boolean }) {
       {!touch && <StopButton size={size} />}
       <PlayPauseButton size={size} longPressStops={touch} />
       <LoopButton size={size} verb={touch ? 'Tap' : 'Click'} />
+      <div className="hidden md:block shrink-0 mx-1">
+        <MasterSliders />
+      </div>
       <div
         className="min-w-0 flex-1"
         data-help={touch ? 'Tap to jump. Hold, then drag, to loop a section.' : 'Click to jump. Click and drag to loop a section.'}
       >
         <WaveformTimeline compact />
       </div>
-      <div className="shrink-0 text-right font-mono text-xs leading-tight text-gray-300">
-        <div>{formatTime(position)}<span className="text-gray-500"> / {formatTime(duration)}</span></div>
-        {mb && <div className="text-gray-500">{mb.measure}<span className="mx-0.5 text-gray-600">|</span>{mb.beat}</div>}
+      <div
+        className="shrink-0 flex flex-col items-end font-mono text-xs leading-tight text-gray-300"
+        data-help="Type a time or measure|beat to jump there"
+        data-help-at="left"
+      >
+        <TimeJump className="[&>span]:text-gray-500" inputClassName={INPUT} />
+        <MeasureBeatJump className="text-gray-500" inputClassName={INPUT} />
       </div>
     </div>
   );

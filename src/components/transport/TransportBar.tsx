@@ -10,61 +10,17 @@ import { ChordsIcon } from '../chords/ChordsIcon';
 import { WaveformTimeline } from './WaveformTimeline';
 import { MasterSliders } from './MasterSliders';
 import { Skeleton } from '../ui/Loading';
-import { formatTime } from '../../utils/formatTime';
-import { measureBeatAt } from '../../audio/tempoUtils';
+import { MeasureBeatJump, TimeJump } from './PositionJump';
 import { LoopButton, PHONE_ROW_BUTTON, PlayPauseButton, StopButton } from './TransportButtons';
 import { SheetMusicIcon } from '../sheet/SheetMusicIcon';
 import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
 
-import type { TapMapEntry } from '../../audio/types';
 import { barStarts, sectionStarts, stepTarget, STEP_SEC } from '../../audio/seekSteps';
 import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import { useLyricsEditorStore } from '../../store/lyricsEditorStore';
 import { useChordsEditorStore } from '../../store/chordsEditorStore';
 import { useOnboardingStore } from '../../onboarding/onboardingStore';
-
-function parseTimeDigits(digits: string): number | null {
-  if (!digits) return null;
-  const padded = digits.padStart(3, '0');
-  const s = parseInt(padded.slice(-2), 10);
-  const m = parseInt(padded.slice(0, -2) || '0', 10);
-  return m * 60 + s;
-}
-
-function formatTimeInput(digits: string): string {
-  if (!digits) return '0:00';
-  const padded = digits.slice(0, 4).padStart(3, '0');
-  const s = padded.slice(-2);
-  const m = padded.slice(0, -2) || '0';
-  return `${parseInt(m, 10)}:${s}`;
-}
-
-function measureBeatToTime(tapMap: TapMapEntry[] | undefined, targetMeasure: number, targetBeat: number): number | null {
-  if (!tapMap || tapMap.length === 0) return null;
-  let measure = 0;
-  let beat = 0;
-  for (const entry of tapMap) {
-    if (entry.type === 'section' || entry.type === 'measure') {
-      measure++;
-      beat = 1;
-    } else {
-      beat++;
-    }
-    if (measure === targetMeasure && beat === targetBeat) return entry.time;
-    if (measure > targetMeasure) break;
-  }
-  // If exact beat not found, return the start of the target measure
-  measure = 0;
-  for (const entry of tapMap) {
-    if (entry.type === 'section' || entry.type === 'measure') {
-      measure++;
-      if (measure === targetMeasure) return entry.time;
-    }
-    if (measure > targetMeasure) break;
-  }
-  return null;
-}
 
 // A made-up waveform for the placeholder: bar heights in %, the same every load.
 const SKELETON_BARS = Array.from({ length: 64 }, (_, i) =>
@@ -176,12 +132,6 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
     usePanelMinimizeStore.getState().restorePanel('sheet');
     useSheetMusicStore.getState().setFullViewOpen(true);
   };
-  const [editingMeasure, setEditingMeasure] = useState(false);
-  const [editingBeat, setEditingBeat] = useState(false);
-  const [measureEditValue, setMeasureEditValue] = useState('');
-  const [beatEditValue, setBeatEditValue] = useState('');
-  const [editingTime, setEditingTime] = useState(false);
-  const [timeEditValue, setTimeEditValue] = useState('');
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -309,104 +259,8 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
           data-help="Jump to specific section, timestamp, or measure|beat"
           data-help-at="left"
         >
-          <div>
-            {editingTime ? (
-              <input
-                type="text"
-                inputMode="numeric"
-                autoFocus
-                value={formatTimeInput(timeEditValue)}
-                onChange={(e) => setTimeEditValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                onBlur={() => {
-                  setEditingTime(false);
-                  const t = parseTimeDigits(timeEditValue);
-                  if (t !== null && t >= 0 && t <= duration) engine.seek(t);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { setEditingTime(false); const t = parseTimeDigits(timeEditValue); if (t !== null && t >= 0 && t <= duration) engine.seek(t); }
-                  if (e.key === 'Escape') setEditingTime(false);
-                }}
-                aria-label="Jump to time, minutes and seconds"
-                className="w-[5ch] text-sm text-center bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
-              />
-            ) : (
-              <button
-                onClick={() => { setTimeEditValue(''); setEditingTime(true); }}
-                className="hover:text-gray-50 cursor-text"
-                aria-label={`Time ${formatTime(position)}. Type a time to jump there`}
-                title="Type a time to jump there"
-              >{formatTime(position)}</button>
-            )}
-            <span> / {formatTime(duration)}</span>
-          </div>
-          {(() => {
-            const hasTapMap = selectedSong?.tapMap && selectedSong.tapMap.length > 0;
-            if (!hasTapMap) return null;
-            const mb = measureBeatAt(selectedSong?.tapMap, position);
-            const measure = mb?.measure ?? 0;
-            const beat = mb?.beat ?? 0;
-
-            const startMeasureEdit = () => {
-              setMeasureEditValue(String(measure));
-              setEditingMeasure(true);
-            };
-            const commitMeasure = () => {
-              setEditingMeasure(false);
-              const num = parseInt(measureEditValue, 10);
-              if (!isNaN(num) && num > 0) {
-                const t = measureBeatToTime(selectedSong?.tapMap, num, 1);
-                if (t !== null) engine.seek(t);
-              }
-            };
-            const startBeatEdit = () => {
-              setBeatEditValue(String(beat));
-              setEditingBeat(true);
-            };
-            const commitBeat = () => {
-              setEditingBeat(false);
-              const num = parseInt(beatEditValue, 10);
-              if (!isNaN(num) && num > 0) {
-                const t = measureBeatToTime(selectedSong?.tapMap, measure || 1, num);
-                if (t !== null) engine.seek(t);
-              }
-            };
-
-            return (
-              <div className="text-gray-500 flex items-center">
-                {editingMeasure ? (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoFocus
-                    value={measureEditValue}
-                    onChange={(e) => setMeasureEditValue(e.target.value)}
-                    onBlur={commitMeasure}
-                    onKeyDown={(e) => { if (e.key === 'Enter') commitMeasure(); if (e.key === 'Escape') setEditingMeasure(false); }}
-                    aria-label="Jump to measure"
-                    className="w-[3ch] text-sm text-right bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
-                  />
-                ) : (
-                  <button onClick={startMeasureEdit} aria-label={`Measure ${measure}. Type a measure to jump there`} title="Measure" className="inline-block w-[2.5ch] text-right hover:text-gray-300 cursor-text">{measure}</button>
-                )}
-                <span className="text-gray-600 mx-0.5">|</span>
-                {editingBeat ? (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoFocus
-                    value={beatEditValue}
-                    onChange={(e) => setBeatEditValue(e.target.value)}
-                    onBlur={commitBeat}
-                    onKeyDown={(e) => { if (e.key === 'Enter') commitBeat(); if (e.key === 'Escape') setEditingBeat(false); }}
-                    aria-label="Jump to beat"
-                    className="w-[2ch] text-sm bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
-                  />
-                ) : (
-                  <button onClick={startBeatEdit} aria-label={`Beat ${beat}. Type a beat to jump there`} title="Beat" className="inline-block w-[1.5ch] hover:text-gray-300 cursor-text">{beat}</button>
-                )}
-              </div>
-            );
-          })()}
+          <TimeJump />
+          <MeasureBeatJump className="text-gray-500" />
           {(() => {
             const sections = selectedSong?.tapMap?.filter((e) => e.type === 'section');
             if (!sections || sections.length === 0) return null;
@@ -539,102 +393,8 @@ export function TransportBar({ showSliders, onToggleSliders, minimal = false, st
       {/* Mobile: bookmark panel (position, measure/beat, section jump) */}
       {showBookmark && !minimal && (
         <div className="mt-2 md:hidden flex items-center justify-center gap-4" data-help="Jump to specific section, timestamp, or measure|beat">
-          <div className="font-mono text-sm text-gray-300">
-            {editingTime ? (
-              <input
-                type="text"
-                inputMode="numeric"
-                autoFocus
-                value={formatTimeInput(timeEditValue)}
-                onChange={(e) => setTimeEditValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                onBlur={() => {
-                  setEditingTime(false);
-                  const t = parseTimeDigits(timeEditValue);
-                  if (t !== null && t >= 0 && t <= duration) engine.seek(t);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { setEditingTime(false); const t = parseTimeDigits(timeEditValue); if (t !== null && t >= 0 && t <= duration) engine.seek(t); }
-                  if (e.key === 'Escape') setEditingTime(false);
-                }}
-                aria-label="Jump to time, minutes and seconds"
-                className="w-[5ch] text-sm text-center bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
-              />
-            ) : (
-              <button
-                onClick={() => { setTimeEditValue(''); setEditingTime(true); }}
-                className="hover:text-gray-50 cursor-text"
-                aria-label={`Time ${formatTime(position)}. Type a time to jump there`}
-                title="Type a time to jump there"
-              >{formatTime(position)}</button>
-            )}
-            <span> / {formatTime(duration)}</span>
-          </div>
-          {(() => {
-            const hasTapMap = selectedSong?.tapMap && selectedSong.tapMap.length > 0;
-            if (!hasTapMap) return null;
-            const mb = measureBeatAt(selectedSong?.tapMap, position);
-            const measure = mb?.measure ?? 0;
-            const beat = mb?.beat ?? 0;
-            const startMeasureEdit = () => {
-              setMeasureEditValue(String(measure));
-              setEditingMeasure(true);
-            };
-            const commitMeasure = () => {
-              setEditingMeasure(false);
-              const num = parseInt(measureEditValue, 10);
-              if (!isNaN(num) && num > 0) {
-                const t = measureBeatToTime(selectedSong?.tapMap, num, 1);
-                if (t !== null) engine.seek(t);
-              }
-            };
-            const startBeatEdit = () => {
-              setBeatEditValue(String(beat));
-              setEditingBeat(true);
-            };
-            const commitBeat = () => {
-              setEditingBeat(false);
-              const num = parseInt(beatEditValue, 10);
-              if (!isNaN(num) && num > 0) {
-                const t = measureBeatToTime(selectedSong?.tapMap, measure || 1, num);
-                if (t !== null) engine.seek(t);
-              }
-            };
-            return (
-              <div className="font-mono text-sm text-gray-500 flex items-center">
-                {editingMeasure ? (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoFocus
-                    value={measureEditValue}
-                    onChange={(e) => setMeasureEditValue(e.target.value)}
-                    onBlur={commitMeasure}
-                    onKeyDown={(e) => { if (e.key === 'Enter') commitMeasure(); if (e.key === 'Escape') setEditingMeasure(false); }}
-                    aria-label="Jump to measure"
-                    className="w-[3ch] text-sm text-right bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
-                  />
-                ) : (
-                  <button onClick={startMeasureEdit} aria-label={`Measure ${measure}. Type a measure to jump there`} title="Measure" className="inline-block w-[2.5ch] text-right hover:text-gray-300 cursor-text">{measure}</button>
-                )}
-                <span className="text-gray-600 mx-0.5">|</span>
-                {editingBeat ? (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoFocus
-                    value={beatEditValue}
-                    onChange={(e) => setBeatEditValue(e.target.value)}
-                    onBlur={commitBeat}
-                    onKeyDown={(e) => { if (e.key === 'Enter') commitBeat(); if (e.key === 'Escape') setEditingBeat(false); }}
-                    aria-label="Jump to beat"
-                    className="w-[2ch] text-sm bg-gray-700 border border-gray-500 rounded px-0.5 outline-none focus:border-blue-500 text-gray-300 font-mono"
-                  />
-                ) : (
-                  <button onClick={startBeatEdit} aria-label={`Beat ${beat}. Type a beat to jump there`} title="Beat" className="inline-block w-[1.5ch] hover:text-gray-300 cursor-text">{beat}</button>
-                )}
-              </div>
-            );
-          })()}
+          <TimeJump className="font-mono text-sm text-gray-300" />
+          <MeasureBeatJump className="font-mono text-sm text-gray-500" />
           {(() => {
             const sections = selectedSong?.tapMap?.filter((e) => e.type === 'section');
             if (!sections || sections.length === 0) return null;

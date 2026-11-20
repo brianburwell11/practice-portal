@@ -33,6 +33,7 @@ import { usePanelMinimizeStore } from './store/panelMinimizeStore';
 import { useLyricsStore } from './store/lyricsStore';
 import { useChordsStore } from './store/chordsStore';
 import { useChordsEditorStore } from './store/chordsEditorStore';
+import { useSheetMusicStore } from './store/sheetMusicStore';
 import { safeHref } from './utils/url';
 import { chordsDataSchema } from './config/schema';
 import { phonePanelOpen, rememberPhonePanel } from './utils/phonePanels';
@@ -110,6 +111,8 @@ export default function App() {
   // The on-page editors hide the pickers, the ribbon and most transport
   // buttons so a stray tap can't switch songs mid-session.
   const editorFocus = markerEditorOpen || lyricsEditorOpen || chordsEditorOpen;
+  // Full screen sheet music floats the notes over the score itself.
+  const sheetFullViewOpen = useSheetMusicStore((s) => s.fullViewOpen);
 
   // The editors need the room: videos minimize while one is open, and the
   // ones minimized for it come back when it closes. Videos already
@@ -437,7 +440,7 @@ export default function App() {
             transport too, so chords, lyrics and the mixer all have room. */}
         <div ref={panelColumnRef} className={phonePageScroll ? 'flex flex-col shrink-0' : 'flex-1 min-h-0 flex flex-col overflow-y-auto'}>
           {/* Timestamp notes — sticky-note pop-ups anchored to playhead-windowed timestamps */}
-          {!editorFocus && !showEditBandModal && <NotesLayer />}
+          {!editorFocus && !showEditBandModal && !sheetFullViewOpen && <NotesLayer />}
 
           {/* Chord lane: below notes, above lyrics. On desktop the current
               chord starts on the lyric reading point. Under the chords
