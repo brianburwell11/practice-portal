@@ -21,6 +21,8 @@ declare module 'muse-encore' {
     nextMeasure(): MuseEncoreMeasure | null;
     /** Start position; `.ticks()` is the raw tick. */
     tick(): { ticks(): number };
+    /** Length; `.ticks()` is the raw tick count. */
+    ticks(): { ticks(): number };
     /** 0-based measure number. */
     no(): number;
   }

@@ -201,11 +201,15 @@ export class ScoreEngine {
 
   private bounds: { top: number; bottom: number } | null = null;
   private beatStarts: (number | null)[] | null = null;
+  /** Each written measure's start tick and length (raw ticks); layout doesn't change them. */
+  private measureTicks: { tick: number; len: number }[] | null = null;
+  private beatXsCache = new Map<string, (number | null)[]>();
 
   private invalidate(): void {
     this.rects = null;
     this.bounds = null;
     this.beatStarts = null;
+    this.beatXsCache.clear();
   }
 
   /**
@@ -311,14 +315,40 @@ export class ScoreEngine {
   private buildMeasureGeometry(): void {
     const rects: (MeasureRect | null)[] = [];
     const starts: (number | null)[] = [];
+    const ticks: { tick: number; len: number }[] = [];
     for (let m = this.score.firstMeasure(); m; m = m.nextMeasure()) {
       const tick = m.tick().ticks();
+      ticks.push({ tick, len: m.ticks().ticks() });
       rects.push(this.me.playalongMeasureBounds(this.score, tick));
       starts.push(this.me.playbackCursorBounds(this.score, tick)?.x ?? null);
     }
     const split = splitMultiMeasureRests(rects, starts);
     this.rects = split.rects;
     this.beatStarts = split.beats;
+    this.measureTicks = ticks;
+  }
+
+  /**
+   * Where each of `beats` even parts of written measure `index` starts (x in
+   * inches on its page): MuseScore's playback cursor at that tick, so a beat
+   * lines up with its note. Null where it lands off the measure's page or
+   * MuseScore has nothing there. Cached per layout.
+   */
+  beatXs(index: number, beats: number): (number | null)[] {
+    if (!this.rects) this.buildMeasureGeometry();
+    const m = this.measureTicks?.[index];
+    const rect = this.rects?.[index];
+    if (!m || !rect || beats < 1) return [];
+    const key = `${index}:${beats}`;
+    const cached = this.beatXsCache.get(key);
+    if (cached) return cached;
+    const xs: (number | null)[] = [];
+    for (let k = 0; k < beats; k++) {
+      const r = this.me.playbackCursorBounds(this.score, m.tick + Math.round((k * m.len) / beats));
+      xs.push(r && r.page === rect.page ? r.x : null);
+    }
+    this.beatXsCache.set(key, xs);
+    return xs;
   }
 
   /**

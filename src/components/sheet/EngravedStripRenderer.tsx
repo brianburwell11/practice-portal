@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { parseMusicXML, unfold, type MusicXMLStructure, type UnfoldedStep } from '../../audio/unfoldRepeats';
 import { scoreCanvasDpr } from './canvasScale';
+import { LOOP_SHADE, spanEdges, type LoopSpan } from './loopSpans';
 import { fetchSongScore, preloadScoreEngine, ScoreEngine, scorePartIds, type SongScoreFiles } from './page/museEncoreEngine';
 
 /** Canvas tiles: the continuous line is far wider than one canvas may be. */
@@ -59,6 +60,8 @@ interface Props {
   onUnfoldedOrder?: (steps: UnfoldedStep[]) => void;
   visiblePartIds?: Set<string>;
   repeatAfterDcDs?: boolean;
+  /** The A/B loop's measures, shaded gold. */
+  loopSpans?: readonly LoopSpan[];
 }
 
 interface Layout {
@@ -68,6 +71,8 @@ interface Layout {
   top: number;
   widthPx: number;
   heightPx: number;
+  /** Measure starts in scroll-host content px, plus the end of the last one. */
+  xs: number[];
 }
 
 /**
@@ -95,6 +100,7 @@ export function EngravedStripRenderer({
   onUnfoldedOrder,
   visiblePartIds,
   repeatAfterDcDs = false,
+  loopSpans,
 }: Props) {
   const scrollHostRef = useRef<HTMLDivElement | null>(null);
   const tilesHostRef = useRef<HTMLDivElement | null>(null);
@@ -223,7 +229,7 @@ export function EngravedStripRenderer({
     const heightPx = Math.ceil((bounds.bottom - bounds.top) * scale);
     cb.current.onPanel?.(heightPx > 0 ? makePanel(engine, scale, dpr, bounds.top, page.height, heightPx, leadingPadPx, rects[0]?.x ?? 0) : null);
 
-    setLayout({ scale, dpr, top: bounds.top, widthPx: Math.ceil(page.width * scale), heightPx });
+    setLayout({ scale, dpr, top: bounds.top, widthPx: Math.ceil(page.width * scale), heightPx, xs });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, zoom, visibleKey, leadingPadPx]);
 
@@ -283,6 +289,21 @@ export function EngravedStripRenderer({
     };
   }, [engine, layout, leadingPadPx, hostWidth]);
 
+  // The A/B loop, shaded measure by measure up to its beats. It sits in the
+  // scrolling content, so it moves with the music.
+  const loopRects = useMemo(() => {
+    if (!engine || !layout || !loopSpans?.length) return [];
+    return loopSpans.flatMap((span) => {
+      const left = layout.xs[span.written];
+      const right = layout.xs[span.written + 1];
+      if (left == null || right == null || right <= left) return [];
+      const beatXs = engine.beatXs(span.written, span.beats).map((x) => (x == null ? null : leadingPadPx + x * layout.scale));
+      const { x0, x1 } = spanEdges(span, left, left, right, beatXs);
+      return [{ key: span.written, left: x0, width: x1 - x0, isStart: span.isStart, isEnd: span.isEnd }];
+    });
+  }, [engine, layout, loopSpans, leadingPadPx]);
+  const shade = LOOP_SHADE.light;
+
   return (
     <div
       ref={scrollHostRef}
@@ -310,6 +331,25 @@ export function EngravedStripRenderer({
       {/* Trailing pad: at least the view's width, so the last measure can
           still scroll to a near-left focus point. */}
       <div style={{ display: 'inline-block', width: Math.max(800, hostWidth), height: 1, verticalAlign: 'top' }} aria-hidden />
+      {layout && loopRects.map((r) => (
+        <div
+          key={r.key}
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: r.left,
+            width: r.width,
+            height: layout.heightPx,
+            background: shade.fill,
+            mixBlendMode: shade.blend,
+            borderLeft: r.isStart ? `2px solid ${shade.edge}` : undefined,
+            borderRight: r.isEnd ? `2px solid ${shade.edge}` : undefined,
+            boxSizing: 'border-box',
+            pointerEvents: 'none',
+          }}
+        />
+      ))}
       {status !== 'ready' && (
         <div
           style={{

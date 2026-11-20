@@ -5,6 +5,8 @@ import { useSheetMusicStore } from '../../../store/sheetMusicStore';
 import { useTransportStore } from '../../../store/transportStore';
 import { firstPlayedIndex, PAST_END, writtenOf } from '../scorePosition';
 import { useScorePosition } from '../useScorePosition';
+import { useLoopSpans } from '../useLoopSpans';
+import { LOOP_SHADE, spanEdges } from '../loopSpans';
 import { scoreCanvasDpr } from '../canvasScale';
 import type { PartInfo } from '../EngravedStripRenderer';
 import { fetchSongScore, preloadScoreEngine, ScoreEngine, scorePartIds, type MeasureRect, type SongScoreFiles } from './museEncoreEngine';
@@ -123,6 +125,7 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
 
   const writtenCount = geometry?.measures.length ?? 0;
   const { measureTimes, scorePosition } = useScorePosition(unfolded, writtenCount);
+  const spans = useLoopSpans(unfolded, writtenCount);
 
   // Track the view's width (debounced: a reflow re-lays out the score).
   useEffect(() => {
@@ -326,6 +329,24 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
     const right = box.left + box.width;
     return { box, right, lineX: box.beat + scorePosition.fraction * (right - box.beat) };
   }, [geometry, scorePosition]);
+
+  // The A/B loop, shaded measure by measure up to its beats.
+  const loopRects = useMemo(() => {
+    if (!geometry || !engine || spans.length === 0) return [];
+    const rects = engine.measureRects();
+    const out: { key: number; left: number; top: number; width: number; height: number; isStart: boolean; isEnd: boolean }[] = [];
+    for (const span of spans) {
+      const box = geometry.measures[span.written];
+      const rect = rects[span.written];
+      const page = rect ? geometry.pages[rect.page] : undefined;
+      if (!box || !page) continue;
+      const xs = engine.beatXs(span.written, span.beats).map((x) => (x == null ? null : page.left + x * geometry.scale));
+      const { x0, x1 } = spanEdges(span, box.left, box.beat, box.left + box.width, xs);
+      out.push({ key: span.written, left: x0, top: box.top, width: x1 - x0, height: box.height, isStart: span.isStart, isEnd: span.isEnd });
+    }
+    return out;
+  }, [geometry, engine, spans]);
+  const shade = invert ? LOOP_SHADE.dark : LOOP_SHADE.light;
 
   // Follow: keep the current system in view, near the top, and near the end
   // of a measure make sure the next one played (even a repeat or jump) is too.
@@ -533,6 +554,22 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
               </div>
             ))}
           </div>
+          {loopRects.map((r) => (
+            <div
+              key={r.key}
+              className="pointer-events-none absolute"
+              style={{
+                left: r.left,
+                top: r.top,
+                width: r.width,
+                height: r.height,
+                background: shade.fill,
+                mixBlendMode: shade.blend,
+                borderLeft: r.isStart ? `2px solid ${shade.edge}` : undefined,
+                borderRight: r.isEnd ? `2px solid ${shade.edge}` : undefined,
+              }}
+            />
+          ))}
           {cursor && (
             <>
               <div

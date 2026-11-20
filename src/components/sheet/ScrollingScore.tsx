@@ -15,6 +15,7 @@ import {
 import type { UnfoldedStep } from '../../audio/unfoldRepeats';
 import { firstPlayedIndex, PAST_END } from './scorePosition';
 import { useScorePosition } from './useScorePosition';
+import { useLoopSpans } from './useLoopSpans';
 import type { ContinuousPanel, PartInfo } from './EngravedStripRenderer';
 import { placePanel, type PanelBox } from './continuousPanelPlacement';
 import { PartsMenu } from './PartsMenu';
@@ -80,6 +81,7 @@ export function ScrollingScore() {
    *  in that case callers fall back to `srcIdx = u`. */
   const [unfolded, setUnfolded] = useState<UnfoldedStep[]>([]);
   const { measureTimes, scorePosition } = useScorePosition(unfolded, Math.max(0, measureXs.length - 1));
+  const loopSpans = useLoopSpans(unfolded, Math.max(0, measureXs.length - 1));
   const [scrollHost, setScrollHost] = useState<HTMLDivElement | null>(null);
   const [cursorPx, setCursorPx] = useState<number | null>(0);
   const [bbox, setBbox] = useState<{ leftPx: number; widthPx: number } | null>(null);
@@ -867,6 +869,7 @@ export function ScrollingScore() {
               onUnfoldedOrder={handleUnfoldedOrder}
               visiblePartIds={visiblePartIds}
               repeatAfterDcDs={song?.repeatAfterDcDs ?? false}
+              loopSpans={loopSpans}
             />
           </Suspense>
         )}
