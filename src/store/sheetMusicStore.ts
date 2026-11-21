@@ -20,6 +20,10 @@ interface Persisted {
   pageZoom: number;
   /** Page view: white-on-dark pages. */
   pageInvert: boolean;
+  /** Beat map editor (desktop): show the score strip above the section list. */
+  editorScoreVisible: boolean;
+  /** Beat map editor: the strip's zoom, smaller than the main strip's so the editor keeps its room. */
+  editorScoreZoom: number;
 }
 
 interface SheetMusicState extends Persisted {
@@ -32,6 +36,8 @@ interface SheetMusicState extends Persisted {
   setShowPlayhead: (v: boolean) => void;
   setPageZoom: (z: number) => void;
   setPageInvert: (v: boolean) => void;
+  setEditorScoreVisible: (v: boolean) => void;
+  setEditorScoreZoom: (z: number) => void;
 }
 
 export const PAGE_ZOOM_MIN = 0.5;
@@ -44,6 +50,8 @@ const DEFAULTS: Persisted = {
   showPlayhead: true,
   pageZoom: 1,
   pageInvert: false,
+  editorScoreVisible: false,
+  editorScoreZoom: 0.7,
 };
 
 function loadInitial(): Persisted {
@@ -75,6 +83,8 @@ export const useSheetMusicStore = create<SheetMusicState>((set, get) => ({
   setShowPlayhead: (v) => { set({ showPlayhead: v }); persist(getPersisted(get())); },
   setPageZoom: (z) => { set({ pageZoom: Math.min(PAGE_ZOOM_MAX, Math.max(PAGE_ZOOM_MIN, z)) }); persist(getPersisted(get())); },
   setPageInvert: (v) => { set({ pageInvert: v }); persist(getPersisted(get())); },
+  setEditorScoreVisible: (v) => { set({ editorScoreVisible: v }); persist(getPersisted(get())); },
+  setEditorScoreZoom: (z) => { set({ editorScoreZoom: z }); persist(getPersisted(get())); },
 }));
 
 function getPersisted(s: SheetMusicState): Persisted {
@@ -85,5 +95,7 @@ function getPersisted(s: SheetMusicState): Persisted {
     showPlayhead: s.showPlayhead,
     pageZoom: s.pageZoom,
     pageInvert: s.pageInvert,
+    editorScoreVisible: s.editorScoreVisible,
+    editorScoreZoom: s.editorScoreZoom,
   };
 }

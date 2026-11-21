@@ -18,6 +18,10 @@ import type { TapMapEntry } from '../../audio/types';
 import { useTransportStore } from '../../store/transportStore';
 import { measureBeatAt } from '../../audio/tempoUtils';
 import { saveEdit } from '../../offline/sync';
+import { ScrollingScore } from '../sheet/ScrollingScore';
+import { SheetMusicIcon } from '../sheet/SheetMusicIcon';
+import { songScoreFiles } from '../sheet/scoreFiles';
+import { useSheetMusicStore } from '../../store/sheetMusicStore';
 
 export function MarkerEditorModal() {
   const {
@@ -38,6 +42,14 @@ export function MarkerEditorModal() {
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const coarse = useMediaQuery('(pointer: coarse)');
   const position = useTransportStore((s) => s.position);
+  // Desktop: the song's sheet music can sit above the section list, its
+  // cursor following the measures as they're tapped.
+  const wide = useMediaQuery('(min-width: 768px)');
+  const showScorePref = useSheetMusicStore((s) => s.editorScoreVisible);
+  const setShowScorePref = useSheetMusicStore((s) => s.setEditorScoreVisible);
+  const hasScore = !!songScoreFiles(currentBand?.id, selectedSong)?.mxlUrl;
+  const canShowScore = hasScore && wide && !coarse && !onComplete;
+  const showScore = canShowScore && showScorePref;
   // Bumped when S/M/B fire from the keyboard so the matching pad lights up.
   const [pulses, setPulses] = useState({ section: 0, measure: 0, beat: 0 });
 
@@ -338,6 +350,17 @@ export function MarkerEditorModal() {
           >
             Calibrate Audio Latency
           </button>
+          {canShowScore && (
+            <button
+              className={`${btn} hidden md:inline-flex items-center gap-1.5 ${showScore ? 'ring-1 ring-white/50 text-white' : ''}`}
+              onClick={() => setShowScorePref(!showScorePref)}
+              aria-pressed={showScore}
+              title={showScore ? 'Hide the sheet music' : 'Show the sheet music while you tap'}
+            >
+              <SheetMusicIcon className="w-4 h-4" />
+              Sheet Music
+            </button>
+          )}
           <div ref={moreMenuRef} className="relative md:hidden">
             <button className={btn} onClick={() => setMoreOpen((v) => !v)}>
               More ▾
@@ -404,6 +427,12 @@ export function MarkerEditorModal() {
           between the toolbar and the footer. Internal scroll kicks in
           when rows exceed that space; `min-h-0` keeps the flex child
           from growing past its parent and pushing the page taller. */}
+      {showScore && (
+        <div className="mt-1">
+          <ScrollingScore inEditor />
+        </div>
+      )}
+
       <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto mt-3 max-w-2xl w-full mx-auto rounded-lg border border-gray-700">
         <SectionList />
       </div>

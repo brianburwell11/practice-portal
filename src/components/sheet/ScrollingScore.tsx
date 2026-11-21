@@ -5,6 +5,7 @@ import { useSongStore } from '../../store/songStore';
 import { useBandStore } from '../../store/bandStore';
 import { useSheetMusicStore } from '../../store/sheetMusicStore';
 import { usePanelMinimizeStore } from '../../store/panelMinimizeStore';
+import { useMarkerEditorStore } from '../../store/markerEditorStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { songScoreFiles } from './scoreFiles';
@@ -60,17 +61,28 @@ const LEADING_PAD_PX = 180;
  * transport position via a Zustand selector (no RAF loop) and turns it into
  * a measure and a fraction through it; scroll / bbox state follows in a
  * useEffect on that.
+ *
+ * `inEditor`: shown inside the beat map editor (desktop). The cursor follows
+ * the editor's draft beat map, so each measure tapped moves it on; the strip
+ * uses its own, smaller zoom and a capped height, and has no full screen.
  */
-export function ScrollingScore() {
+export function ScrollingScore({ inEditor = false }: { inEditor?: boolean } = {}) {
   const song = useSongStore((s) => s.selectedSong);
   const currentBand = useBandStore((s) => s.currentBand);
   const playing = useTransportStore((s) => s.playing);
   const engine = useAudioEngine();
   const trackingMode = useSheetMusicStore((s) => s.trackingMode);
-  const scoreZoom = useSheetMusicStore((s) => s.scoreZoom);
+  const mainZoom = useSheetMusicStore((s) => s.scoreZoom);
+  const editorZoom = useSheetMusicStore((s) => s.editorScoreZoom);
+  const scoreZoom = inEditor ? editorZoom : mainZoom;
   const showPlayhead = useSheetMusicStore((s) => s.showPlayhead);
   const setTrackingMode = useSheetMusicStore((s) => s.setTrackingMode);
-  const setScoreZoom = useSheetMusicStore((s) => s.setScoreZoom);
+  const setMainZoom = useSheetMusicStore((s) => s.setScoreZoom);
+  const setEditorZoom = useSheetMusicStore((s) => s.setEditorScoreZoom);
+  const setScoreZoom = inEditor ? setEditorZoom : setMainZoom;
+  // In the beat map editor the draft beat map drives the cursor.
+  const draftTapMap = useMarkerEditorStore((s) => s.tapMap);
+  const tapMapOverride = inEditor ? draftTapMap : undefined;
   const setShowPlayhead = useSheetMusicStore((s) => s.setShowPlayhead);
 
   const [measureXs, setMeasureXs] = useState<number[]>([]);
@@ -80,8 +92,8 @@ export function ScrollingScore() {
    *  Empty array when the score has no repeats (or the parser failed) —
    *  in that case callers fall back to `srcIdx = u`. */
   const [unfolded, setUnfolded] = useState<UnfoldedStep[]>([]);
-  const { measureTimes, scorePosition } = useScorePosition(unfolded, Math.max(0, measureXs.length - 1));
-  const loopSpans = useLoopSpans(unfolded, Math.max(0, measureXs.length - 1));
+  const { measureTimes, scorePosition } = useScorePosition(unfolded, Math.max(0, measureXs.length - 1), tapMapOverride);
+  const loopSpans = useLoopSpans(unfolded, Math.max(0, measureXs.length - 1), tapMapOverride);
   const [scrollHost, setScrollHost] = useState<HTMLDivElement | null>(null);
   const [cursorPx, setCursorPx] = useState<number | null>(0);
   const [bbox, setBbox] = useState<{ leftPx: number; widthPx: number } | null>(null);
@@ -137,7 +149,9 @@ export function ScrollingScore() {
     requestAnimationFrame(() => expandButtonRef.current?.focus());
   }, [setFullViewOpen]);
   // F opens or closes it (not while typing, and not with modifier keys).
+  // Not in the beat map editor, which has no full screen.
   useEffect(() => {
+    if (inEditor) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'f' && e.key !== 'F') return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -150,7 +164,7 @@ export function ScrollingScore() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeFullView, setFullViewOpen]);
+  }, [closeFullView, setFullViewOpen, inEditor]);
   /** Gear-panel open state + click-outside container ref. */
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const settingsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -642,7 +656,7 @@ export function ScrollingScore() {
 
   if (!sheetMusicUrl) return null;
 
-  const fullView = fullViewOpen && scoreFiles && song && (
+  const fullView = !inEditor && fullViewOpen && scoreFiles && song && (
     <Suspense fallback={null}>
       <ScoreFullView
         title={song.title}
@@ -738,15 +752,15 @@ export function ScrollingScore() {
     <>
     {/* On wider screens the score sits on the band's color as a sheet,
         inset with rounded corners, not a white band cut edge to edge. */}
-    <div className="relative border-b border-gray-800 shrink-0 md:border-0 md:mx-3 md:mt-1 md:mb-3 md:rounded-lg md:overflow-hidden md:shadow-[0_2px_10px_rgb(0_0_0/0.25)]">
+    <div className={`relative border-b border-gray-800 shrink-0 md:border-0 md:mx-3 md:rounded-lg md:shadow-[0_2px_10px_rgb(0_0_0/0.25)] ${inEditor ? 'md:mt-0 md:mb-0' : 'md:mt-1 md:mb-3'}`}>
       {/* Gear + parts triggers — absolutely positioned in the top-right so
           the score renders flush with the top of the panel. Both triggers
           live in the same row-flex wrapper, anchored together. The
           wrapper itself sits above the score (z-index) and does NOT
           scroll with it — it's a sibling of the scroll host, not a
           child. */}
-        <div className="absolute top-1 right-1 z-20 flex items-center gap-1 text-xs">
-          {scoreFiles && song && (
+        <div className="absolute top-1 right-1 z-40 flex items-center gap-1 text-xs">
+          {scoreFiles && song && !inEditor && (
             <button
               ref={expandButtonRef}
               onClick={() => setFullViewOpen(true)}
@@ -844,16 +858,23 @@ export function ScrollingScore() {
             )}
           </div>
           <button
-            onClick={() => usePanelMinimizeStore.getState().minimizePanel('sheet')}
+            onClick={() => inEditor
+              ? useSheetMusicStore.getState().setEditorScoreVisible(false)
+              : usePanelMinimizeStore.getState().minimizePanel('sheet')}
             className="flex items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
-            title="Minimize sheet music"
-            aria-label="Minimize sheet music"
+            title={inEditor ? 'Hide sheet music' : 'Minimize sheet music'}
+            aria-label={inEditor ? 'Hide sheet music' : 'Minimize sheet music'}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="5" y1="19" x2="19" y2="19" />
             </svg>
           </button>
         </div>
+      {/* The rounded corners clip here, not on the wrapper above, so the
+          settings and parts menus can drop below a short score. In the
+          editor a tall score (many staves) scrolls inside a capped height
+          instead of pushing the section list and tap pads away. */}
+      <div className={`md:rounded-lg md:overflow-hidden ${inEditor ? 'max-h-[32vh] !overflow-y-auto overscroll-contain' : ''}`}>
       <div style={{ position: 'relative' }}>
         {scoreFiles && (
           <Suspense fallback={<div style={{ minHeight: minRenderHeight, background: '#fff', borderRadius: 6 }} />}>
@@ -885,6 +906,7 @@ export function ScrollingScore() {
         }}>
           {overlay}
         </div>
+      </div>
       </div>
     </div>
     {fullView}
