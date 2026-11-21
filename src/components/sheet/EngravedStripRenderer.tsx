@@ -62,6 +62,8 @@ interface Props {
   repeatAfterDcDs?: boolean;
   /** The A/B loop's measures, shaded gold. */
   loopSpans?: readonly LoopSpan[];
+  /** Where a written measure's `beats` even parts start, in scroll-host content px (null where unknown). */
+  onBeatXs?: (beatXs: ((written: number, beats: number) => (number | null)[]) | null) => void;
 }
 
 interface Layout {
@@ -98,6 +100,7 @@ export function EngravedStripRenderer({
   onPanel,
   onParts,
   onUnfoldedOrder,
+  onBeatXs,
   visiblePartIds,
   repeatAfterDcDs = false,
   loopSpans,
@@ -114,9 +117,9 @@ export function EngravedStripRenderer({
   const [hostWidth, setHostWidth] = useState(0);
 
   // Keep the latest callbacks without re-running effects when they change.
-  const cb = useRef({ onScrollHost, onMeasureXs, onPanel, onParts, onUnfoldedOrder });
+  const cb = useRef({ onScrollHost, onMeasureXs, onPanel, onParts, onUnfoldedOrder, onBeatXs });
   useLayoutEffect(() => {
-    cb.current = { onScrollHost, onMeasureXs, onPanel, onParts, onUnfoldedOrder };
+    cb.current = { onScrollHost, onMeasureXs, onPanel, onParts, onUnfoldedOrder, onBeatXs };
   });
 
   useLayoutEffect(() => {
@@ -225,6 +228,7 @@ export function EngravedStripRenderer({
     xs.push(leadingPadPx + prev * scale);
 
     cb.current.onMeasureXs?.(xs);
+    cb.current.onBeatXs?.((w, n) => engine.beatXs(w, n).map((x) => (x == null ? null : leadingPadPx + x * scale)));
 
     const heightPx = Math.ceil((bounds.bottom - bounds.top) * scale);
     cb.current.onPanel?.(heightPx > 0 ? makePanel(engine, scale, dpr, bounds.top, page.height, heightPx, leadingPadPx, rects[0]?.x ?? 0) : null);

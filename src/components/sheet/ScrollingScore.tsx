@@ -14,7 +14,7 @@ import {
   saveSheetMusicSongState,
 } from '../../utils/sheetMusicSongStorage';
 import type { UnfoldedStep } from '../../audio/unfoldRepeats';
-import { firstPlayedIndex, PAST_END } from './scorePosition';
+import { beatAtX, beatLoop, beatPointAt, beatStart, firstPlayedIndex, PAST_END, playedNear, type BeatPoint } from './scorePosition';
 import { useScorePosition } from './useScorePosition';
 import { useLoopSpans } from './useLoopSpans';
 import type { ContinuousPanel, PartInfo } from './EngravedStripRenderer';
@@ -92,7 +92,7 @@ export function ScrollingScore({ inEditor = false }: { inEditor?: boolean } = {}
    *  Empty array when the score has no repeats (or the parser failed) —
    *  in that case callers fall back to `srcIdx = u`. */
   const [unfolded, setUnfolded] = useState<UnfoldedStep[]>([]);
-  const { measureTimes, scorePosition } = useScorePosition(unfolded, Math.max(0, measureXs.length - 1), tapMapOverride);
+  const { measureTimes, beatTimes, scorePosition } = useScorePosition(unfolded, Math.max(0, measureXs.length - 1), tapMapOverride);
   const loopSpans = useLoopSpans(unfolded, Math.max(0, measureXs.length - 1), tapMapOverride);
   const [scrollHost, setScrollHost] = useState<HTMLDivElement | null>(null);
   const [cursorPx, setCursorPx] = useState<number | null>(0);
@@ -210,6 +210,11 @@ export function ScrollingScore({ inEditor = false }: { inEditor?: boolean } = {}
   const pointerDownXRef = useRef<number | null>(null);
   const draggingRef = useRef(false);
   const suppressClickRef = useRef(false);
+  /** The beat last clicked: the in point a shift-click loops from. */
+  const loopAnchorRef = useRef<BeatPoint | null>(null);
+  /** Where a measure's beats sit on the strip, from the renderer. */
+  const beatXsRef = useRef<((written: number, beats: number) => (number | null)[]) | null>(null);
+  const handleBeatXs = useCallback((fn: ((written: number, beats: number) => (number | null)[]) | null) => { beatXsRef.current = fn; }, []);
 
   // The song's score files (bare filenames in its own folder only, so a song
   // config can't point the player at another host). The original MuseScore
@@ -538,6 +543,8 @@ export function ScrollingScore({ inEditor = false }: { inEditor?: boolean } = {}
   // and `engine` without needing to re-subscribe on every render.
   const measureXsRef = useRef(measureXs);
   const measureTimesRef = useRef(measureTimes);
+  const beatTimesRef = useRef(beatTimes);
+  useEffect(() => { beatTimesRef.current = beatTimes; }, [beatTimes]);
   const unfoldedRef = useRef(unfolded);
   const trackingModeRef = useRef(trackingMode);
   const engineRef = useRef(engine);
@@ -631,21 +638,46 @@ export function ScrollingScore({ inEditor = false }: { inEditor?: boolean } = {}
       const hostRect = scrollHost.getBoundingClientRect();
       const contentX = (e.clientX - hostRect.left) + scrollHost.scrollLeft;
       const writtenIdx = findMeasureAtX(contentX, xs);
-      // `findMeasureAtX` returns a WRITTEN measure index. `times` is
-      // keyed in PLAYED order (one entry per audible downbeat), so resolve
-      // the click to the first played occurrence of that written measure;
-      // otherwise clicking m.9 on a score with repeats seeks to the 9th
-      // *played* measure, which is usually not m.9 at all.
-      const unfoldedIdx = firstPlayedIndex(writtenIdx, uf);
-      const mIdx = Math.max(0, Math.min(unfoldedIdx, times.length - 1));
-      engineRef.current?.seek(times[mIdx]);
+      const eng = engineRef.current;
+      const bt = beatTimesRef.current;
+      if (!eng || bt.length === 0) return;
+      // `findMeasureAtX` returns a WRITTEN measure index; the tapMap is keyed
+      // in PLAYED order, so resolve it to a played occurrence: the first one
+      // for a click (otherwise clicking m.9 on a score with repeats seeks to
+      // the 9th *played* measure), the one nearest the in point for a
+      // shift-click.
+      const desktop = window.matchMedia('(pointer: fine)').matches;
+      const looping = e.shiftKey && desktop;
+      const anchor = looping ? (loopAnchorRef.current ?? beatPointAt(eng.clock.currentTime, bt)) : null;
+      const played = Math.max(0, Math.min(
+        anchor ? playedNear(writtenIdx, anchor.played, uf) : firstPlayedIndex(writtenIdx, uf),
+        bt.length - 1,
+      ));
+      // Desktop: down to the tapped beat under the pointer. Touch keeps
+      // jumping to the measure's downbeat.
+      const beatXs = beatXsRef.current;
+      const beat = desktop && beatXs ? beatAtX(contentX, beatXs(writtenIdx, bt[played].length)) : 0;
+      const point = { played, beat };
+      if (anchor) {
+        // Loop from the last clicked beat (or the playhead's) through this one.
+        const loop = beatLoop(anchor, point, bt, eng.clock.duration);
+        if (loop) eng.setLoop(loop.a, loop.b);
+        return;
+      }
+      loopAnchorRef.current = point;
+      const t = beatStart(point, bt);
+      if (t !== null) eng.seek(t);
     };
     scrollHost.addEventListener('pointerdown', onPointerDown);
     scrollHost.addEventListener('pointermove', onPointerMove);
     scrollHost.addEventListener('pointerup', onPointerUp);
     scrollHost.addEventListener('pointercancel', onPointerUp);
     scrollHost.addEventListener('click', onClick);
+    // A shift-click (loop out point) shouldn't also extend a text selection.
+    const onMouseDown = (e: MouseEvent) => { if (e.shiftKey) e.preventDefault(); };
+    scrollHost.addEventListener('mousedown', onMouseDown);
     return () => {
+      scrollHost.removeEventListener('mousedown', onMouseDown);
       scrollHost.removeEventListener('pointerdown', onPointerDown);
       scrollHost.removeEventListener('pointermove', onPointerMove);
       scrollHost.removeEventListener('pointerup', onPointerUp);
@@ -888,6 +920,7 @@ export function ScrollingScore({ inEditor = false }: { inEditor?: boolean } = {}
               onPanel={setPanel}
               onParts={handleParts}
               onUnfoldedOrder={handleUnfoldedOrder}
+              onBeatXs={handleBeatXs}
               visiblePartIds={visiblePartIds}
               repeatAfterDcDs={song?.repeatAfterDcDs ?? false}
               loopSpans={loopSpans}

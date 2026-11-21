@@ -3,7 +3,7 @@ import { parseMusicXML, unfold, type MusicXMLStructure, type UnfoldedStep } from
 import { useAudioEngine } from '../../../hooks/useAudioEngine';
 import { useSheetMusicStore } from '../../../store/sheetMusicStore';
 import { useTransportStore } from '../../../store/transportStore';
-import { firstPlayedIndex, PAST_END, writtenOf } from '../scorePosition';
+import { beatAtX, beatLoop, beatPointAt, beatStart, firstPlayedIndex, PAST_END, playedNear, writtenOf, type BeatPoint } from '../scorePosition';
 import { useScorePosition } from '../useScorePosition';
 import { useLoopSpans } from '../useLoopSpans';
 import { LOOP_SHADE, spanEdges } from '../loopSpans';
@@ -124,7 +124,7 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
   const anchorRef = useRef<Anchor | null>(null);
 
   const writtenCount = geometry?.measures.length ?? 0;
-  const { measureTimes, scorePosition } = useScorePosition(unfolded, writtenCount);
+  const { beatTimes, scorePosition } = useScorePosition(unfolded, writtenCount);
   const spans = useLoopSpans(unfolded, writtenCount);
 
   // Track the view's width (debounced: a reflow re-lays out the score).
@@ -488,7 +488,9 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
     };
   }, [setZoom]);
 
-  // Tap or click a measure to jump to its first time through.
+  // Tap or click a measure to jump to its first time through. Desktop:
+  // click a beat, then shift-click another to loop from one through the other.
+  const loopAnchorRef = useRef<BeatPoint | null>(null);
   const pressRef = useRef<{ x: number; y: number; id: number } | null>(null);
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     pressRef.current = e.isPrimary ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null;
@@ -505,12 +507,30 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
     const p = geometry.pages.findIndex((pg) => y >= pg.top && y < pg.top + pg.height && x >= pg.left && x < pg.left + pg.width);
     if (p < 0) return;
     const page = geometry.pages[p];
-    const written = engine.measureAt(p, (x - page.left) / geometry.scale, (y - page.top) / geometry.scale);
-    if (written < 0 || measureTimes.length === 0) return;
-    const played = Math.min(firstPlayedIndex(written, unfolded), measureTimes.length - 1);
-    audio.seek(measureTimes[played]);
+    const xIn = (x - page.left) / geometry.scale;
+    const written = engine.measureAt(p, xIn, (y - page.top) / geometry.scale);
+    if (written < 0 || beatTimes.length === 0) return;
+    // Desktop: down to the tapped beat under the pointer; shift-click loops
+    // from the last clicked beat (or the playhead's) through it. Touch keeps
+    // jumping to the measure's downbeat.
+    const desktop = window.matchMedia('(pointer: fine)').matches;
+    const anchor = e.shiftKey && desktop ? (loopAnchorRef.current ?? beatPointAt(audio.clock.currentTime, beatTimes)) : null;
+    const played = Math.max(0, Math.min(
+      anchor ? playedNear(written, anchor.played, unfolded) : firstPlayedIndex(written, unfolded),
+      beatTimes.length - 1,
+    ));
+    const beat = desktop ? beatAtX(xIn, engine.beatXs(written, beatTimes[played].length)) : 0;
+    const point = { played, beat };
+    if (anchor) {
+      const loop = beatLoop(anchor, point, beatTimes, audio.clock.duration);
+      if (loop) audio.setLoop(loop.a, loop.b);
+      return;
+    }
+    loopAnchorRef.current = point;
+    const t = beatStart(point, beatTimes);
+    if (t !== null) audio.seek(t);
     setFollowPaused(false);
-  }, [geometry, engine, measureTimes, unfolded, audio]);
+  }, [geometry, engine, beatTimes, unfolded, audio]);
 
   const resumeFollow = useCallback(() => setFollowPaused(false), []);
 
@@ -522,6 +542,7 @@ export function PageScoreView({ files, hiddenPartIds, onParts, repeatAfterDcDs =
         className="h-full w-full overflow-auto bg-gray-700 outline-none"
         style={{ touchAction: 'pan-x pan-y', overscrollBehavior: 'contain' }}
         onPointerDown={onPointerDown}
+        onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
         onPointerUp={onPointerUp}
       >
         <div

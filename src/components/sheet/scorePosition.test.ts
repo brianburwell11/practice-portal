@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { currentMeasureIndex } from '../../audio/tempoUtils';
 import type { UnfoldedStep } from '../../audio/unfoldRepeats';
-import { firstPlayedIndex, PAST_END, scorePositionAt, writtenOf } from './scorePosition';
+import { beatAtX, beatLoop, beatPointAt, beatStart, firstPlayedIndex, PAST_END, playedNear, scorePositionAt, writtenOf } from './scorePosition';
 
 const step = (srcIndex: number): UnfoldedStep => ({ srcIndex, pass: 1 });
 
@@ -132,5 +132,37 @@ describe('matches the strip cursor math it replaced', () => {
         expect(b.cursorContentX).toBeCloseTo(a.cursorContentX, 9);
       }
     }
+  });
+});
+
+describe('beat loops', () => {
+  // Three 4-beat measures at 1 s a beat, then one with only its downbeat.
+  const bt = [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11], [12]];
+  it('loops from the in point beat to the end of the shift-clicked beat', () => {
+    expect(beatLoop({ played: 0, beat: 2 }, { played: 1, beat: 1 }, bt, 100)).toEqual({ a: 2, b: 6 });
+  });
+  it('works in either order, and within one beat', () => {
+    expect(beatLoop({ played: 1, beat: 1 }, { played: 0, beat: 2 }, bt, 100)).toEqual({ a: 2, b: 6 });
+    expect(beatLoop({ played: 1, beat: 3 }, { played: 1, beat: 3 }, bt, 100)).toEqual({ a: 7, b: 8 });
+  });
+  it('takes a downbeat-only measure whole, ending it like the measure before', () => {
+    expect(beatLoop({ played: 2, beat: 3 }, { played: 3, beat: 0 }, bt, 100)).toEqual({ a: 11, b: 16 });
+    expect(beatLoop({ played: 2, beat: 3 }, { played: 3, beat: 0 }, bt, 14)).toEqual({ a: 11, b: 14 });
+  });
+  it('finds the beat under x and at a time', () => {
+    expect(beatAtX(5, [2, 4, null, 8])).toBe(1);
+    expect(beatAtX(1, [2, 4, 6, 8])).toBe(0);
+    expect(beatPointAt(6.5, bt)).toEqual({ played: 1, beat: 2 });
+    expect(beatStart({ played: 2, beat: 9 }, bt)).toBe(11);
+  });
+  it('picks the repeated measure occurrence nearest the in point', () => {
+    // written 0 1 0 1 2 (a repeat of bars 0-1)
+    const unfolded: UnfoldedStep[] = [0, 1, 0, 1, 2].map((srcIndex, i) => ({ srcIndex, pass: i < 2 ? 1 : 2 }));
+    expect(playedNear(1, 2, unfolded)).toBe(3);
+    expect(playedNear(0, 1, unfolded)).toBe(2);
+    expect(playedNear(4, 0, [])).toBe(4);
+  });
+  it('returns null without timing', () => {
+    expect(beatLoop({ played: 0, beat: 0 }, { played: 1, beat: 0 }, [], 100)).toBeNull();
   });
 });

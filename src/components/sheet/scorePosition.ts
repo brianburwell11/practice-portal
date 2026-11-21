@@ -69,3 +69,84 @@ export function firstPlayedIndex(writtenIndex: number, unfolded: readonly Unfold
   const first = unfolded.findIndex((s) => s.srcIndex === writtenIndex);
   return first >= 0 ? first : writtenIndex;
 }
+
+/** A point on the sheet music: a played measure and a tapped beat in it (0 = its downbeat). */
+export interface BeatPoint {
+  played: number;
+  beat: number;
+}
+
+/**
+ * The played occurrence of a written measure nearest played measure `near`
+ * (on a tie, the one after it), so a loop drawn across a repeated measure
+ * stays inside one pass.
+ */
+export function playedNear(written: number, near: number, unfolded: readonly UnfoldedStep[]): number {
+  if (unfolded.length === 0) return written;
+  const cost = (i: number) => Math.abs(i - near) * 2 + (i < near ? 1 : 0);
+  let best = -1;
+  unfolded.forEach((s, i) => {
+    if (s.srcIndex === written && (best < 0 || cost(i) < cost(best))) best = i;
+  });
+  return best >= 0 ? best : written;
+}
+
+/** Which beat of a measure `x` falls in: the last beat starting at or before it (`beatXs` null where unknown). */
+export function beatAtX(x: number, beatXs: readonly (number | null)[]): number {
+  let k = 0;
+  beatXs.forEach((bx, i) => { if (bx != null && bx <= x) k = i; });
+  return k;
+}
+
+/** The beat playing at `seconds`. `beatTimes` is each played measure's tap times (`measureBeatTimes`). */
+export function beatPointAt(seconds: number, beatTimes: readonly number[][]): BeatPoint {
+  const played = currentMeasureIndex(seconds, beatTimes.map((m) => m[0]));
+  let beat = 0;
+  (beatTimes[played] ?? []).forEach((t, i) => { if (t <= seconds) beat = i; });
+  return { played, beat };
+}
+
+function clampPoint(pt: BeatPoint, beatTimes: readonly number[][]): BeatPoint {
+  const played = Math.max(0, Math.min(pt.played, beatTimes.length - 1));
+  const beat = Math.max(0, Math.min(pt.beat, beatTimes[played].length - 1));
+  return { played, beat };
+}
+
+/** When a beat starts, in seconds (null without timing). */
+export function beatStart(pt: BeatPoint, beatTimes: readonly number[][]): number | null {
+  if (beatTimes.length === 0) return null;
+  const c = clampPoint(pt, beatTimes);
+  return beatTimes[c.played][c.beat];
+}
+
+/**
+ * The A/B loop a click on one beat (the in point) and a shift-click on
+ * another make: from the earlier beat's start to the later beat's end, in
+ * seconds, either order. A measure with only its downbeat tapped is one
+ * beat, so the loop takes all of it. `songEnd` caps the last beat, which
+ * has no next tap to end it.
+ */
+export function beatLoop(
+  from: BeatPoint,
+  to: BeatPoint,
+  beatTimes: readonly number[][],
+  songEnd: number,
+): { a: number; b: number } | null {
+  if (beatTimes.length === 0) return null;
+  let lo = clampPoint(from, beatTimes);
+  let hi = clampPoint(to, beatTimes);
+  if (hi.played < lo.played || (hi.played === lo.played && hi.beat < lo.beat)) [lo, hi] = [hi, lo];
+  const a = beatTimes[lo.played][lo.beat];
+  const beats = beatTimes[hi.played];
+  let b = beats[hi.beat + 1] ?? beatTimes[hi.played + 1]?.[0];
+  if (b === undefined) {
+    // The very last beat: as long as the measure's average beat, or as long
+    // as the measure before with only a downbeat.
+    const n = beats.length;
+    if (n > 1) b = beats[n - 1] + (beats[n - 1] - beats[0]) / (n - 1);
+    else if (hi.played > 0) b = beats[0] + (beats[0] - beatTimes[hi.played - 1][0]);
+    else b = songEnd;
+  }
+  if (songEnd > a) b = Math.min(b, songEnd);
+  return b > a ? { a, b } : null;
+}

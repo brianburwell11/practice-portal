@@ -4,6 +4,7 @@ import type { TapMapEntry } from '../../audio/types';
 import type { UnfoldedStep } from '../../audio/unfoldRepeats';
 import { useSongStore } from '../../store/songStore';
 import { useTransportStore } from '../../store/transportStore';
+import { measureBeatTimes } from './loopSpans';
 import { PAST_END, scorePositionAt, type ScorePosition } from './scorePosition';
 
 /**
@@ -12,12 +13,15 @@ import { PAST_END, scorePositionAt, type ScorePosition } from './scorePosition';
  */
 export function useScorePosition(unfolded: readonly UnfoldedStep[], writtenCount: number, tapMapOverride?: TapMapEntry[]): {
   measureTimes: number[];
+  /** Each played measure's tap times: its downbeat, then its beats. */
+  beatTimes: number[][];
   scorePosition: ScorePosition | typeof PAST_END | null;
 } {
   const songTapMap = useSongStore((s) => s.selectedSong?.tapMap);
   const tapMap = tapMapOverride ?? songTapMap;
   const position = useTransportStore((s) => s.position);
   const measureTimes = useMemo(() => measureStartTimes(tapMap), [tapMap]);
+  const beatTimes = useMemo(() => measureBeatTimes(tapMap), [tapMap]);
   // With a draft beat map (the beat map editor), past the last tapped
   // downbeat the cursor waits there for the next measure tap instead of
   // sliding on into a measure that isn't tapped yet.
@@ -29,5 +33,5 @@ export function useScorePosition(unfolded: readonly UnfoldedStep[], writtenCount
     }
     return pos;
   }, [position, measureTimes, unfolded, writtenCount, holdAtLast]);
-  return { measureTimes, scorePosition };
+  return { measureTimes, beatTimes, scorePosition };
 }
