@@ -21,6 +21,8 @@ interface Props {
   coveredBy?: string;
   /** Icon only (the toolbar); otherwise icon and words. */
   compact?: boolean;
+  /** Extra classes, such as a hover background. */
+  className?: string;
 }
 
 /** The cloud's outline. */
@@ -32,7 +34,7 @@ const CLOUD = 'M17.5 19H7a5 5 0 1 1 1.6-9.74A6 6 0 0 1 20 11.5 3.75 3.75 0 0 1 1
  * accent: an outline when it isn't kept, filled when it is. Shows progress
  * while downloading, and yellow when a download didn't finish.
  */
-export function OfflineToggle({ pinId, what, name, onPin, coveredBy, compact = false }: Props) {
+export function OfflineToggle({ pinId, what, name, onPin, coveredBy, compact = false, className = '' }: Props) {
   const load = usePinStore((s) => s.load);
   const pin = usePinStore((s) => s.pins[pinId]);
   const progress = usePinStore((s) => s.progress[pinId]);
@@ -89,7 +91,7 @@ export function OfflineToggle({ pinId, what, name, onPin, coveredBy, compact = f
       data-help={what === 'song' ? 'Make this song available offline' : 'Make this setlist available offline'}
       className={`inline-flex items-center gap-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 ${
         compact ? 'p-1.5 min-h-[44px] min-w-[44px] justify-center md:min-h-0 md:min-w-0' : 'px-2 py-1'
-      } ${partial ? 'text-yellow-400' : 'text-blue-400'}`}
+      } ${partial ? 'text-yellow-400' : 'text-blue-400'} ${className}`}
     >
       {downloading ? (
         <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -150,6 +152,8 @@ export function SetlistOfflineToggle({ setlist }: { setlist: SetlistConfig }) {
   if (!band) return null;
   return (
     <OfflineToggle
+      compact
+      className="hover:bg-gray-700/70"
       pinId={setlistPinId(band, setlist.id)}
       what="setlist"
       name={setlist.name}

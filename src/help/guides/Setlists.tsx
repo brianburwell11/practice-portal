@@ -77,7 +77,7 @@ export default function Setlists() {
         <Bullets>
           <li>With a setlist open, <Ui>Setlists</Ui> → <Ui>Edit Setlist</Ui> changes it.</li>
           <li><Ui>Copy Setlist</Ui> starts a new one from it. Give the copy a different name.</li>
-          <li><Ui>View All Setlists</Ui> lists every setlist with how long it runs.</li>
+          <li><Ui>View All Setlists</Ui> lists every setlist with how long it runs, and lets you edit, share or delete any of them.</li>
           <li>
             <Ui>Delete Setlist</Ui> asks you to type “delete” and its name first. It can’t be undone, but the songs in it aren’t touched.
           </li>

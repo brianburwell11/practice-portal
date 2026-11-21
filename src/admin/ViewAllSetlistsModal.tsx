@@ -9,6 +9,10 @@ import { Modal } from '../components/ui/Modal';
 
 interface Props {
   onClose: () => void;
+  /** Open the setlist editor on this setlist. */
+  onEdit: (setlistId: string) => void;
+  /** Copy a guest link to this setlist; left out when you can't share. */
+  onShare?: (setlist: { id: string; slug?: string }) => void;
 }
 
 function formatDuration(seconds: number): string {
@@ -19,7 +23,7 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function ViewAllSetlistsModal({ onClose }: Props) {
+export function ViewAllSetlistsModal({ onClose, onEdit, onShare }: Props) {
   const currentBand = useBandStore((s) => s.currentBand);
   const index = useSetlistStore((s) => s.index);
   const manifest = useSongStore((s) => s.manifest);
@@ -137,8 +141,8 @@ export function ViewAllSetlistsModal({ onClose }: Props) {
               {sortedIndex.map((entry) => {
                 const total = durations[entry.id];
                 return (
-                  <li key={entry.id} className="flex items-center gap-4 py-3">
-                    <div className="flex-1 min-w-0">
+                  <li key={entry.id} className="flex items-center gap-2 py-3">
+                    <div className="flex-1 min-w-0 mr-2">
                       <div className="text-sm font-medium text-gray-100 truncate">{entry.name}</div>
                       <div className="text-xs text-gray-500 font-mono">
                         {loading && total === undefined
@@ -148,6 +152,20 @@ export function ViewAllSetlistsModal({ onClose }: Props) {
                           : '—'}
                       </div>
                     </div>
+                    <button
+                      onClick={() => onEdit(entry.id)}
+                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs font-medium text-gray-100"
+                    >
+                      Edit
+                    </button>
+                    {onShare && (
+                      <button
+                        onClick={() => onShare(entry)}
+                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs font-medium text-gray-100"
+                      >
+                        Share
+                      </button>
+                    )}
                     <button
                       onClick={() => setDeleteTarget({ id: entry.id, name: entry.name })}
                       className="px-3 py-1.5 bg-red-700 hover:bg-red-600 rounded text-xs font-medium text-gray-100"

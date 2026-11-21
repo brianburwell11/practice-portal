@@ -26,7 +26,8 @@ import { AccountMenu } from './components/account/AccountMenu';
 import { MembersModal } from './components/account/MembersModal';
 import { HomeScreenOffer } from './components/HomeScreen';
 import { useSessionStore } from './store/sessionStore';
-import { confirmDiscard, toast } from './store/dialogStore';
+import { copyGuestLink } from './utils/guestLink';
+import { confirmDiscard } from './store/dialogStore';
 import { useMarkerEditorStore } from './store/markerEditorStore';
 import { useLyricsEditorStore } from './store/lyricsEditorStore';
 import { usePanelMinimizeStore } from './store/panelMinimizeStore';
@@ -66,29 +67,6 @@ const ADMIN_CAPABILITIES = new Set([
 const LYRICS_UNSAVED = 'You have unsaved lyrics changes.';
 const TAPMAP_UNSAVED = 'You have unsaved beat map changes.';
 const CHORDS_UNSAVED = 'You have unsaved chord changes.';
-
-/**
- * Copy the band's guest link, opening on `setlistSlug`. The link is the band's
- * one "anyone with the link" link, so this only works once it's turned on.
- */
-async function copyGuestLink(bandId: string, setlistSlug: string): Promise<void> {
-  try {
-    const res = await fetch(`/api/bands/${encodeURIComponent(bandId)}/guest-link`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-    if (!data.link) {
-      toast('The guest link is off. Turn it on in Band → Members & Sharing first.');
-      return;
-    }
-    // The link already carries `?guest=`.
-    await navigator.clipboard.writeText(`${data.link.url}&setlist=${encodeURIComponent(setlistSlug)}`);
-    toast(data.link.expired
-      ? 'Copied, but the guest link has expired. Change its expiry in Members & Sharing.'
-      : 'Guest link to this setlist copied. Anyone with it can play the band’s songs.');
-  } catch (err) {
-    toast(`Couldn’t copy the guest link: ${(err as Error).message}`, 'error');
-  }
-}
 
 export default function App() {
   const engine = useCreateEngine();
@@ -518,6 +496,16 @@ export default function App() {
         <Suspense fallback={null}>
           <ViewAllSetlistsModal
             onClose={() => setShowViewAllSetlistsModal(false)}
+            onEdit={(id) => {
+              // The editor sits beneath this list, so close the list first.
+              setShowViewAllSetlistsModal(false);
+              setEditSetlistId(id);
+              setCopySetlistId(undefined);
+              setShowSetlistModal(true);
+            }}
+            onShare={currentBand && canInvite
+              ? (s) => copyGuestLink(currentBand.id, s.slug ?? s.id)
+              : undefined}
           />
         </Suspense>
       )}

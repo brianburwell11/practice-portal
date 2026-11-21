@@ -9,6 +9,8 @@ import { getCamelotStyle } from '../../utils/camelot';
 import type { SetlistConfig, SongManifestEntry } from '../../audio/types';
 import { SetlistOfflineToggle } from '../../offline/OfflineToggle';
 import { collectionLabel } from '../../utils/collections';
+import { useSessionStore } from '../../store/sessionStore';
+import { copyGuestLink } from '../../utils/guestLink';
 
 type Row =
   | { type: 'heading'; label: string }
@@ -44,12 +46,42 @@ export function SetlistHome({ setlist }: { setlist: SetlistConfig }) {
     <SongsHome
       title={setlist.name}
       rows={rows}
-      aside={<SetlistOfflineToggle setlist={setlist} />}
+      aside={
+        <div className="flex items-center gap-1">
+          <SetlistShareButton setlist={setlist} />
+          <SetlistOfflineToggle setlist={setlist} />
+        </div>
+      }
       onOpen={(idx, song) => {
         setActiveIndex(idx);
         handleSelect(song);
       }}
     />
+  );
+}
+
+/**
+ * Copies the band's guest link, opening on this setlist. Only for those who
+ * can manage the band's sharing, like the ribbon's Copy Guest Link.
+ */
+function SetlistShareButton({ setlist }: { setlist: SetlistConfig }) {
+  const bandId = useBandStore((s) => s.currentBand?.id);
+  const canInvite = useSessionStore((s) => !!s.capabilitiesIn(bandId)?.includes('member.invite'));
+  if (!bandId || !canInvite) return null;
+  return (
+    <button
+      onClick={() => void copyGuestLink(bandId, setlist.slug ?? setlist.id)}
+      aria-label="Share this setlist"
+      title="Copy a guest link to this setlist"
+      data-help="Copy a guest link to this setlist"
+      className="inline-flex items-center justify-center rounded p-1.5 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 text-blue-400 transition-opacity hover:opacity-80 hover:bg-gray-700/70"
+    >
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
+        <polyline points="16 6 12 2 8 6" />
+        <line x1="12" y1="2" x2="12" y2="15" />
+      </svg>
+    </button>
   );
 }
 
