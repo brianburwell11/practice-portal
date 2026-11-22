@@ -56,6 +56,7 @@ const DeleteSetlistModal = lazy(() => import('./admin/DeleteSetlistModal').then(
 const ViewAllSetlistsModal = lazy(() => import('./admin/ViewAllSetlistsModal').then((m) => ({ default: m.ViewAllSetlistsModal })));
 const loadEditBandModal = () => import('./admin/EditBandModal');
 const EditBandModal = lazy(() => loadEditBandModal().then((m) => ({ default: m.EditBandModal })));
+const ScoreEditorPanel = lazy(() => import('./admin/ScoreEditorPanel').then((m) => ({ default: m.ScoreEditorPanel })));
 const DeleteBandModal = lazy(() => import('./admin/DeleteBandModal').then((m) => ({ default: m.DeleteBandModal })));
 
 /** Capabilities that come with something to manage — beyond reading and playing. */
@@ -174,6 +175,7 @@ export default function App() {
     return () => ro.disconnect();
   }, []);
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [showScoreEditor, setShowScoreEditor] = useState(false);
   // Anything to manage here? Decides whether a Member sees the admin ribbon
   // at all (they don't — their screen is the public one). UX only.
   const myCaps = useSessionStore((s) => s.capabilitiesIn(currentBand?.id));
@@ -243,6 +245,7 @@ export default function App() {
     songNavLinks: selectedSong?.navLinks,
     hasBand: !!currentBand,
     hasSong: !!selectedSong,
+    hasSheetMusic: !!selectedSong?.sheetMusicUrl,
     hasSetlist: !!activeSetlist,
     onManageMembers: () => setShowMembersModal(true),
     onEditBand: async () => {
@@ -280,6 +283,11 @@ export default function App() {
         .then((r) => (r.ok ? r.json() : { lines: [] }))
         .then((data) => openLyricsEditor(data.lines ?? []))
         .catch(() => openLyricsEditor([]));
+    },
+    onSheetMusicEditor: async () => {
+      if (!selectedSong?.sheetMusicUrl) return;
+      if (!(await closeOtherEditors())) return;
+      setShowScoreEditor(true);
     },
     onDeleteSong: () => setShowDeleteModal(true),
     onAddSetlist: () => { setEditSetlistId(undefined); setCopySetlistId(undefined); setShowSetlistModal(true); },
@@ -467,6 +475,11 @@ export default function App() {
         {/* Inside the themed page so it takes the band's colors. */}
         {phonePageScroll && selectedSong && <PhoneSectionJump scrollerRef={pageScrollRef} columnRef={panelColumnRef} />}
       </div>
+      {showScoreEditor && selectedSong && currentBand && (
+        <Suspense fallback={null}>
+          <ScoreEditorPanel bandId={currentBand.id} song={selectedSong} onClose={() => setShowScoreEditor(false)} />
+        </Suspense>
+      )}
       {showDeleteModal && selectedSong && (
         <DeleteSongModal
           songId={selectedSong.id}

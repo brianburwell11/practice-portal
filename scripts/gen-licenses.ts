@@ -19,19 +19,27 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** What `src/` imports from npm. A new import there belongs here too. */
+/**
+ * What `src/` imports from npm. A new import there belongs here too. The
+ * score editor (score-editor/, MuseEncore's editor) adds dexie,
+ * spessasynth_lib and TensorFlow.js.
+ */
 const BROWSER_ROOTS = [
   '@fontsource/hanken-grotesk',
+  '@tensorflow/tfjs',
   '@radix-ui/react-slider',
   '@soundtouchjs/audio-worklet',
   '@soundtouchjs/core',
   '@xmldom/xmldom',
+  'dexie',
+  'dexie-react-hooks',
   'fflate',
   'jszip',
   'opentype.js',
   'react',
   'react-dom',
   'react-router-dom',
+  'spessasynth_lib',
   'zod',
   'zustand',
 ];

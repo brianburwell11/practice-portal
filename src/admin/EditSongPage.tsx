@@ -6,10 +6,10 @@ import { detectStem, isAudioFile, isUntouchedStem, oversizedStemsMessage } from 
 import { loadDefaultMixerTemplate } from '../store/mixerTemplateStore';
 import { applyTemplateToConfig } from '../utils/mixerTemplates';
 import { getAudioInfo } from './utils/audioConvert';
-import { uploadFileWithProgress, uploadFormWithProgress } from './utils/uploadWithProgress';
+import { uploadFileWithProgress } from './utils/uploadWithProgress';
 import { uploadStems, waitForStems, type StemJobState } from './utils/stemJobs';
 import { StemProgress } from './components/StemProgress';
-import { prepareSheetMusicUpload, sheetMusicConfigFields } from './utils/sheetMusic';
+import { prepareSheetMusicUpload, sheetMusicConfigFields, uploadMsczForConversion } from './utils/sheetMusic';
 import { SheetMusicUploader } from './SheetMusicUploader';
 import { slugify } from '../utils/deriveId';
 import { dedupeSlug } from '../utils/dedupeSlug';
@@ -349,21 +349,14 @@ export default function EditSongPage() {
         if (!prepared) throw new Error('Unsupported sheet music file type');
         if (prepared.mode === 'server-convert') {
           const { file, filename } = prepared;
-          const sheetForm = new FormData();
-          sheetForm.append('sheetMusic', file, file.name);
           dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
             fileIndex: 0, fileCount: 1, bytesSent: 0, bytesTotal: file.size,
           }});
-          const convertResult = await uploadFormWithProgress(
-            `/api/r2/mscz-convert-upload/${currentBand.id}/${oldId}?filename=${encodeURIComponent(filename)}`,
-            sheetForm,
-            (bytesSent, bytesTotal) => {
-              dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
-                fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
-              }});
-            },
-          );
-          if (!convertResult.ok) throw new Error(convertResult.error ?? 'MSCZ conversion failed');
+          await uploadMsczForConversion(currentBand.id, oldId, file, filename, (bytesSent, bytesTotal) => {
+            dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: {
+              fileIndex: 0, fileCount: 1, bytesSent, bytesTotal,
+            }});
+          });
           dispatch({ type: 'SET_UPLOAD_PROGRESS', progress: null });
         } else {
           const { blob, filename } = prepared;

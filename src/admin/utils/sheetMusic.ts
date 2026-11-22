@@ -15,6 +15,7 @@
  * `server/core/handlers/uploads.ts`).
  */
 import JSZip from 'jszip';
+import { uploadFormWithProgress } from './uploadWithProgress';
 
 export const SHEET_MUSIC_EXTS = ['musicxml', 'xml', 'mxl', 'mscz'] as const;
 export type SheetMusicExt = (typeof SHEET_MUSIC_EXTS)[number];
@@ -80,6 +81,28 @@ export function canonicalSheetMusicName(file: File): string | null {
  */
 export function msczCompanionName(mxlFilename: string): string {
   return mxlFilename.replace(/\.mxl$/, '.mscz');
+}
+
+/**
+ * Sends a MuseScore file to the server, which keeps it as the `.mscz` next to
+ * `filename` and converts it into `filename` (`.mxl`) with the `mscore` CLI.
+ * An existing score under those names is replaced.
+ */
+export async function uploadMsczForConversion(
+  bandId: string,
+  songId: string,
+  file: File,
+  filename: string,
+  onProgress: (bytesSent: number, bytesTotal: number) => void,
+): Promise<void> {
+  const form = new FormData();
+  form.append('sheetMusic', file, file.name);
+  const result = await uploadFormWithProgress(
+    `/api/r2/mscz-convert-upload/${bandId}/${songId}?filename=${encodeURIComponent(filename)}`,
+    form,
+    onProgress,
+  );
+  if (!result.ok) throw new Error(result.error ?? 'MSCZ conversion failed');
 }
 
 /** A file's last-modified date as YYYY-MM-DD in local time, like MuseScore's `$M`. */

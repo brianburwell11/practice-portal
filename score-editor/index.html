@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- MuseEncore's editor page (vendor/muse-encore/editor/index.html, GPL-3.0-only) with our entry point. -->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sheet music editor</title>
+    <meta name="robots" content="noindex">
+    <link rel="icon" href="data:,">
+    </head>
+<body data-view="home">
+<!-- the React app: menu bar, toolbars, home screen, status bar, dialogs; the score view (#viewport) is moved into it -->
+<div id="app-root"></div>
+<div id="toolbar-trigger" class="edge-trigger" aria-hidden="true"></div>
+<div id="bottom-trigger" class="edge-trigger" aria-hidden="true"></div>
+<div id="side-trigger" class="edge-trigger" aria-hidden="true"></div>
+
+
+<main id="viewport" tabindex="0" aria-label="Score">
+    <div id="pages"></div>
+</main>
+
+<!-- shown while a file is opened (the layout blocks the page for a moment) -->
+<div id="busy" class="busy" hidden>
+    <div class="busy-card" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <div id="busy-title" class="busy-title">Loading…</div>
+        <div id="busy-detail" class="muted"></div>
+    </div>
+</div>
+
+<!-- vector pages, only while printing -->
+<div id="print-pages" aria-hidden="true"></div>
+
+
+
+<dialog id="help-dialog" aria-label="Keyboard shortcuts">
+    <h2>Keyboard shortcuts</h2>
+    <table>
+        <tr><td><kbd>Ctrl</kbd> <kbd>N</kbd></td><td>New score</td></tr>
+        <tr><td><kbd>Ctrl</kbd> <kbd>O</kbd></td><td>Open file</td></tr>
+        <tr><td><kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>Ctrl</kbd> <kbd>−</kbd></td><td>Zoom in / out</td></tr>
+        <tr><td><kbd>Ctrl</kbd> <kbd>0</kbd></td><td>Zoom to 100%</td></tr>
+        <tr><td>Mouse wheel, pinch</td><td>Zoom at pointer</td></tr>
+        <tr><td><kbd>Shift</kbd> + wheel, trackpad</td><td>Scroll</td></tr>
+        <tr><td><kbd>Space</kbd></td><td>Play / pause</td></tr>
+        <tr><td>Middle mouse button + drag</td><td>Move the view (also beyond the pages)</td></tr>
+        <tr><td><kbd>Ctrl</kbd> <kbd>PgDn</kbd> / <kbd>Ctrl</kbd> <kbd>PgUp</kbd></td><td>Next / previous page</td></tr>
+        <tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>First / last page</td></tr>
+        <tr><td>Arrow keys</td><td>Scroll</td></tr>
+        <tr><td><kbd>Ctrl</kbd> <kbd>P</kbd></td><td>Print</td></tr>
+        <tr><td><kbd>F11</kbd></td><td>Full screen</td></tr>
+    </table>
+    <p class="muted">On macOS use <kbd>⌘</kbd> instead of <kbd>Ctrl</kbd>.</p>
+    <form method="dialog"><button class="primary">Close</button></form>
+</dialog>
+
+<script type="module" src="./main.tsx"></script>
+</body>
+</html>

@@ -11,6 +11,8 @@ interface Props {
   songNavLinks?: { title: string; url: string }[];
   hasBand?: boolean;
   hasSong?: boolean;
+  /** The song has sheet music (to open in the score editor). */
+  hasSheetMusic?: boolean;
   hasSetlist?: boolean;
   onManageMembers?: () => void;
   onEditBand?: () => void;
@@ -20,6 +22,8 @@ interface Props {
   onTapMapEditor?: () => void;
   onLyricsEditor?: () => void;
   onChordsEditor?: () => void;
+  /** Desktop only: the score editor is too much for a phone. */
+  onSheetMusicEditor?: () => void;
   onDeleteSong?: () => void;
   onAddSetlist?: () => void;
   onEditSetlist?: () => void;
@@ -85,6 +89,7 @@ export function AdminRibbon({
   songNavLinks,
   hasBand,
   hasSong,
+  hasSheetMusic,
   hasSetlist,
   onManageMembers,
   onEditBand,
@@ -94,6 +99,7 @@ export function AdminRibbon({
   onTapMapEditor,
   onLyricsEditor,
   onChordsEditor,
+  onSheetMusicEditor,
   onDeleteSong,
   onAddSetlist,
   onEditSetlist,
@@ -155,6 +161,12 @@ export function AdminRibbon({
         { label: 'Beat Map Editor', show: can('song.timing.write'), enabled: !!hasSong, onClick: onTapMapEditor },
         { label: 'Lyrics Editor', show: can('song.content.write'), enabled: !!hasSong, onClick: onLyricsEditor },
         { label: 'Chords Editor', show: can('song.content.write'), enabled: !!hasSong, onClick: onChordsEditor },
+        {
+          label: 'Sheet Music Editor',
+          show: can('song.score.write') && variant === 'ribbon',
+          enabled: !!hasSong && !!hasSheetMusic,
+          onClick: onSheetMusicEditor,
+        },
         { label: 'Delete Song', show: can('song.delete'), enabled: !!hasSong, danger: true, onClick: onDeleteSong },
       ],
     },

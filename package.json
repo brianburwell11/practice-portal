@@ -6,12 +6,13 @@
   "type": "module",
   "scripts": {
     "dev": "npm run build:sw && vite --open",
-    "build": "tsx scripts/gen-licenses.ts && tsc -b && npm run build:sw && vite build",
+    "build": "tsx scripts/gen-licenses.ts && tsc -b && npm run build:sw && vite build && npm run build:score-editor",
     "build:sw": "esbuild sw/sw.ts --bundle --format=iife --target=es2020 --minify --outfile=public/sw.js --log-level=warning",
+    "build:score-editor": "VITE_CONFIG_NATIVE_IGNORE_WARNING=true vite build --config score-editor/vite.config.ts --logLevel warn",
     "lint": "eslint .",
     "test": "vitest run",
     "preview": "vite preview",
-    "prod": "tsc -b && vite build && vite preview --open",
+    "prod": "tsc -b && vite build && npm run build:score-editor && vite preview --open",
     "prepare": "git config core.hooksPath .hooks",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -33,8 +34,11 @@
     "@fontsource/hanken-grotesk": "^5.3.0",
     "@radix-ui/react-slider": "^1.3.6",
     "@soundtouchjs/audio-worklet": "^1.0.9",
+    "@tensorflow/tfjs": "^4.22.0",
     "@xmldom/xmldom": "^0.8.15",
     "busboy": "^1.6.0",
+    "dexie": "^4.4.6",
+    "dexie-react-hooks": "^4.4.0",
     "drizzle-orm": "0.45.2",
     "fflate": "0.8.3",
     "jszip": "^3.10.1",
@@ -43,6 +47,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.0",
+    "spessasynth_lib": "4.3.14",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"
   },
@@ -71,5 +76,8 @@
     "typescript-eslint": "^8.57.0",
     "vite": "^8.0.1",
     "vitest": "5.0.5"
+  },
+  "overrides": {
+    "spessasynth_core": "4.3.22"
   }
 }

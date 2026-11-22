@@ -80,7 +80,7 @@ function resolveFile(root: string, pathname: string): Resolved | null {
  * so only Vite's output directory and extensions we actually serve count.
  */
 function looksLikeFile(pathname: string): boolean {
-  if (pathname.startsWith('/assets/')) return true;
+  if (pathname.startsWith('/assets/') || pathname.startsWith(`/${SCORE_EDITOR_DIR}`)) return true;
   return path.extname(pathname).toLowerCase() in CONTENT_TYPES;
 }
 
@@ -102,7 +102,7 @@ export const CONTENT_POLICY = [
   `img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com https://*.googleusercontent.com ${R2_HOSTS}`,
   `media-src 'self' blob: ${R2_HOSTS}`,
   `connect-src 'self' https://www.youtube.com ${R2_HOSTS}`,
-  'frame-src https://www.youtube-nocookie.com https://www.youtube.com',
+  "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com",
   "font-src 'self' data:",
   "worker-src 'self' blob:",
   "form-action 'self'",
@@ -110,6 +110,16 @@ export const CONTENT_POLICY = [
   "base-uri 'self'",
   "object-src 'none'",
 ].join('; ');
+
+/**
+ * The score editor (dist/score-editor, MuseEncore's editor): the app opens it
+ * in an iframe, so only our own pages may frame it. Its playback downloads
+ * MuseScore's soundfont from GitHub on first use.
+ */
+const SCORE_EDITOR_DIR = 'score-editor/';
+export const SCORE_EDITOR_POLICY = CONTENT_POLICY
+  .replace(/connect-src [^;]*/, (d) => `${d} https://raw.githubusercontent.com`)
+  .replace("frame-ancestors 'none'", "frame-ancestors 'self'");
 
 /** HTTPS only, here and on every subdomain, once a browser has seen us over it. */
 export const HSTS = 'max-age=31536000; includeSubDomains';
@@ -119,11 +129,12 @@ export const HSTS = 'max-age=31536000; includeSubDomains';
  * plugin tricks, referrers cut to the origin across sites, and HTTPS only
  * (on Fly, where TLS is guaranteed).
  */
-function securityHeaders(res: ServerResponse): void {
+function securityHeaders(res: ServerResponse, framedBySelf = false): void {
+  const ancestors = framedBySelf ? "'self'" : "'none'";
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
-  res.setHeader('Content-Security-Policy-Report-Only', CONTENT_POLICY);
-  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Content-Security-Policy', `frame-ancestors ${ancestors}; base-uri 'self'; object-src 'none'`);
+  res.setHeader('Content-Security-Policy-Report-Only', framedBySelf ? SCORE_EDITOR_POLICY : CONTENT_POLICY);
+  res.setHeader('X-Frame-Options', framedBySelf ? 'SAMEORIGIN' : 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
   if (process.env.FLY_APP_NAME) res.setHeader('Strict-Transport-Security', HSTS);
@@ -148,9 +159,10 @@ function send(req: IncomingMessage, res: ServerResponse, root: string, file: Res
   const rel = path.relative(root, filePath).split(path.sep).join('/');
 
   res.setHeader('Content-Type', CONTENT_TYPES[ext] ?? 'application/octet-stream');
-  res.setHeader('Cache-Control', rel.startsWith('assets/') ? IMMUTABLE : REVALIDATE);
+  const fingerprinted = rel.startsWith('assets/') || rel.startsWith(`${SCORE_EDITOR_DIR}assets/`);
+  res.setHeader('Cache-Control', fingerprinted ? IMMUTABLE : REVALIDATE);
   res.setHeader('ETag', etag);
-  securityHeaders(res);
+  securityHeaders(res, rel.startsWith(SCORE_EDITOR_DIR));
 
   if (req.headers['if-none-match'] === etag) {
     res.statusCode = 304;

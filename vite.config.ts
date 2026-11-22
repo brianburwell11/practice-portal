@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { createServer, defineConfig, type Plugin, type ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import basicSsl from '@vitejs/plugin-basic-ssl'
@@ -14,10 +14,37 @@ const trustedCert = existsSync(`${certDir}localhost.pem`)
   ? { key: readFileSync(`${certDir}localhost-key.pem`), cert: readFileSync(`${certDir}localhost.pem`) }
   : null
 
+/**
+ * The score editor (score-editor/, its own Vite app) at /score-editor/ on
+ * this dev server, so the app's iframe finds it on the same origin as in
+ * production. Started on the first request, since most dev sessions never
+ * open it. It keeps its pre-bundled dependencies apart from ours (cacheDir
+ * in score-editor/vite.config.ts).
+ */
+function scoreEditorDev(): Plugin {
+  return {
+    name: 'score-editor-dev',
+    apply: 'serve',
+    configureServer(server) {
+      let editor: Promise<ViteDevServer> | null = null
+      server.middlewares.use((req, res, next) => {
+        if (!req.url?.startsWith('/score-editor')) return next()
+        editor ??= createServer({
+          configFile: fileURLToPath(new URL('./score-editor/vite.config.ts', import.meta.url)),
+          appType: 'mpa',
+          server: { middlewareMode: true, hmr: false, ws: false },
+        })
+        editor.then((e) => e.middlewares(req, res, next), next)
+      })
+      server.httpServer?.on('close', () => { void editor?.then((e) => e.close()) })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
-  plugins: [react(), tailwindcss(), ...(trustedCert ? [] : [basicSsl()]), configApiPlugin(), offlineAssetsPlugin()],
+  plugins: [react(), tailwindcss(), ...(trustedCert ? [] : [basicSsl()]), configApiPlugin(), offlineAssetsPlugin(), scoreEditorDev()],
   server: { host: true, port: 5173, strictPort: true, ...(trustedCert ? { https: trustedCert } : {}) },
   // `npm run preview`: the production build on the same address as dev, with
   // the API from the production server (`npm run build:server`, then
