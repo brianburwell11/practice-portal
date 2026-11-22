@@ -38,7 +38,8 @@ export async function readMedia(req: CoreRequest): Promise<CoreResponse> {
     status: 302,
     body: null,
     headers: {
-      Location: await r2PresignGet(key),
+      // A new version of a file gets a new URL (see r2PresignGet).
+      Location: await r2PresignGet(key, Date.now(), req.query.get('v') ?? undefined),
       // Reuse the redirect for an hour; its target is good for at least six.
       'Cache-Control': 'private, max-age=3600',
     },

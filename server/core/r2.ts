@@ -14,6 +14,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
 } from '@aws-sdk/client-s3';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
@@ -181,14 +182,22 @@ export async function r2PresignPut(
 /**
  * Presigned GET for a private object. URLs are signed per 6-hour window
  * (and last 12 hours), so the same object gets the same URL all window long
- * and the browser's cache keeps working; every URL lasts at least 6 hours,
+ * and the browser's cache keeps working; every URL lasts at least 5 hours,
  * longer than any rehearsal needs to seek around one song.
+ *
+ * `version` is the file's content version (the app's `?v=`). R2 serves files
+ * as `immutable`, so the browser keeps them by this URL: a file replaced
+ * under the same name must get a new URL, or the old copy keeps playing
+ * until the window ends. So the version moves the signing time back by up
+ * to an hour, which gives each version its own URL. It still lasts 5 hours
+ * past its window.
  */
-export async function r2PresignGet(key: string, now = Date.now()): Promise<string> {
+export async function r2PresignGet(key: string, now = Date.now(), version?: string): Promise<string> {
   const { r2, bucket } = requireR2();
   const windowMs = 6 * 60 * 60 * 1000;
+  const versionOffsetMs = version ? (createHash('sha1').update(version).digest().readUInt32BE(0) % 3600) * 1000 : 0;
   return getSignedUrl(r2, new GetObjectCommand({ Bucket: bucket, Key: key }), {
-    signingDate: new Date(Math.floor(now / windowMs) * windowMs),
+    signingDate: new Date(Math.floor(now / windowMs) * windowMs - versionOffsetMs),
     expiresIn: 12 * 60 * 60,
   });
 }
