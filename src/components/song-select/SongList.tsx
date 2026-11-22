@@ -16,6 +16,7 @@ import type { SongManifestEntry, SetlistConfig } from '../../audio/types';
 import { warmSongScore } from '../sheet/scoreFiles';
 import { readDoc } from '../../offline/sync';
 import { prefetchedOr } from '../../data/prefetch';
+import { compareTitles } from '../../utils/titleSort';
 
 export function useSongLoader() {
   const engine = useAudioEngine();
@@ -39,7 +40,7 @@ export function useSongLoader() {
     }
     // A collection is every song with that tag, A–Z like All Songs.
     const songs = activeTag ? manifest.songs.filter((s) => s.tags?.includes(activeTag)) : manifest.songs;
-    return [...songs].sort((a, b) => a.title.localeCompare(b.title));
+    return [...songs].sort((a, b) => compareTitles(a.title, b.title));
   }, [manifest, activeSetlist, activeTag]);
 
   const handleSelect = useCallback(async (entry: SongManifestEntry) => {

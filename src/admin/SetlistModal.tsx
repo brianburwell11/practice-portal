@@ -15,6 +15,7 @@ import { useSongMeta } from '../hooks/useSongMeta';
 import { useSortableList } from '../hooks/useSortableList';
 import { fetchDoc, saveDoc } from '../utils/docRevs';
 import { onlineOrSay } from '../offline/connectivity';
+import { compareTitles } from '../utils/titleSort';
 
 /** Legacy setlist ids are prefixed with "setlist-". New-format ids are
  *  opaque base62 (7 chars) with no prefix. Detecting the legacy shape
@@ -318,7 +319,7 @@ export function SetlistModal({ setlistId, copyFromSetlistId, onClose }: Props) {
     const arr = [...filteredSongs];
     const mul = sortDir === 'desc' ? -1 : 1;
     if (sortMode === 'title') {
-      arr.sort((a, b) => a.title.localeCompare(b.title) * mul);
+      arr.sort((a, b) => compareTitles(a.title, b.title) * mul);
     } else if (sortMode === 'duration') {
       arr.sort((a, b) => {
         const da = songMeta[a.id]?.durationSeconds ?? 0;

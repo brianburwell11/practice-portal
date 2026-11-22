@@ -4,6 +4,7 @@ import {
   clearOfflineCache, OFFLINE_CACHE_ENABLED, OFFLINE_CAP_CHOICES, offlineCapBytes, offlineUsageBytes, setOfflineCapBytes,
 } from './offline';
 import { usePinStore } from './pinStore';
+import { compareTitles } from '../utils/titleSort';
 
 const mb = (bytes: number) => Math.round(bytes / (1024 * 1024));
 const size = (bytes: number) => (mb(bytes) >= 1024 ? `${+(mb(bytes) / 1024).toFixed(1)} GB` : `${mb(bytes)} MB`);
@@ -22,7 +23,7 @@ export function OfflineSongs() {
   const pins = usePinStore((s) => s.pins);
   const progress = usePinStore((s) => s.progress);
   const unpin = usePinStore((s) => s.unpin);
-  const pinList = Object.values(pins).sort((a, b) => a.label.localeCompare(b.label));
+  const pinList = Object.values(pins).sort((a, b) => compareTitles(a.label, b.label));
   const busy = Object.keys(progress).length > 0;
 
   useEffect(() => {

@@ -9,6 +9,7 @@ import { signInHref, useSessionStore } from '../../store/sessionStore';
 import practicePortalMark from '../../assets/practice-portal-mark-large.png';
 import { GetAppButton } from '../HomeScreen';
 import { Skeleton } from '../ui/Loading';
+import { compareTitles } from '../../utils/titleSort';
 
 export function BandPicker() {
   const { bandsManifest, setBandsManifest } = useBandStore();
@@ -16,7 +17,7 @@ export function BandPicker() {
   // With accounts, only the bands you're in: public bands aren't listed here.
   const bands = (bandsManifest?.bands ?? [])
     .filter((b) => !available || memberOf.some((m) => m.id === b.id))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    .sort((a, b) => compareTitles(a.name, b.name));
   // Signed out on a server with accounts: what this is, and how to get in.
   const welcome = loaded && available && !user;
 

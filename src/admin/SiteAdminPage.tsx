@@ -7,6 +7,7 @@ import { usePageTitle } from '../hooks/usePageTitle';
 import { useSessionStore } from '../store/sessionStore';
 import { toast } from '../store/dialogStore';
 import practicePortalMark from '../assets/practice-portal-mark-large.png';
+import { compareTitles } from '../utils/titleSort';
 
 interface AdminBand {
   id: string;
@@ -262,7 +263,7 @@ function BandsSection({ bands, costs, measuring, onRefresh }: {
   onRefresh: () => void;
 }) {
   const costOf = useMemo(() => new Map((costs?.bands ?? []).map((c) => [c.bandId, c])), [costs]);
-  const sorted = useMemo(() => [...(bands ?? [])].sort((a, b) => a.name.localeCompare(b.name)), [bands]);
+  const sorted = useMemo(() => [...(bands ?? [])].sort((a, b) => compareTitles(a.name, b.name)), [bands]);
   const total = (k: 'songs' | 'storageBytes') => sorted.reduce((sum, b) => sum + (b[k] ?? 0), 0);
 
   return (

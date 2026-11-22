@@ -6,6 +6,7 @@ import { dataUrl } from '../utils/url';
 import { DeleteSetlistModal } from './DeleteSetlistModal';
 import type { SetlistConfig } from '../audio/types';
 import { Modal } from '../components/ui/Modal';
+import { compareTitles } from '../utils/titleSort';
 
 interface Props {
   onClose: () => void;
@@ -104,7 +105,7 @@ export function ViewAllSetlistsModal({ onClose, onEdit, onShare }: Props) {
 
   const sortedIndex = useMemo(() => {
     if (!index) return [];
-    return [...index].sort((a, b) => a.name.localeCompare(b.name));
+    return [...index].sort((a, b) => compareTitles(a.name, b.name));
   }, [index]);
 
   return (
