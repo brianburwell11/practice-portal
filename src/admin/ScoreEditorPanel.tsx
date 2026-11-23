@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { songScoreFiles } from '../components/sheet/scoreFiles';
 import type { SongConfig } from '../audio/types';
 import { songConfigSchema } from '../config/schema';
@@ -6,10 +6,43 @@ import { confirmDiscard, toast } from '../store/dialogStore';
 import { useSongStore } from '../store/songStore';
 import { saveDoc } from '../utils/docRevs';
 import { readDoc } from '../offline/sync';
-import type { ScoreEditorBridge } from './scoreEditorBridge';
+import type { ScoreEditorBridge, SongAudioHost } from './scoreEditorBridge';
+import { useAudioEngine } from '../hooks/useAudioEngine';
+import type { AudioEngine } from '../audio/AudioEngine';
+import { measureBeatTimes } from '../components/sheet/loopSpans';
 import { msczCompanionName, sheetMusicConfigFields, uploadMsczForConversion } from './utils/sheetMusic';
 
 const UNSAVED = 'You have unsaved sheet music changes.';
+
+/**
+ * The app's audio engine for the editor's playback. The first loop or play
+ * from the editor notes the page's own loop and play state, and `release`
+ * puts them back when the editor closes.
+ */
+function engineHost(engine: AudioEngine, beatTimes: number[][]): SongAudioHost & { release(): void } {
+  let saved: { a: number | null; b: number | null; enabled: boolean } | null = null;
+  const take = () => {
+    saved ??= { a: engine.loopA, b: engine.loopB, enabled: engine.loopEnabled };
+  };
+  return {
+    beatTimes,
+    play: () => { take(); return engine.play(); },
+    pause: () => engine.pause(),
+    seek: (seconds) => { take(); void engine.seek(seconds); },
+    position: () => engine.clock.audibleTime,
+    isPlaying: () => engine.clock.playing,
+    setLoop: (from, to) => { take(); engine.setLoop(from, to); },
+    clearLoop: () => { take(); engine.setLoopEnabled(false); },
+    release() {
+      if (!saved) return;
+      engine.pause();
+      if (saved.a !== null && saved.b !== null) engine.setLoop(saved.a, saved.b);
+      else engine.clearLoop();
+      engine.setLoopEnabled(saved.enabled);
+      saved = null;
+    },
+  };
+}
 
 interface Props {
   bandId: string;
@@ -38,6 +71,22 @@ export function ScoreEditorPanel({ bandId, song, onClose }: Props) {
   const [src] = useState(() => (scoreUrl ? `/score-editor/?url=${encodeURIComponent(scoreUrl)}` : null));
 
   const bridge = (): ScoreEditorBridge | undefined => frameRef.current?.contentWindow?.scoreEditor;
+
+  // Playback: the editor can play the song's recording, timed by its tapMap.
+  const engine = useAudioEngine();
+  const tapMap = useSongStore((s) => (s.selectedSong?.id === song.id ? s.selectedSong.tapMap : song.tapMap));
+  const beatTimes = useMemo(() => measureBeatTimes(tapMap), [tapMap]);
+  const host = useMemo(() => engineHost(engine, beatTimes), [engine, beatTimes]);
+  // The editor's playback toolbar offers Recording or Notation when there's a tapMap to time the recording by.
+  const playsRecording = beatTimes.length >= 2;
+
+  useEffect(() => {
+    const editor = bridge();
+    if (editor) editor.songAudio = playsRecording ? host : null;
+  }, [ready, playsRecording, host]);
+  // Closing the editor stops what it played and gives the page back its loop.
+  useEffect(() => () => host.release(), [host]);
+
 
   const save = async () => {
     const editor = bridge();
@@ -96,6 +145,7 @@ export function ScoreEditorPanel({ bandId, song, onClose }: Props) {
     };
     editor.onChange = sync;
     editor.onSaveRequest = () => void saveRef.current();
+    editor.songAudio = playsRecording ? host : null;
     sync();
   };
 

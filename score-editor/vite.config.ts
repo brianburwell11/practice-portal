@@ -12,6 +12,9 @@
  * few dialog images. We don't need those, so `editorStubs` stands in for
  * them: English only, no "New score" templates, and the soundfont comes from
  * MuseScore's repository (the same default the MuseEncore viewer uses).
+ *
+ * It also swaps the editor's Player for songAudioPlayer.ts, so its playback
+ * plays the song's recording through the app's audio engine.
  */
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -38,6 +41,10 @@ function editorStubs(): Plugin {
       if (id.endsWith('MuseScore/share/templates/categories.json')) return '\0score-editor:empty-list'
       // The picture in the MuseScore 3 migration dialog.
       if (id.includes('/MuseScore/src/') && id.endsWith('.png')) return '\0score-editor:no-image'
+      // The editor's playback plays the song's recording (songAudioPlayer.ts wraps the vendor's Player).
+      if (importer?.endsWith('editor/playback/playbackcontroller.ts') && id.endsWith('shared/playback/player')) {
+        return path.join(here, 'songAudioPlayer.ts')
+      }
       // The editor's playback asks for the soundfont at its own base URL.
       if (importer?.endsWith('editor/playback/playbackcontroller.ts') && id.endsWith('shared/playback/soundfont')) {
         return SOUNDFONT_ID

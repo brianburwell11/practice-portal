@@ -20,6 +20,30 @@ export interface ScoreEditorBridge {
   onSaveRequest?: () => void;
   /** Set by the panel: the score or the editor's state changed. */
   onChange?: () => void;
+  /** Stops the editor's playback, if it's playing. */
+  stopPlayback(): void;
+  /**
+   * Set by the panel: the song's recording, which the editor's playback
+   * plays instead of the notation (score-editor/songAudioPlayer.ts) unless
+   * its toolbar is set to Notation. Null or unset: the editor plays the
+   * notation with its own sounds.
+   */
+  songAudio?: SongAudioHost | null;
+}
+
+/** The app's audio engine, as the score editor's playback drives it. Times are seconds of audio. */
+export interface SongAudioHost {
+  /** Each played measure's tap times: its downbeat, then its beats (the song's tapMap). */
+  beatTimes: number[][];
+  /** Resolves once the audio is actually playing. */
+  play(): Promise<void>;
+  pause(): void;
+  seek(seconds: number): void;
+  /** The position being heard now. */
+  position(): number;
+  isPlaying(): boolean;
+  setLoop(from: number, to: number): void;
+  clearLoop(): void;
 }
 
 declare global {

@@ -7,7 +7,7 @@
  */
 import { createRoot } from 'react-dom/client'
 import '../vendor/muse-encore/editor/style.css'
-import { registerAction } from '../vendor/muse-encore/editor/actions/actions'
+import { registerAction, triggerAction } from '../vendor/muse-encore/editor/actions/actions'
 import { registerAppActions } from '../vendor/muse-encore/editor/actions/appactions'
 import { App } from '../vendor/muse-encore/editor/App'
 import { initAutoSaver } from '../vendor/muse-encore/editor/autosave'
@@ -17,9 +17,19 @@ import {
   currentMasterScore, currentScore, onScoreViewChanged, scoreChanged, scoreSaved,
 } from '../vendor/muse-encore/editor/scoreview'
 import { endTextEditing, isModified, markSaved, saveMscz } from '../vendor/muse-encore/src/index'
-import type { ScoreEditorBridge } from '../src/admin/scoreEditorBridge'
+import { playbackState } from '../vendor/muse-encore/editor/playback/playbackcontroller'
+import type { ScoreEditorBridge, SongAudioHost } from '../src/admin/scoreEditorBridge'
+import { mountSoundToggle, refreshSoundToggle } from './soundSource'
+
+let songAudio: SongAudioHost | null = null
 
 const bridge: ScoreEditorBridge = {
+  // The playback toolbar offers the recording only while there is one.
+  get songAudio() { return songAudio },
+  set songAudio(host) {
+    songAudio = host ?? null
+    refreshSoundToggle()
+  },
   hasScore: () => !!currentMasterScore(),
   isModified: () => {
     const s = currentMasterScore()
@@ -40,6 +50,9 @@ const bridge: ScoreEditorBridge = {
     markSaved(s)
     scoreSaved()
   },
+  stopPlayback() {
+    if (playbackState().playing) triggerAction('pause')
+  },
 }
 window.scoreEditor = bridge
 
@@ -53,5 +66,6 @@ onSessionChanged(notify)
 
 void applyLanguageSetting()
 createRoot(document.getElementById('app-root')!).render(<App />)
+mountSoundToggle()
 initAutoSaver()
 void startup()
