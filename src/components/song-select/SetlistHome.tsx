@@ -9,7 +9,7 @@ import { getCamelotStyle } from '../../utils/camelot';
 import type { SetlistConfig, SongManifestEntry } from '../../audio/types';
 import { SetlistOfflineToggle } from '../../offline/OfflineToggle';
 import { collectionLabel } from '../../utils/collections';
-import { useSessionStore } from '../../store/sessionStore';
+import { useCan, useSessionStore } from '../../store/sessionStore';
 import { copyGuestLink } from '../../utils/guestLink';
 
 type Row =
@@ -21,7 +21,7 @@ type Row =
  * lengths. Shown while a setlist is open and no song is. Picking a song
  * opens it at its place in the setlist.
  */
-export function SetlistHome({ setlist }: { setlist: SetlistConfig }) {
+export function SetlistHome({ setlist, onEdit }: { setlist: SetlistConfig; onEdit?: () => void }) {
   const { handleSelect } = useSongLoader();
   const manifest = useSongStore((s) => s.manifest);
   const setActiveIndex = useSetlistStore((s) => s.setActiveIndex);
@@ -48,6 +48,7 @@ export function SetlistHome({ setlist }: { setlist: SetlistConfig }) {
       rows={rows}
       aside={
         <div className="flex items-center gap-1">
+          {onEdit && <SetlistEditButton onEdit={onEdit} />}
           <SetlistShareButton setlist={setlist} />
           <SetlistOfflineToggle setlist={setlist} />
         </div>
@@ -57,6 +58,26 @@ export function SetlistHome({ setlist }: { setlist: SetlistConfig }) {
         handleSelect(song);
       }}
     />
+  );
+}
+
+/** Opens the setlist editor. Only for those who can edit setlists, like the ribbon's Edit Setlist. */
+function SetlistEditButton({ onEdit }: { onEdit: () => void }) {
+  const canEdit = useCan('setlist.write');
+  if (!canEdit) return null;
+  return (
+    <button
+      onClick={onEdit}
+      aria-label="Edit this setlist"
+      title="Edit this setlist"
+      data-help="Edit this setlist"
+      className="inline-flex items-center justify-center rounded p-1.5 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 text-blue-400 transition-opacity hover:opacity-80 hover:bg-gray-700/70"
+    >
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    </button>
   );
 }
 

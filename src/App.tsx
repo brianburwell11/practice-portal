@@ -465,7 +465,7 @@ export default function App() {
               <EditBandModal band={currentBand} onClose={() => setShowEditBandModal(false)} />
             </Suspense>
           ) : !selectedSong ? (
-            <NoSongState onInvite={() => setShowMembersModal(true)} />
+            <NoSongState onInvite={() => setShowMembersModal(true)} onEditSetlist={adminProps.onEditSetlist} />
           ) : (
             <div className={mobileControlsOpen ? 'contents' : 'hidden md:contents'}>
               <MixerPanel />

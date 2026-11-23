@@ -12,7 +12,7 @@ import { AllSongsHome, SetlistHome } from './SetlistHome';
  * Retry, a band with no songs yet (and, for those who can, how to add one),
  * an open setlist's song list, or every song (the open collection's, if any).
  */
-export function NoSongState({ onInvite }: { onInvite: () => void }) {
+export function NoSongState({ onInvite, onEditSetlist }: { onInvite: () => void; onEditSetlist?: () => void }) {
   const { handleSelect } = useSongLoader();
   const manifest = useSongStore((s) => s.manifest);
   const loading = useSongStore((s) => s.loading);
@@ -73,7 +73,7 @@ export function NoSongState({ onInvite }: { onInvite: () => void }) {
     );
   }
 
-  if (activeSetlist) return <SetlistHome setlist={activeSetlist} />;
+  if (activeSetlist) return <SetlistHome setlist={activeSetlist} onEdit={onEditSetlist} />;
 
   return <AllSongsHome />;
 }
