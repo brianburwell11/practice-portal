@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { LegalLinks } from '../legal/LegalPage';
+import { PageLoader } from '../ui/Loading';
 
 /**
  * `/email/unsubscribe?token=…`, from "Don't email me again" in an invite
@@ -39,11 +40,12 @@ export function EmailUnsubscribe() {
     }
   };
 
+  if (!state && !error) return <PageLoader caption="Loading your email preferences" />;
+
   return (
     <div className="min-h-screen bg-page text-gray-100 flex items-center justify-center p-6">
       <div className="max-w-sm w-full bg-gray-800/60 border border-gray-700 rounded-xl p-6 space-y-5 text-center">
         <h1 className="text-xl font-semibold">Email preferences</h1>
-        {!state && !error && <p className="text-gray-400">Loading…</p>}
         {state && (state.blocked ? (
           <p className="text-sm text-gray-300">
             Done. Practice Portal won’t email <span className="text-white">{state.email}</span> again.

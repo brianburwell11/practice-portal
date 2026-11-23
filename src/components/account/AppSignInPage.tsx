@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { signInHref, useSessionStore } from '../../store/sessionStore';
 import practicePortalMark from '../../assets/practice-portal-mark-large.png';
+import { PageLoader } from '../ui/Loading';
 
 /**
  * `/app-sign-in?id=…` — where the iPhone home screen app sends you, in
@@ -66,7 +67,7 @@ export function AppSignInPage() {
       </>
     );
   } else if (!loaded || !code) {
-    body = <p className="text-gray-500">Loading...</p>;
+    return <PageLoader caption="Getting your sign-in ready" />;
   } else if (!user) {
     body = (
       <>

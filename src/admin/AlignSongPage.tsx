@@ -8,6 +8,7 @@ import { AlignmentCanvas, type AlignmentCanvasStem } from './components/Alignmen
 import { confirmDiscard } from '../store/dialogStore';
 import { fetchDoc, saveDoc } from '../utils/docRevs';
 import { onlineOrSay } from '../offline/connectivity';
+import { PageLoader } from '../components/ui/Loading';
 
 interface LoadedStem {
   id: string;
@@ -162,11 +163,7 @@ export default function AlignSongPage() {
   // ---- render ----------------------------------------------------------
 
   if (load.kind === 'loading') {
-    return (
-      <div className="min-h-screen bg-page text-gray-100 p-8">
-        <p className="text-gray-400">Loading song & decoding stems…</p>
-      </div>
-    );
+    return <PageLoader caption="Loading the song and its stems" />;
   }
   if (load.kind === 'error') {
     return (

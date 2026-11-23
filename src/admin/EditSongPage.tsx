@@ -9,6 +9,7 @@ import { getAudioInfo } from './utils/audioConvert';
 import { uploadFileWithProgress } from './utils/uploadWithProgress';
 import { uploadStems, waitForStems, type StemJobState } from './utils/stemJobs';
 import { StemProgress } from './components/StemProgress';
+import { PageLoader } from '../components/ui/Loading';
 import { prepareSheetMusicUpload, sheetMusicConfigFields, uploadMsczForConversion } from './utils/sheetMusic';
 import { SheetMusicUploader } from './SheetMusicUploader';
 import { slugify } from '../utils/deriveId';
@@ -514,9 +515,7 @@ export default function EditSongPage() {
   }
 
   if (!config) {
-    return (
-      <div className="min-h-screen bg-page text-gray-400 p-8">Loading config...</div>
-    );
+    return <PageLoader caption="Loading the song" />;
   }
 
   return (

@@ -13,8 +13,10 @@ const LOADER_WAIT_MS = 250;
 /**
  * A whole page that isn't ready yet: the Practice Portal mark, slowly pulsing.
  * It waits a moment before appearing, so a fast load never flashes it.
+ * `caption` says what's on its way, in a line under the mark that arrives
+ * with it and holds still while the mark breathes.
  */
-export function PageLoader({ label = 'Loading' }: { label?: string }) {
+export function PageLoader({ label = 'Loading', caption }: { label?: string; caption?: string }) {
   const [elapsed] = useState(() => {
     if (shownSince === null) shownSince = performance.now();
     return performance.now() - shownSince;
@@ -36,7 +38,7 @@ export function PageLoader({ label = 'Loading' }: { label?: string }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-page flex items-center justify-center" role="status">
+    <div className="min-h-screen bg-page flex flex-col items-center justify-center gap-5 p-8" role="status">
       <img
         src={practicePortalMark}
         alt=""
@@ -44,7 +46,16 @@ export function PageLoader({ label = 'Loading' }: { label?: string }) {
         // Matches the delays in `--animate-loader`, less the time already shown.
         style={{ animationDelay: `${LOADER_WAIT_MS - elapsed}ms, ${LOADER_WAIT_MS + 600 - elapsed}ms` }}
       />
-      <span className="sr-only">{label}</span>
+      {caption ? (
+        <p
+          className="text-sm text-gray-400 text-center animate-loader-caption"
+          style={{ animationDelay: `${LOADER_WAIT_MS - elapsed}ms` }}
+        >
+          {caption}
+        </p>
+      ) : (
+        <span className="sr-only">{label}</span>
+      )}
     </div>
   );
 }
