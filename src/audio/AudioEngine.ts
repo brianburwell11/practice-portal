@@ -32,7 +32,7 @@ export type EngineStateCallback = () => void;
 export class AudioEngine {
   private ctx: AudioContext;
   readonly clock: TransportClock;
-  readonly masterGain: GainNode;
+  masterGain: GainNode;
   private mixBus: GainNode;
   private pitchNode: PitchCorrectorNode | null = null;
   private _tempoRatio = 1.0;
@@ -61,28 +61,119 @@ export class AudioEngine {
   private background: BackgroundAudio;
   /** The listener's manual correction on top of what the browser reports, in seconds */
   private latencyAdjust = 0;
+  /** The context stopped running and won't start again (phones do this to a page left in
+   *  the background): the next play replaces it. */
+  private stale = false;
+  /** A play in progress, so repeated taps don't start the stems twice */
+  private starting: Promise<void> | null = null;
+  /** For spotting a stalled clock while playing: its last reading and when it changed */
+  private lastCtxTime = 0;
+  private lastCtxChange = 0;
+  private onPageShown = () => {
+    if (document.visibilityState === 'visible') this.checkContext();
+  };
 
   constructor() {
     this.ctx = new AudioContext();
     this.clock = new TransportClock(this.ctx, () => this.outputLatencySeconds);
     this.masterGain = this.ctx.createGain();
-    // Speakers directly, or on iOS through an <audio> element so playback survives backgrounding
-    this.background = new BackgroundAudio(this.ctx, this.masterGain);
-    this.background.setControls({
+    this.background = this.createBackground();
+    // Mix bus: all stems connect here, single SoundTouch node sits between mixBus and masterGain
+    this.mixBus = this.ctx.createGain();
+    this.watchContext();
+
+    // Back from the background: make sure the audio clock came back with the page
+    document.addEventListener('visibilitychange', this.onPageShown);
+    window.addEventListener('pageshow', this.onPageShown);
+  }
+
+  /** Speakers directly, or on iOS through an <audio> element so playback survives backgrounding */
+  private createBackground(): BackgroundAudio {
+    const background = new BackgroundAudio(this.ctx, this.masterGain);
+    background.setControls({
       play: () => { this.play(); },
       pause: () => this.pause(),
       seek: (seconds) => { this.seek(Math.min(Math.max(0, seconds), this.clock.duration)); },
       position: () => ({ currentTime: this.clock.currentTime, duration: this.clock.duration }),
     });
-    // Mix bus: all stems connect here, single SoundTouch node sits between mixBus and masterGain
-    this.mixBus = this.ctx.createGain();
+    if (this._songConfig) background.setMetadata(this._songConfig.title, this._songConfig.artist);
+    return background;
+  }
 
-    // When iOS interrupts the AudioContext (screen lock), stop our playback state to match
-    this.ctx.addEventListener('statechange', () => {
-      if (this.ctx.state !== 'running' && this.clock.playing) {
+  /** When the OS interrupts the AudioContext (screen lock, another app), stop our playback state to match */
+  private watchContext(): void {
+    const ctx = this.ctx;
+    ctx.addEventListener('statechange', () => {
+      if (ctx === this.ctx && ctx.state !== 'running' && this.clock.playing) {
         this.pause();
       }
     });
+  }
+
+  /**
+   * After the page comes back to the foreground. A phone can hand back a
+   * context that says it's running but whose clock no longer moves: nothing
+   * plays and the playhead never leaves its spot. Spot that, and replace the
+   * context on the next play.
+   */
+  private checkContext(): void {
+    // The stall check while playing measures from now, not from before the page was hidden
+    this.lastCtxChange = performance.now();
+    const ctx = this.ctx;
+    if (ctx.state !== 'running') return; // play() resumes it, or replaces it if it won't
+    const before = ctx.currentTime;
+    setTimeout(() => {
+      if (ctx !== this.ctx || ctx.state !== 'running' || document.visibilityState !== 'visible') return;
+      if (ctx.currentTime === before) this.markStalled();
+    }, 500);
+  }
+
+  private markStalled(): void {
+    this.stale = true;
+    this.pause();
+  }
+
+  /**
+   * Swap in a new AudioContext and rebuild the graph on it, keeping the song:
+   * decoded stems (AudioBuffers work in any context), mixer settings, tempo,
+   * loop and position. Best called inside the user's tap, so the new context
+   * is allowed to start.
+   */
+  private replaceContext(): void {
+    this.pause();
+    const old = this.ctx;
+    const volume = this.masterGain.gain.value;
+    const kept = Array.from(this.stems);
+    for (const stem of this.stems.values()) stem.disconnect();
+    if (this.pitchNode) {
+      this.pitchNode.disconnect();
+      this.pitchNode = null;
+    }
+    this.background.dispose();
+    void old.close().catch(() => {});
+
+    this.ctx = new AudioContext();
+    this.clock.setContext(this.ctx);
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = volume;
+    this.mixBus = this.ctx.createGain();
+    this.background = this.createBackground();
+    this.workletRegistered = false;
+    this.watchContext();
+
+    const loop = this.loopRegion();
+    for (const [id, stem] of kept) {
+      const player = new StemPlayer(this.ctx, stem.audioBuffer, this.mixBus, stem.volume, stem.pan, stem.offsetSec);
+      player.stereo = stem.stereo;
+      player.muted = stem.muted;
+      player.soloed = stem.soloed;
+      player.setTempo(this._tempoRatio);
+      player.setLoop(loop);
+      this.stems.set(id, player);
+    }
+    this.recalcAllGains();
+    this.stale = false;
+    this.notify();
   }
 
   /** Output delay the browser reports for the current device, in seconds.
@@ -289,19 +380,37 @@ export class AudioEngine {
     this.notify();
   }
 
-  async play(): Promise<void> {
-    if (this.clock.playing || this.stems.size === 0) return;
+  play(): Promise<void> {
+    if (this.clock.playing || this.stems.size === 0) return Promise.resolve();
+    this.starting ??= this.startPlaying().finally(() => { this.starting = null; });
+    return this.starting;
+  }
+
+  private async startPlaying(): Promise<void> {
+    // A context that stopped working is replaced here, inside the user's tap, where the new one may start
+    if (this.stale || this.ctx.state === 'closed') this.replaceContext();
 
     // Must happen before the first await, while we're still inside the user's tap
     this.background.start();
 
-    // Resume AudioContext if not running (suspended by autoplay policy, or interrupted by screen lock)
-    if (this.ctx.state !== 'running') {
-      await this.ctx.resume();
+    // Resume AudioContext if not running (suspended by autoplay policy, or interrupted by screen lock).
+    // A context the phone won't give back never answers, so don't wait on it for long.
+    if (this.ctx.state !== 'running' && !(await resumed(this.ctx))) {
+      // Try a fresh one. Android still counts this as the tap; if iOS doesn't, the next tap starts it.
+      this.replaceContext();
+      this.background.start();
+      if (!(await resumed(this.ctx))) {
+        this.stale = true;
+        this.background.stop();
+        return;
+      }
     }
 
+    // Register the SoundTouch processor on a replaced context (once per context)
+    await this.ensureWorkletRegistered();
     // Recreate pitch corrector to flush internal buffers from previous playback
     await this.connectPitchNode();
+    if (this.clock.playing) return;
 
     // Starting past the loop's end plays the loop from A
     const loop = this.loopRegion();
@@ -653,7 +762,18 @@ export class AudioEngine {
 
   private startPositionUpdates(): void {
     this.stopPositionUpdates();
+    this.lastCtxTime = this.ctx.currentTime;
+    this.lastCtxChange = performance.now();
     const tick = () => {
+      // The audio clock stopped moving while we're on screen: the context died under us
+      const now = performance.now();
+      if (this.ctx.currentTime !== this.lastCtxTime) {
+        this.lastCtxTime = this.ctx.currentTime;
+        this.lastCtxChange = now;
+      } else if (now - this.lastCtxChange > 1500 && document.visibilityState === 'visible') {
+        this.markStalled();
+        return;
+      }
       // Check if playback reached the end
       if (!(this._loopEnabled && this._loopA !== null && this._loopB !== null) && this.clock.currentTime >= this.clock.duration) {
         this.stop();
@@ -735,9 +855,20 @@ export class AudioEngine {
   }
 
   dispose(): void {
+    document.removeEventListener('visibilitychange', this.onPageShown);
+    window.removeEventListener('pageshow', this.onPageShown);
     this.stop();
     this.disposeStemPlayers();
     this.background.dispose();
     this.ctx.close();
   }
+}
+
+/** Ask a context to run again. False if it isn't running within `ms` (a phone that won't give it back). */
+async function resumed(ctx: AudioContext, ms = 1500): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => { timer = setTimeout(resolve, ms); });
+  await Promise.race([ctx.resume().catch(() => {}), timeout]);
+  clearTimeout(timer);
+  return ctx.state === 'running';
 }

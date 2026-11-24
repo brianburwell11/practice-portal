@@ -21,6 +21,12 @@ export class TransportClock {
     this.getOutputLatency = getOutputLatency;
   }
 
+  /** Follow a replacement context (the old one stalled). Call while paused: the position carries over. */
+  setContext(ctx: AudioContext): void {
+    this.pause();
+    this.ctx = ctx;
+  }
+
   get playing(): boolean {
     return this._playing;
   }
