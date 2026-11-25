@@ -1034,6 +1034,17 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
     }
   }, [position, isZoomed, viewStart, effectiveViewDuration, duration, clampViewStart, followPlayhead, markerEditorOpen]);
 
+  // The playhead out of view (zoomed in, and panned away or not following):
+  // a Follow badge on its side brings the view back and follows again, like
+  // the sheet music's.
+  const playheadSide: 'left' | 'right' | null = !isZoomed || !duration
+    ? null
+    : position < viewStart ? 'left' : position > viewStart + effectiveViewDuration ? 'right' : null;
+  const followAgain = useCallback(() => {
+    setFollowPlayhead(true);
+    setViewStart(clampViewStart(position - effectiveViewDuration * 0.25, effectiveViewDuration));
+  }, [setFollowPlayhead, clampViewStart, position, effectiveViewDuration]);
+
   // ResizeObserver for main canvas
   useEffect(() => {
     const container = containerRef.current;
@@ -1601,6 +1612,21 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
           onPointerCancel={handlePointerLeave}
           onContextMenu={handleContextMenu}
         />
+        {playheadSide && (
+          <button
+            type="button"
+            onClick={followAgain}
+            aria-label="Follow the playhead"
+            title="Back to the playhead, and follow it"
+            className={`absolute z-10 top-1/2 -translate-y-1/2 ${playheadSide === 'left' ? 'left-1.5' : 'right-1.5'} inline-flex items-center gap-1 rounded-full bg-cyan-600 hover:bg-cyan-500 text-white font-medium shadow-lg animate-pop ${
+              compact ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs min-h-8 md:min-h-0'
+            }`}
+          >
+            {playheadSide === 'left' && <FollowArrow left />}
+            Follow
+            {playheadSide === 'right' && <FollowArrow />}
+          </button>
+        )}
         {hoveredNote && !dragNoteRef.current && (() => {
           const note = notes.find((n) => n.id === hoveredNote.id);
           if (!note) return null;
@@ -1752,5 +1778,14 @@ export function WaveformTimeline({ compact = false }: WaveformTimelineProps = {}
         </div>
       )}
     </div>
+  );
+}
+
+/** Which way the playhead is, on the Follow badge. */
+function FollowArrow({ left = false }: { left?: boolean }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" className={left ? 'rotate-180' : ''}>
+      <path d="M3 1.5 7 5 3 8.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
