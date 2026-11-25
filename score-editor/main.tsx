@@ -3,7 +3,8 @@
  * The MuseEncore editor (vendor/muse-encore/editor/main.tsx) plus `window.scoreEditor`, which the app's
  * ScoreEditorPanel uses from the parent page (same origin) to save the open score back to the song.
  *
- * The score to open comes from `?url=` (the editor's own startup()).
+ * The score to open comes from `?url=` (the editor's own startup()). With `?new=1` the editor opens
+ * nothing by itself: the panel hands it a score through `openScore` (a song with no sheet music yet).
  */
 import { createRoot } from 'react-dom/client'
 import '../vendor/muse-encore/editor/style.css'
@@ -12,7 +13,7 @@ import { registerAppActions } from '../vendor/muse-encore/editor/actions/appacti
 import { App } from '../vendor/muse-encore/editor/App'
 import { initAutoSaver } from '../vendor/muse-encore/editor/autosave'
 import { applyLanguageSetting } from '../vendor/muse-encore/editor/i18n'
-import { canSave, onSessionChanged, session, startup } from '../vendor/muse-encore/editor/session'
+import { canSave, onSessionChanged, openFileData, session, startup } from '../vendor/muse-encore/editor/session'
 import {
   currentMasterScore, currentScore, onScoreViewChanged, scoreChanged, scoreSaved,
 } from '../vendor/muse-encore/editor/scoreview'
@@ -36,6 +37,7 @@ const bridge: ScoreEditorBridge = {
     return !!s && isModified(s)
   },
   loadError: () => session().error ?? null,
+  openScore: (name, data) => openFileData(name, data, 'file'),
   saveMscz(fileName) {
     const s = currentMasterScore()
     if (!s) throw new Error('No score is open')
@@ -68,4 +70,4 @@ void applyLanguageSetting()
 createRoot(document.getElementById('app-root')!).render(<App />)
 mountSoundToggle()
 initAutoSaver()
-void startup()
+if (!new URLSearchParams(location.search).has('new')) void startup()

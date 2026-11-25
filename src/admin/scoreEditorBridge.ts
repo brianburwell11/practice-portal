@@ -12,6 +12,13 @@ export interface ScoreEditorBridge {
   isModified(): boolean;
   /** Why the score couldn't be opened, if it couldn't. */
   loadError(): string | null;
+  /**
+   * Opens a score file the panel has in hand (an upload, or MusicXML made
+   * from the beat map). `name`'s extension says what it is: `.mscz`,
+   * `.mxl`, `.musicxml` or `.xml`. Anything but a MuseScore file opens as a
+   * new, unsaved score.
+   */
+  openScore(name: string, data: ArrayBuffer): Promise<void>;
   /** The open score as a MuseScore file. */
   saveMscz(fileName: string): Uint8Array;
   /** The score was saved to the song: clear its modified state. */

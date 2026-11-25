@@ -11,6 +11,7 @@ import { useAudioEngine } from '../hooks/useAudioEngine';
 import type { AudioEngine } from '../audio/AudioEngine';
 import { measureBeatTimes } from '../components/sheet/loopSpans';
 import { msczCompanionName, sheetMusicConfigFields, uploadMsczForConversion } from './utils/sheetMusic';
+import type { NewScore } from './ScoreStartPanel';
 
 const UNSAVED = 'You have unsaved sheet music changes.';
 
@@ -47,6 +48,8 @@ function engineHost(engine: AudioEngine, beatTimes: number[][]): SongAudioHost &
 interface Props {
   bandId: string;
   song: SongConfig;
+  /** A score from the start screen (ScoreStartPanel), for a song with no sheet music yet. */
+  newScore?: NewScore;
   onClose: () => void;
 }
 
@@ -56,8 +59,12 @@ interface Props {
  * Save sends the edited score to the server as a MuseScore file, which keeps
  * it and converts it to the song's MusicXML, the same as uploading a `.mscz`
  * on the Edit Song page. The editor's own File > Save and Ctrl/Cmd+S do the same.
+ *
+ * A song with no sheet music yet starts on ScoreStartPanel in the page's
+ * editor slot, which hands over `newScore` (an upload, or MusicXML made from
+ * the beat map). It opens here, and Save makes it the song's sheet music.
  */
-export function ScoreEditorPanel({ bandId, song, onClose }: Props) {
+export function ScoreEditorPanel({ bandId, song, newScore, onClose }: Props) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -68,7 +75,15 @@ export function ScoreEditorPanel({ bandId, song, onClose }: Props) {
 
   const files = songScoreFiles(bandId, song);
   const scoreUrl = files?.msczUrl ?? files?.mxlUrl;
-  const [src] = useState(() => (scoreUrl ? `/score-editor/?url=${encodeURIComponent(scoreUrl)}` : null));
+  // A new score: the editor opens nothing itself (`?new=1`) and is handed it once connected.
+  const [src] = useState(() => (newScore || !scoreUrl ? '/score-editor/?new=1' : `/score-editor/?url=${encodeURIComponent(scoreUrl)}`));
+  /** The `.mxl` name a new score is saved under. */
+  const newName = newScore?.saveAs ?? null;
+  /** The new score has been saved to the song at least once. */
+  const [savedNew, setSavedNew] = useState(false);
+  // A score from the start screen isn't on the song until it's saved, even
+  // when the editor counts it as unchanged.
+  const unsavedNew = !!newName && !savedNew;
 
   const bridge = (): ScoreEditorBridge | undefined => frameRef.current?.contentWindow?.scoreEditor;
 
@@ -90,7 +105,7 @@ export function ScoreEditorPanel({ bandId, song, onClose }: Props) {
 
   const save = async () => {
     const editor = bridge();
-    const mxlName = song.sheetMusicUrl;
+    const mxlName = newName ?? song.sheetMusicUrl;
     if (!editor?.hasScore() || !mxlName || saving) return;
     setSaveError(null);
     setSaving('Saving...');
@@ -114,6 +129,7 @@ export function ScoreEditorPanel({ bandId, song, onClose }: Props) {
       await saveDoc(key, `/api/bands/${bandId}/songs/${song.id}/config`, body);
       editor.markSaved();
       setDirty(false);
+      setSavedNew(true);
 
       // The saved config comes back with the new files' versions, so the
       // sheet music on the page shows the change.
@@ -147,21 +163,26 @@ export function ScoreEditorPanel({ bandId, song, onClose }: Props) {
     editor.onSaveRequest = () => void saveRef.current();
     editor.songAudio = playsRecording ? host : null;
     sync();
+    // Each load of the editor page, if it reloads, gets the new score again.
+    if (newScore && !editor.hasScore()) {
+      // A failure shows as the editor's load error.
+      void editor.openScore(newScore.name, newScore.data).catch(() => undefined);
+    }
   };
 
   const close = async () => {
     if (saving) return;
-    if (bridge()?.isModified() && !(await confirmDiscard(UNSAVED))) return;
+    if ((unsavedNew || bridge()?.isModified()) && !(await confirmDiscard(UNSAVED))) return;
     onClose();
   };
 
   // Leaving the page with changes asks first.
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !unsavedNew) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  }, [dirty, unsavedNew]);
 
   const btn = 'px-3 py-1.5 rounded text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
@@ -177,7 +198,9 @@ export function ScoreEditorPanel({ bandId, song, onClose }: Props) {
           Sheet music: {song.title}
         </h2>
         <span className="text-xs text-gray-400" aria-live="polite">
-          {saving ?? (dirty ? 'Unsaved changes' : ready ? 'Save puts your changes on the song for the whole band.' : '')}
+          {saving ?? (unsavedNew
+            ? (ready ? 'Not saved yet. Save makes this the song’s sheet music.' : 'Opening...')
+            : dirty ? 'Unsaved changes' : ready ? 'Save puts your changes on the song for the whole band.' : '')}
         </span>
         {saveError && <span className="text-xs text-red-400" role="alert">{saveError}</span>}
         <div className="ml-auto flex items-center gap-2">
@@ -197,24 +220,20 @@ export function ScoreEditorPanel({ bandId, song, onClose }: Props) {
           </button>
         </div>
       </div>
-      {src ? (
-        <div className="relative flex-1 min-h-0">
-          <iframe
-            ref={frameRef}
-            src={src}
-            title="Sheet music editor"
-            className="absolute inset-0 h-full w-full border-0 bg-white"
-            onLoad={connect}
-          />
-          {loadError && (
-            <p role="alert" className="absolute left-1/2 top-4 -translate-x-1/2 rounded bg-gray-900 px-3 py-2 text-red-300 shadow">
-              The sheet music couldn't be opened. {loadError}
-            </p>
-          )}
-        </div>
-      ) : (
-        <p className="p-6 text-gray-400">This song has no sheet music to edit.</p>
-      )}
+      <div className="relative flex-1 min-h-0">
+        <iframe
+          ref={frameRef}
+          src={src}
+          title="Sheet music editor"
+          className="absolute inset-0 h-full w-full border-0 bg-white"
+          onLoad={connect}
+        />
+        {loadError && (
+          <p role="alert" className="absolute left-1/2 top-4 -translate-x-1/2 rounded bg-gray-900 px-3 py-2 text-red-300 shadow">
+            The sheet music couldn't be opened. {loadError}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

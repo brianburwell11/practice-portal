@@ -11,8 +11,6 @@ interface Props {
   songNavLinks?: { title: string; url: string }[];
   hasBand?: boolean;
   hasSong?: boolean;
-  /** The song has sheet music (to open in the score editor). */
-  hasSheetMusic?: boolean;
   hasSetlist?: boolean;
   onManageMembers?: () => void;
   onEditBand?: () => void;
@@ -89,7 +87,6 @@ export function AdminRibbon({
   songNavLinks,
   hasBand,
   hasSong,
-  hasSheetMusic,
   hasSetlist,
   onManageMembers,
   onEditBand,
@@ -164,7 +161,7 @@ export function AdminRibbon({
         {
           label: 'Sheet Music Editor',
           show: can('song.score.write') && variant === 'ribbon',
-          enabled: !!hasSong && !!hasSheetMusic,
+          enabled: !!hasSong,
           onClick: onSheetMusicEditor,
         },
         { label: 'Delete Song', show: can('song.delete'), enabled: !!hasSong, danger: true, onClick: onDeleteSong },

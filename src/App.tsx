@@ -49,6 +49,7 @@ import { useMediaQuery } from './hooks/useMediaQuery';
 import { readDoc } from './offline/sync';
 import { HelpButton, OnboardingLayer } from './onboarding/Onboarding';
 import { editorSwap } from './utils/editorSwap';
+import type { NewScore } from './admin/ScoreStartPanel';
 
 
 const SetlistModal = lazy(() => import('./admin/SetlistModal').then((m) => ({ default: m.SetlistModal })));
@@ -57,6 +58,8 @@ const ViewAllSetlistsModal = lazy(() => import('./admin/ViewAllSetlistsModal').t
 const loadEditBandModal = () => import('./admin/EditBandModal');
 const EditBandModal = lazy(() => loadEditBandModal().then((m) => ({ default: m.EditBandModal })));
 const ScoreEditorPanel = lazy(() => import('./admin/ScoreEditorPanel').then((m) => ({ default: m.ScoreEditorPanel })));
+const loadScoreStartPanel = () => import('./admin/ScoreStartPanel');
+const ScoreStartPanel = lazy(() => loadScoreStartPanel().then((m) => ({ default: m.ScoreStartPanel })));
 const DeleteBandModal = lazy(() => import('./admin/DeleteBandModal').then((m) => ({ default: m.DeleteBandModal })));
 
 /** Capabilities that come with something to manage — beyond reading and playing. */
@@ -89,7 +92,13 @@ export default function App() {
   const editorChords = useChordsEditorStore((s) => s.chords);
   // The on-page editors hide the pickers, the ribbon and most transport
   // buttons so a stray tap can't switch songs mid-session.
-  const editorFocus = markerEditorOpen || lyricsEditorOpen || chordsEditorOpen;
+  // The Sheet Music Editor: 'start' is its on-page start screen (a song with
+  // no sheet music yet), 'full' the full screen MuseEncore editor.
+  const [scoreEditor, setScoreEditor] = useState<'start' | 'full' | null>(null);
+  /** The score the start screen picked, for the full screen editor to open. */
+  const [newScore, setNewScore] = useState<NewScore | null>(null);
+  const showScoreStart = scoreEditor === 'start';
+  const editorFocus = markerEditorOpen || lyricsEditorOpen || chordsEditorOpen || showScoreStart;
   // Full screen sheet music floats the notes over the score itself.
   const sheetFullViewOpen = useSheetMusicStore((s) => s.fullViewOpen);
 
@@ -175,7 +184,6 @@ export default function App() {
     return () => ro.disconnect();
   }, []);
   const [showMembersModal, setShowMembersModal] = useState(false);
-  const [showScoreEditor, setShowScoreEditor] = useState(false);
   // Anything to manage here? Decides whether a Member sees the admin ribbon
   // at all (they don't — their screen is the public one). UX only.
   const myCaps = useSessionStore((s) => s.capabilitiesIn(currentBand?.id));
@@ -245,7 +253,6 @@ export default function App() {
     songNavLinks: selectedSong?.navLinks,
     hasBand: !!currentBand,
     hasSong: !!selectedSong,
-    hasSheetMusic: !!selectedSong?.sheetMusicUrl,
     hasSetlist: !!activeSetlist,
     onManageMembers: () => setShowMembersModal(true),
     onEditBand: async () => {
@@ -285,9 +292,17 @@ export default function App() {
         .catch(() => openLyricsEditor([]));
     },
     onSheetMusicEditor: async () => {
-      if (!selectedSong?.sheetMusicUrl) return;
+      if (!selectedSong) return;
       if (!(await closeOtherEditors())) return;
-      setShowScoreEditor(true);
+      setNewScore(null);
+      if (selectedSong.sheetMusicUrl) {
+        setScoreEditor('full');
+        return;
+      }
+      setShowEditBandModal(false);
+      // Loaded first, so the start screen slides into the mixer's place in one movement.
+      await loadScoreStartPanel();
+      editorSwap(() => setScoreEditor('start'));
     },
     onDeleteSong: () => setShowDeleteModal(true),
     onAddSetlist: () => { setEditSetlistId(undefined); setCopySetlistId(undefined); setShowSetlistModal(true); },
@@ -431,14 +446,14 @@ export default function App() {
           {/* Chord lane: below notes, above lyrics. On desktop the current
               chord starts on the lyric reading point. Under the chords
               editor it previews the draft. */}
-          {!markerEditorOpen && !lyricsEditorOpen && !showEditBandModal && (
+          {!markerEditorOpen && !lyricsEditorOpen && !showScoreStart && !showEditBandModal && (
             <ChordLane overrideChords={chordsEditorOpen ? editorChords : undefined} />
           )}
 
           {/* Lyrics display \u2014 hidden when the tapMap or band editors
               occupy the page. Stays visible under the lyrics editor so
               the admin can sync against the live karaoke view. */}
-          {!markerEditorOpen && !showEditBandModal && !(lyricsEditorOpen && lyricsEditorMode === 'lyrics') && (
+          {!markerEditorOpen && !showScoreStart && !showEditBandModal && !(lyricsEditorOpen && lyricsEditorMode === 'lyrics') && (
             <LyricsDisplay
               overrideLines={lyricsEditorOpen ? editorLines : undefined}
               only={lyricsEditorOpen || chordsEditorOpen ? 'desktop' : undefined}
@@ -460,6 +475,14 @@ export default function App() {
             <LyricsEditorModal />
           ) : chordsEditorOpen ? (
             <ChordsEditorModal />
+          ) : showScoreStart && selectedSong ? (
+            <Suspense fallback={null}>
+              <ScoreStartPanel
+                song={selectedSong}
+                onOpen={(score) => { setNewScore(score); setScoreEditor('full'); }}
+                onClose={() => editorSwap(() => setScoreEditor(null))}
+              />
+            </Suspense>
           ) : showEditBandModal && currentBand ? (
             <Suspense fallback={null}>
               <EditBandModal band={currentBand} onClose={() => setShowEditBandModal(false)} />
@@ -475,9 +498,14 @@ export default function App() {
         {/* Inside the themed page so it takes the band's colors. */}
         {phonePageScroll && selectedSong && <PhoneSectionJump scrollerRef={pageScrollRef} columnRef={panelColumnRef} />}
       </div>
-      {showScoreEditor && selectedSong && currentBand && (
+      {scoreEditor === 'full' && selectedSong && currentBand && (
         <Suspense fallback={null}>
-          <ScoreEditorPanel bandId={currentBand.id} song={selectedSong} onClose={() => setShowScoreEditor(false)} />
+          <ScoreEditorPanel
+            bandId={currentBand.id}
+            song={selectedSong}
+            newScore={newScore ?? undefined}
+            onClose={() => { setScoreEditor(null); setNewScore(null); }}
+          />
         </Suspense>
       )}
       {showDeleteModal && selectedSong && (
