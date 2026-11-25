@@ -1,0 +1,20 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * The app's changes to the editor's look (after the vendor's style.css).
+ */
+
+/* No Home tab: the home screen lists no scores here (NoScoresPage.tsx). The Score tab stays. */
+.app-tabs [role="tablist"] > button[role="tab"]:first-child {
+    display: none;
+}
+
+.pp-no-score {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+}

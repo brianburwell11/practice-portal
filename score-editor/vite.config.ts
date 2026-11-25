@@ -16,6 +16,8 @@
  * It also swaps the editor's Player for songAudioPlayer.ts, so its playback
  * plays the song's recording through the app's audio engine, and adds
  * "Adjust audio settings…" to the playback settings menu (audioLevels.ts).
+ * The home screen and File > Open recent list no scores (NoScoresPage.tsx):
+ * scores open from their songs, and a browser's list held every band's.
  */
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -31,6 +33,7 @@ const LOCALES_ID = 'virtual:musescore-locales'
 const SOUNDFONT_ID = '\0score-editor:soundfont'
 /** The playback settings menu's item list, in the vendor's PlaybackToolBar.tsx. */
 const SETTINGS_MENU_START = 'const SETTINGS_ITEMS: MenuItem[] = [\n'
+const APPMENU_ID = '\0score-editor:appmenu'
 
 function editorStubs(): Plugin {
   const soundfontFile = path.join(vendorRoot, 'shared/playback/soundfont.ts')
@@ -48,6 +51,11 @@ function editorStubs(): Plugin {
       if (importer?.endsWith('editor/playback/playbackcontroller.ts') && id.endsWith('shared/playback/player')) {
         return path.join(here, 'songAudioPlayer.ts')
       }
+      // No list of this browser's scores: the home screen says none is open, File > Open recent is empty.
+      if (importer?.endsWith('editor/App.tsx') && id === './home/ScoresPage') {
+        return path.join(here, 'NoScoresPage.tsx')
+      }
+      if (importer?.endsWith('editor/App.tsx') && id === './menus/appmenu') return APPMENU_ID
       // The editor's playback asks for the soundfont at its own base URL.
       if (importer?.endsWith('editor/playback/playbackcontroller.ts') && id.endsWith('shared/playback/soundfont')) {
         return SOUNDFONT_ID
@@ -67,6 +75,10 @@ function editorStubs(): Plugin {
       if (id === `\0${LOCALES_ID}`) return 'export const LANGUAGES = {}\nexport const loaders = {}\n'
       if (id === '\0score-editor:empty-list') return 'export default []\n'
       if (id === '\0score-editor:no-image') return "export default ''\n"
+      if (id === APPMENU_ID) {
+        const real = JSON.stringify(path.join(vendorRoot, 'editor/menus/appmenu.ts'))
+        return `export * from ${real}\nexport function setRecentScoresProvider() {}\n`
+      }
       if (id === SOUNDFONT_ID) {
         const real = JSON.stringify(soundfontFile)
         return `export * from ${real}\n`

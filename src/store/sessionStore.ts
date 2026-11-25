@@ -3,6 +3,7 @@ import { clearOfflineCache } from '../offline/offline';
 import { allEdits, clearEdits } from '../offline/editStore';
 import { confirmDialog } from './dialogStore';
 import { useBandStore } from './bandStore';
+import { clearScoreEditorScores } from '../utils/scoreEditorStorage';
 
 export type BandRole = 'owner' | 'manager' | 'editor' | 'member';
 
@@ -109,8 +110,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       danger: true,
     }))) return;
     // Songs kept offline go with the account: this may be a shared device.
+    // So do the sheet music editor's copies of the scores opened here.
     await clearOfflineCache();
     await clearEdits().catch(() => undefined);
+    await clearScoreEditorScores();
     await fetch('/api/auth/logout', { method: 'POST' });
     // A full load of the home page, so every cached band list and document is
     // refetched as anonymous — and a Members-only band isn't left on screen.

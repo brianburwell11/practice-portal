@@ -8,6 +8,7 @@
  */
 import { createRoot } from 'react-dom/client'
 import '../vendor/muse-encore/editor/style.css'
+import './overrides.css'
 import { registerAction, triggerAction } from '../vendor/muse-encore/editor/actions/actions'
 import { registerAppActions } from '../vendor/muse-encore/editor/actions/appactions'
 import { App } from '../vendor/muse-encore/editor/App'
