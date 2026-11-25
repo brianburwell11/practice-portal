@@ -82,15 +82,28 @@ export function emailLinkOrigin(requestOrigin: string): string {
   return host ? `https://${host}` : requestOrigin;
 }
 
-/** A plain, client-safe HTML email: paragraphs, at most one button, and an optional small footer link. */
+/**
+ * A plain, client-safe HTML email: paragraphs, at most one button, and an optional small footer link.
+ *
+ * The button is a one-cell table with the link filling it (display:block,
+ * its own padding): mobile mail apps that ignore padding on an inline link
+ * left only the label tappable, or nothing. The same address follows as a
+ * plain link, for any app where the button still won't open.
+ */
 export function htmlEmail(
   paragraphs: string[],
   button?: { label: string; url: string },
   footerLink?: { label: string; url: string },
 ): string {
   const body = paragraphs.map((p) => `<p style="margin:0 0 16px">${p}</p>`).join('');
+  const href = button ? escapeHtml(button.url) : '';
   const cta = button
-    ? `<p style="margin:24px 0"><a href="${escapeHtml(button.url)}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600">${escapeHtml(button.label)}</a></p>`
+    ? `<table role="presentation" border="0" cellspacing="0" cellpadding="0" style="margin:24px 0 12px;border-collapse:separate"><tr>`
+      + `<td align="center" bgcolor="#2563eb" style="background:#2563eb;border-radius:6px">`
+      + `<a href="${href}" target="_blank" style="display:block;padding:12px 22px;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;line-height:20px;border-radius:6px">${escapeHtml(button.label)}</a>`
+      + `</td></tr></table>`
+      + `<p style="margin:0 0 16px;font-size:13px;color:#555">Button not working? Open this link:<br>`
+      + `<a href="${href}" target="_blank" style="color:#2563eb;word-break:break-all">${href}</a></p>`
     : '';
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.5;color:#111;max-width:520px">${body}${cta}<p style="margin:24px 0 0;font-size:12px;color:#666">Practice Portal · practiceportal.app${
     footerLink ? ` · <a href="${escapeHtml(footerLink.url)}" style="color:#666">${escapeHtml(footerLink.label)}</a>` : ''
