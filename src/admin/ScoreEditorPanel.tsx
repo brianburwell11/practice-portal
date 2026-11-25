@@ -20,14 +20,18 @@ const UNSAVED = 'You have unsaved sheet music changes.';
  * The app's audio engine for the editor's playback. The first loop or play
  * from the editor notes the page's own loop and play state, and `release`
  * puts them back when the editor closes.
+ *
+ * One for as long as the editor is open: `beatTimes` reads the song's
+ * current tapMap, so a save (which brings the song's config back) doesn't
+ * replace it, and with it pause what's playing.
  */
-function engineHost(engine: AudioEngine, beatTimes: number[][]): SongAudioHost & { release(): void } {
+function engineHost(engine: AudioEngine, beatTimes: () => number[][]): SongAudioHost & { release(): void } {
   let saved: { a: number | null; b: number | null; enabled: boolean } | null = null;
   const take = () => {
     saved ??= { a: engine.loopA, b: engine.loopB, enabled: engine.loopEnabled };
   };
   return {
-    beatTimes,
+    get beatTimes() { return beatTimes(); },
     play: () => { take(); return engine.play(); },
     pause: () => engine.pause(),
     seek: (seconds) => { take(); void engine.seek(seconds); },
@@ -96,7 +100,11 @@ export function ScoreEditorPanel({ bandId, song, newScore, onClose }: Props) {
   const engine = useAudioEngine();
   const tapMap = useSongStore((s) => (s.selectedSong?.id === song.id ? s.selectedSong.tapMap : song.tapMap));
   const beatTimes = useMemo(() => measureBeatTimes(tapMap), [tapMap]);
-  const host = useMemo(() => engineHost(engine, beatTimes), [engine, beatTimes]);
+  const beatTimesRef = useRef(beatTimes);
+  useEffect(() => {
+    beatTimesRef.current = beatTimes;
+  }, [beatTimes]);
+  const host = useMemo(() => engineHost(engine, () => beatTimesRef.current), [engine]);
   // The editor's playback toolbar offers Recording or Notation when there's a tapMap to time the recording by.
   const playsRecording = beatTimes.length >= 2;
 
