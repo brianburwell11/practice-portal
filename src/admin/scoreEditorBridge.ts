@@ -29,6 +29,8 @@ export interface ScoreEditorBridge {
   onChange?: () => void;
   /** Stops the editor's playback, if it's playing. */
   stopPlayback(): void;
+  /** The editor's Play: plays or pauses, as Space does in the editor. */
+  togglePlay(): void;
   /**
    * Set by the panel: the song's recording, which the editor's playback
    * plays instead of the notation (score-editor/songAudioPlayer.ts) unless
@@ -48,8 +50,12 @@ export interface SongAudioHost {
   seek(seconds: number): void;
   /** The position being heard now. */
   position(): number;
+  /** The playback speed: 1 is normal, 0.75 three quarters (the transport's Speed). */
+  rate(): number;
   isPlaying(): boolean;
   setLoop(from: number, to: number): void;
+  /** How loud the recording plays in the editor, 0..1 of the page's own volume (Adjust audio settings). */
+  setLevel(level: number): void;
   clearLoop(): void;
 }
 

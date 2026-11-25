@@ -10,6 +10,7 @@ import type { ScoreEditorBridge, SongAudioHost } from './scoreEditorBridge';
 import { useAudioEngine } from '../hooks/useAudioEngine';
 import type { AudioEngine } from '../audio/AudioEngine';
 import { measureBeatTimes } from '../components/sheet/loopSpans';
+import { useMixerStore } from '../store/mixerStore';
 import { msczCompanionName, sheetMusicConfigFields, uploadMsczForConversion } from './utils/sheetMusic';
 import type { NewScore } from './ScoreStartPanel';
 
@@ -31,10 +32,14 @@ function engineHost(engine: AudioEngine, beatTimes: number[][]): SongAudioHost &
     pause: () => engine.pause(),
     seek: (seconds) => { take(); void engine.seek(seconds); },
     position: () => engine.clock.audibleTime,
+    rate: () => engine.clock.tempoRatio,
     isPlaying: () => engine.clock.playing,
     setLoop: (from, to) => { take(); engine.setLoop(from, to); },
     clearLoop: () => { take(); engine.setLoopEnabled(false); },
+    // The page's volume (its Vol slider), scaled while the editor is open; `release` puts it back.
+    setLevel: (level) => engine.setMasterVolume(useMixerStore.getState().masterVolume * level),
     release() {
+      engine.setMasterVolume(useMixerStore.getState().masterVolume);
       if (!saved) return;
       engine.pause();
       if (saved.a !== null && saved.b !== null) engine.setLoop(saved.a, saved.b);
@@ -163,6 +168,8 @@ export function ScoreEditorPanel({ bandId, song, newScore, onClose }: Props) {
     editor.onSaveRequest = () => void saveRef.current();
     editor.songAudio = playsRecording ? host : null;
     sync();
+    // Keys go to the editor, so Space plays there and its other shortcuts work, without a click on the score first.
+    frameRef.current?.contentWindow?.focus();
     // Each load of the editor page, if it reloads, gets the new score again.
     if (newScore && !editor.hasScore()) {
       // A failure shows as the editor's load error.
@@ -175,6 +182,22 @@ export function ScoreEditorPanel({ bandId, song, newScore, onClose }: Props) {
     if ((unsavedNew || bridge()?.isModified()) && !(await confirmDiscard(UNSAVED))) return;
     onClose();
   };
+
+  // Space with the focus out here (this bar, or the page under the editor) is the editor's Play, not the page's
+  // transport, which would play the recording without the editor following it. Captured on the window, before the
+  // transport's own handler.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || t?.isContentEditable) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      bridge()?.togglePlay();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
 
   // Leaving the page with changes asks first.
   useEffect(() => {

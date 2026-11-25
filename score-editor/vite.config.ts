@@ -14,7 +14,8 @@
  * MuseScore's repository (the same default the MuseEncore viewer uses).
  *
  * It also swaps the editor's Player for songAudioPlayer.ts, so its playback
- * plays the song's recording through the app's audio engine.
+ * plays the song's recording through the app's audio engine, and adds
+ * "Adjust audio settings…" to the playback settings menu (audioLevels.ts).
  */
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -28,6 +29,8 @@ const vendorRoot = path.join(projectRoot, 'vendor/muse-encore')
 
 const LOCALES_ID = 'virtual:musescore-locales'
 const SOUNDFONT_ID = '\0score-editor:soundfont'
+/** The playback settings menu's item list, in the vendor's PlaybackToolBar.tsx. */
+const SETTINGS_MENU_START = 'const SETTINGS_ITEMS: MenuItem[] = [\n'
 
 function editorStubs(): Plugin {
   const soundfontFile = path.join(vendorRoot, 'shared/playback/soundfont.ts')
@@ -50,6 +53,15 @@ function editorStubs(): Plugin {
         return SOUNDFONT_ID
       }
       return null
+    },
+    transform(code, id) {
+      if (!id.endsWith('editor/toolbars/PlaybackToolBar.tsx')) return null
+      // Fails the build, rather than losing the item quietly, if a vendor update moves the list.
+      if (!code.includes(SETTINGS_MENU_START)) throw new Error('score-editor: the playback settings menu list moved')
+      return code.replace(
+        SETTINGS_MENU_START,
+        `${SETTINGS_MENU_START}    { kind: 'action', code: 'pp-audio-levels' },\n    { kind: 'separator' },\n`,
+      )
     },
     load(id) {
       if (id === `\0${LOCALES_ID}`) return 'export const LANGUAGES = {}\nexport const loaders = {}\n'

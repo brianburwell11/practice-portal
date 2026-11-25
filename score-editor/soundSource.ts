@@ -1,6 +1,7 @@
 /*
  * SPDX-License-Identifier: GPL-3.0-only
- * What the editor's Play plays: the song's recording (songAudioPlayer.ts) or the notation's own sounds. The choice
+ * What the editor's Play plays: the song's recording (songAudioPlayer.ts), the recording with the notation's own
+ * sounds over it, in time with it (synthLayer.ts), or the notation's sounds alone. The choice
  * sits in the editor's playback toolbar, after its mute button, as a dropdown styled like the editor's others.
  * The toolbar is the vendor's React code, so the dropdown is added to its DOM from here, and added again whenever the
  * toolbar is drawn anew (docked, floating, or reopened). It shows only when the song has a recording to play
@@ -10,13 +11,15 @@ import { triggerAction } from '../vendor/muse-encore/editor/actions/actions'
 import { playbackState } from '../vendor/muse-encore/editor/playback/playbackcontroller'
 import type { SongAudioHost } from '../src/admin/scoreEditorBridge'
 
-type Source = 'recording' | 'notation'
+type Source = 'recording' | 'both' | 'notation'
+const SOURCES: readonly Source[] = ['recording', 'both', 'notation']
 const KEY = 'practice-portal.scoreEditorSound'
 const GROUP_CLASS = 'pp-sound-source'
 
 let source: Source = (() => {
     try {
-        return localStorage.getItem(KEY) === 'notation' ? 'notation' : 'recording'
+        const stored = localStorage.getItem(KEY)
+        return SOURCES.find((s) => s === stored) ?? 'recording'
     } catch {
         return 'recording'
     }
@@ -28,9 +31,14 @@ function host(): SongAudioHost | null {
     return h && h.beatTimes.length >= 2 ? h : null
 }
 
-/** Play plays the recording: the song has one and it's chosen. */
+/** Play plays the recording: the song has one and it's chosen (alone, or with the synth over it). */
 export function songAudioToPlay(): SongAudioHost | null {
-    return source === 'recording' ? host() : null
+    return source === 'notation' ? null : host()
+}
+
+/** The synth plays the notation over the recording, in time with it. */
+export function synthOverSong(): boolean {
+    return source === 'both' && !!host()
 }
 
 function choose(next: Source): void {
@@ -50,6 +58,7 @@ function choose(next: Source): void {
 
 const LABELS: Record<Source, string> = {
     recording: 'Portal Audio',
+    both: 'Portal + Synth',
     notation: 'Synth Audio',
 }
 
@@ -62,8 +71,9 @@ function makeGroup(): HTMLElement {
     const select = document.createElement('select')
     select.className = 'zoom-select'
     select.setAttribute('aria-label', 'Playback sound')
-    select.title = 'Portal Audio plays the song’s recording, in time with the sheet music. Synth Audio plays the notes as written.'
-    for (const s of ['recording', 'notation'] as const) {
+    select.title = 'Portal Audio plays the song’s recording, in time with the sheet music. Portal + Synth plays the '
+        + 'notes as written over the recording, following its timing. Synth Audio plays the notes alone.'
+    for (const s of SOURCES) {
         select.add(new Option(LABELS[s], s))
     }
     select.addEventListener('change', () => {
